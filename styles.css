@@ -104,13 +104,13 @@ textarea {
 }
 
 .brand-mark-logo-image {
-  background: #fff;
+  background: linear-gradient(135deg, rgba(34, 197, 94, 0.16), rgba(255, 255, 255, 0.98));
 }
 
 .brand-mark-logo-image img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
+  width: 34px;
+  height: 34px;
+  object-fit: contain;
 }
 
 .brand-text {
@@ -225,16 +225,8 @@ textarea {
 
 .sidebar-rail {
   display: grid;
-  grid-auto-flow: column;
-  grid-auto-columns: minmax(280px, 320px);
+  grid-template-columns: 1fr;
   gap: 14px;
-  overflow-x: auto;
-  padding-bottom: 4px;
-  scrollbar-width: thin;
-}
-
-.sidebar-rail .panel {
-  height: 100%;
 }
 
 .hero-card {
@@ -254,11 +246,28 @@ textarea {
   margin-bottom: 12px;
 }
 
-.hero-logo-image {
-  width: min(100%, 420px);
-  height: auto;
-  display: block;
-  filter: saturate(1.06) contrast(1.03);
+.hero-logo-mark {
+  width: 104px;
+  height: 104px;
+  border-radius: 30px;
+  display: grid;
+  place-items: center;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(231, 248, 236, 0.98));
+  border: 1px solid rgba(34, 197, 94, 0.16);
+  box-shadow: 0 18px 50px rgba(34, 197, 94, 0.08);
+}
+
+.hero-icon-image {
+  width: 56px;
+  height: 56px;
+  object-fit: contain;
+}
+
+.hero-logo-text {
+  font-size: 2.8rem;
+  line-height: 1;
+  font-weight: 900;
+  color: var(--brand-strong);
 }
 
 .hero-actions,
@@ -297,7 +306,7 @@ textarea {
 }
 
 .mini-feature {
-  padding: 16px;
+  padding: 18px;
   border-radius: 22px;
   border: 1px solid var(--line);
   background: rgba(255, 255, 255, 0.94);
@@ -338,7 +347,7 @@ textarea {
 }
 
 .panel {
-  padding: 16px;
+  padding: 18px;
   border-radius: 24px;
   border: 1px solid var(--line);
   background: rgba(255, 255, 255, 0.88);
@@ -989,8 +998,8 @@ a.memory-item {
 }
 
 .auth-preview-logo {
-  justify-items: start;
-  text-align: right;
+  justify-items: center;
+  text-align: center;
 }
 
 .auth-preview-copy {
@@ -1169,8 +1178,7 @@ a.memory-item {
   }
 
   .sidebar-rail {
-    grid-auto-flow: row;
-    grid-auto-columns: 1fr;
+    grid-template-columns: 1fr;
     overflow: visible;
   }
 
