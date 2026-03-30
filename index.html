@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="theme-color" content="#22c55e">
-  <title>ملم يحل | الشات الأكاديمي للمنهج السعودي</title>
+  <title>ملم — مساعدك الذكي لحل أسئلة المنهج السعودي</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800;900&display=swap" rel="stylesheet">
@@ -20,7 +20,7 @@
         </div>
         <div class="brand-text">
           <div class="brand-name">ملم</div>
-          <div class="brand-copy">ملم — الشات الأكاديمي للمنهج السعودي</div>
+          <div class="brand-copy">مساعدك الذكي لحل أسئلة المنهج السعودي</div>
         </div>
       </a>
 
@@ -28,23 +28,23 @@
         <nav class="main-nav" aria-label="التنقل الرئيسي">
           <a href="#home">الرئيسية</a>
           <a href="#about">عن الموقع</a>
-          <a href="login.html">تسجيل الدخول</a>
+          <a href="login.html">دخول</a>
         </nav>
         <div class="top-status">
           <div class="top-chip xp-chip">رصيدك: <span data-xp-balance>120</span> نقطة</div>
-          <div class="top-chip" data-status>وضع تجريبي محلي</div>
+          <div class="top-chip" data-status>جاهز للمساعدة</div>
           <button class="theme-toggle" type="button" data-theme-toggle aria-label="تبديل الوضع الداكن">🌙</button>
         </div>
         <div class="top-cta">
           <a class="secondary-btn top-cta-link" href="login.html">تسجيل الدخول</a>
-          <a class="primary-btn top-cta-link" href="#chat">ابدأ الآن</a>
+          <a class="primary-btn top-cta-link" href="student.html">ابدأ الآن</a>
         </div>
       </div>
     </header>
   </div>
 
-  <main class="page-wrap" id="home">
-    <section class="shell hero-stage">
+  <main class="page-wrap landing-page" id="home">
+    <section class="shell landing-hero">
       <section class="hero-card hero-card-showcase">
         <div class="hero-logo" aria-hidden="true">
           <div class="hero-logo-mark">
@@ -52,38 +52,101 @@
           </div>
           <div class="hero-logo-text">ملم</div>
         </div>
-        <div class="eyebrow">مساعدك الذكي لحل أسئلة المنهج السعودي</div>
-        <h1>حل واجباتك بسهولة مع الذكاء الاصطناعي</h1>
+        <div class="eyebrow">ملم — مساعدك الذكي لحل أسئلة المنهج السعودي</div>
+        <h1>حل واجباتك في ثواني</h1>
         <p>
-          ارفع سؤالك أو اكتبه، واحصل على شرح خطوة بخطوة، مع تحليل ذكي للسؤال، ومراجعة تعليمية دقيقة،
-          وإجابة مختصرة وواضحة تناسب مرحلتك الدراسية.
+          اكتب سؤالك أو ارفعه صورة واحصل على شرح خطوة بخطوة، مع تحليل ذكي للإجابة
+          وربط مباشر بالمنهج السعودي.
         </p>
-        <div class="hero-actions">
-          <a class="primary-btn top-cta-link" href="#chat">ابدأ الشات 🚀</a>
-          <button class="secondary-btn" type="button" data-hero-example>جرب مثال</button>
-        </div>
-        <div class="hero-meta">
-          <div class="hero-pill">📷 رفع صورة السؤال</div>
-          <div class="hero-pill">🧠 تحليل الخيارات والصح والخطأ</div>
-          <div class="hero-pill">📚 مراجعة المنهج السعودي</div>
+        <div class="hero-actions hero-actions-dual">
+          <a class="primary-btn top-cta-link" href="student.html">🚀 ابدأ الآن</a>
+          <button class="secondary-btn gold-btn" type="button" data-hero-upload>📷 رفع صورة</button>
         </div>
       </section>
+    </section>
 
-      <div class="hero-utility" hidden>
-        <button class="primary-btn" type="button" data-start-chat>ابدأ الشات</button>
-        <button class="secondary-btn" type="button" data-quick-solve>ابدأ حل سؤال الآن</button>
-        <div data-selection-summary>لم يتم بدء جلسة جديدة بعد.</div>
-        <div data-runtime-summary>التشغيل الحالي: تجربة محلية مرتبة مع تحسينات مستمرة في الحل والشرح.</div>
-        <select data-runtime>
-          <option selected>vLLM Runtime</option>
-          <option>Ollama Runtime</option>
-          <option>وضع تجريبي داخل الواجهة</option>
-        </select>
-        <select data-training-mode>
-          <option selected>Prompt + RAG</option>
-          <option>Prompt + RAG + LoRA</option>
-          <option>Prompt + RAG + LoRA + DPO</option>
-        </select>
+    <section class="shell landing-strip">
+      <div class="quick-strip">
+        <button class="quick-card" type="button" data-starter-prompt="احسب محيط دائرة نصف قطرها 7" data-starter-subject="الرياضيات">
+          <strong>🧮 حل سؤال رياضيات</strong>
+          <span>إجابة مباشرة مع خطوات واضحة.</span>
+        </button>
+        <button class="quick-card" type="button" data-starter-prompt="اشرح قانون نيوتن الثاني" data-starter-subject="الفيزياء">
+          <strong>📘 اشرح درس</strong>
+          <span>شرح مبسط يناسب مرحلتك.</span>
+        </button>
+        <button class="quick-card" type="button" data-starter-action="upload-image">
+          <strong>📷 حل من صورة</strong>
+          <span>ارفع صورة السؤال وسأحللها لك.</span>
+        </button>
+        <button class="quick-card" type="button" data-starter-prompt="اختبرني في هذا الدرس بخمس أسئلة قصيرة" data-starter-subject="العلوم">
+          <strong>📝 اختبرني</strong>
+          <span>أسئلة قصيرة لقياس الفهم.</span>
+        </button>
+      </div>
+    </section>
+
+    <section class="shell onboarding-stage">
+      <div class="onboarding-card">
+        <div class="onboarding-copy">
+          <h2>ابدأ بشكل صحيح</h2>
+          <p>اختر صفك ومادتك أولًا، أو اكتب السؤال مباشرة وسيحاول ملم اقتراح المادة والدرس تلقائيًا.</p>
+        </div>
+
+        <div class="selectors selectors-hero">
+          <select class="field" data-grade>
+            <option>الأول الابتدائي</option>
+            <option>الثاني الابتدائي</option>
+            <option>الثالث الابتدائي</option>
+            <option>الرابع الابتدائي</option>
+            <option>الخامس الابتدائي</option>
+            <option>السادس الابتدائي</option>
+            <option>الأول المتوسط</option>
+            <option>الثاني المتوسط</option>
+            <option>الثالث المتوسط</option>
+            <option>الأول الثانوي</option>
+            <option selected>الثاني الثانوي</option>
+            <option>الثالث الثانوي</option>
+          </select>
+          <select class="field" data-subject>
+            <option selected>الرياضيات</option>
+            <option>العلوم</option>
+            <option>الفيزياء</option>
+            <option>الكيمياء</option>
+            <option>الأحياء</option>
+            <option>اللغة العربية</option>
+            <option>اللغة الإنجليزية</option>
+            <option>الاجتماعيات</option>
+            <option>المهارات الرقمية</option>
+          </select>
+          <select class="field" data-term>
+            <option selected>الفصل الدراسي الأول</option>
+            <option>الفصل الدراسي الثاني</option>
+          </select>
+          <input class="field" data-lesson type="text" placeholder="اسم الدرس اختياري">
+        </div>
+
+        <div class="cta-row onboarding-actions">
+          <a class="primary-btn" href="#chat">ابدأ الشات</a>
+          <button class="secondary-btn gold-btn" type="button" data-open-upload>رفع صورة السؤال</button>
+        </div>
+      </div>
+    </section>
+
+    <section class="shell feature-grid-stage" id="about">
+      <div class="feature-grid">
+        <article class="mini-feature">
+          <strong>شرح خطوة بخطوة</strong>
+          <span>يعرض الحل منظمًا داخل بطاقات واضحة وسهلة المراجعة.</span>
+        </article>
+        <article class="mini-feature">
+          <strong>تحليل الأخطاء</strong>
+          <span>يحدد الخطأ المفاهيمي أو الحسابي ويقترح التحسين.</span>
+        </article>
+        <article class="mini-feature">
+          <strong>متوافق مع المنهج السعودي</strong>
+          <span>يعتمد على المحتوى التعليمي والمراجع الأقرب للمنهج.</span>
+        </article>
       </div>
     </section>
 
@@ -91,88 +154,17 @@
       <section class="chat-shell" id="chat">
         <div class="chat-top">
           <h2>الشات الذكي</h2>
-          <p>
-            اكتب السؤال مباشرة، أو اختر من الأمثلة الجاهزة، أو ارفع صورة السؤال. إذا كان السؤال
-            صح أو خطأ أو فيه خيارات متعددة فسيحللها النظام ويحدد الإجابة الصحيحة مباشرة.
-          </p>
-          <div class="chat-tags">
-            <div class="tag">تصنيف نية ذكي</div>
-            <div class="tag">المنهج السعودي أولًا</div>
-            <div class="tag">بحث ويب ومقارنة</div>
-            <div class="tag">حل أكاديمي منظم</div>
-            <div class="tag">رفع صورة أو ملف</div>
-            <div class="tag">إعجاب وعدم إعجاب</div>
-          </div>
-          <div class="smart-note">
-            قد تختلف طريقة الحل بحسب المعلم أو الكتاب، لذلك نعرض أكثر من أسلوب عند الحاجة.
-          </div>
-          <div class="starter-grid">
-            <button class="starter-card" type="button" data-starter-prompt="احسب محيط دائرة نصف قطرها 7" data-starter-subject="الرياضيات">
-              <strong>حل سؤال رياضيات</strong>
-              <span>ابدأ بمسألة مباشرة مع خطوات واضحة.</span>
-            </button>
-            <button class="starter-card" type="button" data-starter-prompt="اشرح الفرق بين الانقسام المتساوي والمنصف" data-starter-subject="الأحياء">
-              <strong>اشرح درس</strong>
-              <span>احصل على شرح مبسط مناسب للمرحلة.</span>
-            </button>
-            <button class="starter-card" type="button" data-starter-action="upload-image">
-              <strong>حل من صورة</strong>
-              <span>ارفع صورة السؤال وسأحللها لك.</span>
-            </button>
-            <button class="starter-card" type="button" data-starter-prompt="اختبرني في هذا الدرس بخمس أسئلة قصيرة" data-starter-subject="العلوم">
-              <strong>اختبرني</strong>
-              <span>اختبار سريع لقياس الفهم.</span>
-            </button>
-            <button class="starter-card" type="button" data-starter-prompt="ساعدني في حل واجب هذا الدرس خطوة بخطوة">
-              <strong>حل واجب</strong>
-              <span>دعم منظم للواجبات الدراسية.</span>
-            </button>
-          </div>
+          <p>اكتب سؤالك من المنهج السعودي، أو استخدم مثالًا جاهزًا، أو ارفع صورة السؤال مباشرة.</p>
           <div class="example-list">
             <button class="example-chip" type="button" data-starter-prompt="احسب محيط دائرة نصف قطرها 7" data-starter-subject="الرياضيات">احسب محيط دائرة نصف قطرها 7</button>
             <button class="example-chip" type="button" data-starter-prompt="اشرح قانون نيوتن الثاني" data-starter-subject="الفيزياء">اشرح قانون نيوتن الثاني</button>
-            <button class="example-chip" type="button" data-starter-prompt="حل هذا السؤال مع صورة">حل هذا السؤال مع صورة</button>
-            <button class="example-chip" type="button" data-starter-prompt="س: ما نوع الرابطة في NaCl؟&#10;أ) تساهمية&#10;ب) أيونية&#10;ج) فلزية&#10;د) هيدروجينية" data-starter-subject="الكيمياء">حل سؤال اختيارات</button>
+            <button class="example-chip" type="button" data-starter-prompt="حل هذا السؤال مع صورة">حل هذا السؤال</button>
           </div>
         </div>
 
         <div class="messages" data-messages></div>
 
         <div class="composer-area">
-          <div class="small-copy">القائمة تشمل جميع الصفوف: من الأول الابتدائي حتى الثالث الثانوي.</div>
-          <div class="selectors">
-            <select class="field" data-grade>
-              <option>الأول الابتدائي</option>
-              <option>الثاني الابتدائي</option>
-              <option>الثالث الابتدائي</option>
-              <option>الرابع الابتدائي</option>
-              <option>الخامس الابتدائي</option>
-              <option>السادس الابتدائي</option>
-              <option>الأول المتوسط</option>
-              <option>الثاني المتوسط</option>
-              <option>الثالث المتوسط</option>
-              <option>الأول الثانوي</option>
-              <option selected>الثاني الثانوي</option>
-              <option>الثالث الثانوي</option>
-            </select>
-            <select class="field" data-subject>
-              <option selected>الرياضيات</option>
-              <option>العلوم</option>
-              <option>الفيزياء</option>
-              <option>الكيمياء</option>
-              <option>الأحياء</option>
-              <option>اللغة العربية</option>
-              <option>اللغة الإنجليزية</option>
-              <option>الاجتماعيات</option>
-              <option>المهارات الرقمية</option>
-            </select>
-            <select class="field" data-term>
-              <option selected>الفصل الدراسي الأول</option>
-              <option>الفصل الدراسي الثاني</option>
-            </select>
-            <input class="field" data-lesson type="text" placeholder="الدرس اختياري، والنظام يستنتجه من السؤال">
-          </div>
-
           <div class="attachments" data-attachments></div>
 
           <form class="composer" data-chat-form>
@@ -193,20 +185,20 @@
           </form>
 
           <div class="helper-toolbar">
-            <button class="helper-btn" type="button" data-upload-image>📷 رفع صورة السؤال</button>
-            <button class="helper-btn" type="button" data-upload-file>رفع ملف</button>
+            <button class="helper-btn" type="button" data-upload-image>📷 رفع صورة</button>
+            <button class="helper-btn" type="button" data-upload-file>📎 رفع ملف</button>
             <button class="helper-btn" type="button" data-focus-subject>اختيار مادة</button>
-            <button class="helper-btn helper-btn-ghost" type="button" data-clear-chat>مسح المحادثة</button>
+            <button class="helper-btn helper-btn-ghost" type="button" data-clear-chat>محادثة جديدة</button>
           </div>
 
           <div class="composer-note">
-            يجيب ملم يحل من الدرس الأقرب أولًا عبر المحتوى المحلي، ثم ينسق النتيجة بأسلوب المنصة المختصر والواضح.
+            إذا كان السؤال واضحًا سيجيب ملم مباشرة. وإذا كان ناقصًا سيسألك سؤالًا محددًا بدل الرد العام.
           </div>
         </div>
       </section>
     </section>
 
-    <section class="platform-insights" id="about">
+    <section class="platform-insights">
       <div class="shell">
         <div class="platform-insights-wrap">
           <article class="info-stat-card">
@@ -217,27 +209,27 @@
           <article class="info-stat-card">
             <div class="info-stat-icon">📚</div>
             <strong>9</strong>
-            <span>مواد أساسية داخل المنصة التعليمية</span>
+            <span>مواد أساسية داخل المنصة</span>
           </article>
           <article class="info-stat-card">
             <div class="info-stat-icon">🗓️</div>
             <strong>2</strong>
-            <span>فصلان دراسيان مع تغطية مستمرة للمنهج</span>
-          </article>
-          <article class="info-stat-card">
-            <div class="info-stat-icon">📷</div>
-            <strong>رفع</strong>
-            <span>صورة السؤال أو ملف الدرس مباشرة</span>
+            <span>فصلان دراسيان مع تغطية تعليمية مستمرة</span>
           </article>
           <article class="info-stat-card">
             <div class="info-stat-icon">🧠</div>
-            <strong>تحليل</strong>
-            <span>اختيارات، صح وخطأ، وشرح مبسط</span>
+            <strong>ذكي</strong>
+            <span>تحليل للسؤال والاختيارات والصح والخطأ</span>
+          </article>
+          <article class="info-stat-card">
+            <div class="info-stat-icon">📷</div>
+            <strong>مرن</strong>
+            <span>يدعم رفع صورة السؤال أو ملف الدرس</span>
           </article>
           <article class="info-stat-card">
             <div class="info-stat-icon">🇸🇦</div>
-            <strong>منهج</strong>
-            <span>اعتماد على المنهج السعودي ومراجعته</span>
+            <strong>سعودي</strong>
+            <span>يراجع الإجابة وفق المنهج السعودي</span>
           </article>
 
           <article class="info-stat-card info-stat-card-wide">
@@ -247,7 +239,7 @@
           </article>
           <article class="info-stat-card info-stat-card-wide">
             <div class="info-stat-icon">🗂️</div>
-            <h3>المحادثات المحفوظة</h3>
+            <h3>سجل المحادثات</h3>
             <div class="learned-list compact-list dark-list" data-history></div>
           </article>
           <article class="info-stat-card info-stat-card-wide">
@@ -267,7 +259,7 @@
           </article>
           <article class="info-stat-card info-stat-card-wide">
             <div class="info-stat-icon">⭐</div>
-            <h3>ما أعجبك سابقًا</h3>
+            <h3>إجابات أعجبتك</h3>
             <div class="learned-list compact-list dark-list" data-learned></div>
           </article>
           <article class="info-stat-card info-stat-card-wide">
@@ -278,12 +270,26 @@
         </div>
       </div>
     </section>
+
+    <div hidden>
+      <div data-selection-summary>لم يتم بدء جلسة جديدة بعد.</div>
+      <div data-runtime-summary>التشغيل الحالي: تجربة محلية مرتبة مع تحسينات مستمرة في الحل والشرح.</div>
+      <select data-runtime>
+        <option selected>vLLM Runtime</option>
+        <option>Ollama Runtime</option>
+        <option>وضع تجريبي داخل الواجهة</option>
+      </select>
+      <select data-training-mode>
+        <option selected>Prompt + RAG</option>
+        <option>Prompt + RAG + LoRA</option>
+        <option>Prompt + RAG + LoRA + DPO</option>
+      </select>
+      <button type="button" data-start-chat>ابدأ الشات</button>
+      <button type="button" data-quick-solve>ابدأ حل سؤال الآن</button>
+    </div>
   </main>
 
-  <button class="scroll-top-btn" type="button" data-scroll-top aria-label="العودة إلى أعلى الصفحة">
-    ↑
-  </button>
-
+  <button class="scroll-top-btn" type="button" data-scroll-top aria-label="العودة إلى أعلى الصفحة">↑</button>
   <script src="app.js"></script>
 </body>
 </html>

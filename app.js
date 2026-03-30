@@ -546,6 +546,7 @@ const runtimeSummary = document.querySelector("[data-runtime-summary]");
 const startChatButton = document.querySelector("[data-start-chat]");
 const quickSolveButton = document.querySelector("[data-quick-solve]");
 const heroExampleButton = document.querySelector("[data-hero-example]");
+const heroUploadButton = document.querySelector("[data-hero-upload]");
 const themeToggleButton = document.querySelector("[data-theme-toggle]");
 const uploadButton = document.querySelector("[data-open-upload]");
 const starterButtons = document.querySelectorAll("[data-starter-prompt], [data-starter-action]");
@@ -994,6 +995,9 @@ function jaccardSimilarity(left, right) {
 
 function getIntentScores(message) {
   const tokens = tokenizeForModel(message);
+  const genericAcademicTerms = new Set(["حلها", "اشرح", "ساعد", "سؤال", "مسألة", "هذا", "ذي", "حل", "وضح", "وش الحل"]);
+  const specificSignals =
+    /\d|احسب|أوجد|اوجد|حل|اختر|قارن|فسر|علل|اشرح|حدد|ما|لماذا|كيف|صح|خطأ|محيط|مساحة|قانون|معادلة|رابطة|نيوتن|خلية|ترجم|صحح/i;
   const scores = {
     academic: 0,
     chat: 0,
@@ -1061,7 +1065,7 @@ function needsClarification(message, intentResult, hasAttachments = false) {
     return false;
   }
 
-  if (/\d/.test(normalized) && tokens.length >= 3) {
+  if (specificSignals.test(normalized) && tokens.length >= 2) {
     return false;
   }
 
@@ -1069,23 +1073,23 @@ function needsClarification(message, intentResult, hasAttachments = false) {
     return false;
   }
 
-  if (tokens.length >= 4) {
+  if (tokens.length >= 3) {
     return false;
   }
 
-  if (intentResult.confidence < 0.42 && tokens.length <= 3) {
+  if (intentResult.confidence < 0.35 && tokens.length <= 2) {
     return true;
   }
 
-  if (normalized.length <= 4) {
+  if (normalized.length <= 3) {
     return true;
   }
 
-  if (unclearAcademicTerms.includes(normalized)) {
+  if (unclearAcademicTerms.includes(normalized) || genericAcademicTerms.has(normalized)) {
     return true;
   }
 
-  return normalized.split(/\s+/).length <= 2 && !/\d/.test(normalized);
+  return normalized.split(/\s+/).length <= 1 && !specificSignals.test(normalized);
 }
 
 function formatSimpleReply(text) {
@@ -2323,6 +2327,9 @@ if (heroExampleButton) {
     setPromptValue("احسب محيط دائرة نصف قطرها 7", "الرياضيات");
     document.querySelector("#chat")?.scrollIntoView({ behavior: "smooth", block: "start" });
   });
+}
+if (heroUploadButton) {
+  heroUploadButton.addEventListener("click", openImageUpload);
 }
 uploadButton.addEventListener("click", openGenericUpload);
 uploadImageButton.addEventListener("click", openImageUpload);
