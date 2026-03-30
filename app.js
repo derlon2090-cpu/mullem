@@ -134,16 +134,33 @@ const webPolicyItems = [
   "يتم ترجيح الجواب الأقرب للمنهج السعودي عند اختلاف الصياغات."
 ];
 
-const wajibatiLinks = {
-  "الفصل الدراسي الأول": [
-    { label: "دليل واجباتي للفصل الدراسي الأول", url: "https://www.wajibati.net/fsl1/" },
-    { label: "رياضيات الفصل الأول", url: "https://www.wajibati.net/fhrh1/" }
-  ],
-  "الفصل الدراسي الثاني": [
-    { label: "دليل واجباتي للفصل الدراسي الثاني", url: "https://www.wajibati.net/fsl22/" },
-    { label: "رياضيات الفصل الثاني", url: "https://www.wajibati.net/ry4mqrrat/" }
-  ]
+const gradeSubjectCatalog = {
+  "الأول الابتدائي": ["لغتي", "الرياضيات", "العلوم", "اللغة الإنجليزية", "التربية الإسلامية", "التربية الفنية", "المهارات الحياتية والأسرية"],
+  "الثاني الابتدائي": ["لغتي", "الرياضيات", "العلوم", "اللغة الإنجليزية", "التربية الإسلامية", "التربية الفنية", "المهارات الحياتية والأسرية"],
+  "الثالث الابتدائي": ["لغتي", "الرياضيات", "العلوم", "اللغة الإنجليزية", "التربية الإسلامية", "التربية الفنية", "المهارات الحياتية والأسرية"],
+  "الرابع الابتدائي": ["لغتي الجميلة", "الرياضيات", "العلوم", "اللغة الإنجليزية", "الدراسات الإسلامية", "الدراسات الاجتماعية", "التربية الفنية", "المهارات الرقمية"],
+  "الخامس الابتدائي": ["لغتي الجميلة", "الرياضيات", "العلوم", "اللغة الإنجليزية", "الدراسات الإسلامية", "الدراسات الاجتماعية", "التربية الفنية", "المهارات الرقمية"],
+  "السادس الابتدائي": ["لغتي الجميلة", "الرياضيات", "العلوم", "اللغة الإنجليزية", "الدراسات الإسلامية", "الدراسات الاجتماعية", "التربية الفنية", "المهارات الرقمية"],
+  "الأول المتوسط": ["لغتي الخالدة", "الرياضيات", "العلوم", "اللغة الإنجليزية", "الدراسات الإسلامية", "الدراسات الاجتماعية", "المهارات الرقمية", "التربية الفنية"],
+  "الثاني المتوسط": ["لغتي الخالدة", "الرياضيات", "العلوم", "اللغة الإنجليزية", "الدراسات الإسلامية", "الدراسات الاجتماعية", "المهارات الرقمية", "التربية الفنية"],
+  "الثالث المتوسط": ["لغتي الخالدة", "الرياضيات", "العلوم", "اللغة الإنجليزية", "الدراسات الإسلامية", "الدراسات الاجتماعية", "المهارات الرقمية", "التربية الفنية"],
+  "الأول الثانوي": ["الرياضيات", "الفيزياء", "الكيمياء", "الأحياء", "اللغة العربية", "اللغة الإنجليزية", "التقنية الرقمية", "الدراسات الإسلامية", "الاجتماعيات", "المهارات الحياتية والأسرية"],
+  "الثاني الثانوي": ["الرياضيات", "الفيزياء", "الكيمياء", "الأحياء", "اللغة العربية", "اللغة الإنجليزية", "التقنية الرقمية", "الدراسات الإسلامية", "الاجتماعيات", "المهارات الحياتية والأسرية"],
+  "الثالث الثانوي": ["الرياضيات", "الفيزياء", "الكيمياء", "الأحياء", "اللغة العربية", "اللغة الإنجليزية", "التقنية الرقمية", "الدراسات الإسلامية", "الاجتماعيات", "المهارات الحياتية والأسرية"]
 };
+
+const wajibatiTerms = [
+  {
+    name: "الفصل الدراسي الأول",
+    guideLabel: "دليل واجباتي للفصل الدراسي الأول",
+    guideUrl: "https://www.wajibati.net/fsl1/"
+  },
+  {
+    name: "الفصل الدراسي الثاني",
+    guideLabel: "دليل واجباتي للفصل الدراسي الثاني",
+    guideUrl: "https://www.wajibati.net/fsl22/"
+  }
+];
 
 const questionBankItems = [
   "احسب محيط دائرة نصف قطرها 7",
@@ -190,15 +207,9 @@ const scrollTopButton = document.querySelector("[data-scroll-top]");
 
 let attachments = [];
 let clarificationCursor = 0;
-let likedAnswers = loadJson(storageKeys.liked, []);
-let chatHistory = loadJson(storageKeys.history, []);
-let analytics = loadJson(storageKeys.analytics, {
-  totalMessages: 0,
-  xpUsed: 0,
-  subjects: {},
-  likes: 0,
-  dislikes: 0
-});
+let likedAnswers = [];
+let chatHistory = [];
+let analytics = createEmptyAnalytics();
 
 function loadJson(key, fallback) {
   try {
@@ -230,6 +241,43 @@ function getActiveUser() {
   const users = getUsers();
   const currentId = localStorage.getItem(storageKeys.currentUser);
   return users.find((user) => user.id === currentId) || users[0];
+}
+
+function createEmptyAnalytics() {
+  return {
+    totalMessages: 0,
+    xpUsed: 0,
+    subjects: {},
+    likes: 0,
+    dislikes: 0
+  };
+}
+
+function getScopedStorageKey(baseKey) {
+  const activeUser = getActiveUser();
+  return `${baseKey}_${activeUser?.id || "guest"}`;
+}
+
+function loadUserState() {
+  likedAnswers = loadJson(getScopedStorageKey(storageKeys.liked), []);
+  chatHistory = loadJson(getScopedStorageKey(storageKeys.history), []);
+  analytics = loadJson(getScopedStorageKey(storageKeys.analytics), createEmptyAnalytics());
+}
+
+function saveLikedAnswers() {
+  saveJson(getScopedStorageKey(storageKeys.liked), likedAnswers);
+}
+
+function saveChatHistory() {
+  saveJson(getScopedStorageKey(storageKeys.history), chatHistory);
+}
+
+function saveAnalytics() {
+  saveJson(getScopedStorageKey(storageKeys.analytics), analytics);
+}
+
+function getGradeMaterials(grade) {
+  return gradeSubjectCatalog[grade] || subjectOptions;
 }
 
 function applyTheme(theme) {
@@ -569,9 +617,10 @@ function formatAssistantSections(response) {
 
 function buildSources() {
   const term = termSelect?.value || "الفصل الدراسي الأول";
+  const termGuide = wajibatiTerms.find((entry) => entry.name === term) || wajibatiTerms[0];
   return [
     { type: "مرجع رسمي", label: "عين التعليمية", url: "https://ien.edu.sa/" },
-    { type: "مرجع منهجي", label: wajibatiLinks[term][0].label, url: wajibatiLinks[term][0].url },
+    { type: "مرجع منهجي", label: termGuide.guideLabel, url: termGuide.guideUrl },
     { type: "مرجع تعليمي", label: "بيت العلم", url: "https://www.baetiy.com/" }
   ];
 }
@@ -641,18 +690,55 @@ function renderQuestionBank() {
 
 function renderWajibatiLibrary() {
   if (!wajibatiLibraryList) return;
-  const term = termSelect?.value || "الفصل الدراسي الأول";
-  wajibatiLibraryList.innerHTML = wajibatiLinks[term]
-    .map((item) => `<a class="memory-item" href="${item.url}" target="_blank" rel="noreferrer"><strong>${item.label}</strong><span>${term}</span></a>`)
+  const activeGrade = gradeSelect?.value || "الثاني الثانوي";
+  const activeSubject = subjectSelect?.value || "";
+  const activeTerm = termSelect?.value || "الفصل الدراسي الأول";
+  const materials = getGradeMaterials(activeGrade);
+
+  wajibatiLibraryList.innerHTML = wajibatiTerms
+    .map(
+      (term) => `
+        <details class="library-term" ${term.name === activeTerm ? "open" : ""}>
+          <summary class="library-term-summary">
+            <strong>${term.name}</strong>
+            <span>${activeGrade}</span>
+          </summary>
+          <div class="library-term-body">
+            <a class="memory-item" href="${term.guideUrl}" target="_blank" rel="noreferrer">
+              <strong>${term.guideLabel}</strong>
+              <span>افتح الدليل أو اضغط على أي مادة لتجهيز الشات عليها مباشرة.</span>
+            </a>
+            <div class="library-subjects">
+              ${materials
+                .map(
+                  (subject) => `
+                    <button
+                      class="library-chip ${subject === activeSubject ? "active" : ""}"
+                      type="button"
+                      data-library-grade="${activeGrade}"
+                      data-library-term="${term.name}"
+                      data-library-subject="${subject}"
+                    >
+                      ${subject}
+                    </button>
+                  `
+                )
+                .join("")}
+            </div>
+          </div>
+        </details>
+      `
+    )
     .join("");
 }
 
 function renderTermCoverage() {
   if (!termCoverageList) return;
   const grade = gradeSelect?.value || "الثاني الثانوي";
+  const materialsCount = getGradeMaterials(grade).length;
   termCoverageList.innerHTML = [
-    `${grade} — الفصل الدراسي الأول: مراجع وكتب وحلول جاهزة.`,
-    `${grade} — الفصل الدراسي الثاني: مراجع وكتب وحلول جاهزة.`
+    `${grade} — الفصل الدراسي الأول: ${materialsCount} مادة متاحة داخل المكتبة.`,
+    `${grade} — الفصل الدراسي الثاني: ${materialsCount} مادة متاحة داخل المكتبة.`
   ]
     .map((item) => `<div class="memory-item"><strong>تغطية منهجية</strong><span>${item}</span></div>`)
     .join("");
@@ -714,7 +800,7 @@ function quickSolve() {
 function saveHistory(question, subject) {
   chatHistory.unshift({ question, subject, time: Date.now() });
   chatHistory = chatHistory.slice(0, 12);
-  saveJson(storageKeys.history, chatHistory);
+  saveChatHistory();
   renderHistory();
 }
 
@@ -760,7 +846,7 @@ async function handleSubmit(event) {
     analytics.totalMessages += 1;
     analytics.xpUsed += 5;
     analytics.subjects[subjectSelect?.value || "عام"] = (analytics.subjects[subjectSelect?.value || "عام"] || 0) + 1;
-    saveJson(storageKeys.analytics, analytics);
+    saveAnalytics();
     saveHistory(question || "سؤال مرفق", subjectSelect?.value || "عام");
   }
 
@@ -801,8 +887,8 @@ function handleMessageInteractions(event) {
     likedAnswers.unshift({ title, preview });
     likedAnswers = likedAnswers.slice(0, 8);
     analytics.likes += 1;
-    saveJson(storageKeys.analytics, analytics);
-    saveJson(storageKeys.liked, likedAnswers);
+    saveAnalytics();
+    saveLikedAnswers();
     renderLearnedMemory();
     renderInsights();
     likeButton.classList.add("active");
@@ -811,10 +897,27 @@ function handleMessageInteractions(event) {
 
   if (dislikeButton) {
     analytics.dislikes += 1;
-    saveJson(storageKeys.analytics, analytics);
+    saveAnalytics();
     renderInsights();
     dislikeButton.classList.add("active");
   }
+}
+
+function handleLibraryInteractions(event) {
+  const chip = event.target.closest("[data-library-subject]");
+  if (!chip) return;
+
+  const subject = chip.getAttribute("data-library-subject") || "";
+  const grade = chip.getAttribute("data-library-grade") || "";
+  const term = chip.getAttribute("data-library-term") || "";
+
+  if (gradeSelect && grade) gradeSelect.value = grade;
+  if (subjectSelect && subject) subjectSelect.value = subject;
+  if (termSelect && term) termSelect.value = term;
+
+  updateSelectionSummary();
+  setPromptValue(`ابدأ بشرح أساسيات مادة ${subject} لهذا الصف، ثم حل سؤالًا نموذجيًا من ${term}.`, subject);
+  startChat();
 }
 
 function bindStarterButtons() {
@@ -837,6 +940,7 @@ function bindStarterButtons() {
 
 function bootstrap() {
   applyTheme(localStorage.getItem(storageKeys.theme) || "light");
+  loadUserState();
   updateXpBalance();
   renderLearnedMemory();
   renderHistory();
@@ -880,6 +984,7 @@ function bootstrap() {
   });
 
   messageList?.addEventListener("click", handleMessageInteractions);
+  wajibatiLibraryList?.addEventListener("click", handleLibraryInteractions);
   window.addEventListener("scroll", syncScrollTopButton, { passive: true });
   scrollTopButton?.addEventListener("click", () => window.scrollTo({ top: 0, behavior: "smooth" }));
   bindStarterButtons();

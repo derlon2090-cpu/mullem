@@ -29,7 +29,10 @@ const storageKeys = {
   users: "mlm_users",
   currentUser: "mlm_current_user",
   adminSession: "mlm_admin_session",
-  passwordReset: "mlm_password_reset"
+  passwordReset: "mlm_password_reset",
+  history: "mlm_chat_history",
+  liked: "mlm_liked_answers",
+  analytics: "mlm_analytics"
 };
 
 const adminCredentials = {
@@ -86,6 +89,33 @@ function generateResetCode() {
   return String(Math.floor(100000 + Math.random() * 900000));
 }
 
+function ensureUserWorkspace(userId) {
+  const analyticsKey = `${storageKeys.analytics}_${userId}`;
+  const historyKey = `${storageKeys.history}_${userId}`;
+  const likedKey = `${storageKeys.liked}_${userId}`;
+
+  if (!localStorage.getItem(analyticsKey)) {
+    localStorage.setItem(
+      analyticsKey,
+      JSON.stringify({
+        totalMessages: 0,
+        xpUsed: 0,
+        subjects: {},
+        likes: 0,
+        dislikes: 0
+      })
+    );
+  }
+
+  if (!localStorage.getItem(historyKey)) {
+    localStorage.setItem(historyKey, JSON.stringify([]));
+  }
+
+  if (!localStorage.getItem(likedKey)) {
+    localStorage.setItem(likedKey, JSON.stringify([]));
+  }
+}
+
 function saveResetRequest(request) {
   localStorage.setItem(storageKeys.passwordReset, JSON.stringify(request));
 }
@@ -140,6 +170,7 @@ loginForm?.addEventListener("submit", (event) => {
   }
 
   localStorage.setItem(storageKeys.currentUser, user.id);
+  ensureUserWorkspace(user.id);
   setState(`أهلًا ${user.name}، تم تسجيل الدخول بنجاح.`);
   window.location.href = "student.html";
 });
@@ -188,6 +219,7 @@ registerForm?.addEventListener("submit", (event) => {
   users.unshift(user);
   saveUsers(users);
   localStorage.setItem(storageKeys.currentUser, user.id);
+  ensureUserWorkspace(user.id);
   setState(`تم إنشاء الحساب بنجاح يا ${name}.`);
   window.location.href = "student.html";
 });
