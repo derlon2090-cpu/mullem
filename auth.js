@@ -1,6 +1,12 @@
 const authTabs = document.querySelectorAll("[data-auth-tab]");
+const authPanels = document.querySelectorAll("[data-auth-panel]");
+
 const loginForm = document.querySelector("[data-auth-login-form]");
 const registerForm = document.querySelector("[data-auth-register-form]");
+const forgotEmailForm = document.querySelector("[data-auth-forgot-email-form]");
+const codeForm = document.querySelector("[data-auth-code-form]");
+const resetForm = document.querySelector("[data-auth-reset-form]");
+
 const authState = document.querySelector("[data-auth-state]");
 
 const loginEmail = document.querySelector("[data-auth-login-email]");
@@ -9,24 +15,29 @@ const registerName = document.querySelector("[data-auth-register-name]");
 const registerEmail = document.querySelector("[data-auth-register-email]");
 const registerPassword = document.querySelector("[data-auth-register-password]");
 const registerGrade = document.querySelector("[data-auth-register-grade]");
+const forgotEmail = document.querySelector("[data-auth-forgot-email]");
+const forgotCode = document.querySelector("[data-auth-code]");
+const newPassword = document.querySelector("[data-auth-new-password]");
+const confirmPassword = document.querySelector("[data-auth-confirm-password]");
+
 const googleButton = document.querySelector("[data-auth-google]");
 const forgotButton = document.querySelector("[data-auth-forgot]");
+const backButton = document.querySelector("[data-auth-back]");
 const scrollTopButton = document.querySelector("[data-scroll-top]");
-const authCopies = document.querySelectorAll("[data-auth-copy]");
-const authTrustBlocks = document.querySelectorAll("[data-auth-trust]");
-const authPreviewBlocks = document.querySelectorAll("[data-auth-preview]");
-const authFeatureBlocks = document.querySelectorAll("[data-auth-feature]");
 
 const storageKeys = {
   users: "mlm_users",
   currentUser: "mlm_current_user",
-  adminSession: "mlm_admin_session"
+  adminSession: "mlm_admin_session",
+  passwordReset: "mlm_password_reset"
 };
 
 const adminCredentials = {
   email: "admin@mullem.sa",
   password: "Mullem@2026"
 };
+
+const googleAuthUrl = "https://accounts.google.com/v3/signin/accountchooser?client_id=310079877066-matp293bddarf3hnstcd4t86qcbn6st5.apps.googleusercontent.com&code_challenge=ukLxkUvQSTdXKMpvgFaNecXJL-OMuKYappJshQR2cPg&code_challenge_method=S256&redirect_uri=https%3A%2F%2Ffor-test.runasp.net%2Fsignin-google&response_type=code&scope=openid+profile+email&state=CfDJ8NrJmZRANOhNtI69Ce945adjwp7Isi5KvuQ686lo2OZSc7mi2ByPR9OIRUGFCuoM0GKoPmtPGFeYGfqDlBagKlGcJ1qUvEJLEiOmU25DbgjkOLah1Z0Gzft4zMYpXuZbV7x-msInU3yFey9MJaxAMUAeAnWauRWh82A4agHZRMixBPlcwn7n2OmqIf7kbkYoqwzLJwY53VCVu006sObab8ZFSSumssGv5MQvUZ9ycO4hYoD-5FZ3QoUtNBUcQ25_xpGRb1mhIHkLQo_zU3Ii8JZEPW3fzcbVPFxf_2JSCIuXpPBqZg9-i5y5ro6tQkPyDi28QA_OLXPIDyC7DM_2y8fdfp9j2XgMXckXIparQ2r3sTsuMVuM88hpQRMA-a8WZfnpGDTQ1GV65DFerR3mwzc&dsh=S1310616813%3A1774886189779982&o2v=2&service=lso&flowName=GeneralOAuthFlow&opparams=%253F&continue=https%3A%2F%2Faccounts.google.com%2Fsignin%2Foauth%2Fconsent%3Fauthuser%3Dunknown%26part%3DAJi8hANR2Ua5iZYW7V082zIowf-wy4291zvcivR3wVqEgNKV3AkS1VKhcamB2Ng3oYEDZ_XL4t2TtqFwiphRc9VlyZTXH4wPR6p2lRn0013lTgGpw4enahAV4RZ1d_zFZXsYHMTjSbFhQ67BNaN18tC_LuuNDkJl4QwCM4B3S0ez-xp6GtXe7hinveaGp4F27-DzParuNym9MRD3zsyqBciJdhf27YD4n5hDPTIDI5HW9LONlhZFhcttI9iKBB2upFy8oPTUZsdLy5WVvKUXliwTdMv1cfF3K9t5UNMYfTfql2yEqLXKM6QrZxUoTlgPYLWSaSQTtzAr-K8Adp39VHLFj3272eszFop82qR-1Kqfj5LD-WIrMvQCmcNnWmW_rvhtoc1NApna6nAW2f2WfPHM_N3fvWovjFPFvo3r61QSgw_R8yC0Pwf8yskjUkoJTTD5qcAlTTobhwQCZjU3aw1jB8ONQ8K2OQ%26flowName%3DGeneralOAuthFlow%26as%3DS1310616813%253A1774886189779982%26client_id%3D310079877066-matp293bddarf3hnstcd4t86qcbn6st5.apps.googleusercontent.com%26requestPath%3D%252Fsignin%252Foauth%252Fconsent%23&app_domain=https%3A%2F%2Ffor-test.runasp.net";
 
 function loadUsers() {
   try {
@@ -59,42 +70,46 @@ function isValidEmail(email) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
 }
 
+function setActivePanel(mode) {
+  authTabs.forEach((tab) => {
+    tab.classList.toggle("active", tab.getAttribute("data-auth-tab") === mode);
+  });
+
+  authPanels.forEach((panel) => {
+    panel.hidden = panel.getAttribute("data-auth-panel") !== mode;
+  });
+}
+
 function syncScrollTopButton() {
   if (!scrollTopButton) return;
   scrollTopButton.classList.toggle("visible", window.scrollY > 220);
 }
 
-function setActiveTab(mode) {
-  const isLogin = mode === "login";
-  authTabs.forEach((tab) => {
-    tab.classList.toggle("active", tab.getAttribute("data-auth-tab") === mode);
-  });
-  loginForm.hidden = !isLogin;
-  registerForm.hidden = isLogin;
-  authCopies.forEach((block) => {
-    block.hidden = block.getAttribute("data-auth-copy") !== mode;
-  });
-  authTrustBlocks.forEach((block) => {
-    block.hidden = block.getAttribute("data-auth-trust") !== mode;
-  });
-  authPreviewBlocks.forEach((block) => {
-    block.hidden = block.getAttribute("data-auth-preview") !== mode;
-  });
-  authFeatureBlocks.forEach((block) => {
-    const targetMode = block.getAttribute("data-auth-feature");
-    block.hidden = targetMode !== "login" && targetMode !== "register" ? false : targetMode !== mode;
-  });
+function generateResetCode() {
+  return String(Math.floor(100000 + Math.random() * 900000));
+}
+
+function saveResetRequest(request) {
+  localStorage.setItem(storageKeys.passwordReset, JSON.stringify(request));
+}
+
+function loadResetRequest() {
+  try {
+    return JSON.parse(localStorage.getItem(storageKeys.passwordReset) || "null");
+  } catch (error) {
+    return null;
+  }
 }
 
 authTabs.forEach((tab) => {
   tab.addEventListener("click", () => {
-    setActiveTab(tab.getAttribute("data-auth-tab"));
+    setActivePanel(tab.getAttribute("data-auth-tab"));
   });
 });
 
-setActiveTab("login");
+setActivePanel("login");
 
-loginForm.addEventListener("submit", (event) => {
+loginForm?.addEventListener("submit", (event) => {
   event.preventDefault();
   const email = loginEmail.value.trim().toLowerCase();
   const password = loginPassword.value;
@@ -129,7 +144,7 @@ loginForm.addEventListener("submit", (event) => {
   window.location.href = "index.html";
 });
 
-registerForm.addEventListener("submit", (event) => {
+registerForm?.addEventListener("submit", (event) => {
   event.preventDefault();
   const name = registerName.value.trim();
   const email = registerEmail.value.trim().toLowerCase();
@@ -177,39 +192,125 @@ registerForm.addEventListener("submit", (event) => {
   window.location.href = "index.html";
 });
 
-if (googleButton) {
-  googleButton.addEventListener("click", () => {
-    const users = loadUsers();
-    let user = users.find((entry) => entry.email === "google.student@mullem.sa");
+forgotButton?.addEventListener("click", () => {
+  setActivePanel("forgot");
+  authState.textContent = "أدخل بريدك الإلكتروني لبدء استعادة كلمة المرور.";
+});
 
-    if (!user) {
-      user = {
-        id: `student-google-${Date.now()}`,
-        name: "طالب Google",
-        email: "google.student@mullem.sa",
-        password: "GoogleLogin",
-        role: "Student",
-        grade: "الثاني الثانوي",
-        package: "مجاني محدود",
-        xp: 120,
-        status: "نشط",
-        activity: "سجل الدخول عبر Google"
-      };
-      users.unshift(user);
-      saveUsers(users);
-    }
+backButton?.addEventListener("click", () => {
+  setActivePanel("login");
+  authState.textContent = "عدت إلى صفحة تسجيل الدخول.";
+  forgotEmailForm.hidden = false;
+  codeForm.hidden = true;
+  resetForm.hidden = true;
+});
 
-    localStorage.setItem(storageKeys.currentUser, user.id);
-    authState.textContent = "تم تسجيل الدخول عبر Google التجريبي، جارٍ تحويلك إلى الشات.";
-    window.location.href = "index.html";
+forgotEmailForm?.addEventListener("submit", (event) => {
+  event.preventDefault();
+  const email = forgotEmail.value.trim().toLowerCase();
+  const users = loadUsers();
+  const user = users.find((entry) => entry.email?.toLowerCase() === email);
+
+  if (!email) {
+    authState.textContent = "أدخل بريدك الإلكتروني أولًا.";
+    return;
+  }
+
+  if (!isValidEmail(email)) {
+    authState.textContent = "البريد الإلكتروني غير صحيح.";
+    return;
+  }
+
+  if (!user) {
+    authState.textContent = "لا يوجد حساب مرتبط بهذا البريد.";
+    return;
+  }
+
+  const code = generateResetCode();
+  saveResetRequest({
+    email,
+    code,
+    createdAt: Date.now()
   });
-}
 
-if (forgotButton) {
-  forgotButton.addEventListener("click", () => {
-    authState.textContent = "لإعادة التعيين، أدخل بريدك أولًا ثم أنشئ كلمة مرور جديدة من تبويب إنشاء حساب.";
-  });
-}
+  forgotEmailForm.hidden = true;
+  codeForm.hidden = false;
+  authState.textContent = `تم إرسال كود التحقق إلى بريدك. في النسخة الحالية داخل الموقع، كود التحقق التجريبي هو: ${code}`;
+});
+
+codeForm?.addEventListener("submit", (event) => {
+  event.preventDefault();
+  const request = loadResetRequest();
+  const code = forgotCode.value.trim();
+
+  if (!request) {
+    authState.textContent = "ابدأ من جديد بإدخال البريد الإلكتروني.";
+    forgotEmailForm.hidden = false;
+    codeForm.hidden = true;
+    return;
+  }
+
+  if (code !== request.code) {
+    authState.textContent = "كود التحقق غير صحيح.";
+    return;
+  }
+
+  codeForm.hidden = true;
+  resetForm.hidden = false;
+  authState.textContent = "تم التحقق من الكود. اكتب كلمة المرور الجديدة الآن.";
+});
+
+resetForm?.addEventListener("submit", (event) => {
+  event.preventDefault();
+  const request = loadResetRequest();
+
+  if (!request) {
+    authState.textContent = "انتهت جلسة الاستعادة. أعد المحاولة من البداية.";
+    forgotEmailForm.hidden = false;
+    codeForm.hidden = true;
+    resetForm.hidden = true;
+    return;
+  }
+
+  if (!newPassword.value || !confirmPassword.value) {
+    authState.textContent = "أدخل كلمة المرور الجديدة وأعد تأكيدها.";
+    return;
+  }
+
+  if (newPassword.value.length < 6) {
+    authState.textContent = "كلمة المرور الجديدة يجب أن تكون 6 أحرف أو أكثر.";
+    return;
+  }
+
+  if (newPassword.value !== confirmPassword.value) {
+    authState.textContent = "كلمتا المرور غير متطابقتين.";
+    return;
+  }
+
+  const users = loadUsers();
+  const userIndex = users.findIndex((entry) => entry.email?.toLowerCase() === request.email);
+
+  if (userIndex === -1) {
+    authState.textContent = "تعذر تحديث كلمة المرور لهذا الحساب.";
+    return;
+  }
+
+  users[userIndex].password = newPassword.value;
+  users[userIndex].activity = "حدّث كلمة المرور";
+  saveUsers(users);
+  localStorage.removeItem(storageKeys.passwordReset);
+
+  authState.textContent = "تم تحديث كلمة المرور بنجاح. يمكنك تسجيل الدخول الآن.";
+  forgotEmailForm.hidden = false;
+  codeForm.hidden = true;
+  resetForm.hidden = true;
+  setActivePanel("login");
+});
+
+googleButton?.addEventListener("click", () => {
+  authState.textContent = "جارٍ تحويلك إلى صفحة تسجيل الدخول عبر Google...";
+  window.location.href = googleAuthUrl;
+});
 
 if (scrollTopButton) {
   window.addEventListener("scroll", syncScrollTopButton, { passive: true });
