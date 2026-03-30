@@ -21,6 +21,7 @@
         <div class="top-chip" data-status>وضع تجريبي محلي</div>
         <div class="top-chip">مصنف نية مستقل</div>
         <div class="top-chip">مراجعة ويب قبل الإجابة</div>
+        <div class="top-chip">مراجع واجباتي للترمين</div>
       </div>
     </header>
   </div>
@@ -60,6 +61,21 @@
         </div>
 
         <div class="panel">
+          <h3>مكتبة واجباتي</h3>
+          <div class="learned-list" data-wajibati-library></div>
+        </div>
+
+        <div class="panel">
+          <h3>تغطية الترمين</h3>
+          <div class="learned-list" data-term-coverage></div>
+        </div>
+
+        <div class="panel">
+          <h3>تصنيف مصادر الويب</h3>
+          <div class="learned-list" data-web-policy></div>
+        </div>
+
+        <div class="panel">
           <h3>محرك الذكاء الاصطناعي المحلي</h3>
           <div class="stack">
             <select class="field" data-runtime>
@@ -73,7 +89,7 @@
               <option>Prompt + RAG + LoRA + DPO</option>
             </select>
             <div class="small-copy">
-              هذا التصميم مبني على نموذج مفتوح المصدر + طبقة معرفة للمنهج السعودي + تدريب سلوكي خفيف لأسلوب ملم يحل.
+              هذا التصميم مبني على نموذج مفتوح المصدر + طبقة معرفة للمنهج السعودي + تدريب سلوكي خفيف لأسلوب ملم يحل، مع ربط مراجع كتب وحلول من واجباتي للفصلين الأول والثاني.
             </div>
             <div class="selection-summary" data-runtime-summary>
               التشغيل الحالي: محرك محلي تجريبي داخل الواجهة. في النسخة الإنتاجية يُستبدل هذا بسيرفر vLLM أو Ollama داخل المنصة.
@@ -94,7 +110,7 @@
             </div>
             <div class="memory-item">
               <strong>مراجعة الويب قبل الإجابة</strong>
-              <span>في الأسئلة الأكاديمية يحاول جمع أكثر من مرجع ويب، ثم يقارنها مع المنهج المحلي ويختار الصياغة الأقرب والأكثر اتساقًا.</span>
+              <span>في الأسئلة الأكاديمية يبدأ بالمراجعة التعليمية من بيت العلم، ثم يراجع عين التعليمية وواجباتي للتحقق من الكتاب والمنهج، ثم يقارن ذلك مع بقية المراجع قبل تثبيت الجواب التحليلي النهائي.</span>
             </div>
             <div class="memory-item">
               <strong>سلوك المنصة</strong>
@@ -125,7 +141,7 @@
       <section class="chat-shell">
         <div class="chat-top">
           <h2>الشات الذكي</h2>
-          <p>بعد تحديد السياق الدراسي، سيجيب ملم يحل بصيغة تعليمية: إجابة نهائية، شرح، خطوات، أخطاء شائعة، وسؤال مشابه.</p>
+          <p>بعد تحديد السياق الدراسي، سيجيب ملم يحل بصيغة تعليمية: إجابة نهائية، شرح، خطوات، أخطاء شائعة، وسؤال مشابه. لا يلزم كتابة اسم الدرس إذا كان السؤال واضحًا؛ فالنظام يحاول استنتاجه تلقائيًا من النص.</p>
           <div class="chat-tags">
             <div class="tag">تصنيف نية ذكي</div>
             <div class="tag">المنهج السعودي أولًا</div>
@@ -137,15 +153,41 @@
           <div class="smart-note">
             قد تختلف طريقة الحل بحسب المعلم أو الكتاب، لذلك نعرض أكثر من أسلوب عند الحاجة.
           </div>
+          <div class="starter-grid">
+            <button class="starter-card" type="button" data-starter-prompt="احسب محيط دائرة نصف قطرها 7" data-starter-subject="الرياضيات">
+              <strong>حل سؤال رياضيات</strong>
+              <span>ابدأ بمسألة مباشرة مع خطوات واضحة.</span>
+            </button>
+            <button class="starter-card" type="button" data-starter-prompt="اشرح الفرق بين الانقسام المتساوي والمنصف" data-starter-subject="الأحياء">
+              <strong>اشرح درس</strong>
+              <span>احصل على شرح مبسط مناسب للمرحلة.</span>
+            </button>
+            <button class="starter-card" type="button" data-starter-action="upload-image">
+              <strong>حل من صورة</strong>
+              <span>ارفع صورة السؤال وسأحللها لك.</span>
+            </button>
+            <button class="starter-card" type="button" data-starter-prompt="اختبرني في هذا الدرس بخمسة أسئلة قصيرة" data-starter-subject="العلوم">
+              <strong>اختبرني</strong>
+              <span>اختبار سريع لقياس الفهم.</span>
+            </button>
+            <button class="starter-card" type="button" data-starter-prompt="ساعدني في حل واجب هذا الدرس خطوة بخطوة">
+              <strong>حل واجب</strong>
+              <span>دعم منظم للواجبات الدراسية.</span>
+            </button>
+          </div>
         </div>
 
         <div class="messages" data-messages></div>
 
         <div class="composer-area">
+          <div class="small-copy">القائمة تشمل جميع الصفوف: من الأول الابتدائي حتى الثالث الثانوي.</div>
           <div class="selectors">
             <select class="field" data-grade>
               <option>الأول الابتدائي</option>
+              <option>الثاني الابتدائي</option>
               <option>الثالث الابتدائي</option>
+              <option>الرابع الابتدائي</option>
+              <option>الخامس الابتدائي</option>
               <option>السادس الابتدائي</option>
               <option>الأول المتوسط</option>
               <option>الثاني المتوسط</option>
@@ -168,9 +210,8 @@
             <select class="field" data-term>
               <option selected>الفصل الدراسي الأول</option>
               <option>الفصل الدراسي الثاني</option>
-              <option>الفصل الدراسي الثالث</option>
             </select>
-            <input class="field" data-lesson type="text" placeholder="الدرس أو الوحدة">
+            <input class="field" data-lesson type="text" placeholder="الدرس اختياري، والنظام يستنتجه من السؤال">
           </div>
 
           <div class="attachments" data-attachments></div>
@@ -182,7 +223,7 @@
                 <path d="M5 12h14"></path>
               </svg>
             </button>
-            <textarea class="prompt-input" data-prompt rows="1" placeholder="اكتب سؤالك الأكاديمي هنا..."></textarea>
+            <textarea class="prompt-input" data-prompt rows="1" placeholder="اكتب سؤالك من المنهج السعودي..."></textarea>
             <button class="send-btn" type="submit" aria-label="إرسال">
               <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <path d="M22 2L11 13"></path>
@@ -191,6 +232,13 @@
             </button>
             <input data-file-input type="file" hidden multiple accept=".pdf,.doc,.docx,.png,.jpg,.jpeg,.txt,.md">
           </form>
+
+          <div class="helper-toolbar">
+            <button class="helper-btn" type="button" data-upload-image>رفع صورة</button>
+            <button class="helper-btn" type="button" data-upload-file>رفع ملف</button>
+            <button class="helper-btn" type="button" data-focus-subject>اختيار مادة</button>
+            <button class="helper-btn helper-btn-ghost" type="button" data-clear-chat>مسح المحادثة</button>
+          </div>
 
           <div class="composer-note">
             يجيب ملم يحل من الدرس الأقرب أولًا عبر RAG محلي، ثم يُنسق النتيجة بأسلوب المنصة. في النسخة الاحترافية يعمل هذا على نموذج محلي عبر vLLM أو Ollama مع تدريب سلوكي خفيف.

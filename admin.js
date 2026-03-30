@@ -2,6 +2,19 @@ const adminStatsRoot = document.querySelector("[data-admin-stats]");
 const usersTableRoot = document.querySelector("[data-users-table]");
 const feedbackListRoot = document.querySelector("[data-feedback-list]");
 const reportListRoot = document.querySelector("[data-report-list]");
+const adminAuthRoot = document.querySelector("[data-admin-auth]");
+const adminAppRoot = document.querySelector("[data-admin-app]");
+const adminLoginForm = document.querySelector("[data-admin-login-form]");
+const adminEmailInput = document.querySelector("[data-admin-email]");
+const adminPasswordInput = document.querySelector("[data-admin-password]");
+const adminLoginState = document.querySelector("[data-admin-login-state]");
+const adminLogoutButton = document.querySelector("[data-admin-logout]");
+
+const adminCredentials = {
+  email: "admin@mullem.sa",
+  password: "Mullem@2026"
+};
+const adminSessionKey = "mlm_admin_session";
 
 const analytics = loadAdminJson("mlm_analytics", {
   totalMessages: 0,
@@ -38,6 +51,17 @@ function loadAdminJson(key, fallback) {
   } catch (error) {
     return fallback;
   }
+}
+
+function isAdminLoggedIn() {
+  return localStorage.getItem(adminSessionKey) === "1";
+}
+
+function updateAdminView() {
+  const loggedIn = isAdminLoggedIn();
+  adminAuthRoot.hidden = loggedIn;
+  adminAppRoot.hidden = !loggedIn;
+  adminLogoutButton.hidden = !loggedIn;
 }
 
 function getTopEntry(record, fallback) {
@@ -161,7 +185,38 @@ function renderReports() {
     .join("");
 }
 
-renderStats();
-renderUsersTable();
-renderFeedback();
-renderReports();
+adminLoginForm.addEventListener("submit", (event) => {
+  event.preventDefault();
+
+  const email = adminEmailInput.value.trim().toLowerCase();
+  const password = adminPasswordInput.value;
+
+  if (email === adminCredentials.email && password === adminCredentials.password) {
+    localStorage.setItem(adminSessionKey, "1");
+    adminLoginState.textContent = "تم تسجيل الدخول بنجاح.";
+    updateAdminView();
+    renderStats();
+    renderUsersTable();
+    renderFeedback();
+    renderReports();
+    return;
+  }
+
+  adminLoginState.textContent = "بيانات الدخول غير صحيحة. تأكد من البريد وكلمة المرور.";
+});
+
+adminLogoutButton.addEventListener("click", () => {
+  localStorage.removeItem(adminSessionKey);
+  adminPasswordInput.value = "";
+  adminLoginState.textContent = "تم تسجيل الخروج.";
+  updateAdminView();
+});
+
+updateAdminView();
+
+if (isAdminLoggedIn()) {
+  renderStats();
+  renderUsersTable();
+  renderFeedback();
+  renderReports();
+}

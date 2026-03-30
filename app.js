@@ -121,7 +121,7 @@ const curriculumData = [
   {
     grade: "الثاني الثانوي",
     subject: "المهارات الرقمية",
-    term: "الفصل الدراسي الثالث",
+    term: "الفصل الدراسي الثاني",
     lesson: "أمن المعلومات",
     unit: "الثقافة الرقمية",
     concepts: ["كلمات المرور", "التصيد", "الحماية"],
@@ -136,6 +136,363 @@ const curriculumData = [
     sampleQuestion: "كيف أحمي حسابي من التصيد الإلكتروني؟"
   }
 ];
+
+const curriculumLibrary = [
+  {
+    grade: "الثاني الثانوي",
+    subject: "الرياضيات",
+    term: "الفصل الدراسي الأول",
+    label: "كتاب الرياضيات 2-1 ثاني ثانوي مسارات ف1 - واجباتي",
+    url: "https://www.wajibati.net/fhrh1/"
+  },
+  {
+    grade: "الثاني الثانوي",
+    subject: "الرياضيات",
+    term: "الفصل الدراسي الأول",
+    label: "حل كتاب الرياضيات 1-2 ثاني ثانوي مسارات - واجباتي",
+    url: "https://www.wajibati.net/%D8%AD%D9%84-%D9%83%D8%AA%D8%A7%D8%A8-%D8%A7%D9%84%D8%B1%D9%8A%D8%A7%D8%B6%D9%8A%D8%A7%D8%AA-%D8%AB%D8%A7%D9%86%D9%8A-%D8%AB%D8%A7%D9%86%D9%88%D9%8A-%D9%85%D9%82%D8%B1%D8%B1%D8%A7%D8%AA-1441/"
+  },
+  {
+    grade: "الثاني الثانوي",
+    subject: "الفيزياء",
+    term: "الفصل الدراسي الأول",
+    label: "كتاب فيزياء 2 ثاني ثانوي مسارات ف1 - واجباتي",
+    url: "https://www.wajibati.net/fez21445/"
+  },
+  {
+    grade: "الثاني الثانوي",
+    subject: "الفيزياء",
+    term: "الفصل الدراسي الأول",
+    label: "حل كتاب الفيزياء 2 نظام المسارات - واجباتي",
+    url: "https://www.wajibati.net/fezeaa2/"
+  },
+  {
+    grade: "الثاني الثانوي",
+    subject: "الأحياء",
+    term: "الفصل الدراسي الأول",
+    label: "كتاب أحياء 2-1 ثاني ثانوي مسارات ف1 - واجباتي",
+    url: "https://www.wajibati.net/%D9%83%D8%AA%D8%A7%D8%A8-%D8%A7%D8%AD%D9%8A%D8%A7%D8%A1-2-%D9%85%D8%B3%D8%A7%D8%B1%D8%A7%D8%AA-1445/"
+  },
+  {
+    grade: "الثاني الثانوي",
+    subject: "الأحياء",
+    term: "الفصل الدراسي الثاني",
+    label: "كتاب الأحياء 2-2 ثاني ثانوي مسارات ف2 - واجباتي",
+    url: "https://www.wajibati.net/%D9%83%D8%AA%D8%A7%D8%A8-%D8%A7%D9%84%D8%A7%D8%AD%D9%8A%D8%A7%D8%A1-2-2-%D8%AB%D8%A7%D9%86%D9%8A-%D8%AB%D8%A7%D9%86%D9%88%D9%8A-%D9%85%D8%B3%D8%A7%D8%B1%D8%A7%D8%AA-%D9%812-%D8%A7%D9%84%D9%81%D8%B5/"
+  },
+  {
+    grade: "الثاني الثانوي",
+    subject: "اللغة العربية",
+    term: "الفصل الدراسي الأول",
+    label: "كتاب القراءات 1 ثاني ثانوي الفصل الأول - واجباتي",
+    url: "https://www.wajibati.net/%D9%83%D8%AA%D8%A7%D8%A8-%D8%A7%D9%84%D9%82%D8%B1%D8%A7%D8%A1%D8%A7%D8%AA-1-%D8%AB%D8%A7%D9%86%D9%8A-%D8%AB%D8%A7%D9%86%D9%88%D9%8A-%D8%A7%D9%84%D9%81%D8%B5%D9%84-%D8%A7%D9%84%D8%A7%D9%88%D9%84-1447/"
+  },
+  {
+    grade: "الثاني الثانوي",
+    subject: "اللغة الإنجليزية",
+    term: "الفصل الدراسي الأول",
+    label: "كتاب الإنجليزي Mega Goal 2-1 ثاني ثانوي مسارات ف1 - واجباتي",
+    url: "https://www.wajibati.net/%D9%83%D8%AA%D8%A7%D8%A8-%D8%A7%D9%84%D8%A7%D9%86%D8%AC%D9%84%D9%8A%D8%B2%D9%8A-mega-goal-2-%D8%AB%D8%A7%D9%86%D9%8A-%D8%AB%D8%A7%D9%86%D9%88%D9%8A-%D9%85%D8%B3%D8%A7%D8%B1%D8%A7%D8%AA-%D9%811-1446/"
+  },
+  {
+    grade: "الثاني الثانوي",
+    subject: "اللغة الإنجليزية",
+    term: "الفصل الدراسي الأول",
+    label: "حل Mega Goal 2-1 ثاني ثانوي مسارات ف1 - واجباتي",
+    url: "https://www.wajibati.net/mega-goal-3-altaalib/"
+  },
+  {
+    grade: "الثاني الثانوي",
+    subject: "الرياضيات",
+    term: "الفصل الدراسي الثاني",
+    label: "كتاب الرياضيات 2-2 ثاني ثانوي مسارات ف2 - واجباتي",
+    url: "https://www.wajibati.net/%D9%83%D8%AA%D8%A7%D8%A8-%D8%A7%D9%84%D8%B1%D9%8A%D8%A7%D8%B6%D9%8A%D8%A7%D8%AA-2-%D8%AB%D8%A7%D9%86%D9%8A-%D8%AB%D8%A7%D9%86%D9%88%D9%8A-%D9%85%D8%B3%D8%A7%D8%B1%D8%A7%D8%AA-%D9%812-1445/"
+  },
+  {
+    grade: "الثاني الثانوي",
+    subject: "الرياضيات",
+    term: "الفصل الدراسي الثاني",
+    label: "حل كتاب الرياضيات 2-2 ثاني ثانوي مسارات ف2 - واجباتي",
+    url: "https://www.wajibati.net/ry4mqrrat/"
+  },
+  {
+    grade: "الثاني الثانوي",
+    subject: "الكيمياء",
+    term: "الفصل الدراسي الأول",
+    label: "كتاب الكيمياء 2-1 ثاني ثانوي مسارات ف1 - واجباتي",
+    url: "https://www.wajibati.net/34929/"
+  },
+  {
+    grade: "الثاني الثانوي",
+    subject: "الكيمياء",
+    term: "الفصل الدراسي الثاني",
+    label: "كتاب الكيمياء 2-2 ثاني ثانوي مسارات ف2 - واجباتي",
+    url: "https://www.wajibati.net/%D9%83%D8%AA%D8%A7%D8%A8-%D8%A7%D9%84%D9%83%D9%8A%D9%85%D9%8A%D8%A7%D8%A1-2-2-%D8%AB%D8%A7%D9%86%D9%8A-%D8%AB%D8%A7%D9%86%D9%88%D9%8A-%D9%85%D8%B3%D8%A7%D8%B1%D8%A7%D8%AA-%D9%812-1444/"
+  },
+  {
+    grade: "الثاني الثانوي",
+    subject: "الكيمياء",
+    term: "الفصل الدراسي الثاني",
+    label: "حل كتاب الكيمياء 2-2 ثاني ثانوي مسارات ف2 - واجباتي",
+    url: "https://www.wajibati.net/%D8%AD%D9%84-%D9%83%D8%AA%D8%A7%D8%A8-%D8%A7%D9%84%D9%83%D9%8A%D9%85%D9%8A%D8%A7%D8%A1-2-2-%D8%AB%D8%A7%D9%86%D9%8A-%D8%AB%D8%A7%D9%86%D9%88%D9%8A-%D9%85%D8%B3%D8%A7%D8%B1%D8%A7%D8%AA-%D9%812-1444/"
+  },
+  {
+    grade: "الثاني الثانوي",
+    subject: "اللغة الإنجليزية",
+    term: "الفصل الدراسي الثاني",
+    label: "كتاب Mega Goal 2-2 ثاني ثانوي مسارات ف2 - واجباتي",
+    url: "https://www.wajibati.net/k-mega2/"
+  },
+  {
+    grade: "الثاني الثانوي",
+    subject: "اللغة الإنجليزية",
+    term: "الفصل الدراسي الثاني",
+    label: "حل Mega Goal 2-2 ثاني ثانوي مسارات ف2 - واجباتي",
+    url: "https://www.wajibati.net/megagoal4-altalb/"
+  }
+];
+
+const wajibatiDirectoryLibrary = {
+  "الفصل الدراسي الأول": {
+    root: {
+      label: "دليل واجباتي للفصل الدراسي الأول",
+      url: "https://www.wajibati.net/fsl1/"
+    },
+    grades: {
+      "الأول الابتدائي": "https://www.wajibati.net/fsl1/saf1/",
+      "الثاني الابتدائي": "https://www.wajibati.net/fsl1/saf2/",
+      "الثالث الابتدائي": "https://www.wajibati.net/fsl1/saf3/",
+      "الرابع الابتدائي": "https://www.wajibati.net/fsl1/saf4/",
+      "الخامس الابتدائي": "https://www.wajibati.net/fsl1/saf5/",
+      "السادس الابتدائي": "https://www.wajibati.net/fsl1/saf6/",
+      "الأول المتوسط": "https://www.wajibati.net/fsl1/%D8%A7%D9%88%D9%84-%D9%85%D8%AA%D9%88%D8%B3%D8%B7-%D8%A7%D9%84%D9%81%D8%B5%D9%84-%D8%A7%D9%84%D8%A7%D9%88%D9%84/",
+      "الثاني المتوسط": "https://www.wajibati.net/fsl1/%D8%A7%D9%84%D8%B5%D9%81-%D8%A7%D9%84%D8%AB%D8%A7%D9%86%D9%8A-%D9%85%D8%AA%D9%88%D8%B3%D8%B7/",
+      "الثالث المتوسط": "https://www.wajibati.net/fsl1/%D8%A7%D9%84%D8%B5%D9%81-%D8%A7%D9%84%D8%AB%D8%A7%D9%84%D8%AB-%D8%A7%D9%84%D9%85%D8%AA%D9%88%D8%B3%D8%B7/",
+      "الأول الثانوي": "https://www.wajibati.net/fsl1/%D8%A7%D9%84%D9%85%D8%B1%D8%AD%D9%84%D8%A9-%D8%A7%D9%84%D8%AB%D8%A7%D9%86%D9%88%D9%8A%D8%A9-%D9%85%D9%82%D8%B1%D8%B1%D8%A7%D8%AA/%D8%A7%D9%84%D8%AB%D8%A7%D9%86%D9%88%D9%8A%D8%A9-%D9%85%D8%B3%D8%A7%D8%B1%D8%A7%D8%AA/%D8%A7%D9%84%D8%B3%D9%86%D8%A9-%D8%A7%D9%84%D8%A7%D9%88%D9%84%D9%89/",
+      "الثاني الثانوي": "https://www.wajibati.net/fsl1/%D8%AB%D8%A7%D9%86%D9%8A-%D8%AB%D8%A7%D9%86%D9%88%D9%8A-%D9%85%D8%B3%D8%A7%D8%B1%D8%A7%D8%AA-%D8%A7%D9%84%D9%81%D8%B5%D9%84-%D8%A7%D9%84%D8%A7%D9%88%D9%84/",
+      "الثالث الثانوي": "https://www.wajibati.net/fsl1/%D8%A7%D9%84%D9%85%D8%B1%D8%AD%D9%84%D8%A9-%D8%A7%D9%84%D8%AB%D8%A7%D9%86%D9%88%D9%8A%D8%A9-%D9%85%D9%82%D8%B1%D8%B1%D8%A7%D8%AA/%D8%A7%D9%84%D8%AB%D8%A7%D9%86%D9%88%D9%8A%D8%A9-%D9%85%D8%B3%D8%A7%D8%B1%D8%A7%D8%AA/%D8%A7%D9%84%D8%B3%D9%86%D8%A9-%D8%A7%D9%84%D8%AB%D8%A7%D9%84%D8%AB%D8%A9/"
+    }
+  },
+  "الفصل الدراسي الثاني": {
+    root: {
+      label: "دليل واجباتي للفصل الدراسي الثاني",
+      url: "https://www.wajibati.net/fsl22/"
+    },
+    grades: {
+      "الأول الابتدائي": "https://www.wajibati.net/fsl22/%D8%A7%D9%84%D8%B5%D9%81-%D8%A7%D9%84%D8%A7%D9%88%D9%84-%D8%A7%D9%84%D8%A7%D8%A8%D8%AA%D8%AF%D8%A7%D8%A6%D9%8A/",
+      "الثاني الابتدائي": "https://www.wajibati.net/fsl22/%D8%A7%D9%84%D8%B5%D9%81-%D8%A7%D9%84%D8%AB%D8%A7%D9%86%D9%8A-%D8%A7%D9%84%D8%A7%D8%A8%D8%AA%D8%AF%D8%A7%D8%A6%D9%8A/",
+      "الثالث الابتدائي": "https://www.wajibati.net/fsl22/%D8%A7%D9%84%D8%B5%D9%81-%D8%A7%D9%84%D8%AB%D8%A7%D9%84%D8%AB-%D8%A7%D9%84%D8%A7%D8%A8%D8%AA%D8%AF%D8%A7%D8%A6%D9%8A/",
+      "الرابع الابتدائي": "https://www.wajibati.net/fsl22/%D8%A7%D9%84%D8%B5%D9%81-%D8%A7%D9%84%D8%B1%D8%A7%D8%A8%D8%B9-%D8%A7%D9%84%D8%A7%D8%A8%D8%AA%D8%AF%D8%A7%D8%A6%D9%8A/",
+      "الخامس الابتدائي": "https://www.wajibati.net/fsl22/%D8%A7%D9%84%D8%B5%D9%81-%D8%A7%D9%84%D8%AE%D8%A7%D9%85%D8%B3-%D8%A7%D9%84%D8%A7%D8%A8%D8%AA%D8%AF%D8%A7%D8%A6%D9%8A/",
+      "السادس الابتدائي": "https://www.wajibati.net/fsl22/%D8%A7%D9%84%D8%B5%D9%81-%D8%A7%D9%84%D8%B3%D8%A7%D8%AF%D8%B3-%D8%A7%D9%84%D8%A7%D8%A8%D8%AA%D8%AF%D8%A7%D8%A6%D9%8A/",
+      "الأول المتوسط": "https://www.wajibati.net/fsl22/%D8%A7%D9%84%D8%B5%D9%81-%D8%A7%D9%84%D8%A7%D9%88%D9%84-%D8%A7%D9%84%D9%85%D8%AA%D9%88%D8%B3%D8%B7/",
+      "الثاني المتوسط": "https://www.wajibati.net/fsl22/%D8%A7%D9%84%D8%B5%D9%81-%D8%A7%D9%84%D8%AB%D8%A7%D9%86%D9%8A-%D8%A7%D9%84%D9%85%D8%AA%D9%88%D8%B3%D8%B7/",
+      "الثالث المتوسط": "https://www.wajibati.net/fsl22/%D8%A7%D9%84%D8%B5%D9%81-%D8%A7%D9%84%D8%AB%D8%A7%D9%84%D8%AB-%D8%A7%D9%84%D9%85%D8%AA%D9%88%D8%B3%D8%B7/",
+      "الأول الثانوي": "https://www.wajibati.net/fsl22/%D8%A7%D9%84%D9%85%D8%B1%D8%AD%D9%84%D8%A9-%D8%A7%D9%84%D8%AB%D8%A7%D9%86%D9%88%D9%8A%D8%A9/%D8%A7%D9%88%D9%84-%D8%AB%D8%A7%D9%86%D9%88%D9%8A-%D9%85%D8%B3%D8%A7%D8%B1%D8%A7%D8%AA/",
+      "الثاني الثانوي": "https://www.wajibati.net/fsl22/%D8%A7%D9%84%D9%85%D8%B1%D8%AD%D9%84%D8%A9-%D8%A7%D9%84%D8%AB%D8%A7%D9%86%D9%88%D9%8A%D8%A9/%D8%AB%D8%A7%D9%86%D9%8A-%D8%AB%D8%A7%D9%86%D9%88%D9%8A-%D9%85%D8%B3%D8%A7%D8%B1%D8%A7%D8%AA/",
+      "الثالث الثانوي": "https://www.wajibati.net/fsl22/%D8%A7%D9%84%D9%85%D8%B1%D8%AD%D9%84%D8%A9-%D8%A7%D9%84%D8%AB%D8%A7%D9%86%D9%88%D9%8A%D8%A9/%D8%AB%D8%A7%D9%84%D8%AB-%D8%AB%D8%A7%D9%86%D9%88%D9%8A-%D9%85%D8%B3%D8%A7%D8%B1%D8%A7%D8%AA/"
+    }
+  }
+};
+
+const gradeSubjectCatalog = {
+  "الأول الابتدائي": {
+    phase: "المرحلة الابتدائية",
+    subjects: ["الرياضيات", "العلوم", "اللغة العربية", "الدراسات الإسلامية", "التربية الفنية", "التربية البدنية"]
+  },
+  "الثاني الابتدائي": {
+    phase: "المرحلة الابتدائية",
+    subjects: ["الرياضيات", "العلوم", "اللغة العربية", "الدراسات الإسلامية", "التربية الفنية", "التربية البدنية"]
+  },
+  "الثالث الابتدائي": {
+    phase: "المرحلة الابتدائية",
+    subjects: ["الرياضيات", "العلوم", "اللغة العربية", "الدراسات الإسلامية", "التربية الفنية", "التربية البدنية"]
+  },
+  "الرابع الابتدائي": {
+    phase: "المرحلة الابتدائية",
+    subjects: ["الرياضيات", "العلوم", "اللغة العربية", "اللغة الإنجليزية", "الدراسات الإسلامية", "الاجتماعيات", "المهارات الرقمية", "التربية الفنية", "التربية البدنية"]
+  },
+  "الخامس الابتدائي": {
+    phase: "المرحلة الابتدائية",
+    subjects: ["الرياضيات", "العلوم", "اللغة العربية", "اللغة الإنجليزية", "الدراسات الإسلامية", "الاجتماعيات", "المهارات الرقمية", "التربية الفنية", "التربية البدنية"]
+  },
+  "السادس الابتدائي": {
+    phase: "المرحلة الابتدائية",
+    subjects: ["الرياضيات", "العلوم", "اللغة العربية", "اللغة الإنجليزية", "الدراسات الإسلامية", "الاجتماعيات", "المهارات الرقمية", "التربية الفنية", "التربية البدنية"]
+  },
+  "الأول المتوسط": {
+    phase: "المرحلة المتوسطة",
+    subjects: ["الرياضيات", "العلوم", "اللغة العربية", "اللغة الإنجليزية", "الدراسات الإسلامية", "الاجتماعيات", "المهارات الرقمية", "التربية الفنية", "التربية البدنية"]
+  },
+  "الثاني المتوسط": {
+    phase: "المرحلة المتوسطة",
+    subjects: ["الرياضيات", "العلوم", "اللغة العربية", "اللغة الإنجليزية", "الدراسات الإسلامية", "الاجتماعيات", "المهارات الرقمية", "التربية الفنية", "التربية البدنية"]
+  },
+  "الثالث المتوسط": {
+    phase: "المرحلة المتوسطة",
+    subjects: ["الرياضيات", "العلوم", "اللغة العربية", "اللغة الإنجليزية", "الدراسات الإسلامية", "الاجتماعيات", "المهارات الرقمية", "التربية الفنية", "التربية البدنية"]
+  },
+  "الأول الثانوي": {
+    phase: "المرحلة الثانوية",
+    subjects: ["الرياضيات", "العلوم", "اللغة العربية", "اللغة الإنجليزية", "الدراسات الإسلامية", "الاجتماعيات", "المهارات الرقمية", "التربية الفنية", "التربية البدنية"]
+  },
+  "الثاني الثانوي": {
+    phase: "المرحلة الثانوية",
+    subjects: ["الرياضيات", "الفيزياء", "الكيمياء", "الأحياء", "اللغة العربية", "اللغة الإنجليزية", "الدراسات الإسلامية", "الاجتماعيات", "المهارات الرقمية"]
+  },
+  "الثالث الثانوي": {
+    phase: "المرحلة الثانوية",
+    subjects: ["الرياضيات", "الفيزياء", "الكيمياء", "الأحياء", "اللغة العربية", "اللغة الإنجليزية", "الدراسات الإسلامية", "الاجتماعيات", "المهارات الرقمية"]
+  }
+};
+
+const subjectKnowledgeBase = {
+  "الرياضيات": {
+    aliases: ["رياضيات", "معادلة", "هندسة", "كسر", "نسبة", "مساحة", "محيط", "جبر"],
+    coreConcepts: ["القوانين", "التعويض", "التحقق", "المعادلات", "الكسور", "الهندسة"],
+    commonMistakes: ["نسيان ترتيب العمليات", "التعويض الخاطئ في القانون", "إهمال التحقق من الناتج"],
+    sampleQuestions: ["احسب محيط دائرة نصف قطرها 7", "حل المعادلة 3س + 5 = 20", "أوجد مساحة مستطيل طوله 8 وعرضه 5"],
+    overview: "تركز الرياضيات على فهم المعطيات وتحديد المطلوب ثم اختيار القانون أو القاعدة المناسبة وإجراء الحل خطوة بخطوة مع التحقق من الناتج."
+  },
+  "العلوم": {
+    aliases: ["علوم", "تجربة", "مادة", "طاقة", "بيئة", "خلية", "كائن", "ظاهرة"],
+    coreConcepts: ["المفاهيم العلمية", "التفسير", "التجارب", "الطاقة", "البيئة", "المادة"],
+    commonMistakes: ["حفظ التعريف دون فهمه", "الخلط بين السبب والنتيجة", "إهمال الربط بالتجربة أو المثال"],
+    sampleQuestions: ["اشرح الفرق بين المنتجات والمستهلكات", "ما المقصود بدورة الماء؟", "فسر حدوث التبخر"],
+    overview: "تعتمد العلوم على فهم الظواهر والمفاهيم وربطها بأمثلة وتجارب مبسطة من المنهج مع توضيح السبب العلمي الصحيح."
+  },
+  "الفيزياء": {
+    aliases: ["فيزياء", "تسارع", "سرعة", "قوة", "حركة", "كتلة", "زمن", "إزاحة"],
+    coreConcepts: ["الحركة", "القوانين الفيزيائية", "الوحدات", "التسارع", "القوة", "الزمن"],
+    commonMistakes: ["الخلط بين الكميات الفيزيائية", "نسيان الوحدات", "اختيار قانون لا يناسب المعطيات"],
+    sampleQuestions: ["ما المقصود بالتسارع وكيف نحسبه؟", "احسب السرعة إذا قطع جسم 100 متر في 20 ثانية", "فسر قانون نيوتن الثاني"],
+    overview: "تُحل مسائل الفيزياء بتحديد المعطيات والوحدات ثم اختيار القانون المناسب والتعويض فيه ومراجعة منطق النتيجة."
+  },
+  "الكيمياء": {
+    aliases: ["كيمياء", "ذرة", "جزيء", "عنصر", "مركب", "رابطة", "تفاعل", "تكافؤ"],
+    coreConcepts: ["الذرات", "الروابط", "العناصر", "التفاعلات", "المركبات", "التكافؤ"],
+    commonMistakes: ["الخلط بين العنصر والمركب", "عدم تحديد نوع الرابطة", "إهمال التكافؤ أو الشحنة"],
+    sampleQuestions: ["ما الفرق بين الرابطة الأيونية والتساهمية؟", "عرّف العنصر والمركب", "اشرح معنى التكافؤ"],
+    overview: "تعتمد الكيمياء على تفسير بناء المادة وعلاقات العناصر والمركبات مع ربط المفاهيم الأساسية بالأمثلة الشائعة في الكتاب."
+  },
+  "الأحياء": {
+    aliases: ["أحياء", "خلية", "وراثة", "نواة", "عضية", "كائن حي", "تنفس", "نبات"],
+    coreConcepts: ["الخلية", "العضيات", "الكائنات الحية", "الوراثة", "الأجهزة الحيوية", "الوظائف الحيوية"],
+    commonMistakes: ["الخلط بين الأعضاء والعضيات", "عدم ربط التركيب بالوظيفة", "نسيان المفاهيم الأساسية للحياة"],
+    sampleQuestions: ["ما أهمية النواة داخل الخلية؟", "اذكر وظيفة الغشاء البلازمي", "اشرح الفرق بين الخلية النباتية والحيوانية"],
+    overview: "تشرح الأحياء تركيب الكائنات الحية ووظائف أجزائها مع التركيز على الربط بين البنية والوظيفة والمصطلحات العلمية الدقيقة."
+  },
+  "اللغة العربية": {
+    aliases: ["عربي", "نحو", "بلاغة", "إملاء", "تعبير", "مبتدأ", "خبر", "فاعل", "لغة عربية"],
+    coreConcepts: ["النحو", "البلاغة", "الإملاء", "القراءة", "التعبير", "التحليل اللغوي"],
+    commonMistakes: ["الخلط بين الوظائف النحوية", "إهمال علامات الإعراب", "ضعف الربط بين القاعدة والتطبيق"],
+    sampleQuestions: ["حدد المبتدأ والخبر في جملة: العلم نور", "استخرج الفاعل من الجملة", "صحح الأخطاء الإملائية في النص"],
+    overview: "تقوم اللغة العربية على تحليل المطلوب ثم تحديد القاعدة المناسبة وتطبيقها على المثال مع بيان السبب اللغوي الصحيح."
+  },
+  "اللغة الإنجليزية": {
+    aliases: ["English", "grammar", "verb", "tense", "translate", "correct", "إنجليزي", "انجليزي"],
+    coreConcepts: ["grammar", "translation", "sentence structure", "tenses", "vocabulary", "writing"],
+    commonMistakes: ["الخلط بين الأزمنة", "نسيان توافق الفعل مع الفاعل", "ترجمة حرفية غير مناسبة"],
+    sampleQuestions: ["صحح الجملة بالإنجليزية: He play football every day", "Translate this sentence into English", "ما الفرق بين present simple وpresent continuous؟"],
+    overview: "تعتمد الإنجليزية على فهم معنى الجملة ثم تطبيق قاعدة مناسبة في الزمن أو الصياغة أو الترجمة مع تصحيح الخطأ وشرح سببه."
+  },
+  "الاجتماعيات": {
+    aliases: ["اجتماعيات", "تاريخ", "جغرافيا", "وطنية", "مواطنة", "خريطة", "سكان"],
+    coreConcepts: ["التاريخ", "الجغرافيا", "المواطنة", "الخرائط", "الأحداث", "المفاهيم الوطنية"],
+    commonMistakes: ["حفظ المعلومة دون فهم سياقها", "الخلط بين الأزمنة التاريخية", "عدم الربط بين الحدث ونتيجته"],
+    sampleQuestions: ["اذكر أهمية الموقع الجغرافي للمملكة", "فسر سبب قيام الدولة السعودية الأولى", "ما المقصود بالمواطنة؟"],
+    overview: "تشرح الاجتماعيات الأحداث والمواقع والمفاهيم الوطنية من خلال ربط السبب بالنتيجة وتوضيح السياق التاريخي أو الجغرافي."
+  },
+  "المهارات الرقمية": {
+    aliases: ["مهارات رقمية", "حاسب", "تقنية", "برمجة", "أمن معلومات", "شبكات", "إنترنت", "ملفات"],
+    coreConcepts: ["الأمن الرقمي", "المهارات الحاسوبية", "الإنترنت", "البرمجة", "الملفات", "الحماية"],
+    commonMistakes: ["استخدام مصطلحات غير دقيقة", "إهمال خطوات الأمان", "الخلط بين نوعي الأجهزة أو الشبكات"],
+    sampleQuestions: ["كيف أحمي حسابي من التصيد الإلكتروني؟", "ما أهمية النسخ الاحتياطي؟", "اشرح الفرق بين الملف والمجلد"],
+    overview: "تركز المهارات الرقمية على الاستخدام الآمن والفعّال للتقنية مع شرح الخطوات العملية والمفاهيم الأساسية بلغة واضحة."
+  },
+  "الدراسات الإسلامية": {
+    aliases: ["إسلامية", "فقه", "توحيد", "حديث", "تفسير", "سيرة", "دراسات إسلامية"],
+    coreConcepts: ["العبادات", "العقيدة", "الأحاديث", "الآداب", "السيرة", "الأحكام"],
+    commonMistakes: ["الخلط بين الدليل والحكم", "نسيان الشرط أو الركن", "الاعتماد على صياغة غير دقيقة"],
+    sampleQuestions: ["اذكر أركان الإسلام", "ما الفرق بين الشرط والركن؟", "اشرح معنى الإحسان"],
+    overview: "توضح الدراسات الإسلامية الأحكام والمفاهيم الشرعية بطريقة تعليمية مبسطة مع ربطها بالدليل والمعنى الصحيح."
+  },
+  "التربية الفنية": {
+    aliases: ["فنية", "رسم", "ألوان", "تصميم", "تشكيل", "منظور"],
+    coreConcepts: ["العناصر الفنية", "الألوان", "التصميم", "التوازن", "المنظور", "التكوين"],
+    commonMistakes: ["إهمال الفكرة الأساسية للعمل", "عدم التمييز بين العناصر الفنية", "الخلط بين اللون الأساسي والثانوي"],
+    sampleQuestions: ["ما المقصود بالألوان الأساسية؟", "اشرح معنى التوازن في العمل الفني", "اذكر عناصر التكوين الفني"],
+    overview: "تساعد التربية الفنية على فهم العناصر والأسس الجمالية للعمل الفني وربطها بأمثلة تطبيقية مبسطة."
+  },
+  "التربية البدنية": {
+    aliases: ["بدنية", "رياضة", "لياقة", "تمرين", "إحماء", "صحة"],
+    coreConcepts: ["اللياقة", "الإحماء", "المرونة", "التحمل", "السلامة", "الحركة"],
+    commonMistakes: ["إهمال الإحماء", "عدم التمييز بين أنواع اللياقة", "تطبيق التمرين بطريقة غير صحيحة"],
+    sampleQuestions: ["ما أهمية الإحماء قبل التمرين؟", "اذكر فوائد النشاط البدني", "ما الفرق بين المرونة والتحمل؟"],
+    overview: "تشرح التربية البدنية أسس اللياقة والصحة البدنية والسلامة أثناء التمرين مع توضيح المفاهيم بشكل عملي."
+  }
+};
+
+const webSourceRegistry = [
+  {
+    name: "بيت العلم",
+    domains: ["baetiy.com"],
+    category: "مرجع تعليمي مساعد",
+    priority: 1,
+    useCase: "أولوية أولى في المراجعة التعليمية المساندة قبل التحقق النهائي من الكتاب والمنهج."
+  },
+  {
+    name: "عين التعليمية",
+    domains: ["ien.edu.sa", "mobile.ien.edu.sa"],
+    category: "مرجع رسمي",
+    priority: 2,
+    useCase: "مراجعة رسمية من المحتوى التعليمي الوطني والدروس الرقمية المرتبطة بالمنهج السعودي."
+  },
+  {
+    name: "واجباتي",
+    domains: ["wajibati.net"],
+    category: "مرجع منهجي",
+    priority: 3,
+    useCase: "مراجعة الكتاب ودليل الصف وحلول المنهج بعد المقارنة مع المصادر التعليمية الأخرى."
+  },
+  {
+    name: "ويكيبيديا العربية",
+    domains: ["wikipedia.org", "ar.wikipedia.org"],
+    category: "مرجع عام",
+    priority: 4,
+    useCase: "يستخدم لشرح المفاهيم العامة والمقارنة السريعة عند الحاجة."
+  }
+];
+
+function createGeneratedCurriculumData() {
+  const terms = ["الفصل الدراسي الأول", "الفصل الدراسي الثاني"];
+
+  return Object.entries(gradeSubjectCatalog).flatMap(([grade, config]) =>
+    terms.flatMap((term) =>
+      config.subjects.map((subject) => {
+        const profile = subjectKnowledgeBase[subject];
+        if (!profile) {
+          return null;
+        }
+
+        return {
+          grade,
+          subject,
+          term,
+          lesson: `${subject} - المنهج العام`,
+          unit: `${config.phase} - المهارات الأساسية`,
+          concepts: profile.coreConcepts,
+          content: `${profile.overview} هذا الملخص محفوظ محليًا داخل ملم يحل لتقريب المادة حتى لو لم يكتب الطالب اسم الدرس بشكل صريح.`,
+          commonMistakes: profile.commonMistakes,
+          similarQuestion: profile.sampleQuestions[0],
+          sampleQuestion: profile.sampleQuestions[1] || profile.sampleQuestions[0]
+        };
+      }).filter(Boolean)
+    )
+  );
+}
+
+const curriculumRecords = [...curriculumData, ...createGeneratedCurriculumData()];
 
 const storageKeys = {
   runtime: "mlm_runtime",
@@ -162,15 +519,24 @@ const learnList = document.querySelector("[data-learned]");
 const historyList = document.querySelector("[data-history]");
 const insightsList = document.querySelector("[data-insights]");
 const questionBank = document.querySelector("[data-question-bank]");
+const wajibatiLibraryList = document.querySelector("[data-wajibati-library]");
+const termCoverageList = document.querySelector("[data-term-coverage]");
+const webPolicyList = document.querySelector("[data-web-policy]");
 const statusChip = document.querySelector("[data-status]");
 const selectionSummary = document.querySelector("[data-selection-summary]");
 const runtimeSummary = document.querySelector("[data-runtime-summary]");
 const startChatButton = document.querySelector("[data-start-chat]");
 const quickSolveButton = document.querySelector("[data-quick-solve]");
 const uploadButton = document.querySelector("[data-open-upload]");
+const starterButtons = document.querySelectorAll("[data-starter-prompt], [data-starter-action]");
+const uploadImageButton = document.querySelector("[data-upload-image]");
+const uploadFileButton = document.querySelector("[data-upload-file]");
+const focusSubjectButton = document.querySelector("[data-focus-subject]");
+const clearChatButton = document.querySelector("[data-clear-chat]");
 
 let attachments = [];
 let lastUserQuestion = "";
+let clarificationCursor = 0;
 let likedMemory = loadJson(storageKeys.likedMemory, []);
 let dislikedMemory = loadJson(storageKeys.dislikedMemory, []);
 let chatHistory = loadJson(storageKeys.history, []);
@@ -239,6 +605,42 @@ function updateStatus() {
   runtimeSummary.textContent = `التشغيل الحالي: ${runtime} مع طبقة سلوكية ${trainingMode}. المعرفة تأتي من RAG للمنهج السعودي، أما أسلوب الرد فيمثّل سلوك ملم يحل.`;
 }
 
+function populateGradeOptions() {
+  const currentGrade = gradeSelect.value || "الثاني الثانوي";
+  const groupedGrades = Object.entries(gradeSubjectCatalog).reduce((bucket, [grade, config]) => {
+    if (!bucket[config.phase]) {
+      bucket[config.phase] = [];
+    }
+    bucket[config.phase].push(grade);
+    return bucket;
+  }, {});
+
+  gradeSelect.innerHTML = Object.entries(groupedGrades)
+    .map(
+      ([phase, grades]) => `
+        <optgroup label="${phase}">
+          ${grades
+            .map((grade) => `<option${grade === currentGrade ? " selected" : ""}>${grade}</option>`)
+            .join("")}
+        </optgroup>
+      `
+    )
+    .join("");
+}
+
+function updateSubjectOptions(preferredSubject = subjectSelect.value) {
+  const grade = gradeSelect.value;
+  const allowedSubjects = gradeSubjectCatalog[grade]?.subjects || Object.keys(subjectKnowledgeBase);
+
+  subjectSelect.innerHTML = allowedSubjects
+    .map((subject) => `<option${subject === preferredSubject ? " selected" : ""}>${subject}</option>`)
+    .join("");
+
+  if (!allowedSubjects.includes(subjectSelect.value)) {
+    subjectSelect.value = allowedSubjects[0];
+  }
+}
+
 function autoGrow(element) {
   element.style.height = "0px";
   element.style.height = `${Math.min(element.scrollHeight, 200)}px`;
@@ -255,47 +657,108 @@ function getCurrentSelection() {
 
 function updateSelectionSummary() {
   const selection = getCurrentSelection();
-  selectionSummary.textContent = `الصف: ${selection.grade} | المادة: ${selection.subject} | الفصل: ${selection.term} | الدرس: ${selection.lesson}`;
+  selectionSummary.textContent = `الصف: ${selection.grade} | المادة: ${selection.subject} | الفصل: ${selection.term} | الدرس: ${selection.lesson === "غير محدد" ? "اختياري ويُستنتج من السؤال" : selection.lesson}`;
   renderQuestionBank();
+  renderWajibatiLibrary();
+  renderTermCoverage();
 }
 
 function normalizeText(value) {
   return (value || "").trim().toLowerCase();
 }
 
+function inferSubjectFromQuestion(question, grade) {
+  const availableSubjects = gradeSubjectCatalog[grade]?.subjects || Object.keys(subjectKnowledgeBase);
+  const normalizedQuestion = normalizeText(question);
+  const questionTokens = tokenizeForModel(question);
+  let bestMatch = {
+    subject: availableSubjects[0] || "الرياضيات",
+    score: 0
+  };
+
+  availableSubjects.forEach((subject) => {
+    const profile = subjectKnowledgeBase[subject];
+    if (!profile) {
+      return;
+    }
+
+    const lexicon = [subject, ...profile.aliases, ...profile.coreConcepts, ...profile.sampleQuestions].join(" ");
+    const lexiconTokens = tokenizeForModel(lexicon);
+    let score = jaccardSimilarity(questionTokens, lexiconTokens) * 2.5;
+
+    profile.aliases.forEach((alias) => {
+      if (normalizedQuestion.includes(normalizeText(alias))) {
+        score += 0.8;
+      }
+    });
+
+    profile.coreConcepts.forEach((concept) => {
+      if (normalizedQuestion.includes(normalizeText(concept))) {
+        score += 0.45;
+      }
+    });
+
+    if (score > bestMatch.score) {
+      bestMatch = { subject, score };
+    }
+  });
+
+  return bestMatch;
+}
+
 function findRelevantLesson(question) {
   const selection = getCurrentSelection();
   const normalizedQuestion = normalizeText(question);
-
-  const exactMatches = curriculumData.filter((item) => {
-    const sameGrade = item.grade === selection.grade;
-    const sameSubject = item.subject === selection.subject;
-    const sameTerm = item.term === selection.term;
-    const lessonHint = normalizeText(selection.lesson);
-    const lessonMatches =
-      lessonHint === "غير محدد" ||
-      normalizeText(item.lesson).includes(lessonHint) ||
-      lessonHint.includes(normalizeText(item.lesson));
-    const questionMatches =
-      normalizedQuestion.includes(normalizeText(item.lesson)) ||
-      normalizedQuestion.includes(normalizeText(item.unit)) ||
-      item.concepts.some((concept) => normalizedQuestion.includes(normalizeText(concept)));
-
-    return sameGrade && sameSubject && sameTerm && (lessonMatches || questionMatches);
-  });
-
-  if (exactMatches.length > 0) {
-    return exactMatches[0];
-  }
-
-  const subjectMatches = curriculumData.filter(
-    (item) =>
-      item.grade === selection.grade &&
-      item.subject === selection.subject &&
-      item.term === selection.term
+  const lessonHint = normalizeText(selection.lesson);
+  const inferredSubject = inferSubjectFromQuestion(question, selection.grade);
+  const resolvedSubject = inferredSubject.score > 0.18 ? inferredSubject.subject : selection.subject;
+  const sameStageCandidates = curriculumRecords.filter(
+    (item) => item.grade === selection.grade && item.term === selection.term
   );
+  const candidates = sameStageCandidates.length > 0 ? sameStageCandidates : curriculumRecords;
 
-  return subjectMatches[0] || curriculumData[0];
+  const ranked = candidates
+    .map((item) => {
+      let score = 0;
+      const lessonText = `${item.lesson} ${item.unit} ${item.content} ${item.sampleQuestion} ${item.concepts.join(" ")}`;
+      const lessonTokens = tokenizeForModel(lessonText);
+
+      if (item.subject === resolvedSubject) {
+        score += 5;
+      }
+
+      if (item.subject === selection.subject) {
+        score += 1.2;
+      }
+
+      if (lessonHint !== "غير محدد") {
+        const itemLesson = normalizeText(item.lesson);
+        if (itemLesson.includes(lessonHint) || lessonHint.includes(itemLesson)) {
+          score += 4;
+        }
+      }
+
+      if (normalizedQuestion.includes(normalizeText(item.lesson))) {
+        score += 2.5;
+      }
+
+      if (normalizedQuestion.includes(normalizeText(item.unit))) {
+        score += 1.5;
+      }
+
+      item.concepts.forEach((concept) => {
+        if (normalizedQuestion.includes(normalizeText(concept))) {
+          score += 1.1;
+        }
+      });
+
+      score += jaccardSimilarity(tokenizeForModel(question), lessonTokens) * 6;
+
+      return { item, score };
+    })
+    .sort((left, right) => right.score - left.score);
+
+  return ranked[0]?.item || curriculumRecords[0];
 }
 
 function buildCurriculumContext(lesson) {
@@ -436,16 +899,29 @@ function needsClarification(message, intentResult, hasAttachments = false) {
 
   const normalized = normalizeText(message);
   const unclearAcademicTerms = ["حلها", "اشرح", "ساعد", "سؤال", "مسألة", "هذا", "ذي", "حل", "وضح"];
+  const tokens = tokenizeForModel(message);
 
   if (intentResult.label !== "academic") {
     return false;
   }
 
-  if (intentResult.confidence < 0.55) {
+  if (/\d/.test(normalized) && tokens.length >= 3) {
+    return false;
+  }
+
+  if (lessonInput.value.trim() && tokens.length >= 3) {
+    return false;
+  }
+
+  if (tokens.length >= 4) {
+    return false;
+  }
+
+  if (intentResult.confidence < 0.42 && tokens.length <= 3) {
     return true;
   }
 
-  if (normalized.length <= 6) {
+  if (normalized.length <= 4) {
     return true;
   }
 
@@ -483,7 +959,129 @@ function createCasualResponse(message) {
 }
 
 function createHelpResponse() {
-  return "تقدر تبدأ باختيار الصف والمادة والفصل والدرس، ثم تكتب سؤالك أو ترفع صورة من زر +. إذا كان السؤال أكاديميًا سأعطيك الحل والشرح والخطوات، وإذا كان سؤالك عامًا سأرد عليك بشكل طبيعي.";
+  return "تقدر تبدأ باختيار الصف والمادة والفصل، والدرس هنا اختياري لأن ملم يحل يحاول استنتاجه من السؤال نفسه. بعد ذلك اكتب سؤالك أو ارفع صورة من زر +، وإذا كان السؤال أكاديميًا سأعطيك الحل والشرح والخطوات.";
+}
+
+function createClarificationResponse(message) {
+  const normalized = normalizeText(message);
+  const variants = [
+    "أحتاج جزءًا أوضح من السؤال حتى أجيب بدقة.",
+    "أقدر أساعدك، لكن أحتاج تفاصيل أكثر قليلًا.",
+    "حتى أعطيك جوابًا صحيحًا، وضّح المقصود أكثر."
+  ];
+  const intro = variants[clarificationCursor % variants.length];
+  clarificationCursor += 1;
+
+  let prompt = "اكتب السؤال كاملًا أو اختر أحد الخيارات السريعة التالية:";
+  const actions = [];
+
+  if (normalized.includes("هذا") || normalized.includes("ذي") || normalized.includes("وش الحل")) {
+    prompt = "أرسل نص السؤال كاملًا أو ارفع صورة واضحة للسؤال حتى أتمكن من الحل.";
+    actions.push(
+      { label: "ارفع صورة السؤال", action: "upload-image" },
+      { label: "اكتب السؤال كاملًا", fill: "اكتب السؤال كاملًا هنا مع المعطيات والمطلوب." }
+    );
+  } else if (normalized.includes("اشرح")) {
+    prompt = "ما الدرس أو المفهوم الذي تريد شرحه؟ اكتب اسم الدرس أو اختر المادة أولًا.";
+    actions.push(
+      { label: "اختيار المادة", action: "focus-subject" },
+      { label: "اشرح درس الانقسام المتساوي", fill: "اشرح الفرق بين الانقسام المتساوي والانقسام المنصف." }
+    );
+  } else {
+    actions.push(
+      { label: "اكتب السؤال كاملًا", fill: "اكتب السؤال كاملًا مع المطلوب." },
+      { label: "ارفع صورة السؤال", action: "upload-image" },
+      { label: "اختيار المادة", action: "focus-subject" }
+    );
+  }
+
+  return { intro, prompt, actions };
+}
+
+function formatClarificationReply(payload) {
+  return `
+    <div class="clarify-card">
+      <p>${payload.intro}</p>
+      <p>${payload.prompt}</p>
+      <div class="inline-actions">
+        ${payload.actions
+          .map((action) => {
+            if (action.fill) {
+              return `<button class="inline-action-btn" type="button" data-fill-prompt="${action.fill}">${action.label}</button>`;
+            }
+
+            return `<button class="inline-action-btn" type="button" data-action="${action.action}">${action.label}</button>`;
+          })
+          .join("")}
+      </div>
+    </div>
+  `;
+}
+
+function setPromptValue(value, nextSubject = "") {
+  promptInput.value = value;
+  if (nextSubject) {
+    updateSubjectOptions(nextSubject);
+    const allowedSubjects = gradeSubjectCatalog[gradeSelect.value]?.subjects || [];
+    if (allowedSubjects.includes(nextSubject)) {
+      subjectSelect.value = nextSubject;
+    }
+  }
+  autoGrow(promptInput);
+  updateSelectionSummary();
+  promptInput.focus();
+}
+
+function openImageUpload() {
+  fileInput.setAttribute("accept", ".png,.jpg,.jpeg,.webp");
+  fileInput.click();
+}
+
+function openGenericUpload() {
+  fileInput.setAttribute("accept", ".pdf,.doc,.docx,.png,.jpg,.jpeg,.txt,.md");
+  fileInput.click();
+}
+
+function createLoadingCopy() {
+  const loadingVariants = [
+    "جاري تحليل السؤال واستخراج المطلوب...",
+    "جاري مطابقة السؤال مع الدرس والمفاهيم المرتبطة...",
+    "جاري تجهيز الحل بصيغة تعليمية واضحة..."
+  ];
+
+  const first = loadingVariants[analytics.totalMessages % loadingVariants.length];
+  const second = loadingVariants[(analytics.totalMessages + 1) % loadingVariants.length];
+
+  return `
+    <div class="clarify-card">
+      <p>${first}</p>
+      <p class="muted-inline">${second}</p>
+    </div>
+  `;
+}
+
+function renderWelcomeMessage() {
+  addMessage(
+    "assistant",
+    "ملم يحل",
+    `<div class="answer-grid">
+      <section class="answer-section answer-section-wide">
+        <h4>مرحبًا بك في ملم يحل</h4>
+        <p>أنا مساعد أكاديمي للمنهج السعودي. أستطيع حل الأسئلة، شرح الدروس، تحليل الأخطاء، أو الرد عليك بشكل طبيعي إذا كانت رسالتك غير أكاديمية.</p>
+        <p>ابدأ ببطاقات البداية السريعة، أو اكتب سؤالك مباشرة، أو ارفع صورة من الكتاب.</p>
+      </section>
+    </div>`
+  );
+}
+
+function resetConversationView() {
+  messageList.innerHTML = "";
+  attachments = [];
+  if (fileInput) {
+    fileInput.value = "";
+  }
+  renderAttachments();
+  renderWelcomeMessage();
 }
 
 const academicPromptRule =
@@ -538,6 +1136,100 @@ function formatAssistantSections(response) {
   `;
 }
 
+function getCurriculumSources(subject, term, grade) {
+  return curriculumLibrary.filter(
+    (item) => item.grade === grade && item.subject === subject && item.term === term
+  );
+}
+
+function getWajibatiDirectorySources(grade, term) {
+  const termBucket = wajibatiDirectoryLibrary[term];
+  if (!termBucket) {
+    return [];
+  }
+
+  const sources = [
+    {
+      url: termBucket.root.url,
+      label: termBucket.root.label,
+      type: "دليل واجباتي"
+    }
+  ];
+
+  const gradeUrl = termBucket.grades[grade];
+  if (gradeUrl) {
+    sources.push({
+      url: gradeUrl,
+      label: `كتب ${grade} - ${term}`,
+      type: "دليل الصف"
+    });
+  }
+
+  return sources;
+}
+
+function getGradeTermCoverage(grade, subject) {
+  const terms = ["الفصل الدراسي الأول", "الفصل الدراسي الثاني"];
+  return terms.map((term) => {
+    const directBooks = getCurriculumSources(subject, term, grade);
+    const directorySources = getWajibatiDirectorySources(grade, term);
+
+    return {
+      term,
+      directBooks,
+      directorySources,
+      hasCoverage: directorySources.length > 0
+    };
+  });
+}
+
+function getSourceProfile(url = "") {
+  try {
+    const hostname = new URL(url).hostname.replace(/^www\./, "");
+    return (
+      webSourceRegistry.find((source) =>
+        source.domains.some((domain) => hostname === domain || hostname.endsWith(`.${domain}`))
+      ) || {
+        name: hostname || "مصدر غير مصنف",
+        category: "مصدر غير مصنف",
+        priority: 5,
+        useCase: "يحتاج مراجعة قبل اعتماده كمصدر متكرر."
+      }
+    );
+  } catch (error) {
+    return {
+      name: "مصدر غير معروف",
+      category: "مصدر غير مصنف",
+      priority: 5,
+      useCase: "الرابط غير واضح أو غير مكتمل."
+    };
+  }
+}
+
+function buildPrioritySearchLinks(question, selection) {
+  const query = encodeURIComponent(
+    `${selection.grade} ${selection.subject} ${selection.term} ${question}`.trim()
+  );
+
+  return [
+    {
+      url: `https://www.google.com/search?q=site%3Abaetiy.com+${query}`,
+      label: `بحث بيت العلم: ${selection.subject} - ${question}`,
+      type: "مراجعة تعليمية"
+    },
+    {
+      url: `https://www.google.com/search?q=site%3Aien.edu.sa+${query}`,
+      label: `بحث عين التعليمية: ${selection.subject} - ${question}`,
+      type: "مراجعة رسمية"
+    },
+    {
+      url: `https://www.google.com/search?q=site%3Awajibati.net+${query}`,
+      label: `بحث واجباتي: ${selection.subject} - ${question}`,
+      type: "مراجعة من الكتاب"
+    }
+  ];
+}
+
 function createSourcesMarkup(sources) {
   if (!sources || sources.length === 0) {
     return "";
@@ -546,13 +1238,103 @@ function createSourcesMarkup(sources) {
   return `
     <div class="sources-list">
       ${sources
-        .map(
-          (source) =>
-            `<a class="source-link" href="${source}" target="_blank" rel="noreferrer">${source}</a>`
-        )
+        .map((source) => {
+          const sourceMeta =
+            typeof source === "string"
+              ? { url: source, label: source, type: "مرجع" }
+              : {
+                  url: source.url,
+                  label: source.label || source.url,
+                  type: source.type || "مرجع"
+                };
+          const profile = getSourceProfile(sourceMeta.url);
+
+          return `<a class="source-link" href="${sourceMeta.url}" target="_blank" rel="noreferrer">${sourceMeta.type} | ${profile.category}: ${sourceMeta.label}</a>`;
+        })
         .join("")}
     </div>
   `;
+}
+
+function renderWajibatiLibrary() {
+  if (!wajibatiLibraryList) {
+    return;
+  }
+
+  const selection = getCurrentSelection();
+  const directBookSources = getCurriculumSources(selection.subject, selection.term, selection.grade).map(
+    (item) => ({
+      url: item.url,
+      label: item.label,
+      type: "كتاب مباشر"
+    })
+  );
+  const directorySources = getWajibatiDirectorySources(selection.grade, selection.term);
+  const references = [...directBookSources, ...directorySources];
+
+  if (references.length === 0) {
+    wajibatiLibraryList.innerHTML = `
+      <div class="memory-item">
+        <strong>لا توجد مراجع جاهزة لهذا الاختيار بعد</strong>
+        <span>يمكنك تغيير الصف أو المادة أو الفصل لعرض أقرب مراجع من واجباتي.</span>
+      </div>
+    `;
+    return;
+  }
+
+  wajibatiLibraryList.innerHTML = references
+    .map(
+      (item) => `
+        <a class="memory-item" href="${item.url}" target="_blank" rel="noreferrer">
+          <strong>${item.type}</strong>
+          <span>${item.label}</span>
+        </a>
+      `
+    )
+    .join("");
+}
+
+function renderTermCoverage() {
+  if (!termCoverageList) {
+    return;
+  }
+
+  const selection = getCurrentSelection();
+  const coverage = getGradeTermCoverage(selection.grade, selection.subject);
+
+  termCoverageList.innerHTML = coverage
+    .map((entry) => {
+      const directCount = entry.directBooks.length;
+      const summary = directCount > 0
+        ? `مرجع مباشر للمادة: ${directCount} | دليل الصف والكتب متوفر.`
+        : "دليل الصف والكتب متوفر من واجباتي، والتحليل يعتمد أيضًا على المخزون المحلي للمادة.";
+
+      return `
+        <div class="memory-item">
+          <strong>${entry.term}</strong>
+          <span>${summary}</span>
+        </div>
+      `;
+    })
+    .join("");
+}
+
+function renderWebPolicy() {
+  if (!webPolicyList) {
+    return;
+  }
+
+  webPolicyList.innerHTML = webSourceRegistry
+    .sort((left, right) => left.priority - right.priority)
+    .map(
+      (source) => `
+        <div class="memory-item">
+          <strong>${source.name} | ${source.category}</strong>
+          <span>${source.useCase}</span>
+        </div>
+      `
+    )
+    .join("");
 }
 
 function addMessage(role, title, content, options = {}) {
@@ -669,8 +1451,9 @@ function renderHistory() {
     item.addEventListener("click", () => {
       promptInput.value = session.question;
       autoGrow(promptInput);
-      subjectSelect.value = session.subject;
       gradeSelect.value = session.grade;
+      updateSubjectOptions(session.subject);
+      subjectSelect.value = session.subject;
       termSelect.value = session.term;
       lessonInput.value = session.lesson === "غير محدد" ? "" : session.lesson;
       updateSelectionSummary();
@@ -715,14 +1498,20 @@ function renderQuestionBank() {
   questionBank.innerHTML = "";
 
   const selection = getCurrentSelection();
-  const filtered = curriculumData.filter(
+  const filtered = curriculumRecords.filter(
     (item) =>
       item.grade === selection.grade &&
       item.subject === selection.subject &&
       item.term === selection.term
   );
 
-  const bank = filtered.length > 0 ? filtered : curriculumData.slice(0, 4);
+  const profile = subjectKnowledgeBase[selection.subject];
+  const bank = filtered.length > 0
+    ? filtered
+    : (profile?.sampleQuestions || []).map((sampleQuestion) => ({
+        lesson: `${selection.subject} - المنهج العام`,
+        sampleQuestion
+      }));
 
   bank.slice(0, 4).forEach((entry) => {
     const button = document.createElement("button");
@@ -895,9 +1684,16 @@ async function collectWebEvidence(question, lesson, subject) {
   const ranked = collected
     .map((item) => ({
       ...item,
+      sourceProfile: getSourceProfile(item.url),
       score: scoreEvidenceSnippet(item.snippet, question, lesson)
     }))
-    .sort((a, b) => b.score - a.score)
+    .sort((a, b) => {
+      const priorityDelta = (a.sourceProfile?.priority || 5) - (b.sourceProfile?.priority || 5);
+      if (priorityDelta !== 0) {
+        return priorityDelta;
+      }
+      return b.score - a.score;
+    })
     .slice(0, 3);
 
   if (ranked.length === 0) {
@@ -909,10 +1705,11 @@ async function collectWebEvidence(question, lesson, subject) {
   }
 
   const strongest = ranked[0];
+  const classes = [...new Set(ranked.map((item) => item.sourceProfile?.category || "مرجع عام"))].join("، ");
   return {
     evidence: ranked,
-    summary: `تمت مراجعة ${ranked.length} مصادر ويب ومقارنتها مع المنهج. الأقرب كان: ${strongest.title}.`,
-    decision: `جرى ترجيح الإجابة التي تتوافق أكثر مع مفاهيم درس ${lesson.lesson} ومع تكرار الفكرة الأساسية داخل المصادر المجمعة.`
+    summary: `تمت مراجعة ${ranked.length} مصادر ويب ومقارنتها مع المنهج. التصنيف المستخدم: ${classes}. الأقرب كان: ${strongest.title}.`,
+    decision: `جرى ترجيح الإجابة التي تتوافق أكثر مع مفاهيم درس ${lesson.lesson} ومع أولوية نوع المصدر ثم تكرار الفكرة الأساسية داخل المصادر المجمعة.`
   };
 }
 
@@ -1054,35 +1851,90 @@ async function requestAI(question, lesson) {
   const localResponse = createLocalResponse(question, lesson);
   const runtime = runtimeSelect.value;
   const trainingMode = trainingModeSelect.value;
+  const selection = getCurrentSelection();
   const attachmentsInput = await toAttachmentInputs(attachments);
   const hasFiles = attachmentsInput.length > 0;
   const selectedPrompt = academicSystemPrompt;
   void selectedPrompt;
   const webConsensus = await collectWebEvidence(question, lesson, subjectSelect.value);
+  const curriculumSources = getCurriculumSources(
+    subjectSelect.value,
+    termSelect.value,
+    gradeSelect.value
+  );
+  const directorySources = getWajibatiDirectorySources(gradeSelect.value, termSelect.value);
+
+  const normalizedCurriculumSources = curriculumSources.map((item) => ({
+    url: item.url,
+    label: item.label,
+    type: "مرجع المنهج"
+  }));
+  const normalizedDirectorySources = directorySources.map((item) => ({
+    url: item.url,
+    label: item.label,
+    type: item.type
+  }));
+  const prioritizedSearchSources = buildPrioritySearchLinks(question, selection).map((item) => ({
+    ...item,
+    type: item.type
+  }));
+  const normalizedWebSources = webConsensus.evidence.map((item) => ({
+    url: item.url,
+    label: item.title || item.url,
+    type: "مرجع ويب"
+  }));
+  const allSources = [
+    ...prioritizedSearchSources,
+    ...normalizedCurriculumSources,
+    ...normalizedDirectorySources,
+    ...normalizedWebSources
+  ].filter(
+    (item, index, array) => item.url && array.findIndex((entry) => entry.url === item.url) === index
+  );
+  const curriculumReferenceNote = normalizedCurriculumSources.length
+    ? `تمت مطابقة السؤال أيضًا مع مراجع محفوظة من واجباتي مثل ${normalizedCurriculumSources
+        .slice(0, 2)
+        .map((item) => item.label)
+        .join("، ")}.`
+    : normalizedDirectorySources.length
+      ? `تم دعم الإجابة أيضًا بدليل واجباتي الخاص بـ${gradeSelect.value} في ${termSelect.value} حتى مع عدم توفر كتاب مباشر محفوظ لهذه المادة بعد.`
+      : "لا توجد مراجع واجباتي محفوظة لهذا الاختيار بعد، لذلك تم الاعتماد أكثر على محتوى الدرس المحلي ومراجعة الويب.";
+  const allTermCoverage = getGradeTermCoverage(gradeSelect.value, subjectSelect.value);
+  const termsCoverageNote = `التغطية الحالية لهذا الصف تشمل ${allTermCoverage
+    .map((entry) => `${entry.term} (${entry.directBooks.length > 0 ? `${entry.directBooks.length} كتاب/حل مباشر` : "دليل الصف والكتب"})`)
+    .join("، ")}.`;
+  const priorityPolicyNote =
+    "ترتيب التحقق الخارجي المعتمد هنا هو: بيت العلم أولًا، ثم عين التعليمية، ثم واجباتي لمراجعة الكتاب والمنهج، ثم المراجع العامة للمقارنة النهائية.";
 
   const response = {
     ...localResponse,
-    explanation: `${localResponse.explanation} يعمل المحرك الحالي بصيغة ${runtime} مع نمط ${trainingMode}، لذلك يتم فصل المعرفة عن السلوك: المنهج يأتي من RAG المحلي، وأسلوب الرد يمثل سياسة ملم يحل. كما تمت مراجعة نتائج من الويب قبل تثبيت الصياغة النهائية.`,
+    explanation: `${localResponse.explanation} يعمل المحرك الحالي بصيغة ${runtime} مع نمط ${trainingMode}، لذلك يتم فصل المعرفة عن السلوك: المنهج يأتي من RAG المحلي، وأسلوب الرد يمثل سياسة ملم يحل. كما تمت مراجعة نتائج من الويب قبل تثبيت الصياغة النهائية. ${priorityPolicyNote} ${curriculumReferenceNote} ${termsCoverageNote}`,
     steps: [
       `تشغيل المصنف المستقل للنية لتأكيد أن الرسالة سؤال أكاديمي.`,
       `تصنيف السؤال إلى: ${detectQuestionType(question)}.`,
-      `إرسال السؤال إلى طبقة البحث على الويب وجمع أكثر من مرجع قبل الجواب.`,
+      `إرسال السؤال أولًا إلى طبقة المراجعة التعليمية المساندة عبر بيت العلم.`,
+      `مراجعة المحتوى الرسمي بعد ذلك عبر عين التعليمية.`,
+      `تحميل مراجع المنهج للصف ${gradeSelect.value} في ${subjectSelect.value} خلال ${termSelect.value}.`,
+      `مراجعة واجباتي للتحقق من الكتاب والصف والمرجع المنهجي المناسب.`,
+      `إرسال السؤال إلى طبقة البحث على الويب وجمع أكثر من مرجع للمقارنة النهائية قبل الجواب.`,
       `استرجاع أقرب مقطع من درس ${lesson.lesson} ضمن ${lesson.unit}.`,
-      `مقارنة الأدلة المجمعة مع المنهج المحلي واختيار الصياغة الأكثر اتساقًا.`,
+      `مقارنة الأدلة المجمعة بين بيت العلم وعين وواجباتي والمخزون المحلي ثم اختيار الصياغة الأكثر اتساقًا.`,
       `تطبيق سياسة الإجابة الخاصة بملم يحل: حل ثم شرح ثم أخطاء شائعة ثم سؤال مشابه.`,
       hasFiles
         ? "تحليل المرفقات كجزء من السؤال قبل بناء الجواب."
         : "بناء الإجابة مباشرة من السؤال النصي والسياق الدراسي.",
       `المحرك المفترض للتشغيل النهائي: ${runtime}.`
     ],
-    curriculumLink: `${localResponse.curriculumLink} | طبقة التشغيل: ${runtime} | طبقة السلوك: ${trainingMode}`,
-    evidenceSummary: webConsensus.summary,
-    decisionRationale: webConsensus.decision
+    curriculumLink: `${localResponse.curriculumLink} | طبقة التشغيل: ${runtime} | طبقة السلوك: ${trainingMode} | ${termsCoverageNote}`,
+    evidenceSummary: normalizedCurriculumSources.length
+      ? `${webConsensus.summary} كما جرى ربط النتيجة بمراجع المنهج من واجباتي بعد المرور على طبقة بيت العلم وعين التعليمية قبل عرض الجواب.`
+      : webConsensus.summary,
+    decisionRationale: `${webConsensus.decision} ${priorityPolicyNote} ${curriculumReferenceNote}`
   };
 
   return {
     response,
-    sources: webConsensus.evidence.map((item) => item.url)
+    sources: allSources
   };
 }
 
@@ -1090,7 +1942,7 @@ function addPendingMessage() {
   addMessage(
     "assistant",
     "ملم يحل",
-    `<div class="pending-copy">جارٍ تحليل السؤال وربطه بالمنهج السعودي ثم تجهيز الإجابة المنظمة...</div>`
+    createLoadingCopy()
   );
 }
 
@@ -1104,6 +1956,13 @@ async function handleSubmit(event) {
   const intentResult = classifyIntent(prompt, hasAttachments);
   const selection = getCurrentSelection();
   const lesson = findRelevantLesson(prompt || selection.lesson);
+
+  if (lesson?.subject && lesson.subject !== subjectSelect.value) {
+    updateSubjectOptions(lesson.subject);
+    subjectSelect.value = lesson.subject;
+  }
+
+  const resolvedSelection = getCurrentSelection();
   lastUserQuestion = prompt || "سؤال مرفوع عبر ملفات مرفقة";
 
   const userText = attachments.length
@@ -1115,16 +1974,17 @@ async function handleSubmit(event) {
   addMessage("user", "أنت", userText);
   trackUsage({
     intent: intentResult.label,
-    grade: selection.grade,
-    subject: selection.subject,
+    grade: resolvedSelection.grade,
+    subject: resolvedSelection.subject,
     lesson: lesson.lesson
   });
 
   if (needsClarification(prompt, intentResult, hasAttachments)) {
+    const clarification = createClarificationResponse(prompt);
     addMessage(
       "assistant",
       "ملم يحل",
-      formatSimpleReply("أحتاج توضيحًا أكثر حتى أساعدك بشكل صحيح. اكتب السؤال كاملًا أو حدّد المادة والدرس وما المطلوب بالضبط.")
+      formatClarificationReply(clarification)
     );
     promptInput.value = "";
     attachments = [];
@@ -1231,34 +2091,71 @@ function quickSolve() {
 promptInput.addEventListener("input", () => autoGrow(promptInput));
 runtimeSelect.addEventListener("change", saveSettings);
 trainingModeSelect.addEventListener("change", saveSettings);
-gradeSelect.addEventListener("change", updateSelectionSummary);
+gradeSelect.addEventListener("change", () => {
+  updateSubjectOptions();
+  updateSelectionSummary();
+});
 subjectSelect.addEventListener("change", updateSelectionSummary);
 termSelect.addEventListener("change", updateSelectionSummary);
 lessonInput.addEventListener("input", updateSelectionSummary);
 startChatButton.addEventListener("click", startChat);
 quickSolveButton.addEventListener("click", quickSolve);
-uploadButton.addEventListener("click", () => fileInput.click());
+uploadButton.addEventListener("click", openGenericUpload);
+uploadImageButton.addEventListener("click", openImageUpload);
+uploadFileButton.addEventListener("click", openGenericUpload);
+focusSubjectButton.addEventListener("click", () => subjectSelect.focus());
+clearChatButton.addEventListener("click", resetConversationView);
+
+starterButtons.forEach((button) => {
+  button.addEventListener("click", () => {
+    const starterAction = button.getAttribute("data-starter-action");
+    const starterPrompt = button.getAttribute("data-starter-prompt") || "";
+    const starterSubject = button.getAttribute("data-starter-subject") || "";
+
+    if (starterAction === "upload-image") {
+      openImageUpload();
+      return;
+    }
+
+    setPromptValue(starterPrompt, starterSubject);
+  });
+});
+
+messageList.addEventListener("click", (event) => {
+  const target = event.target.closest("[data-fill-prompt], [data-action]");
+  if (!target) return;
+
+  const fillPrompt = target.getAttribute("data-fill-prompt");
+  const action = target.getAttribute("data-action");
+
+  if (fillPrompt) {
+    setPromptValue(fillPrompt);
+    return;
+  }
+
+  if (action === "upload-image") {
+    openImageUpload();
+    return;
+  }
+
+  if (action === "focus-subject") {
+    subjectSelect.focus();
+  }
+});
+
 fileInput.addEventListener("change", (event) => {
   attachments = Array.from(event.target.files || []);
   renderAttachments();
 });
 form.addEventListener("submit", handleSubmit);
 
+populateGradeOptions();
+updateSubjectOptions();
 renderLearnedMemory();
 renderHistory();
 renderInsights();
+renderWebPolicy();
 updateSelectionSummary();
 updateStatus();
 saveJson(storageKeys.users, users);
-
-addMessage(
-  "assistant",
-  "ملم يحل",
-  `<div class="answer-grid">
-    <section class="answer-section answer-section-wide">
-      <h4>مرحبًا بك في ملم يحل</h4>
-      <p>أنا شات أكاديمي سعودي يجيب من سياق الصف والمادة والدرس أولًا، ثم يعرض الإجابة النهائية والشرح والخطوات والأخطاء الشائعة والسؤال المشابه.</p>
-      <p>ابدأ باختيار الصف والمادة والدرس، ثم اضغط <strong>ابدأ الشات</strong> أو أرسل سؤالك مباشرة.</p>
-    </section>
-  </div>`
-);
+renderWelcomeMessage();

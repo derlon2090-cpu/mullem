@@ -272,6 +272,11 @@ textarea {
   color: var(--text);
 }
 
+a.memory-item {
+  display: block;
+  text-decoration: none;
+}
+
 .suggestion-btn {
   cursor: pointer;
   transition: 180ms ease;
@@ -358,6 +363,40 @@ textarea {
   font-size: 0.95rem;
 }
 
+.starter-grid {
+  margin-top: 16px;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.starter-card {
+  text-align: right;
+  border: 1px solid var(--line);
+  border-radius: 20px;
+  padding: 16px;
+  background: rgba(255, 255, 255, 0.96);
+  cursor: pointer;
+  transition: 180ms ease;
+}
+
+.starter-card strong {
+  display: block;
+  margin-bottom: 6px;
+  color: var(--brand-strong);
+}
+
+.starter-card span {
+  color: var(--muted);
+  line-height: 1.7;
+  font-size: 0.92rem;
+}
+
+.starter-card:hover {
+  transform: translateY(-2px);
+  border-color: rgba(15, 76, 129, 0.22);
+}
+
 .messages {
   padding: 24px;
   overflow: auto;
@@ -400,6 +439,30 @@ textarea {
 
 .simple-reply {
   padding: 2px 0;
+}
+
+.clarify-card {
+  display: grid;
+  gap: 12px;
+}
+
+.clarify-card p {
+  margin: 0;
+}
+
+.inline-actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.inline-action-btn {
+  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.98);
+  color: var(--brand-strong);
+  border-radius: 999px;
+  padding: 9px 14px;
+  cursor: pointer;
 }
 
 .answer-grid {
@@ -579,9 +642,58 @@ textarea {
   line-height: 1.8;
 }
 
+.helper-toolbar {
+  margin-top: 12px;
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.helper-btn {
+  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.98);
+  color: var(--brand-strong);
+  border-radius: 999px;
+  padding: 10px 14px;
+  cursor: pointer;
+}
+
+.helper-btn-ghost {
+  color: var(--muted);
+}
+
 .admin-wrap {
   display: grid;
   gap: 22px;
+}
+
+.admin-auth-shell {
+  display: grid;
+  place-items: center;
+}
+
+.admin-login-card {
+  width: min(460px, 100%);
+  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.94);
+  border-radius: 28px;
+  padding: 26px;
+  box-shadow: var(--shadow);
+}
+
+.admin-login-card h2 {
+  margin: 0 0 8px;
+}
+
+.admin-login-card p {
+  margin: 0 0 18px;
+  color: var(--muted);
+  line-height: 1.8;
+}
+
+.admin-login-form {
+  display: grid;
+  gap: 12px;
 }
 
 .stats-grid {
@@ -692,6 +804,7 @@ textarea {
   .cta-row,
   .selectors,
   .answer-grid,
+  .starter-grid,
   .stats-grid,
   .admin-grid {
     grid-template-columns: 1fr;

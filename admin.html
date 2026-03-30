@@ -18,13 +18,27 @@
       </div>
       <div class="topbar-actions">
         <a class="top-chip top-link" href="index.html">العودة إلى الشات</a>
+        <button class="top-chip top-link" type="button" data-admin-logout>تسجيل الخروج</button>
         <div class="top-chip">تحديث مباشر من بيانات المتصفح</div>
       </div>
     </header>
   </div>
 
   <main class="page-wrap">
-    <div class="shell admin-wrap">
+    <div class="shell admin-auth-shell" data-admin-auth>
+      <section class="admin-login-card">
+        <h2>دخول الأدمن</h2>
+        <p>أدخل بريد الأدمن وكلمة المرور للوصول إلى لوحة إدارة ملم يحل.</p>
+        <form class="admin-login-form" data-admin-login-form>
+          <input class="field" type="email" data-admin-email placeholder="البريد الإلكتروني">
+          <input class="field" type="password" data-admin-password placeholder="كلمة المرور">
+          <button class="primary-btn" type="submit">دخول لوحة الأدمن</button>
+          <div class="small-copy" data-admin-login-state>الدخول محمي ببريد وكلمة مرور.</div>
+        </form>
+      </section>
+    </div>
+
+    <div class="shell admin-wrap" data-admin-app hidden>
       <section class="stats-grid" data-admin-stats></section>
 
       <section class="admin-grid">
