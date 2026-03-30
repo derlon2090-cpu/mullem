@@ -88,18 +88,29 @@ textarea {
 }
 
 .brand-mark {
-  width: 52px;
-  height: 52px;
+  width: 60px;
+  height: 60px;
   border-radius: 18px;
   display: grid;
   place-items: center;
   background: linear-gradient(135deg, rgba(34, 197, 94, 0.14), rgba(255, 255, 255, 0.98));
   border: 1px solid rgba(34, 197, 94, 0.16);
+  overflow: hidden;
 }
 
 .brand-mark-logo svg {
   width: 34px;
   height: 34px;
+}
+
+.brand-mark-logo-image {
+  background: #fff;
+}
+
+.brand-mark-logo-image img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
 }
 
 .brand-text {
@@ -187,7 +198,7 @@ textarea {
 
 .layout {
   display: grid;
-  grid-template-columns: 430px 1fr;
+  grid-template-columns: 360px 1fr;
   gap: 22px;
   align-items: start;
 }
@@ -207,6 +218,9 @@ textarea {
   top: 18px;
   display: grid;
   gap: 18px;
+  max-height: calc(100vh - 36px);
+  overflow: auto;
+  scrollbar-width: thin;
 }
 
 .hero-card {
@@ -226,26 +240,11 @@ textarea {
   margin-bottom: 12px;
 }
 
-.hero-logo-mark {
-  width: 96px;
-  height: 96px;
-  border-radius: 28px;
-  display: grid;
-  place-items: center;
-  background: linear-gradient(135deg, rgba(34, 197, 94, 0.14), rgba(255, 255, 255, 0.98));
-  border: 1px solid rgba(34, 197, 94, 0.16);
-}
-
-.hero-logo-mark svg {
-  width: 56px;
-  height: 56px;
-}
-
-.hero-logo-text {
-  font-size: clamp(3rem, 6vw, 5.5rem);
-  line-height: 1;
-  font-weight: 900;
-  color: var(--brand-strong);
+.hero-logo-image {
+  width: min(100%, 420px);
+  height: auto;
+  display: block;
+  filter: saturate(1.06) contrast(1.03);
 }
 
 .hero-actions,
@@ -334,6 +333,31 @@ textarea {
 .panel h3 {
   margin: 0 0 10px;
   font-size: 1rem;
+}
+
+.panel-compact {
+  display: grid;
+  gap: 12px;
+}
+
+.panel-section {
+  display: grid;
+  gap: 8px;
+}
+
+.panel-section + .panel-section {
+  padding-top: 10px;
+  border-top: 1px solid var(--line);
+}
+
+.panel-section-title {
+  font-size: 0.9rem;
+  font-weight: 800;
+  color: var(--brand-strong);
+}
+
+.compact-list {
+  gap: 8px;
 }
 
 .small-copy {
@@ -835,6 +859,149 @@ a.memory-item {
   font-size: 0.9rem;
 }
 
+.auth-shell {
+  display: grid;
+  grid-template-columns: minmax(0, 520px) minmax(0, 1fr);
+  gap: 22px;
+  align-items: start;
+}
+
+.auth-card,
+.auth-preview {
+  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.95);
+  border-radius: 30px;
+  box-shadow: var(--shadow);
+}
+
+.auth-card {
+  padding: 28px;
+  display: grid;
+  gap: 16px;
+}
+
+.auth-card h1 {
+  margin: 0;
+  font-size: clamp(2rem, 4vw, 3rem);
+}
+
+.auth-card p {
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.9;
+}
+
+.auth-tabs {
+  display: flex;
+  gap: 10px;
+}
+
+.auth-tab {
+  flex: 1;
+  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.98);
+  color: var(--muted);
+  border-radius: 16px;
+  padding: 12px 14px;
+  cursor: pointer;
+}
+
+.auth-tab.active {
+  color: #fff;
+  background: linear-gradient(135deg, var(--brand), var(--accent));
+  border-color: transparent;
+}
+
+.auth-form {
+  display: grid;
+  gap: 12px;
+}
+
+.field-label {
+  font-size: 0.92rem;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.auth-links,
+.auth-footer-links,
+.auth-trust {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.auth-links {
+  justify-content: flex-end;
+}
+
+.auth-link-btn {
+  border: 0;
+  background: transparent;
+  color: var(--brand-strong);
+  font-weight: 700;
+  cursor: pointer;
+  padding: 0;
+}
+
+.auth-google-btn {
+  background: rgba(255, 255, 255, 0.96);
+  border: 1px solid var(--line);
+}
+
+.auth-preview {
+  padding: 22px;
+  display: grid;
+  gap: 12px;
+}
+
+.auth-preview-logo {
+  justify-items: start;
+  text-align: right;
+}
+
+.auth-preview-copy {
+  display: grid;
+  gap: 8px;
+  padding: 16px 0 8px;
+}
+
+.auth-preview-copy strong {
+  font-size: 1.45rem;
+}
+
+.auth-preview-copy span,
+.auth-footer-links a {
+  color: var(--muted);
+}
+
+.scroll-top-btn {
+  position: fixed;
+  left: 20px;
+  bottom: 20px;
+  width: 54px;
+  height: 54px;
+  border: 0;
+  border-radius: 18px;
+  background: linear-gradient(135deg, var(--brand), var(--accent));
+  color: #fff;
+  font-size: 1.5rem;
+  box-shadow: var(--shadow);
+  cursor: pointer;
+  opacity: 0;
+  visibility: hidden;
+  transform: translateY(12px);
+  transition: 180ms ease;
+  z-index: 50;
+}
+
+.scroll-top-btn.visible {
+  opacity: 1;
+  visibility: visible;
+  transform: translateY(0);
+}
+
 .admin-wrap {
   display: grid;
   gap: 22px;
@@ -965,6 +1132,10 @@ a.memory-item {
 
   .sidebar {
     position: static;
+  }
+
+  .auth-shell {
+    grid-template-columns: 1fr;
   }
 }
 

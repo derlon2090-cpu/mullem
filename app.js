@@ -137,6 +137,21 @@ const curriculumData = [
   }
 ];
 
+const scrollTopButton = document.querySelector("[data-scroll-top]");
+
+function syncScrollTopButton() {
+  if (!scrollTopButton) return;
+  scrollTopButton.classList.toggle("visible", window.scrollY > 320);
+}
+
+if (scrollTopButton) {
+  window.addEventListener("scroll", syncScrollTopButton, { passive: true });
+  scrollTopButton.addEventListener("click", () => {
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  });
+  syncScrollTopButton();
+}
+
 const curriculumLibrary = [
   {
     grade: "الثاني الثانوي",
@@ -502,6 +517,7 @@ const storageKeys = {
   history: "mlm_chat_history",
   analytics: "mlm_analytics",
   users: "mlm_users",
+  currentUser: "mlm_current_user",
   theme: "mlm_theme"
 };
 
@@ -553,6 +569,15 @@ if (!Array.isArray(users) || users.length === 0) {
   users = createDefaultUsers();
 }
 
+function getActiveUserId() {
+  return localStorage.getItem(storageKeys.currentUser) || users[0]?.id || "student-demo-1";
+}
+
+function getActiveUser() {
+  const activeUserId = getActiveUserId();
+  return users.find((entry) => entry.id === activeUserId) || users[0] || createDefaultUsers()[0];
+}
+
 applyTheme(localStorage.getItem(storageKeys.theme) || "light");
 runtimeSelect.value = localStorage.getItem(storageKeys.runtime) || "vLLM Runtime";
 trainingModeSelect.value = localStorage.getItem(storageKeys.trainingMode) || "Prompt + RAG";
@@ -588,6 +613,7 @@ function createDefaultUsers() {
     {
       id: "student-demo-1",
       name: "طالب تجريبي",
+      email: "student@mullem.sa",
       role: "Student",
       package: "مجاني محدود",
       xp: 120,
@@ -618,7 +644,7 @@ function applyTheme(theme) {
 }
 
 function updateXpBalance() {
-  const currentXp = users[0]?.xp ?? 120;
+  const currentXp = getActiveUser()?.xp ?? 120;
   xpBalanceNodes.forEach((node) => {
     node.textContent = currentXp;
   });
@@ -846,12 +872,12 @@ function analyzeChoiceQuestion(question, lesson) {
     const verdict = positiveScore >= 0.12 ? "صح" : "خطأ";
     return {
       mode: "truefalse",
-      finalAnswer: `الإجابة الصحيحة: ${verdict}.`,
-      explanation: `تم تحليل العبارة وربطها بمفاهيم ${lesson.lesson}. وبناءً على التطابق مع محتوى الدرس كانت النتيجة الأقرب: ${verdict}.`,
+      finalAnswer: verdict,
+      explanation: `بعد تحليل العبارة ومقارنتها بمفاهيم ${lesson.lesson} فالنتيجة الأقرب هي: ${verdict}.`,
       steps: [
-        "قراءة العبارة كاملة وتحديد الفكرة الأساسية فيها.",
-        `مطابقة العبارة مع مفاهيم درس ${lesson.lesson}.`,
-        `الحكم على العبارة بأنها ${verdict} بناءً على مدى اتساقها مع المنهج.`
+        "تحليل نص العبارة.",
+        `مقارنتها بمفاهيم ${lesson.lesson}.`,
+        `ترجيح الحكم النهائي: ${verdict}.`
       ]
     };
   }
@@ -873,13 +899,12 @@ function analyzeChoiceQuestion(question, lesson) {
   const best = rankedOptions[0];
   return {
     mode: "mcq",
-    finalAnswer: `الخيار الصحيح هو <span class="mcq-highlight">(${best.key}) ${best.text}</span>.`,
-    explanation: `تم تحليل السؤال والخيارات وربطها بمحتوى درس ${lesson.lesson}. الخيار (${best.key}) كان الأقرب لمفاهيم الدرس ومصطلحاته الأساسية.`,
+    finalAnswer: `الخيار الصحيح هو <span class="mcq-highlight">(${best.key}) ${best.text}</span>`,
+    explanation: `بعد تحليل السؤال والخيارات ومقارنتها بمحتوى ${lesson.lesson} كان الخيار (${best.key}) هو الأقرب للجواب الصحيح.`,
     steps: [
-      "قراءة نص السؤال واستخراج المطلوب بدقة.",
-      "تحليل كل خيار على حدة بدل اختيار الإجابة بسرعة.",
-      `مطابقة الخيارات مع مفاهيم ${lesson.lesson} مثل: ${lesson.concepts.join("، ")}.`,
-      `ترجيح الخيار (${best.key}) لأنه الأكثر اتساقًا مع الشرح المخزن محليًا.`
+      "تحديد المطلوب من السؤال.",
+      "مقارنة كل خيار بالمفهوم الدراسي.",
+      `ترجيح (${best.key}) لأنه الأكثر اتساقًا مع ${lesson.lesson}.`
     ]
   };
 }
@@ -1195,6 +1220,21 @@ const chatSystemPrompt =
   "رد بشكل طبيعي ومختصر ولطيف، ومن دون أي تنسيق أكاديمي أو خطوات حل أو ربط بالمنهج.";
 
 function formatAssistantSections(response) {
+  if (response.answerMode === "mcq" || response.answerMode === "truefalse") {
+    return `
+      <div class="answer-grid">
+        <section class="answer-section answer-section-wide">
+          <h4>${response.answerMode === "truefalse" ? "✅ الحكم النهائي" : "✅ الخيار الصحيح"}</h4>
+          <p>${response.finalAnswer}</p>
+        </section>
+        <section class="answer-section">
+          <h4>📘 التحليل المختصر</h4>
+          <p>${response.explanation}</p>
+        </section>
+      </div>
+    `;
+  }
+
   return `
     <div class="answer-grid">
       <section class="answer-section">
@@ -1680,8 +1720,9 @@ function trackUsage(selection) {
 
   const dayKey = new Date().toISOString().slice(0, 10);
   analytics.dailyMessages[dayKey] = (analytics.dailyMessages[dayKey] || 0) + 1;
-  users[0].xp = Math.max(0, users[0].xp - (selection.intent === "academic" ? 7 : 1));
-  users[0].activity =
+  const activeUser = getActiveUser();
+  activeUser.xp = Math.max(0, activeUser.xp - (selection.intent === "academic" ? 7 : 1));
+  activeUser.activity =
     selection.intent === "academic"
       ? `آخر نشاط في ${selection.subject} - ${selection.lesson}`
       : `آخر نشاط: ${selection.intent === "help" ? "طلب مساعدة" : "محادثة عادية"}`;
@@ -1847,6 +1888,7 @@ function createLocalResponse(question, lesson) {
     grade: selection.grade,
     subject: selection.subject,
     term: selection.term,
+    answerMode: choiceAnalysis?.mode || "full",
     lesson: lesson ? lesson.lesson : selection.lesson,
     finalAnswer,
     explanation,
