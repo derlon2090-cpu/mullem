@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>ملم | شات أكاديمي سعودي ذكي</title>
+  <title>ملم يحل | شات أكاديمي سعودي ذكي</title>
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
@@ -12,13 +12,13 @@
       <div class="brand-wrap">
         <div class="brand-mark">م</div>
         <div class="brand-text">
-          <div class="brand-name">ملم</div>
-          <div class="brand-copy">شات ذكي للدروس والأسئلة الأكاديمية السعودية</div>
+          <div class="brand-name">ملم يحل</div>
+          <div class="brand-copy">شات ذكي لحل الأسئلة الأكاديمية حسب المنهج السعودي</div>
         </div>
       </div>
       <div class="topbar-actions">
-        <div class="top-chip">دقة عالية في الحل والشرح</div>
-        <div class="top-chip">رفع ملفات وصور من زر +</div>
+        <div class="top-chip" data-status>وضع تجريبي محلي</div>
+        <div class="top-chip">رفع ملفات من زر +</div>
       </div>
     </header>
   </div>
@@ -26,53 +26,78 @@
   <main class="page-wrap">
     <div class="shell layout">
       <aside class="sidebar">
-        <div class="eyebrow">ملم للمنهج السعودي</div>
-        <h1>اسأل. ارفع. وافهم الحل خطوة بخطوة.</h1>
+        <div class="eyebrow">AI أكاديمي للفصول السعودية</div>
+        <h1>اسأل ملم يحل وسيشرح لك الجواب منظمًا وواضحًا.</h1>
         <p>
-          واجهة بسيطة تركز على شيء واحد فقط: شات أكاديمي ذكي يساعد الطالب السعودي على حل الأسئلة، شرح الأسباب،
-          وتحويل الدرس إلى إجابة واضحة وسريعة.
+          المنصة الآن مركزة على الشات فقط: حل ذكي، شرح خطوة بخطوة، مقارنة عند الحاجة، وربط أفضل بالمنهج السعودي
+          والفصول الدراسية.
         </p>
 
-        <div class="meta-grid">
-          <div class="meta-card">
-            <strong>المواد المدعومة</strong>
-            <span>رياضيات، علوم، فيزياء، كيمياء، أحياء، عربي، إنجليزي</span>
-          </div>
-          <div class="meta-card">
-            <strong>آلية الإجابة</strong>
-            <span>حل نهائي، شرح مبسط، خطوات، أخطاء شائعة، وسؤال مشابه</span>
-          </div>
-          <div class="meta-card">
-            <strong>الملفات</strong>
-            <span>زر + لرفع صور الأسئلة أو ملفات الدرس بأسلوب قريب من ChatGPT</span>
+        <div class="panel">
+          <h3>إعدادات الذكاء الاصطناعي</h3>
+          <div class="stack">
+            <input class="field" data-api-key type="password" placeholder="ضع OpenAI API Key للتشغيل الفعلي">
+            <div class="toggle-row">
+              <span>تفعيل مقارنة من الويب</span>
+              <input data-web-toggle type="checkbox">
+            </div>
+            <div class="small-copy">
+              هذه النسخة تشغل AI فعليًا من داخل الموقع إذا وضعت المفتاح. للإنتاج، يفضّل نقل المفتاح إلى خادم آمن.
+            </div>
           </div>
         </div>
 
-        <div class="suggestions">
-          <button class="suggestion-btn" type="button" data-suggestion="احسب محيط الدائرة إذا كان نصف القطر 7">
-            احسب محيط الدائرة إذا كان نصف القطر 7
-          </button>
-          <button class="suggestion-btn" type="button" data-suggestion="اشرح الفرق بين المنتجات والمستهلكات في النظام البيئي">
-            اشرح الفرق بين المنتجات والمستهلكات في النظام البيئي
-          </button>
-          <button class="suggestion-btn" type="button" data-suggestion="حدد المبتدأ والخبر في جملة: العلم نور">
-            حدد المبتدأ والخبر في جملة: العلم نور
-          </button>
-          <button class="suggestion-btn" type="button" data-suggestion="صحح الجملة بالإنجليزية: He play football every day">
-            صحح الجملة بالإنجليزية: He play football every day
-          </button>
+        <div class="panel">
+          <h3>ماذا يفعل ملم يحل؟</h3>
+          <div class="stack">
+            <div class="memory-item">
+              <strong>المنهج السعودي أولًا</strong>
+              <span>يعطي الإجابة بحسب المنهج السعودي، ثم يقارن بالمعلومة العامة عند تفعيل الويب.</span>
+            </div>
+            <div class="memory-item">
+              <strong>تعلم من الإعجاب</strong>
+              <span>عند الضغط على زر الإعجاب، يتذكر ملم يحل أسلوب الإجابة ليستفيد منه لاحقًا.</span>
+            </div>
+            <div class="memory-item">
+              <strong>ملفات وصور</strong>
+              <span>يمكنك رفع صورة سؤال أو ملف نصي أو مرفق دراسي من زر +.</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="panel">
+          <h3>تعلم من الإجابات المعجبة</h3>
+          <div class="learned-list" data-learned></div>
+        </div>
+
+        <div class="panel">
+          <h3>أسئلة مقترحة</h3>
+          <div class="suggestions">
+            <button class="suggestion-btn" type="button" data-suggestion="احسب محيط الدائرة إذا كان نصف القطر 7">
+              احسب محيط الدائرة إذا كان نصف القطر 7
+            </button>
+            <button class="suggestion-btn" type="button" data-suggestion="اشرح الفرق بين المنتجات والمستهلكات في النظام البيئي">
+              اشرح الفرق بين المنتجات والمستهلكات في النظام البيئي
+            </button>
+            <button class="suggestion-btn" type="button" data-suggestion="حدد المبتدأ والخبر في جملة: العلم نور">
+              حدد المبتدأ والخبر في جملة: العلم نور
+            </button>
+            <button class="suggestion-btn" type="button" data-suggestion="صحح الجملة بالإنجليزية: He play football every day">
+              صحح الجملة بالإنجليزية: He play football every day
+            </button>
+          </div>
         </div>
       </aside>
 
       <section class="chat-shell">
         <div class="chat-top">
           <h2>الشات الذكي</h2>
-          <p>اكتب السؤال أو أرفق ملفًا، وسيجيب ملم بصياغة تعليمية منظمة ومناسبة للفصول الدراسية السعودية.</p>
+          <p>اكتب السؤال أو أرفق ملفًا، وسيجيب ملم يحل بصياغة تعليمية مناسبة للفصول الدراسية السعودية.</p>
           <div class="chat-tags">
             <div class="tag">حل أكاديمي</div>
             <div class="tag">شرح خطوة بخطوة</div>
-            <div class="tag">رفع ملفات وصور</div>
-            <div class="tag">أسئلة مشابهة</div>
+            <div class="tag">مقارنة من الويب</div>
+            <div class="tag">إعجاب بالإجابة</div>
           </div>
           <div class="smart-note">
             قد تختلف طريقة الحل بحسب المعلم أو الكتاب، لذلك نعرض أكثر من أسلوب عند الحاجة.
@@ -87,7 +112,8 @@
               <option>الأول الابتدائي</option>
               <option>الثالث الابتدائي</option>
               <option>السادس الابتدائي</option>
-              <option selected>الأول المتوسط</option>
+              <option>الأول المتوسط</option>
+              <option>الثاني المتوسط</option>
               <option>الثالث المتوسط</option>
               <option>الأول الثانوي</option>
               <option>الثاني الثانوي</option>
@@ -101,6 +127,7 @@
               <option>الأحياء</option>
               <option>اللغة العربية</option>
               <option>اللغة الإنجليزية</option>
+              <option>الاجتماعيات</option>
             </select>
             <select class="field" data-term>
               <option selected>الفصل الدراسي الأول</option>
@@ -126,11 +153,12 @@
                 <path d="M22 2L15 22L11 13L2 9L22 2Z"></path>
               </svg>
             </button>
-            <input data-file-input type="file" hidden multiple accept=".pdf,.doc,.docx,.png,.jpg,.jpeg,.txt">
+            <input data-file-input type="file" hidden multiple accept=".pdf,.doc,.docx,.png,.jpg,.jpeg,.txt,.md">
           </form>
 
           <div class="composer-note">
-            المخرجات الحالية واجهة أولية ذكية على المتصفح. يمكن ربطها لاحقًا بنموذج AI فعلي لرفع الدقة في الحل والتحليل.
+            يعمل ملم يحل الآن بوضعين: وضع تجريبي محلي إذا لم تضع المفتاح، أو AI فعلي من داخل الموقع إذا أدخلت
+            مفتاح OpenAI. كما يمكنه الاستفادة من بحث الويب عند التفعيل، لكن جواب المنهج السعودي يظل الأولوية.
           </div>
         </div>
       </section>
