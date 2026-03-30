@@ -501,7 +501,8 @@ const storageKeys = {
   dislikedMemory: "mlm_disliked_memory",
   history: "mlm_chat_history",
   analytics: "mlm_analytics",
-  users: "mlm_users"
+  users: "mlm_users",
+  theme: "mlm_theme"
 };
 
 const messageList = document.querySelector("[data-messages]");
@@ -523,10 +524,13 @@ const wajibatiLibraryList = document.querySelector("[data-wajibati-library]");
 const termCoverageList = document.querySelector("[data-term-coverage]");
 const webPolicyList = document.querySelector("[data-web-policy]");
 const statusChip = document.querySelector("[data-status]");
+const xpBalanceNodes = document.querySelectorAll("[data-xp-balance]");
 const selectionSummary = document.querySelector("[data-selection-summary]");
 const runtimeSummary = document.querySelector("[data-runtime-summary]");
 const startChatButton = document.querySelector("[data-start-chat]");
 const quickSolveButton = document.querySelector("[data-quick-solve]");
+const heroExampleButton = document.querySelector("[data-hero-example]");
+const themeToggleButton = document.querySelector("[data-theme-toggle]");
 const uploadButton = document.querySelector("[data-open-upload]");
 const starterButtons = document.querySelectorAll("[data-starter-prompt], [data-starter-action]");
 const uploadImageButton = document.querySelector("[data-upload-image]");
@@ -549,6 +553,7 @@ if (!Array.isArray(users) || users.length === 0) {
   users = createDefaultUsers();
 }
 
+applyTheme(localStorage.getItem(storageKeys.theme) || "light");
 runtimeSelect.value = localStorage.getItem(storageKeys.runtime) || "vLLM Runtime";
 trainingModeSelect.value = localStorage.getItem(storageKeys.trainingMode) || "Prompt + RAG";
 
@@ -603,6 +608,20 @@ function updateStatus() {
   const trainingMode = trainingModeSelect.value;
   statusChip.textContent = runtime === "وضع تجريبي داخل الواجهة" ? "وضع محلي تجريبي" : `AI محلي | ${runtime}`;
   runtimeSummary.textContent = `التشغيل الحالي: ${runtime} مع طبقة سلوكية ${trainingMode}. المعرفة تأتي من RAG للمنهج السعودي، أما أسلوب الرد فيمثّل سلوك ملم يحل.`;
+}
+
+function applyTheme(theme) {
+  document.body.classList.toggle("theme-dark", theme === "dark");
+  if (themeToggleButton) {
+    themeToggleButton.textContent = theme === "dark" ? "☀️" : "🌙";
+  }
+}
+
+function updateXpBalance() {
+  const currentXp = users[0]?.xp ?? 120;
+  xpBalanceNodes.forEach((node) => {
+    node.textContent = currentXp;
+  });
 }
 
 function populateGradeOptions() {
@@ -779,12 +798,90 @@ function buildCurriculumContext(lesson) {
 function detectQuestionType(question) {
   const normalized = normalizeText(question);
 
+  if (extractChoiceOptions(question)?.options.length) return "اختيار من متعدد";
   if (normalized.includes("اختر") || normalized.includes("اختيار")) return "اختيار من متعدد";
   if (normalized.includes("صح") && normalized.includes("خطأ")) return "صح وخطأ";
   if (normalized.includes("اشرح") || normalized.includes("فسر")) return "سؤال تفسيري";
   if (normalized.includes("حل") || normalized.includes("احسب") || normalized.includes("معادلة")) return "مسألة حسابية";
   if (normalized.includes("صحح") || normalized.includes("correct")) return "تصحيح وصياغة";
   return "سؤال أكاديمي عام";
+}
+
+function extractChoiceOptions(question) {
+  const lines = question
+    .split(/\n+/)
+    .map((line) => line.trim())
+    .filter(Boolean);
+
+  const options = lines
+    .map((line) => {
+      const match = line.match(/^([أ-دA-D1-4])[\)\-\.:\s]+(.+)$/u);
+      if (!match) {
+        return null;
+      }
+
+      return {
+        key: match[1],
+        text: match[2].trim()
+      };
+    })
+    .filter(Boolean);
+
+  if (options.length >= 2) {
+    const stem = lines.filter((line) => !line.match(/^([أ-دA-D1-4])[\)\-\.:\s]+/u)).join(" ");
+    return { stem: stem || question, options };
+  }
+
+  return null;
+}
+
+function analyzeChoiceQuestion(question, lesson) {
+  const normalized = normalizeText(question);
+  const trueFalse = normalized.includes("صح") && normalized.includes("خطأ");
+  const choiceBundle = extractChoiceOptions(question);
+  const knowledgeText = `${lesson.lesson} ${lesson.unit} ${lesson.content} ${lesson.concepts.join(" ")} ${lesson.similarQuestion}`;
+
+  if (trueFalse && !choiceBundle) {
+    const positiveScore = jaccardSimilarity(tokenizeForModel(question), tokenizeForModel(knowledgeText));
+    const verdict = positiveScore >= 0.12 ? "صح" : "خطأ";
+    return {
+      mode: "truefalse",
+      finalAnswer: `الإجابة الصحيحة: ${verdict}.`,
+      explanation: `تم تحليل العبارة وربطها بمفاهيم ${lesson.lesson}. وبناءً على التطابق مع محتوى الدرس كانت النتيجة الأقرب: ${verdict}.`,
+      steps: [
+        "قراءة العبارة كاملة وتحديد الفكرة الأساسية فيها.",
+        `مطابقة العبارة مع مفاهيم درس ${lesson.lesson}.`,
+        `الحكم على العبارة بأنها ${verdict} بناءً على مدى اتساقها مع المنهج.`
+      ]
+    };
+  }
+
+  if (!choiceBundle) {
+    return null;
+  }
+
+  const rankedOptions = choiceBundle.options
+    .map((option) => ({
+      ...option,
+      score: jaccardSimilarity(
+        tokenizeForModel(`${choiceBundle.stem} ${option.text}`),
+        tokenizeForModel(knowledgeText)
+      )
+    }))
+    .sort((left, right) => right.score - left.score);
+
+  const best = rankedOptions[0];
+  return {
+    mode: "mcq",
+    finalAnswer: `الخيار الصحيح هو <span class="mcq-highlight">(${best.key}) ${best.text}</span>.`,
+    explanation: `تم تحليل السؤال والخيارات وربطها بمحتوى درس ${lesson.lesson}. الخيار (${best.key}) كان الأقرب لمفاهيم الدرس ومصطلحاته الأساسية.`,
+    steps: [
+      "قراءة نص السؤال واستخراج المطلوب بدقة.",
+      "تحليل كل خيار على حدة بدل اختيار الإجابة بسرعة.",
+      `مطابقة الخيارات مع مفاهيم ${lesson.lesson} مثل: ${lesson.concepts.join("، ")}.`,
+      `ترجيح الخيار (${best.key}) لأنه الأكثر اتساقًا مع الشرح المخزن محليًا.`
+    ]
+  };
 }
 
 const intentModel = {
@@ -1066,9 +1163,9 @@ function renderWelcomeMessage() {
     "ملم يحل",
     `<div class="answer-grid">
       <section class="answer-section answer-section-wide">
-        <h4>مرحبًا بك في ملم يحل</h4>
-        <p>أنا مساعد أكاديمي للمنهج السعودي. أستطيع حل الأسئلة، شرح الدروس، تحليل الأخطاء، أو الرد عليك بشكل طبيعي إذا كانت رسالتك غير أكاديمية.</p>
-        <p>ابدأ ببطاقات البداية السريعة، أو اكتب سؤالك مباشرة، أو ارفع صورة من الكتاب.</p>
+        <h4>كيف أقدر أساعدك اليوم؟</h4>
+        <p>أنا مساعد أكاديمي للمنهج السعودي. أستطيع حل الأسئلة، شرح الدروس، تحليل الأخطاء، واختيار الإجابة الصحيحة إذا كان السؤال بنمط صح وخطأ أو متعدد الخيارات.</p>
+        <p class="logic-note">أمثلة سريعة: احسب محيط دائرة نصف قطرها 7 | اشرح قانون نيوتن الثاني | حل هذا السؤال (مع صورة) | س: ما نوع الرابطة في NaCl؟ أ) تساهمية ب) أيونية ج) فلزية د) هيدروجينية</p>
       </section>
     </div>`
   );
@@ -1569,6 +1666,7 @@ function rememberFeedback(type, messagePayload) {
 function saveAnalytics() {
   saveJson(storageKeys.analytics, analytics);
   saveJson(storageKeys.users, users);
+  updateXpBalance();
 }
 
 function trackUsage(selection) {
@@ -1716,27 +1814,33 @@ async function collectWebEvidence(question, lesson, subject) {
 function createLocalResponse(question, lesson) {
   const questionType = detectQuestionType(question);
   const selection = getCurrentSelection();
-  const finalAnswer =
-    lesson && question
+  const choiceAnalysis = lesson ? analyzeChoiceQuestion(question, lesson) : null;
+  const finalAnswer = choiceAnalysis
+    ? choiceAnalysis.finalAnswer
+    : lesson && question
       ? `اعتمادًا على درس ${lesson.lesson} في ${selection.subject}، الحل الأقرب هو: ${lesson.content.split(" ").slice(0, 16).join(" ")}...`
       : `تم تحليل سؤالك في ${selection.subject}، لكن يفضّل تحديد الدرس بدقة لرفع جودة الإجابة.`;
 
-  const explanation = lesson
-    ? `ربطت السؤال بدرس ${lesson.lesson} من وحدة ${lesson.unit}، ثم استخرجت المفاهيم الأساسية: ${lesson.concepts.join("، ")}.`
-    : `لم أجد درسًا مطابقًا بشكل كامل، لذلك اعتمدت على المادة والسياق العام لتقديم شرح تدريجي.`;
+  const explanation = choiceAnalysis
+    ? choiceAnalysis.explanation
+    : lesson
+      ? `ربطت السؤال بدرس ${lesson.lesson} من وحدة ${lesson.unit}، ثم استخرجت المفاهيم الأساسية: ${lesson.concepts.join("، ")}.`
+      : `لم أجد درسًا مطابقًا بشكل كامل، لذلك اعتمدت على المادة والسياق العام لتقديم شرح تدريجي.`;
 
-  const steps = lesson
-    ? [
-        `تحديد نوع السؤال: ${questionType}.`,
-        `الرجوع إلى محتوى المنهج المحلي في درس ${lesson.lesson}.`,
-        `استخراج الفكرة الأساسية: ${lesson.concepts[0]}.`,
-        `بناء حل مبسط يناسب ${selection.grade} مع ربطه بالسياق الدراسي.`
-      ]
-    : [
-        "قراءة صيغة السؤال وتحديد المطلوب.",
-        "تجهيز شرح مبسط بناءً على المادة المختارة.",
-        "اقتراح الدرس الأقرب لمراجعة الطالب."
-      ];
+  const steps = choiceAnalysis
+    ? choiceAnalysis.steps
+    : lesson
+      ? [
+          `تحديد نوع السؤال: ${questionType}.`,
+          `الرجوع إلى محتوى المنهج المحلي في درس ${lesson.lesson}.`,
+          `استخراج الفكرة الأساسية: ${lesson.concepts[0]}.`,
+          `بناء حل مبسط يناسب ${selection.grade} مع ربطه بالسياق الدراسي.`
+        ]
+      : [
+          "قراءة صيغة السؤال وتحديد المطلوب.",
+          "تجهيز شرح مبسط بناءً على المادة المختارة.",
+          "اقتراح الدرس الأقرب لمراجعة الطالب."
+        ];
 
   return {
     question,
@@ -2100,11 +2204,24 @@ termSelect.addEventListener("change", updateSelectionSummary);
 lessonInput.addEventListener("input", updateSelectionSummary);
 startChatButton.addEventListener("click", startChat);
 quickSolveButton.addEventListener("click", quickSolve);
+if (heroExampleButton) {
+  heroExampleButton.addEventListener("click", () => {
+    setPromptValue("احسب محيط دائرة نصف قطرها 7", "الرياضيات");
+    document.querySelector("#chat")?.scrollIntoView({ behavior: "smooth", block: "start" });
+  });
+}
 uploadButton.addEventListener("click", openGenericUpload);
 uploadImageButton.addEventListener("click", openImageUpload);
 uploadFileButton.addEventListener("click", openGenericUpload);
 focusSubjectButton.addEventListener("click", () => subjectSelect.focus());
 clearChatButton.addEventListener("click", resetConversationView);
+if (themeToggleButton) {
+  themeToggleButton.addEventListener("click", () => {
+    const nextTheme = document.body.classList.contains("theme-dark") ? "light" : "dark";
+    localStorage.setItem(storageKeys.theme, nextTheme);
+    applyTheme(nextTheme);
+  });
+}
 
 starterButtons.forEach((button) => {
   button.addEventListener("click", () => {
@@ -2157,5 +2274,6 @@ renderInsights();
 renderWebPolicy();
 updateSelectionSummary();
 updateStatus();
+updateXpBalance();
 saveJson(storageKeys.users, users);
 renderWelcomeMessage();

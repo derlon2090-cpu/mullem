@@ -3,44 +3,111 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>ملم يحل | شات أكاديمي سعودي ذكي</title>
+  <meta name="theme-color" content="#22c55e">
+  <title>ملم يحل | الشات الأكاديمي للمنهج السعودي</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800;900&display=swap" rel="stylesheet">
+  <link rel="icon" type="image/svg+xml" href="favicon.svg">
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
   <div class="shell">
     <header class="topbar">
-      <div class="brand-wrap">
-        <div class="brand-mark">م</div>
-        <div class="brand-text">
-          <div class="brand-name">ملم يحل</div>
-          <div class="brand-copy">شات ذكي لحل الأسئلة الأكاديمية حسب المنهج السعودي</div>
+      <a class="brand-wrap" href="#home">
+        <div class="brand-mark brand-mark-logo" aria-hidden="true">
+          <svg viewBox="0 0 64 64" fill="none">
+            <defs>
+              <linearGradient id="brandBulbGradient" x1="8" y1="8" x2="56" y2="56" gradientUnits="userSpaceOnUse">
+                <stop stop-color="#16a34a"/>
+                <stop offset="1" stop-color="#4ade80"/>
+              </linearGradient>
+            </defs>
+            <path d="M32 8c-10.493 0-19 8.507-19 19 0 6.626 3.397 12.457 8.543 15.857 1.566 1.034 2.457 2.824 2.457 4.7V49a3 3 0 0 0 3 3h10a3 3 0 0 0 3-3v-1.443c0-1.876.891-3.666 2.457-4.7C47.603 39.457 51 33.626 51 27c0-10.493-8.507-19-19-19Z" fill="url(#brandBulbGradient)"/>
+            <path d="M25 56h14M27 61h10" stroke="#166534" stroke-width="4" stroke-linecap="round"/>
+            <path d="M28 22h8l-2 6h5l-9 12 2-8h-5l1-10Z" fill="#fde047"/>
+          </svg>
         </div>
-      </div>
+        <div class="brand-text">
+          <div class="brand-name">ملم</div>
+          <div class="brand-copy">ملم — الشات الأكاديمي للمنهج السعودي</div>
+        </div>
+      </a>
       <div class="topbar-actions">
-        <a class="top-chip top-link" href="admin.html">لوحة الأدمن</a>
-        <div class="top-chip" data-status>وضع تجريبي محلي</div>
-        <div class="top-chip">مصنف نية مستقل</div>
-        <div class="top-chip">مراجعة ويب قبل الإجابة</div>
-        <div class="top-chip">مراجع واجباتي للترمين</div>
+        <nav class="main-nav" aria-label="التنقل الرئيسي">
+          <a href="#home">الرئيسية</a>
+          <a href="#about">عن الموقع</a>
+          <a href="login.html">تسجيل الدخول</a>
+        </nav>
+        <div class="top-status">
+          <div class="top-chip xp-chip">رصيدك: <span data-xp-balance>120</span> نقطة</div>
+          <div class="top-chip" data-status>وضع تجريبي محلي</div>
+          <button class="theme-toggle" type="button" data-theme-toggle aria-label="تبديل الوضع الداكن">🌙</button>
+        </div>
+        <div class="top-cta">
+          <a class="secondary-btn top-cta-link" href="login.html">تسجيل الدخول</a>
+          <a class="primary-btn top-cta-link" href="#chat">ابدأ الآن</a>
+        </div>
       </div>
     </header>
   </div>
 
-  <main class="page-wrap">
+  <main class="page-wrap" id="home">
     <div class="shell layout">
       <aside class="sidebar">
-        <div class="eyebrow">AI أكاديمي للفصول السعودية</div>
-        <h1>اسأل ملم يحل وسيعطيك جوابًا منظمًا من المنهج قبل أي شيء آخر.</h1>
-        <p>
-          هذه النسخة تركز على رحلة الطالب التعليمية: اختيار الصف والمادة والدرس أولًا، ثم إجابة ذكية مرتبطة بالمحتوى
-          السعودي، مع شرح وخطوات وأخطاء شائعة وسؤال مشابه للتدريب.
-        </p>
+        <section class="hero-card">
+          <div class="hero-logo" aria-hidden="true">
+            <div class="hero-logo-mark">
+              <svg viewBox="0 0 64 64" fill="none">
+                <defs>
+                  <linearGradient id="heroBulbGradient" x1="8" y1="8" x2="56" y2="56" gradientUnits="userSpaceOnUse">
+                    <stop stop-color="#16a34a"/>
+                    <stop offset="1" stop-color="#4ade80"/>
+                  </linearGradient>
+                </defs>
+                <path d="M32 8c-10.493 0-19 8.507-19 19 0 6.626 3.397 12.457 8.543 15.857 1.566 1.034 2.457 2.824 2.457 4.7V49a3 3 0 0 0 3 3h10a3 3 0 0 0 3-3v-1.443c0-1.876.891-3.666 2.457-4.7C47.603 39.457 51 33.626 51 27c0-10.493-8.507-19-19-19Z" fill="url(#heroBulbGradient)"/>
+                <path d="M25 56h14M27 61h10" stroke="#166534" stroke-width="4" stroke-linecap="round"/>
+                <path d="M28 22h8l-2 6h5l-9 12 2-8h-5l1-10Z" fill="#fde047"/>
+              </svg>
+            </div>
+            <div class="hero-logo-text">ملم</div>
+          </div>
+          <div class="eyebrow">مساعدك الذكي لحل أسئلة المنهج السعودي</div>
+          <h1>حل واجباتك بسهولة مع الذكاء الاصطناعي</h1>
+          <p>
+            ارفع سؤالك أو اكتبه، واحصل على شرح خطوة بخطوة، مع تحليل ذكي للسؤال، ومراجعة للمصادر التعليمية، وإجابة منظمة تناسب مرحلتك الدراسية.
+          </p>
+          <div class="hero-actions">
+            <a class="primary-btn top-cta-link" href="#chat">ابدأ الشات 🚀</a>
+            <button class="secondary-btn" type="button" data-hero-example>جرب مثال</button>
+          </div>
+          <div class="hero-meta">
+            <div class="hero-pill">📷 رفع صورة السؤال</div>
+            <div class="hero-pill">🧠 تحليل الخيارات والصح والخطأ</div>
+            <div class="hero-pill">📚 مراجعة المنهج السعودي</div>
+          </div>
+        </section>
+
+        <section class="hero-subgrid" id="about">
+          <article class="mini-feature">
+            <strong>منهج سعودي</strong>
+            <span>يعتمد على المنهج السعودي ومراجع الويب المساندة بشكل تحليلي.</span>
+          </article>
+          <article class="mini-feature">
+            <strong>تجربة واضحة</strong>
+            <span>اختر الصف والمادة أو اكتب السؤال فقط، والنظام يحاول استنتاج الدرس تلقائيًا.</span>
+          </article>
+          <article class="mini-feature">
+            <strong>ردود تعليمية</strong>
+            <span>الإجابة النهائية، الشرح، الخطوات، الأخطاء الشائعة، والسؤال المشابه في بطاقات مرتبة.</span>
+          </article>
+        </section>
 
         <div class="panel">
           <h3>ابدأ بشكل صحيح</h3>
           <div class="stack">
             <div class="small-copy">
-              اختر صفك ومادتك ودرسك ليبني ملم يحل السياق الدراسي قبل إرسال السؤال.
+              اختر صفك ومادتك، ثم اكتب سؤالك. إذا كان السؤال واضحًا فسيستنتج ملم يحل الدرس تلقائيًا.
             </div>
             <div class="selection-summary" data-selection-summary>لم يتم بدء جلسة جديدة بعد.</div>
             <div class="cta-row">
@@ -138,10 +205,10 @@
         </div>
       </aside>
 
-      <section class="chat-shell">
+      <section class="chat-shell" id="chat">
         <div class="chat-top">
           <h2>الشات الذكي</h2>
-          <p>بعد تحديد السياق الدراسي، سيجيب ملم يحل بصيغة تعليمية: إجابة نهائية، شرح، خطوات، أخطاء شائعة، وسؤال مشابه. لا يلزم كتابة اسم الدرس إذا كان السؤال واضحًا؛ فالنظام يحاول استنتاجه تلقائيًا من النص.</p>
+          <p>كيف أقدر أساعدك اليوم؟ اكتب السؤال مباشرة، أو اختر من الأمثلة الجاهزة، أو ارفع صورة السؤال. إذا كان فيه خيارات متعددة أو صح وخطأ فسيحللها النظام ويحدد الإجابة الصحيحة بينها.</p>
           <div class="chat-tags">
             <div class="tag">تصنيف نية ذكي</div>
             <div class="tag">المنهج السعودي أولًا</div>
@@ -174,6 +241,12 @@
               <strong>حل واجب</strong>
               <span>دعم منظم للواجبات الدراسية.</span>
             </button>
+          </div>
+          <div class="example-list">
+            <button class="example-chip" type="button" data-starter-prompt="احسب محيط دائرة نصف قطرها 7" data-starter-subject="الرياضيات">احسب محيط دائرة نصف قطرها 7</button>
+            <button class="example-chip" type="button" data-starter-prompt="اشرح قانون نيوتن الثاني" data-starter-subject="الفيزياء">اشرح قانون نيوتن الثاني</button>
+            <button class="example-chip" type="button" data-starter-prompt="حل هذا السؤال مع صورة">حل هذا السؤال (مع صورة)</button>
+            <button class="example-chip" type="button" data-starter-prompt="س: ما نوع الرابطة في NaCl؟&#10;أ) تساهمية&#10;ب) أيونية&#10;ج) فلزية&#10;د) هيدروجينية" data-starter-subject="الكيمياء">حل سؤال اختيارات</button>
           </div>
         </div>
 
@@ -234,7 +307,7 @@
           </form>
 
           <div class="helper-toolbar">
-            <button class="helper-btn" type="button" data-upload-image>رفع صورة</button>
+            <button class="helper-btn" type="button" data-upload-image>📷 رفع صورة السؤال</button>
             <button class="helper-btn" type="button" data-upload-file>رفع ملف</button>
             <button class="helper-btn" type="button" data-focus-subject>اختيار مادة</button>
             <button class="helper-btn helper-btn-ghost" type="button" data-clear-chat>مسح المحادثة</button>
