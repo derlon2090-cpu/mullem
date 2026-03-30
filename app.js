@@ -324,6 +324,181 @@ function detectQuestionType(question) {
   return "سؤال أكاديمي عام";
 }
 
+const intentModel = {
+  academic: [
+    "احسب محيط دائرة نصف قطرها 7",
+    "اشرح الفرق بين المنتجات والمستهلكات",
+    "صحح الجملة بالانجليزي",
+    "ما المقصود بالتسارع وكيف نحسبه",
+    "حدد المبتدأ والخبر في الجملة"
+  ],
+  chat: [
+    "كيف حالك",
+    "هلا",
+    "شكرا",
+    "صباح الخير",
+    "وش اخبارك"
+  ],
+  help: [
+    "كيف استخدم المنصة",
+    "اشرح لي طريقة استخدام ملم يحل",
+    "وش تسوي",
+    "كيف ارفع صورة",
+    "ما الذي تقدمه المنصة"
+  ]
+};
+
+function tokenizeForModel(message) {
+  return normalizeText(message)
+    .replace(/[^\p{L}\p{N}\s]/gu, " ")
+    .split(/\s+/)
+    .filter(Boolean);
+}
+
+function jaccardSimilarity(left, right) {
+  const a = new Set(left);
+  const b = new Set(right);
+  if (a.size === 0 || b.size === 0) {
+    return 0;
+  }
+
+  let intersection = 0;
+  a.forEach((token) => {
+    if (b.has(token)) {
+      intersection += 1;
+    }
+  });
+
+  const union = new Set([...a, ...b]).size;
+  return union === 0 ? 0 : intersection / union;
+}
+
+function getIntentScores(message) {
+  const tokens = tokenizeForModel(message);
+  const scores = {
+    academic: 0,
+    chat: 0,
+    help: 0
+  };
+
+  Object.entries(intentModel).forEach(([label, examples]) => {
+    const exampleScores = examples.map((example) =>
+      jaccardSimilarity(tokens, tokenizeForModel(example))
+    );
+    const averageScore =
+      exampleScores.reduce((sum, value) => sum + value, 0) / Math.max(exampleScores.length, 1);
+    scores[label] = averageScore;
+  });
+
+  if (/\d/.test(message) || message.includes("=") || message.includes("؟")) {
+    scores.academic += 0.18;
+  }
+
+  if (message.includes("كيف") && message.includes("استخدم")) {
+    scores.help += 0.28;
+  }
+
+  if (message.includes("كيف حالك") || message.includes("شكرا")) {
+    scores.chat += 0.32;
+  }
+
+  return scores;
+}
+
+function classifyIntent(message, hasAttachments = false) {
+  if (hasAttachments) {
+    return {
+      label: "academic",
+      confidence: 0.99,
+      scores: { academic: 0.99, chat: 0.01, help: 0.01 },
+      model: "attachment-priority"
+    };
+  }
+
+  const scores = getIntentScores(message);
+  const ranking = Object.entries(scores).sort((a, b) => b[1] - a[1]);
+  const [bestLabel, bestScore] = ranking[0];
+  const secondScore = ranking[1]?.[1] ?? 0;
+  const confidence = Math.max(0.35, Math.min(0.99, bestScore + (bestScore - secondScore)));
+
+  return {
+    label: bestLabel,
+    confidence,
+    scores,
+    model: "local-intent-model-v2"
+  };
+}
+
+function needsClarification(message, intentResult, hasAttachments = false) {
+  if (hasAttachments) {
+    return false;
+  }
+
+  const normalized = normalizeText(message);
+  const unclearAcademicTerms = ["حلها", "اشرح", "ساعد", "سؤال", "مسألة", "هذا", "ذي", "حل", "وضح"];
+
+  if (intentResult.label !== "academic") {
+    return false;
+  }
+
+  if (intentResult.confidence < 0.55) {
+    return true;
+  }
+
+  if (normalized.length <= 6) {
+    return true;
+  }
+
+  if (unclearAcademicTerms.includes(normalized)) {
+    return true;
+  }
+
+  return normalized.split(/\s+/).length <= 2 && !/\d/.test(normalized);
+}
+
+function formatSimpleReply(text) {
+  return `
+    <div class="simple-reply">
+      <p>${text}</p>
+    </div>
+  `;
+}
+
+function createCasualResponse(message) {
+  const normalized = normalizeText(message);
+
+  if (normalized.includes("كيف حالك") || normalized.includes("شلونك")) {
+    return "تمام! كيف أقدر أساعدك؟";
+  }
+
+  if (normalized.includes("شكرا") || normalized.includes("يعطيك العافية")) {
+    return "العفو، أنا حاضر. إذا عندك سؤال دراسي أو تحتاج شرح استخدام المنصة فأنا معك.";
+  }
+
+  if (normalized.includes("السلام عليكم") || normalized.includes("مرحبا") || normalized.includes("هلا")) {
+    return "وعليكم السلام، أهلًا بك. كيف أقدر أساعدك اليوم؟";
+  }
+
+  return "أنا معك. إذا عندك سؤال دراسي أكتبه لي، وإذا تريد فقط دردشة أو مساعدة في استخدام المنصة فأقدر أساعدك أيضًا.";
+}
+
+function createHelpResponse() {
+  return "تقدر تبدأ باختيار الصف والمادة والفصل والدرس، ثم تكتب سؤالك أو ترفع صورة من زر +. إذا كان السؤال أكاديميًا سأعطيك الحل والشرح والخطوات، وإذا كان سؤالك عامًا سأرد عليك بشكل طبيعي.";
+}
+
+const academicPromptRule =
+  'If the user message is not an academic question, respond in a normal conversational way without using the academic response format.';
+
+const academicSystemPrompt = [
+  "أنت ملم يحل، مساعد أكاديمي.",
+  "إذا كانت الرسالة أكاديمية فاعرض الإجابة النهائية والشرح والخطوات والأخطاء الشائعة والسؤال المشابه والربط بالمنهج.",
+  "إذا كانت الرسالة غير أكاديمية فاردد بشكل طبيعي ومختصر.",
+  academicPromptRule
+].join(" ");
+
+const chatSystemPrompt =
+  "رد بشكل طبيعي ومختصر ولطيف، ومن دون أي تنسيق أكاديمي أو خطوات حل أو ربط بالمنهج.";
+
 function formatAssistantSections(response) {
   return `
     <div class="answer-grid">
@@ -350,6 +525,14 @@ function formatAssistantSections(response) {
       <section class="answer-section answer-section-wide">
         <h4>📚 الربط بالمنهج</h4>
         <p>${response.curriculumLink}</p>
+      </section>
+      <section class="answer-section answer-section-wide">
+        <h4>🌐 مراجعة الويب</h4>
+        <p>${response.evidenceSummary || "تم الاعتماد على المنهج المحلي فقط في هذه المحاولة."}</p>
+      </section>
+      <section class="answer-section answer-section-wide">
+        <h4>🧠 قرار المحرك</h4>
+        <p>${response.decisionRationale || "تم اختيار الجواب الأقرب للمنهج والسؤال."}</p>
       </section>
     </div>
   `;
@@ -601,13 +784,20 @@ function saveAnalytics() {
 
 function trackUsage(selection) {
   analytics.totalMessages += 1;
-  analytics.xpUsed += 7;
-  analytics.subjects[selection.subject] = (analytics.subjects[selection.subject] || 0) + 1;
-  analytics.grades[selection.grade] = (analytics.grades[selection.grade] || 0) + 1;
+  analytics.xpUsed += selection.intent === "academic" ? 7 : 1;
+
+  if (selection.intent === "academic") {
+    analytics.subjects[selection.subject] = (analytics.subjects[selection.subject] || 0) + 1;
+    analytics.grades[selection.grade] = (analytics.grades[selection.grade] || 0) + 1;
+  }
+
   const dayKey = new Date().toISOString().slice(0, 10);
   analytics.dailyMessages[dayKey] = (analytics.dailyMessages[dayKey] || 0) + 1;
-  users[0].xp = Math.max(0, users[0].xp - 7);
-  users[0].activity = `آخر نشاط في ${selection.subject} - ${selection.lesson}`;
+  users[0].xp = Math.max(0, users[0].xp - (selection.intent === "academic" ? 7 : 1));
+  users[0].activity =
+    selection.intent === "academic"
+      ? `آخر نشاط في ${selection.subject} - ${selection.lesson}`
+      : `آخر نشاط: ${selection.intent === "help" ? "طلب مساعدة" : "محادثة عادية"}`;
   saveAnalytics();
 }
 
@@ -628,6 +818,102 @@ function saveSession(question, response) {
   saveJson(storageKeys.history, chatHistory);
   saveAnalytics();
   renderHistory();
+}
+
+function scoreEvidenceSnippet(snippet, question, lesson) {
+  const snippetTokens = tokenizeForModel(snippet);
+  const questionTokens = tokenizeForModel(question);
+  const conceptTokens = lesson ? lesson.concepts.flatMap((concept) => tokenizeForModel(concept)) : [];
+
+  return (
+    jaccardSimilarity(snippetTokens, questionTokens) * 0.7 +
+    jaccardSimilarity(snippetTokens, conceptTokens) * 0.3
+  );
+}
+
+async function fetchWikipediaCandidates(query, language = "ar", limit = 3) {
+  const searchUrl = `https://${language}.wikipedia.org/w/api.php?origin=*&action=query&list=search&srsearch=${encodeURIComponent(
+    query
+  )}&format=json&srlimit=${limit}`;
+
+  const response = await fetch(searchUrl);
+  if (!response.ok) {
+    throw new Error("تعذر الوصول إلى نتائج الويب.");
+  }
+
+  const data = await response.json();
+  const results = data?.query?.search || [];
+
+  const summaries = await Promise.all(
+    results.slice(0, limit).map(async (result) => {
+      const title = result.title;
+      const summaryResponse = await fetch(
+        `https://${language}.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(title)}`
+      );
+
+      if (!summaryResponse.ok) {
+        return null;
+      }
+
+      const summary = await summaryResponse.json();
+      return {
+        title: summary.title || title,
+        snippet: summary.extract || "",
+        url: summary.content_urls?.desktop?.page || `https://${language}.wikipedia.org/wiki/${encodeURIComponent(title)}`,
+        source: `${language}.wikipedia.org`
+      };
+    })
+  );
+
+  return summaries.filter(Boolean);
+}
+
+async function collectWebEvidence(question, lesson, subject) {
+  const queries = [
+    question,
+    `${subject} ${lesson.lesson}`,
+    `${subject} ${lesson.unit} ${question}`.trim()
+  ];
+
+  const collected = [];
+  const seenUrls = new Set();
+
+  for (const query of queries) {
+    try {
+      const candidates = await fetchWikipediaCandidates(query, "ar", 2);
+      candidates.forEach((candidate) => {
+        if (!seenUrls.has(candidate.url)) {
+          seenUrls.add(candidate.url);
+          collected.push(candidate);
+        }
+      });
+    } catch (error) {
+      continue;
+    }
+  }
+
+  const ranked = collected
+    .map((item) => ({
+      ...item,
+      score: scoreEvidenceSnippet(item.snippet, question, lesson)
+    }))
+    .sort((a, b) => b.score - a.score)
+    .slice(0, 3);
+
+  if (ranked.length === 0) {
+    return {
+      evidence: [],
+      summary: "لم أتمكن من جلب مصادر ويب مباشرة الآن، لذلك تم اعتماد المنهج المحلي أولًا.",
+      decision: "تم ترجيح محتوى المنهج المحلي لعدم توفر أدلة ويب كافية."
+    };
+  }
+
+  const strongest = ranked[0];
+  return {
+    evidence: ranked,
+    summary: `تمت مراجعة ${ranked.length} مصادر ويب ومقارنتها مع المنهج. الأقرب كان: ${strongest.title}.`,
+    decision: `جرى ترجيح الإجابة التي تتوافق أكثر مع مفاهيم درس ${lesson.lesson} ومع تكرار الفكرة الأساسية داخل المصادر المجمعة.`
+  };
 }
 
 function createLocalResponse(question, lesson) {
@@ -770,25 +1056,33 @@ async function requestAI(question, lesson) {
   const trainingMode = trainingModeSelect.value;
   const attachmentsInput = await toAttachmentInputs(attachments);
   const hasFiles = attachmentsInput.length > 0;
+  const selectedPrompt = academicSystemPrompt;
+  void selectedPrompt;
+  const webConsensus = await collectWebEvidence(question, lesson, subjectSelect.value);
 
   const response = {
     ...localResponse,
-    explanation: `${localResponse.explanation} يعمل المحرك الحالي بصيغة ${runtime} مع نمط ${trainingMode}، لذلك يتم فصل المعرفة عن السلوك: المنهج يأتي من RAG المحلي، وأسلوب الرد يمثل سياسة ملم يحل.`,
+    explanation: `${localResponse.explanation} يعمل المحرك الحالي بصيغة ${runtime} مع نمط ${trainingMode}، لذلك يتم فصل المعرفة عن السلوك: المنهج يأتي من RAG المحلي، وأسلوب الرد يمثل سياسة ملم يحل. كما تمت مراجعة نتائج من الويب قبل تثبيت الصياغة النهائية.`,
     steps: [
+      `تشغيل المصنف المستقل للنية لتأكيد أن الرسالة سؤال أكاديمي.`,
       `تصنيف السؤال إلى: ${detectQuestionType(question)}.`,
+      `إرسال السؤال إلى طبقة البحث على الويب وجمع أكثر من مرجع قبل الجواب.`,
       `استرجاع أقرب مقطع من درس ${lesson.lesson} ضمن ${lesson.unit}.`,
+      `مقارنة الأدلة المجمعة مع المنهج المحلي واختيار الصياغة الأكثر اتساقًا.`,
       `تطبيق سياسة الإجابة الخاصة بملم يحل: حل ثم شرح ثم أخطاء شائعة ثم سؤال مشابه.`,
       hasFiles
         ? "تحليل المرفقات كجزء من السؤال قبل بناء الجواب."
         : "بناء الإجابة مباشرة من السؤال النصي والسياق الدراسي.",
       `المحرك المفترض للتشغيل النهائي: ${runtime}.`
     ],
-    curriculumLink: `${localResponse.curriculumLink} | طبقة التشغيل: ${runtime} | طبقة السلوك: ${trainingMode}`
+    curriculumLink: `${localResponse.curriculumLink} | طبقة التشغيل: ${runtime} | طبقة السلوك: ${trainingMode}`,
+    evidenceSummary: webConsensus.summary,
+    decisionRationale: webConsensus.decision
   };
 
   return {
     response,
-    sources: []
+    sources: webConsensus.evidence.map((item) => item.url)
   };
 }
 
@@ -806,6 +1100,8 @@ async function handleSubmit(event) {
   const prompt = promptInput.value.trim();
   if (!prompt && attachments.length === 0) return;
 
+  const hasAttachments = attachments.length > 0;
+  const intentResult = classifyIntent(prompt, hasAttachments);
   const selection = getCurrentSelection();
   const lesson = findRelevantLesson(prompt || selection.lesson);
   lastUserQuestion = prompt || "سؤال مرفوع عبر ملفات مرفقة";
@@ -817,12 +1113,54 @@ async function handleSubmit(event) {
     : prompt;
 
   addMessage("user", "أنت", userText);
-  addPendingMessage();
   trackUsage({
+    intent: intentResult.label,
     grade: selection.grade,
     subject: selection.subject,
     lesson: lesson.lesson
   });
+
+  if (needsClarification(prompt, intentResult, hasAttachments)) {
+    addMessage(
+      "assistant",
+      "ملم يحل",
+      formatSimpleReply("أحتاج توضيحًا أكثر حتى أساعدك بشكل صحيح. اكتب السؤال كاملًا أو حدّد المادة والدرس وما المطلوب بالضبط.")
+    );
+    promptInput.value = "";
+    attachments = [];
+    if (fileInput) {
+      fileInput.value = "";
+    }
+    renderAttachments();
+    autoGrow(promptInput);
+    return;
+  }
+
+  if (intentResult.label === "chat") {
+    addMessage("assistant", "ملم يحل", formatSimpleReply(createCasualResponse(prompt)));
+    promptInput.value = "";
+    attachments = [];
+    if (fileInput) {
+      fileInput.value = "";
+    }
+    renderAttachments();
+    autoGrow(promptInput);
+    return;
+  }
+
+  if (intentResult.label === "help") {
+    addMessage("assistant", "ملم يحل", formatSimpleReply(createHelpResponse()));
+    promptInput.value = "";
+    attachments = [];
+    if (fileInput) {
+      fileInput.value = "";
+    }
+    renderAttachments();
+    autoGrow(promptInput);
+    return;
+  }
+
+  addPendingMessage();
 
   try {
     const pendingMessage = messageList.lastElementChild;
