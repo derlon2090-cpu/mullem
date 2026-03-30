@@ -909,6 +909,40 @@ function analyzeChoiceQuestion(question, lesson) {
   };
 }
 
+function trySolveStructuredQuestion(question, lesson) {
+  if (!lesson) return null;
+
+  const normalizedQuestion = normalizeText(question);
+  const normalizedLesson = normalizeText(lesson.lesson);
+  const numericValues = [...question.matchAll(/(\d+(?:\.\d+)?)/g)].map((match) => Number(match[1]));
+
+  if (
+    normalizedLesson.includes("محيط الدائرة") &&
+    normalizedQuestion.includes("محيط") &&
+    normalizedQuestion.includes("دائرة") &&
+    numericValues.length
+  ) {
+    const rawValue = numericValues[0];
+    const usesDiameter = normalizedQuestion.includes("القطر") && !normalizedQuestion.includes("نصف القطر");
+    const radius = usesDiameter ? rawValue / 2 : rawValue;
+    const symbolicFactor = Number((2 * radius).toFixed(2));
+    const approximate = Number((2 * Math.PI * radius).toFixed(2));
+
+    return {
+      finalAnswer: `محيط الدائرة = ${symbolicFactor}π ≈ ${approximate}`,
+      explanation: `نستخدم قانون محيط الدائرة: 2 × π × نصف القطر.${usesDiameter ? " بما أن المعطى هو القطر قسمناه على 2 أولًا." : ""}`,
+      steps: [
+        usesDiameter ? `نصف القطر = ${rawValue} ÷ 2 = ${radius}.` : `نصف القطر = ${radius}.`,
+        `التعويض: 2 × π × ${radius}.`,
+        `الناتج النهائي: ${symbolicFactor}π ≈ ${approximate}.`
+      ],
+      similar: `احسب محيط دائرة نصف قطرها ${radius === 7 ? 5 : radius + 1}.`
+    };
+  }
+
+  return null;
+}
+
 const intentModel = {
   academic: [
     "احسب محيط دائرة نصف قطرها 7",
@@ -1260,14 +1294,6 @@ function formatAssistantSections(response) {
       <section class="answer-section answer-section-wide">
         <h4>📚 الربط بالمنهج</h4>
         <p>${response.curriculumLink}</p>
-      </section>
-      <section class="answer-section answer-section-wide">
-        <h4>🌐 مراجعة الويب</h4>
-        <p>${response.evidenceSummary || "تم الاعتماد على المنهج المحلي فقط في هذه المحاولة."}</p>
-      </section>
-      <section class="answer-section answer-section-wide">
-        <h4>🧠 قرار المحرك</h4>
-        <p>${response.decisionRationale || "تم اختيار الجواب الأقرب للمنهج والسؤال."}</p>
       </section>
     </div>
   `;
@@ -1856,6 +1882,7 @@ function createLocalResponse(question, lesson) {
   const questionType = detectQuestionType(question);
   const selection = getCurrentSelection();
   const choiceAnalysis = lesson ? analyzeChoiceQuestion(question, lesson) : null;
+  const structuredSolution = lesson ? trySolveStructuredQuestion(question, lesson) : null;
   const finalAnswer = choiceAnalysis
     ? choiceAnalysis.finalAnswer
     : lesson && question
@@ -1895,6 +1922,63 @@ function createLocalResponse(question, lesson) {
     steps,
     mistakes: lesson ? lesson.commonMistakes : ["عدم تحديد الدرس بدقة", "القفز إلى النتيجة قبل فهم المطلوب"],
     similar: lesson ? lesson.similarQuestion : "اكتب سؤالًا آخر من نفس الدرس وسأولده لك بصيغة مشابهة.",
+    curriculumLink: lesson
+      ? `${selection.grade} > ${selection.subject} > ${selection.term} > ${lesson.unit} > ${lesson.lesson}`
+      : `${selection.grade} > ${selection.subject} > ${selection.term}`
+  };
+}
+
+function createImprovedLocalResponse(question, lesson) {
+  const questionType = detectQuestionType(question);
+  const selection = getCurrentSelection();
+  const choiceAnalysis = lesson ? analyzeChoiceQuestion(question, lesson) : null;
+  const structuredSolution = lesson ? trySolveStructuredQuestion(question, lesson) : null;
+
+  const finalAnswer = choiceAnalysis
+    ? choiceAnalysis.finalAnswer
+    : structuredSolution
+      ? structuredSolution.finalAnswer
+      : lesson && question
+        ? lesson.content.split(" ").slice(0, 18).join(" ")
+        : `تم تحليل سؤالك في ${selection.subject}، لكن يُفضّل تحديد الدرس بدقة لرفع جودة الإجابة.`;
+
+  const explanation = choiceAnalysis
+    ? choiceAnalysis.explanation
+    : structuredSolution
+      ? structuredSolution.explanation
+      : lesson
+        ? lesson.content
+        : "لم أجد درسًا مطابقًا بشكل كامل، لذلك اعتمدت على المادة والسياق العام لتقديم شرح مبسط.";
+
+  const steps = choiceAnalysis
+    ? choiceAnalysis.steps
+    : structuredSolution
+      ? structuredSolution.steps
+      : lesson
+        ? [
+            `تحديد نوع السؤال: ${questionType}.`,
+            `الرجوع إلى محتوى درس ${lesson.lesson}.`,
+            `استخراج الفكرة الأساسية: ${lesson.concepts[0]}.`,
+            "تقديم الحل بشكل مباشر ومبسط."
+          ]
+        : [
+            "قراءة صيغة السؤال وتحديد المطلوب.",
+            "تجهيز شرح مبسط بناءً على المادة المختارة.",
+            "اقتراح الدرس الأقرب للمراجعة."
+          ];
+
+  return {
+    question,
+    grade: selection.grade,
+    subject: selection.subject,
+    term: selection.term,
+    answerMode: choiceAnalysis?.mode || "full",
+    lesson: lesson ? lesson.lesson : selection.lesson,
+    finalAnswer,
+    explanation,
+    steps,
+    mistakes: lesson ? lesson.commonMistakes : ["عدم تحديد الدرس بدقة", "القفز إلى النتيجة قبل فهم المطلوب"],
+    similar: structuredSolution?.similar || (lesson ? lesson.similarQuestion : "اكتب سؤالًا آخر من نفس الدرس وسأولده لك بصيغة مشابهة."),
     curriculumLink: lesson
       ? `${selection.grade} > ${selection.subject} > ${selection.term} > ${lesson.unit} > ${lesson.lesson}`
       : `${selection.grade} > ${selection.subject} > ${selection.term}`
@@ -1994,7 +2078,7 @@ function parseAiText(rawText, lesson) {
 }
 
 async function requestAI(question, lesson) {
-  const localResponse = createLocalResponse(question, lesson);
+  const localResponse = createImprovedLocalResponse(question, lesson);
   const runtime = runtimeSelect.value;
   const trainingMode = trainingModeSelect.value;
   const selection = getCurrentSelection();
@@ -2052,30 +2136,18 @@ async function requestAI(question, lesson) {
   const priorityPolicyNote =
     "ترتيب التحقق الخارجي المعتمد هنا هو: بيت العلم أولًا، ثم عين التعليمية، ثم واجباتي لمراجعة الكتاب والمنهج، ثم المراجع العامة للمقارنة النهائية.";
 
+  void runtime;
+  void trainingMode;
+  void hasFiles;
+  void webConsensus;
+  void normalizedCurriculumSources;
+  void priorityPolicyNote;
+  void curriculumReferenceNote;
+  void termsCoverageNote;
+
   const response = {
     ...localResponse,
-    explanation: `${localResponse.explanation} يعمل المحرك الحالي بصيغة ${runtime} مع نمط ${trainingMode}، لذلك يتم فصل المعرفة عن السلوك: المنهج يأتي من RAG المحلي، وأسلوب الرد يمثل سياسة ملم يحل. كما تمت مراجعة نتائج من الويب قبل تثبيت الصياغة النهائية. ${priorityPolicyNote} ${curriculumReferenceNote} ${termsCoverageNote}`,
-    steps: [
-      `تشغيل المصنف المستقل للنية لتأكيد أن الرسالة سؤال أكاديمي.`,
-      `تصنيف السؤال إلى: ${detectQuestionType(question)}.`,
-      `إرسال السؤال أولًا إلى طبقة المراجعة التعليمية المساندة عبر بيت العلم.`,
-      `مراجعة المحتوى الرسمي بعد ذلك عبر عين التعليمية.`,
-      `تحميل مراجع المنهج للصف ${gradeSelect.value} في ${subjectSelect.value} خلال ${termSelect.value}.`,
-      `مراجعة واجباتي للتحقق من الكتاب والصف والمرجع المنهجي المناسب.`,
-      `إرسال السؤال إلى طبقة البحث على الويب وجمع أكثر من مرجع للمقارنة النهائية قبل الجواب.`,
-      `استرجاع أقرب مقطع من درس ${lesson.lesson} ضمن ${lesson.unit}.`,
-      `مقارنة الأدلة المجمعة بين بيت العلم وعين وواجباتي والمخزون المحلي ثم اختيار الصياغة الأكثر اتساقًا.`,
-      `تطبيق سياسة الإجابة الخاصة بملم يحل: حل ثم شرح ثم أخطاء شائعة ثم سؤال مشابه.`,
-      hasFiles
-        ? "تحليل المرفقات كجزء من السؤال قبل بناء الجواب."
-        : "بناء الإجابة مباشرة من السؤال النصي والسياق الدراسي.",
-      `المحرك المفترض للتشغيل النهائي: ${runtime}.`
-    ],
-    curriculumLink: `${localResponse.curriculumLink} | طبقة التشغيل: ${runtime} | طبقة السلوك: ${trainingMode} | ${termsCoverageNote}`,
-    evidenceSummary: normalizedCurriculumSources.length
-      ? `${webConsensus.summary} كما جرى ربط النتيجة بمراجع المنهج من واجباتي بعد المرور على طبقة بيت العلم وعين التعليمية قبل عرض الجواب.`
-      : webConsensus.summary,
-    decisionRationale: `${webConsensus.decision} ${priorityPolicyNote} ${curriculumReferenceNote}`
+    curriculumLink: localResponse.curriculumLink
   };
 
   return {

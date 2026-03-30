@@ -94,65 +94,67 @@
           </div>
         </div>
 
-        <div class="panel panel-compact">
-          <h3>ملخصك السريع</h3>
-          <div class="panel-section">
-            <div class="panel-section-title">تحليل الطالب</div>
-            <div class="learned-list compact-list" data-insights></div>
-          </div>
-          <div class="panel-section">
-            <div class="panel-section-title">المحادثات المحفوظة</div>
-            <div class="learned-list compact-list" data-history></div>
-          </div>
-        </div>
-
-        <div class="panel panel-compact">
-          <h3>المراجع والتغطية</h3>
-          <div class="panel-section">
-            <div class="panel-section-title">مكتبة واجباتي</div>
-            <div class="learned-list compact-list" data-wajibati-library></div>
-          </div>
-          <div class="panel-section">
-            <div class="panel-section-title">تغطية الترمين</div>
-            <div class="learned-list compact-list" data-term-coverage></div>
-          </div>
-          <div class="panel-section">
-            <div class="panel-section-title">مصادر الويب</div>
-            <div class="learned-list compact-list" data-web-policy></div>
-          </div>
-        </div>
-
-        <div class="panel panel-compact">
-          <h3>حالة المحرك</h3>
-          <div class="stack">
-            <select class="field" data-runtime>
-              <option selected>vLLM Runtime</option>
-              <option>Ollama Runtime</option>
-              <option>وضع تجريبي داخل الواجهة</option>
-            </select>
-            <select class="field" data-training-mode>
-              <option selected>Prompt + RAG</option>
-              <option>Prompt + RAG + LoRA</option>
-              <option>Prompt + RAG + LoRA + DPO</option>
-            </select>
-            <div class="small-copy">
-              يفهم نوع الرسالة أولًا، ثم يبحث في المنهج والمراجع التعليمية، ثم يبني جوابًا مختصرًا أو أكاديميًا حسب السؤال.
+        <div class="sidebar-rail">
+          <div class="panel panel-compact">
+            <h3>ملخصك السريع</h3>
+            <div class="panel-section">
+              <div class="panel-section-title">تحليل الطالب</div>
+              <div class="learned-list compact-list" data-insights></div>
             </div>
-            <div class="selection-summary" data-runtime-summary>
-              التشغيل الحالي: محرك محلي تجريبي. وفي النسخة الخادمية ينتقل إلى vLLM أو Ollama مع RAG كامل.
+            <div class="panel-section">
+              <div class="panel-section-title">المحادثات المحفوظة</div>
+              <div class="learned-list compact-list" data-history></div>
             </div>
           </div>
-        </div>
 
-        <div class="panel panel-compact">
-          <h3>أدوات سريعة</h3>
-          <div class="panel-section">
-            <div class="panel-section-title">ما أعجبك سابقًا</div>
-            <div class="learned-list compact-list" data-learned></div>
+          <div class="panel panel-compact">
+            <h3>المراجع والتغطية</h3>
+            <div class="panel-section">
+              <div class="panel-section-title">مكتبة واجباتي</div>
+              <div class="learned-list compact-list" data-wajibati-library></div>
+            </div>
+            <div class="panel-section">
+              <div class="panel-section-title">تغطية الترمين</div>
+              <div class="learned-list compact-list" data-term-coverage></div>
+            </div>
+            <div class="panel-section">
+              <div class="panel-section-title">مصادر الويب</div>
+              <div class="learned-list compact-list" data-web-policy></div>
+            </div>
           </div>
-          <div class="panel-section">
-            <div class="panel-section-title">بنك أسئلة سريع</div>
-            <div class="suggestions" data-question-bank></div>
+
+          <div class="panel panel-compact">
+            <h3>حالة المحرك</h3>
+            <div class="stack">
+              <select class="field" data-runtime>
+                <option selected>vLLM Runtime</option>
+                <option>Ollama Runtime</option>
+                <option>وضع تجريبي داخل الواجهة</option>
+              </select>
+              <select class="field" data-training-mode>
+                <option selected>Prompt + RAG</option>
+                <option>Prompt + RAG + LoRA</option>
+                <option>Prompt + RAG + LoRA + DPO</option>
+              </select>
+              <div class="small-copy">
+                يفهم نوع الرسالة أولًا، ثم يبحث في المنهج والمراجع التعليمية، ثم يبني جوابًا مختصرًا أو أكاديميًا حسب السؤال.
+              </div>
+              <div class="selection-summary" data-runtime-summary>
+                التشغيل الحالي: محرك محلي تجريبي. وفي النسخة الخادمية ينتقل إلى vLLM أو Ollama مع RAG كامل.
+              </div>
+            </div>
+          </div>
+
+          <div class="panel panel-compact">
+            <h3>أدوات سريعة</h3>
+            <div class="panel-section">
+              <div class="panel-section-title">ما أعجبك سابقًا</div>
+              <div class="learned-list compact-list" data-learned></div>
+            </div>
+            <div class="panel-section">
+              <div class="panel-section-title">بنك أسئلة سريع</div>
+              <div class="suggestions" data-question-bank></div>
+            </div>
           </div>
         </div>
       </aside>

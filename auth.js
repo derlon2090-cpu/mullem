@@ -12,6 +12,10 @@ const registerGrade = document.querySelector("[data-auth-register-grade]");
 const googleButton = document.querySelector("[data-auth-google]");
 const forgotButton = document.querySelector("[data-auth-forgot]");
 const scrollTopButton = document.querySelector("[data-scroll-top]");
+const authCopies = document.querySelectorAll("[data-auth-copy]");
+const authTrustBlocks = document.querySelectorAll("[data-auth-trust]");
+const authPreviewBlocks = document.querySelectorAll("[data-auth-preview]");
+const authFeatureBlocks = document.querySelectorAll("[data-auth-feature]");
 
 const storageKeys = {
   users: "mlm_users",
@@ -67,6 +71,19 @@ function setActiveTab(mode) {
   });
   loginForm.hidden = !isLogin;
   registerForm.hidden = isLogin;
+  authCopies.forEach((block) => {
+    block.hidden = block.getAttribute("data-auth-copy") !== mode;
+  });
+  authTrustBlocks.forEach((block) => {
+    block.hidden = block.getAttribute("data-auth-trust") !== mode;
+  });
+  authPreviewBlocks.forEach((block) => {
+    block.hidden = block.getAttribute("data-auth-preview") !== mode;
+  });
+  authFeatureBlocks.forEach((block) => {
+    const targetMode = block.getAttribute("data-auth-feature");
+    block.hidden = targetMode !== "login" && targetMode !== "register" ? false : targetMode !== mode;
+  });
 }
 
 authTabs.forEach((tab) => {
@@ -74,6 +91,8 @@ authTabs.forEach((tab) => {
     setActiveTab(tab.getAttribute("data-auth-tab"));
   });
 });
+
+setActiveTab("login");
 
 loginForm.addEventListener("submit", (event) => {
   event.preventDefault();

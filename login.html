@@ -44,6 +44,16 @@
           <button class="auth-tab" type="button" data-auth-tab="register">إنشاء حساب</button>
         </div>
 
+        <div class="auth-mode-copy auth-mode-copy-active" data-auth-copy="login">
+          <strong>معلومات تسجيل الدخول</strong>
+          <span>أدخل بريدك الإلكتروني وكلمة المرور للدخول مباشرة إلى الشات ومتابعة واجباتك المحفوظة.</span>
+        </div>
+
+        <div class="auth-mode-copy" data-auth-copy="register" hidden>
+          <strong>معلومات إنشاء الحساب</strong>
+          <span>أنشئ حسابًا جديدًا بإدخال اسمك وبريدك وصفك الدراسي، ثم سيتم تجهيز حسابك تلقائيًا والانتقال إلى المنصة.</span>
+        </div>
+
         <form class="auth-form" data-auth-login-form>
           <label class="field-label" for="login-email">البريد الإلكتروني</label>
           <input class="field" id="login-email" type="email" data-auth-login-email placeholder="أدخل بريدك الإلكتروني">
@@ -82,10 +92,15 @@
         </form>
 
         <div class="selection-summary" data-auth-state>متوافق مع المنهج السعودي، ويستخدمه آلاف الطلاب يوميًا للمراجعة وحل الواجبات.</div>
-        <div class="auth-trust">
-          <div class="top-chip">متوافق مع المنهج السعودي</div>
-          <div class="top-chip">شرح خطوة بخطوة</div>
-          <div class="top-chip">تحليل أخطاء ذكي</div>
+        <div class="auth-trust" data-auth-trust="login">
+          <div class="top-chip">دخول سريع وآمن</div>
+          <div class="top-chip">استكمال محادثاتك</div>
+          <div class="top-chip">الوصول المباشر للشات</div>
+        </div>
+        <div class="auth-trust" data-auth-trust="register" hidden>
+          <div class="top-chip">حساب جديد خلال دقيقة</div>
+          <div class="top-chip">اختيار الصف الدراسي</div>
+          <div class="top-chip">بدء الاستخدام فورًا</div>
         </div>
         <div class="auth-footer-links">
           <a href="index.html#about">عن المنصة</a>
@@ -98,17 +113,29 @@
         <div class="hero-logo auth-preview-logo" aria-hidden="true">
           <img class="hero-logo-image" src="mullem-logo.png" alt="شعار ملم">
         </div>
-        <div class="auth-preview-copy">
+        <div class="auth-preview-copy" data-auth-preview="login">
           <strong>مساعدك الذكي لحل واجبات المنهج السعودي</strong>
-          <span>حل خطوة بخطوة، تحليل أخطاء، شرح مبسط، وتجربة واضحة من أول دخول.</span>
+          <span>سجل دخولك ثم أكمل من حيث توقفت، وراجع أسئلتك السابقة وحلولك مباشرة.</span>
         </div>
-        <div class="mini-feature">
+        <div class="auth-preview-copy" data-auth-preview="register" hidden>
+          <strong>ابدأ حسابك الدراسي في ملم</strong>
+          <span>أنشئ حسابًا جديدًا، اختر صفك، وابدأ استخدام المساعد الأكاديمي الذكي من أول دقيقة.</span>
+        </div>
+        <div class="mini-feature" data-auth-feature="login">
           <strong>تسجيل واضح</strong>
           <span>الدخول عبر البريد الإلكتروني وكلمة المرور، مع إنشاء حساب سريع وتحويل مباشر إلى الشات.</span>
         </div>
-        <div class="mini-feature">
+        <div class="mini-feature" data-auth-feature="login">
           <strong>تحليل مختصر</strong>
           <span>أسئلة صح وخطأ والاختيارات تعود بجواب مختصر: صح، خطأ، أو الخيار الصحيح بعد تحليل النص.</span>
+        </div>
+        <div class="mini-feature" data-auth-feature="register">
+          <strong>إنشاء حساب سهل</strong>
+          <span>أدخل الاسم والبريد وكلمة المرور والصف الدراسي، وسيتم إنشاء حسابك فورًا داخل النظام.</span>
+        </div>
+        <div class="mini-feature" data-auth-feature="register">
+          <strong>تهيئة سريعة</strong>
+          <span>بعد التسجيل تدخل مباشرة للمنصة وتبدأ استخدام الشات التعليمي دون خطوات معقدة.</span>
         </div>
         <div class="mini-feature">
           <strong>ربط بالبيانات</strong>
