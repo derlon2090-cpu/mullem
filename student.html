@@ -53,8 +53,34 @@
         </div>
 
         <section class="sidebar-panel">
-          <h3 class="sidebar-title">إعدادات سريعة</h3>
+          <h3 class="sidebar-title">اقتراحات سريعة</h3>
           <div class="stack">
+            <button class="suggestion-btn" type="button" data-starter-prompt="احسب محيط دائرة نصف قطرها 7" data-starter-subject="الرياضيات">احسب محيط دائرة نصف قطرها 7</button>
+            <button class="suggestion-btn" type="button" data-starter-prompt="اشرح قانون نيوتن الثاني" data-starter-subject="الفيزياء">اشرح قانون نيوتن الثاني</button>
+            <button class="suggestion-btn" type="button" data-starter-action="upload-image">حل من صورة</button>
+            <button class="suggestion-btn" type="button" data-starter-prompt="اختبرني في هذا الدرس بخمس أسئلة قصيرة" data-starter-subject="العلوم">اختبرني</button>
+          </div>
+        </section>
+
+        <section class="sidebar-panel">
+          <h3 class="sidebar-title">سجل المحادثات</h3>
+          <div class="learned-list compact-list" data-history></div>
+        </section>
+
+        <section class="sidebar-panel">
+          <h3 class="sidebar-title">تحليل الطالب</h3>
+          <div class="learned-list compact-list" data-insights></div>
+        </section>
+      </aside>
+
+      <section class="workspace-main">
+        <section class="onboarding-card workspace-onboarding">
+          <div class="onboarding-copy">
+            <h2>ابدأ بشكل صحيح</h2>
+            <p>اختر صفك ومادتك أولًا، أو اكتب السؤال مباشرة وسيحاول ملم اقتراح المادة والدرس تلقائيًا.</p>
+          </div>
+
+          <div class="selectors selectors-hero">
             <select class="field" data-grade>
               <option>الأول الابتدائي</option>
               <option>الثاني الابتدائي</option>
@@ -86,36 +112,20 @@
             </select>
             <input class="field" data-lesson type="text" placeholder="اسم الدرس اختياري">
           </div>
-          <div class="subject-pills subject-pills-compact">
+
+          <div class="subject-pills">
             <button class="subject-pill" type="button" data-starter-prompt="احسب محيط دائرة نصف قطرها 7" data-starter-subject="الرياضيات">🧮 رياضيات</button>
             <button class="subject-pill" type="button" data-starter-prompt="اشرح دورة الماء في الطبيعة" data-starter-subject="العلوم">📘 علوم</button>
             <button class="subject-pill" type="button" data-starter-prompt="حدد المبتدأ والخبر في الجملة" data-starter-subject="اللغة العربية">📖 عربي</button>
             <button class="subject-pill" type="button" data-starter-prompt="Correct this sentence in English" data-starter-subject="اللغة الإنجليزية">🇬🇧 إنجليزي</button>
           </div>
-        </section>
 
-        <section class="sidebar-panel">
-          <h3 class="sidebar-title">اقتراحات سريعة</h3>
-          <div class="stack">
-            <button class="suggestion-btn" type="button" data-starter-prompt="احسب محيط دائرة نصف قطرها 7" data-starter-subject="الرياضيات">احسب محيط دائرة نصف قطرها 7</button>
-            <button class="suggestion-btn" type="button" data-starter-prompt="اشرح قانون نيوتن الثاني" data-starter-subject="الفيزياء">اشرح قانون نيوتن الثاني</button>
-            <button class="suggestion-btn" type="button" data-starter-action="upload-image">حل من صورة</button>
-            <button class="suggestion-btn" type="button" data-starter-prompt="اختبرني في هذا الدرس بخمس أسئلة قصيرة" data-starter-subject="العلوم">اختبرني</button>
+          <div class="cta-row onboarding-actions">
+            <button class="primary-btn" type="button" data-start-chat>ابدأ الشات</button>
+            <button class="secondary-btn gold-btn" type="button" data-open-upload>رفع صورة السؤال</button>
           </div>
         </section>
 
-        <section class="sidebar-panel">
-          <h3 class="sidebar-title">سجل المحادثات</h3>
-          <div class="learned-list compact-list" data-history></div>
-        </section>
-
-        <section class="sidebar-panel">
-          <h3 class="sidebar-title">تحليل الطالب</h3>
-          <div class="learned-list compact-list" data-insights></div>
-        </section>
-      </aside>
-
-      <section class="workspace-main">
         <section class="chat-shell" id="chat">
           <div class="chat-top">
             <h2>الشات الرئيسي</h2>

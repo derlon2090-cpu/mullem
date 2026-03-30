@@ -361,13 +361,22 @@ textarea {
 
 .workspace-main {
   padding: 0;
-  overflow: hidden;
+  overflow: visible;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+  display: grid;
+  gap: 18px;
 }
 
 .workspace-bottom-grid {
   display: grid;
   gap: 18px;
-  margin-top: 18px;
+  margin-top: 0;
+}
+
+.workspace-onboarding {
+  margin-bottom: 0;
 }
 
 .auth-preview-rich {
