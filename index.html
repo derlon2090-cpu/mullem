@@ -3,43 +3,136 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>معلّم - الرئيسية</title>
+  <title>ملم | شات أكاديمي سعودي ذكي</title>
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
   <div class="shell">
     <header class="topbar">
-      <div class="brand">معلّم</div>
-      <nav class="nav">
-        <a href="index.html">الرئيسية</a>
-        <a href="student.html">الطالب</a>
-        <a href="chat.html">الشات</a>
-        <a href="analysis.html">التحليل</a>
-        <a href="teacher.html">المعلم</a>
-        <a href="admin.html">الإدارة</a>
-        <a href="login.html">الدخول</a>
-      </nav>
+      <div class="brand-wrap">
+        <div class="brand-mark">م</div>
+        <div class="brand-text">
+          <div class="brand-name">ملم</div>
+          <div class="brand-copy">شات ذكي للدروس والأسئلة الأكاديمية السعودية</div>
+        </div>
+      </div>
+      <div class="topbar-actions">
+        <div class="top-chip">دقة عالية في الحل والشرح</div>
+        <div class="top-chip">رفع ملفات وصور من زر +</div>
+      </div>
     </header>
   </div>
+
   <main class="page-wrap">
-    <div class="shell stage">
-      <section class="card">
-        <div class="dropzone">
-          <div>
-            <div class="label">الصفحة الرئيسية</div>
-            <div class="icon">
-              <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
-                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
-                <path d="M14 2v6h6"></path>
+    <div class="shell layout">
+      <aside class="sidebar">
+        <div class="eyebrow">ملم للمنهج السعودي</div>
+        <h1>اسأل. ارفع. وافهم الحل خطوة بخطوة.</h1>
+        <p>
+          واجهة بسيطة تركز على شيء واحد فقط: شات أكاديمي ذكي يساعد الطالب السعودي على حل الأسئلة، شرح الأسباب،
+          وتحويل الدرس إلى إجابة واضحة وسريعة.
+        </p>
+
+        <div class="meta-grid">
+          <div class="meta-card">
+            <strong>المواد المدعومة</strong>
+            <span>رياضيات، علوم، فيزياء، كيمياء، أحياء، عربي، إنجليزي</span>
+          </div>
+          <div class="meta-card">
+            <strong>آلية الإجابة</strong>
+            <span>حل نهائي، شرح مبسط، خطوات، أخطاء شائعة، وسؤال مشابه</span>
+          </div>
+          <div class="meta-card">
+            <strong>الملفات</strong>
+            <span>زر + لرفع صور الأسئلة أو ملفات الدرس بأسلوب قريب من ChatGPT</span>
+          </div>
+        </div>
+
+        <div class="suggestions">
+          <button class="suggestion-btn" type="button" data-suggestion="احسب محيط الدائرة إذا كان نصف القطر 7">
+            احسب محيط الدائرة إذا كان نصف القطر 7
+          </button>
+          <button class="suggestion-btn" type="button" data-suggestion="اشرح الفرق بين المنتجات والمستهلكات في النظام البيئي">
+            اشرح الفرق بين المنتجات والمستهلكات في النظام البيئي
+          </button>
+          <button class="suggestion-btn" type="button" data-suggestion="حدد المبتدأ والخبر في جملة: العلم نور">
+            حدد المبتدأ والخبر في جملة: العلم نور
+          </button>
+          <button class="suggestion-btn" type="button" data-suggestion="صحح الجملة بالإنجليزية: He play football every day">
+            صحح الجملة بالإنجليزية: He play football every day
+          </button>
+        </div>
+      </aside>
+
+      <section class="chat-shell">
+        <div class="chat-top">
+          <h2>الشات الذكي</h2>
+          <p>اكتب السؤال أو أرفق ملفًا، وسيجيب ملم بصياغة تعليمية منظمة ومناسبة للفصول الدراسية السعودية.</p>
+          <div class="chat-tags">
+            <div class="tag">حل أكاديمي</div>
+            <div class="tag">شرح خطوة بخطوة</div>
+            <div class="tag">رفع ملفات وصور</div>
+            <div class="tag">أسئلة مشابهة</div>
+          </div>
+        </div>
+
+        <div class="messages" data-messages></div>
+
+        <div class="composer-area">
+          <div class="selectors">
+            <select class="field" data-grade>
+              <option>الأول الابتدائي</option>
+              <option>الثالث الابتدائي</option>
+              <option>السادس الابتدائي</option>
+              <option selected>الأول المتوسط</option>
+              <option>الثالث المتوسط</option>
+              <option>الأول الثانوي</option>
+              <option>الثالث الثانوي</option>
+            </select>
+            <select class="field" data-subject>
+              <option selected>الرياضيات</option>
+              <option>العلوم</option>
+              <option>الفيزياء</option>
+              <option>الكيمياء</option>
+              <option>الأحياء</option>
+              <option>اللغة العربية</option>
+              <option>اللغة الإنجليزية</option>
+            </select>
+            <select class="field" data-term>
+              <option selected>الفصل الدراسي الأول</option>
+              <option>الفصل الدراسي الثاني</option>
+              <option>الفصل الدراسي الثالث</option>
+            </select>
+            <input class="field" data-lesson type="text" placeholder="الدرس أو الوحدة">
+          </div>
+
+          <div class="attachments" data-attachments></div>
+
+          <form class="composer" data-chat-form>
+            <button class="plus-btn" type="button" onclick="document.querySelector('[data-file-input]').click()" aria-label="رفع ملف">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M12 5v14"></path>
+                <path d="M5 12h14"></path>
               </svg>
-            </div>
-            <h1 class="title">Drag files here to add them to your repository</h1>
-            <p class="copy">واجهة صفحة موحدة بدون مجلدات إضافية. هذه النسخة مناسبة أكثر للرفع على GitHub كملفات صفحات مباشرة.</p>
-            <div class="action">Or <span class="choose">choose your files</span></div>
+            </button>
+            <textarea class="prompt-input" data-prompt rows="1" placeholder="اكتب سؤالك الأكاديمي هنا..."></textarea>
+            <button class="send-btn" type="submit" aria-label="إرسال">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M22 2L11 13"></path>
+                <path d="M22 2L15 22L11 13L2 9L22 2Z"></path>
+              </svg>
+            </button>
+            <input data-file-input type="file" hidden multiple accept=".pdf,.doc,.docx,.png,.jpg,.jpeg,.txt">
+          </form>
+
+          <div class="composer-note">
+            المخرجات الحالية واجهة أولية ذكية على المتصفح. يمكن ربطها لاحقًا بنموذج AI فعلي لرفع الدقة في الحل والتحليل.
           </div>
         </div>
       </section>
     </div>
   </main>
+
+  <script src="app.js"></script>
 </body>
 </html>
