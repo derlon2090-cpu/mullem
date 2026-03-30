@@ -41,33 +41,31 @@ const googleAuthUrl = "https://accounts.google.com/v3/signin/accountchooser?clie
 
 function loadUsers() {
   try {
-    const parsed = JSON.parse(localStorage.getItem(storageKeys.users) || "[]");
-    return Array.isArray(parsed) && parsed.length
-      ? parsed
-      : [
-          {
-            id: "student-demo-1",
-            name: "طالب تجريبي",
-            email: "student@mullem.sa",
-            role: "Student",
-            package: "مجاني محدود",
-            xp: 120,
-            status: "نشط",
-            activity: "بدأ استخدام المنصة",
-            password: "Student@2026"
-          }
-        ];
-  } catch (error) {
-    return [];
-  }
+    const users = JSON.parse(localStorage.getItem(storageKeys.users) || "[]");
+    if (Array.isArray(users) && users.length) return users;
+  } catch {}
+
+  return [
+    {
+      id: "student-demo-1",
+      name: "طالب تجريبي",
+      email: "student@mullem.sa",
+      role: "Student",
+      package: "مجاني محدود",
+      xp: 120,
+      status: "نشط",
+      activity: "بدأ استخدام المنصة",
+      password: "Student@2026"
+    }
+  ];
 }
 
 function saveUsers(users) {
   localStorage.setItem(storageKeys.users, JSON.stringify(users));
 }
 
-function isValidEmail(email) {
-  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+function setState(text) {
+  if (authState) authState.textContent = text;
 }
 
 function setActivePanel(mode) {
@@ -80,9 +78,8 @@ function setActivePanel(mode) {
   });
 }
 
-function syncScrollTopButton() {
-  if (!scrollTopButton) return;
-  scrollTopButton.classList.toggle("visible", window.scrollY > 220);
+function isValidEmail(email) {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
 }
 
 function generateResetCode() {
@@ -96,9 +93,14 @@ function saveResetRequest(request) {
 function loadResetRequest() {
   try {
     return JSON.parse(localStorage.getItem(storageKeys.passwordReset) || "null");
-  } catch (error) {
+  } catch {
     return null;
   }
+}
+
+function syncScrollTopButton() {
+  if (!scrollTopButton) return;
+  scrollTopButton.classList.toggle("visible", window.scrollY > 220);
 }
 
 authTabs.forEach((tab) => {
@@ -115,33 +117,31 @@ loginForm?.addEventListener("submit", (event) => {
   const password = loginPassword.value;
 
   if (!email || !password) {
-    authState.textContent = "أدخل البريد الإلكتروني وكلمة المرور أولًا.";
+    setState("أدخل البريد الإلكتروني وكلمة المرور أولًا.");
     return;
   }
 
   if (!isValidEmail(email)) {
-    authState.textContent = "البريد الإلكتروني غير صحيح.";
+    setState("البريد الإلكتروني غير صحيح.");
     return;
   }
 
   if (email === adminCredentials.email && password === adminCredentials.password) {
     localStorage.setItem(storageKeys.adminSession, "1");
-    authState.textContent = "تم تسجيل الدخول بنجاح. جارٍ توجيهك إلى لوحة الإدارة.";
+    setState("تم تسجيل دخول الأدمن بنجاح. جارٍ تحويلك إلى لوحة الإدارة.");
     window.location.href = "admin.html";
     return;
   }
 
-  const users = loadUsers();
-  const user = users.find((entry) => entry.email?.toLowerCase() === email && entry.password === password);
-
+  const user = loadUsers().find((entry) => entry.email.toLowerCase() === email && entry.password === password);
   if (!user) {
-    authState.textContent = "كلمة المرور غير صحيحة أو الحساب غير موجود.";
+    setState("كلمة المرور غير صحيحة أو الحساب غير موجود.");
     return;
   }
 
   localStorage.setItem(storageKeys.currentUser, user.id);
-  authState.textContent = `أهلًا ${user.name}، تم تسجيل الدخول بنجاح.`;
-  window.location.href = "index.html";
+  setState(`أهلًا ${user.name}، تم تسجيل الدخول بنجاح.`);
+  window.location.href = "student.html";
 });
 
 registerForm?.addEventListener("submit", (event) => {
@@ -152,23 +152,23 @@ registerForm?.addEventListener("submit", (event) => {
   const grade = registerGrade.value;
 
   if (!name || !email || !password) {
-    authState.textContent = "أكمل جميع الحقول أولًا.";
+    setState("أكمل جميع الحقول أولًا.");
     return;
   }
 
   if (!isValidEmail(email)) {
-    authState.textContent = "البريد الإلكتروني غير صحيح.";
+    setState("البريد الإلكتروني غير صحيح.");
     return;
   }
 
   if (password.length < 6) {
-    authState.textContent = "كلمة المرور يجب أن تكون 6 أحرف أو أكثر.";
+    setState("كلمة المرور يجب أن تكون 6 أحرف أو أكثر.");
     return;
   }
 
   const users = loadUsers();
-  if (users.some((entry) => entry.email?.toLowerCase() === email)) {
-    authState.textContent = "هذا البريد مسجل مسبقًا.";
+  if (users.some((entry) => entry.email.toLowerCase() === email)) {
+    setState("هذا البريد مسجل مسبقًا.");
     return;
   }
 
@@ -188,134 +188,111 @@ registerForm?.addEventListener("submit", (event) => {
   users.unshift(user);
   saveUsers(users);
   localStorage.setItem(storageKeys.currentUser, user.id);
-  authState.textContent = `تم إنشاء الحساب بنجاح يا ${name}.`;
-  window.location.href = "index.html";
+  setState(`تم إنشاء الحساب بنجاح يا ${name}.`);
+  window.location.href = "student.html";
 });
 
 forgotButton?.addEventListener("click", () => {
   setActivePanel("forgot");
-  authState.textContent = "أدخل بريدك الإلكتروني لبدء استعادة كلمة المرور.";
+  setState("أدخل بريدك الإلكتروني لبدء استعادة كلمة المرور.");
+  if (forgotEmailForm) forgotEmailForm.hidden = false;
+  if (codeForm) codeForm.hidden = true;
+  if (resetForm) resetForm.hidden = true;
 });
 
 backButton?.addEventListener("click", () => {
   setActivePanel("login");
-  authState.textContent = "عدت إلى صفحة تسجيل الدخول.";
-  forgotEmailForm.hidden = false;
-  codeForm.hidden = true;
-  resetForm.hidden = true;
+  setState("عدت إلى صفحة تسجيل الدخول.");
+  if (forgotEmailForm) forgotEmailForm.hidden = false;
+  if (codeForm) codeForm.hidden = true;
+  if (resetForm) resetForm.hidden = true;
 });
 
 forgotEmailForm?.addEventListener("submit", (event) => {
   event.preventDefault();
   const email = forgotEmail.value.trim().toLowerCase();
-  const users = loadUsers();
-  const user = users.find((entry) => entry.email?.toLowerCase() === email);
+  const user = loadUsers().find((entry) => entry.email.toLowerCase() === email);
 
   if (!email) {
-    authState.textContent = "أدخل بريدك الإلكتروني أولًا.";
+    setState("أدخل بريدك الإلكتروني أولًا.");
     return;
   }
 
   if (!isValidEmail(email)) {
-    authState.textContent = "البريد الإلكتروني غير صحيح.";
+    setState("البريد الإلكتروني غير صحيح.");
     return;
   }
 
   if (!user) {
-    authState.textContent = "لا يوجد حساب مرتبط بهذا البريد.";
+    setState("لا يوجد حساب مرتبط بهذا البريد.");
     return;
   }
 
   const code = generateResetCode();
-  saveResetRequest({
-    email,
-    code,
-    createdAt: Date.now()
-  });
+  saveResetRequest({ email, code, verified: false });
 
   forgotEmailForm.hidden = true;
-  codeForm.hidden = false;
-  authState.textContent = `تم إرسال كود التحقق إلى بريدك. في النسخة الحالية داخل الموقع، كود التحقق التجريبي هو: ${code}`;
+  if (codeForm) codeForm.hidden = false;
+  setState(`تم إنشاء كود التحقق: ${code} — هذه نسخة تجريبية داخل الموقع.`);
 });
 
 codeForm?.addEventListener("submit", (event) => {
   event.preventDefault();
   const request = loadResetRequest();
-  const code = forgotCode.value.trim();
-
   if (!request) {
-    authState.textContent = "ابدأ من جديد بإدخال البريد الإلكتروني.";
-    forgotEmailForm.hidden = false;
-    codeForm.hidden = true;
+    setState("ابدأ من خطوة البريد الإلكتروني أولًا.");
     return;
   }
 
-  if (code !== request.code) {
-    authState.textContent = "كود التحقق غير صحيح.";
+  if (forgotCode.value.trim() !== request.code) {
+    setState("كود التحقق غير صحيح.");
     return;
   }
 
+  request.verified = true;
+  saveResetRequest(request);
   codeForm.hidden = true;
-  resetForm.hidden = false;
-  authState.textContent = "تم التحقق من الكود. اكتب كلمة المرور الجديدة الآن.";
+  if (resetForm) resetForm.hidden = false;
+  setState("تم التحقق من الكود. اكتب كلمة المرور الجديدة.");
 });
 
 resetForm?.addEventListener("submit", (event) => {
   event.preventDefault();
   const request = loadResetRequest();
-
-  if (!request) {
-    authState.textContent = "انتهت جلسة الاستعادة. أعد المحاولة من البداية.";
-    forgotEmailForm.hidden = false;
-    codeForm.hidden = true;
-    resetForm.hidden = true;
-    return;
-  }
-
-  if (!newPassword.value || !confirmPassword.value) {
-    authState.textContent = "أدخل كلمة المرور الجديدة وأعد تأكيدها.";
+  if (!request?.verified) {
+    setState("أكمل التحقق أولًا.");
     return;
   }
 
   if (newPassword.value.length < 6) {
-    authState.textContent = "كلمة المرور الجديدة يجب أن تكون 6 أحرف أو أكثر.";
+    setState("كلمة المرور الجديدة يجب أن تكون 6 أحرف أو أكثر.");
     return;
   }
 
   if (newPassword.value !== confirmPassword.value) {
-    authState.textContent = "كلمتا المرور غير متطابقتين.";
+    setState("كلمتا المرور غير متطابقتين.");
     return;
   }
 
-  const users = loadUsers();
-  const userIndex = users.findIndex((entry) => entry.email?.toLowerCase() === request.email);
+  const users = loadUsers().map((user) =>
+    user.email.toLowerCase() === request.email
+      ? { ...user, password: newPassword.value }
+      : user
+  );
 
-  if (userIndex === -1) {
-    authState.textContent = "تعذر تحديث كلمة المرور لهذا الحساب.";
-    return;
-  }
-
-  users[userIndex].password = newPassword.value;
-  users[userIndex].activity = "حدّث كلمة المرور";
   saveUsers(users);
   localStorage.removeItem(storageKeys.passwordReset);
-
-  authState.textContent = "تم تحديث كلمة المرور بنجاح. يمكنك تسجيل الدخول الآن.";
-  forgotEmailForm.hidden = false;
-  codeForm.hidden = true;
-  resetForm.hidden = true;
   setActivePanel("login");
+  setState("تم تحديث كلمة المرور بنجاح. يمكنك تسجيل الدخول الآن.");
 });
 
 googleButton?.addEventListener("click", () => {
-  authState.textContent = "جارٍ تحويلك إلى صفحة تسجيل الدخول عبر Google...";
+  setState("جارٍ تحويلك إلى Google...");
   window.location.href = googleAuthUrl;
 });
 
-if (scrollTopButton) {
-  window.addEventListener("scroll", syncScrollTopButton, { passive: true });
-  scrollTopButton.addEventListener("click", () => {
-    window.scrollTo({ top: 0, behavior: "smooth" });
-  });
-  syncScrollTopButton();
-}
+window.addEventListener("scroll", syncScrollTopButton, { passive: true });
+scrollTopButton?.addEventListener("click", () => {
+  window.scrollTo({ top: 0, behavior: "smooth" });
+});
+syncScrollTopButton();
