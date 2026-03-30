@@ -68,97 +68,9 @@
           </div>
         </section>
 
-        <section class="hero-subgrid" id="about">
-          <article class="mini-feature">
-            <strong>منهج سعودي</strong>
-            <span>يعتمد على المنهج السعودي ومراجع الويب المساندة بشكل تحليلي.</span>
-          </article>
-          <article class="mini-feature">
-            <strong>تجربة واضحة</strong>
-            <span>اختر الصف والمادة أو اكتب السؤال فقط، والنظام يحاول استنتاج الدرس تلقائيًا.</span>
-          </article>
-          <article class="mini-feature">
-            <strong>ردود تعليمية</strong>
-            <span>الإجابة النهائية، الشرح، الخطوات، الأخطاء الشائعة، والسؤال المشابه في بطاقات مرتبة.</span>
-          </article>
-        </section>
-
-        <div class="panel">
-          <h3>ابدأ بشكل صحيح</h3>
-          <div class="stack">
-            <div class="small-copy">
-              اختر صفك ومادتك، ثم اكتب سؤالك. إذا كان السؤال واضحًا فسيستنتج ملم يحل الدرس تلقائيًا.
-            </div>
-            <div class="selection-summary" data-selection-summary>لم يتم بدء جلسة جديدة بعد.</div>
-            <div class="cta-row">
-              <button class="primary-btn" type="button" data-start-chat>ابدأ الشات</button>
-              <button class="secondary-btn" type="button" data-quick-solve>ابدأ حل سؤال الآن</button>
-            </div>
-          </div>
-        </div>
-
-        <div class="sidebar-rail">
-          <div class="panel panel-compact">
-            <h3>ملخصك السريع</h3>
-            <div class="panel-section">
-              <div class="panel-section-title">تحليل الطالب</div>
-              <div class="learned-list compact-list" data-insights></div>
-            </div>
-            <div class="panel-section">
-              <div class="panel-section-title">المحادثات المحفوظة</div>
-              <div class="learned-list compact-list" data-history></div>
-            </div>
-          </div>
-
-          <div class="panel panel-compact">
-            <h3>المراجع والتغطية</h3>
-            <div class="panel-section">
-              <div class="panel-section-title">مكتبة واجباتي</div>
-              <div class="learned-list compact-list" data-wajibati-library></div>
-            </div>
-            <div class="panel-section">
-              <div class="panel-section-title">تغطية الترمين</div>
-              <div class="learned-list compact-list" data-term-coverage></div>
-            </div>
-            <div class="panel-section">
-              <div class="panel-section-title">مصادر الويب</div>
-              <div class="learned-list compact-list" data-web-policy></div>
-            </div>
-          </div>
-
-          <div class="panel panel-compact">
-            <h3>حالة المنصة</h3>
-            <div class="stack">
-              <select class="field" data-runtime>
-                <option selected>vLLM Runtime</option>
-                <option>Ollama Runtime</option>
-                <option>وضع تجريبي داخل الواجهة</option>
-              </select>
-              <select class="field" data-training-mode>
-                <option selected>Prompt + RAG</option>
-                <option>Prompt + RAG + LoRA</option>
-                <option>Prompt + RAG + LoRA + DPO</option>
-              </select>
-              <div class="small-copy">
-                يفهم نوع الرسالة أولًا، ثم يبحث في المنهج والمراجع التعليمية، ثم يبني جوابًا واضحًا ومختصرًا حسب السؤال.
-              </div>
-              <div class="selection-summary" data-runtime-summary>
-                التشغيل الحالي: تجربة محلية مرتبة، مع تحسينات مستمرة في الحل والشرح.
-              </div>
-            </div>
-          </div>
-
-          <div class="panel panel-compact">
-            <h3>أدوات سريعة</h3>
-            <div class="panel-section">
-              <div class="panel-section-title">ما أعجبك سابقًا</div>
-              <div class="learned-list compact-list" data-learned></div>
-            </div>
-            <div class="panel-section">
-              <div class="panel-section-title">بنك أسئلة سريع</div>
-              <div class="suggestions" data-question-bank></div>
-            </div>
-          </div>
+        <div class="hero-utility" hidden>
+          <button class="primary-btn" type="button" data-start-chat>ابدأ الشات</button>
+          <button class="secondary-btn" type="button" data-quick-solve>ابدأ حل سؤال الآن</button>
         </div>
       </aside>
 
@@ -276,6 +188,96 @@
         </div>
       </section>
     </div>
+
+    <section class="platform-insights" id="about">
+      <div class="shell">
+        <div class="platform-insights-wrap">
+          <article class="info-stat-card">
+            <div class="info-stat-icon">🎓</div>
+            <strong>12</strong>
+            <span>صفًا دراسيًا من الأول الابتدائي حتى الثالث الثانوي</span>
+          </article>
+          <article class="info-stat-card">
+            <div class="info-stat-icon">📚</div>
+            <strong>9</strong>
+            <span>مواد أساسية داخل المنصة التعليمية</span>
+          </article>
+          <article class="info-stat-card">
+            <div class="info-stat-icon">🗓️</div>
+            <strong>2</strong>
+            <span>فصلان دراسيان مع تغطية مستمرة للمنهج</span>
+          </article>
+          <article class="info-stat-card">
+            <div class="info-stat-icon">📷</div>
+            <strong>رفع</strong>
+            <span>صورة السؤال أو ملف الدرس مباشرة</span>
+          </article>
+          <article class="info-stat-card">
+            <div class="info-stat-icon">🧠</div>
+            <strong>تحليل</strong>
+            <span>اختيارات، صح وخطأ، وشرح مبسط</span>
+          </article>
+          <article class="info-stat-card">
+            <div class="info-stat-icon">🇸🇦</div>
+            <strong>منهج</strong>
+            <span>اعتماد على المنهج السعودي ومراجعه</span>
+          </article>
+          <article class="info-stat-card info-stat-card-wide">
+            <div class="info-stat-icon">🧭</div>
+            <h3>اختياراتك الحالية</h3>
+            <div class="selection-summary info-inline-summary" data-selection-summary>لم يتم بدء جلسة جديدة بعد.</div>
+            <div class="selection-summary info-inline-summary" data-runtime-summary>التشغيل الحالي: تجربة محلية مرتبة، مع تحسينات مستمرة في الحل والشرح.</div>
+            <div class="stack info-selectors">
+              <select class="field" data-runtime>
+                <option selected>vLLM Runtime</option>
+                <option>Ollama Runtime</option>
+                <option>وضع تجريبي داخل الواجهة</option>
+              </select>
+              <select class="field" data-training-mode>
+                <option selected>Prompt + RAG</option>
+                <option>Prompt + RAG + LoRA</option>
+                <option>Prompt + RAG + LoRA + DPO</option>
+              </select>
+            </div>
+          </article>
+          <article class="info-stat-card info-stat-card-wide">
+            <div class="info-stat-icon">📈</div>
+            <h3>تحليل الطالب</h3>
+            <div class="learned-list compact-list dark-list" data-insights></div>
+          </article>
+          <article class="info-stat-card info-stat-card-wide">
+            <div class="info-stat-icon">🕘</div>
+            <h3>المحادثات المحفوظة</h3>
+            <div class="learned-list compact-list dark-list" data-history></div>
+          </article>
+          <article class="info-stat-card info-stat-card-wide">
+            <div class="info-stat-icon">📘</div>
+            <h3>مكتبة واجباتي</h3>
+            <div class="learned-list compact-list dark-list" data-wajibati-library></div>
+          </article>
+          <article class="info-stat-card info-stat-card-wide">
+            <div class="info-stat-icon">🗂️</div>
+            <h3>تغطية الترمين</h3>
+            <div class="learned-list compact-list dark-list" data-term-coverage></div>
+          </article>
+          <article class="info-stat-card info-stat-card-wide">
+            <div class="info-stat-icon">🌐</div>
+            <h3>مصادر الويب</h3>
+            <div class="learned-list compact-list dark-list" data-web-policy></div>
+          </article>
+          <article class="info-stat-card info-stat-card-wide">
+            <div class="info-stat-icon">⭐</div>
+            <h3>ما أعجبك سابقًا</h3>
+            <div class="learned-list compact-list dark-list" data-learned></div>
+          </article>
+          <article class="info-stat-card info-stat-card-wide">
+            <div class="info-stat-icon">⚡</div>
+            <h3>بنك أسئلة سريع</h3>
+            <div class="suggestions dark-suggestions" data-question-bank></div>
+          </article>
+        </div>
+      </div>
+    </section>
   </main>
 
   <button class="scroll-top-btn" type="button" data-scroll-top aria-label="العودة إلى أعلى الصفحة">
