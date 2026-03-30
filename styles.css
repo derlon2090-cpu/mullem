@@ -117,6 +117,11 @@ textarea {
   color: var(--muted);
 }
 
+.top-link {
+  color: var(--brand-strong);
+  font-weight: 700;
+}
+
 .page-wrap {
   padding: 24px 0 64px;
 }
@@ -186,6 +191,45 @@ textarea {
   line-height: 1.8;
 }
 
+.selection-summary {
+  padding: 12px 14px;
+  border-radius: 18px;
+  background: rgba(15, 118, 110, 0.08);
+  color: var(--brand-strong);
+  line-height: 1.8;
+}
+
+.cta-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.primary-btn,
+.secondary-btn {
+  width: 100%;
+  border: 0;
+  cursor: pointer;
+  border-radius: 18px;
+  padding: 13px 16px;
+  transition: 180ms ease;
+}
+
+.primary-btn {
+  color: #fff;
+  background: linear-gradient(135deg, var(--brand), var(--accent));
+}
+
+.secondary-btn {
+  color: var(--brand-strong);
+  background: var(--brand-soft);
+}
+
+.primary-btn:hover,
+.secondary-btn:hover {
+  transform: translateY(-1px);
+}
+
 .stack {
   display: grid;
   gap: 10px;
@@ -240,6 +284,24 @@ textarea {
 .memory-item strong {
   display: block;
   margin-bottom: 6px;
+}
+
+.history-item {
+  padding: 12px 14px;
+  border-radius: 18px;
+  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.92);
+}
+
+.history-item strong {
+  display: block;
+  margin-bottom: 6px;
+}
+
+.history-item span {
+  color: var(--muted);
+  font-size: 0.9rem;
+  line-height: 1.7;
 }
 
 .chat-shell {
@@ -308,7 +370,6 @@ textarea {
   border-radius: 24px;
   border: 1px solid var(--line);
   line-height: 1.9;
-  white-space: pre-wrap;
 }
 
 .message.user {
@@ -325,6 +386,51 @@ textarea {
   margin-bottom: 8px;
   font-weight: 800;
   color: var(--brand-strong);
+}
+
+.message-body {
+  line-height: 1.9;
+}
+
+.answer-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.answer-section {
+  padding: 14px 16px;
+  border-radius: 18px;
+  border: 1px solid var(--line);
+  background: rgba(248, 250, 252, 0.92);
+}
+
+.answer-section-wide {
+  grid-column: 1 / -1;
+}
+
+.answer-section h4 {
+  margin: 0 0 10px;
+  font-size: 0.98rem;
+}
+
+.answer-section p,
+.answer-section ul {
+  margin: 0;
+  color: var(--text);
+}
+
+.answer-section ul {
+  padding-right: 18px;
+}
+
+.pending-copy {
+  color: var(--muted);
+}
+
+.muted-inline {
+  color: var(--muted);
+  font-size: 0.92rem;
 }
 
 .message-tools {
@@ -350,6 +456,12 @@ textarea {
   color: var(--brand-strong);
   border-color: rgba(15, 118, 110, 0.22);
   background: var(--brand-soft);
+}
+
+.mini-btn.disliked.active {
+  color: #b42318;
+  border-color: rgba(180, 35, 24, 0.18);
+  background: rgba(254, 242, 242, 0.96);
 }
 
 .sources-list {
@@ -457,6 +569,100 @@ textarea {
   line-height: 1.8;
 }
 
+.admin-wrap {
+  display: grid;
+  gap: 22px;
+}
+
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.stat-card,
+.admin-panel {
+  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.9);
+  border-radius: 24px;
+  padding: 18px;
+  box-shadow: var(--shadow);
+}
+
+.stat-card strong {
+  display: block;
+  font-size: 1.9rem;
+  margin-top: 10px;
+}
+
+.stat-card span {
+  color: var(--muted);
+  font-size: 0.92rem;
+}
+
+.admin-section-title {
+  margin: 0 0 14px;
+  font-size: 1.05rem;
+}
+
+.admin-subtitle {
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.8;
+}
+
+.admin-grid {
+  display: grid;
+  grid-template-columns: 1.15fr 0.85fr;
+  gap: 18px;
+}
+
+.admin-list {
+  display: grid;
+  gap: 10px;
+}
+
+.admin-item {
+  padding: 12px 14px;
+  border-radius: 18px;
+  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.92);
+}
+
+.admin-item strong {
+  display: block;
+  margin-bottom: 6px;
+}
+
+.admin-item span {
+  color: var(--muted);
+  font-size: 0.9rem;
+  line-height: 1.7;
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.table th,
+.table td {
+  text-align: right;
+  padding: 12px 10px;
+  border-bottom: 1px solid var(--line);
+}
+
+.table th {
+  color: var(--muted);
+  font-weight: 600;
+}
+
+.chip-row {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
 @media (max-width: 1120px) {
   .layout {
     grid-template-columns: 1fr;
@@ -473,8 +679,12 @@ textarea {
     align-items: stretch;
   }
 
-  .selectors {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+  .cta-row,
+  .selectors,
+  .answer-grid,
+  .stats-grid,
+  .admin-grid {
+    grid-template-columns: 1fr;
   }
 
   .composer {
