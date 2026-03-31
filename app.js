@@ -6,7 +6,8 @@ const storageKeys = {
   liked: "mlm_liked_answers",
   analytics: "mlm_analytics",
   feedback: "mlm_feedback_log",
-  aiLogs: "mlm_ai_logs"
+  aiLogs: "mlm_ai_logs",
+  responseMode: "mlm_response_mode"
 };
 
 const gradeOptions = [
@@ -235,6 +236,7 @@ const uploadFileButton = document.querySelector("[data-upload-file]");
 const focusSubjectButton = document.querySelector("[data-focus-subject]");
 const clearChatButton = document.querySelector("[data-clear-chat]");
 const scrollTopButton = document.querySelector("[data-scroll-top]");
+const responseModeButtons = document.querySelectorAll("[data-response-mode]");
 
 let attachments = [];
 let clarificationCursor = 0;
@@ -243,6 +245,7 @@ let chatHistory = [];
 let analytics = createEmptyAnalytics();
 let feedbackLog = [];
 let aiLogs = [];
+let selectedResponseMode = localStorage.getItem(storageKeys.responseMode) || "educational";
 
 function loadJson(key, fallback) {
   try {
@@ -374,6 +377,14 @@ function applyTheme(theme) {
   document.body.classList.toggle("theme-dark", theme === "dark");
 }
 
+function applyResponseMode(mode) {
+  selectedResponseMode = mode;
+  localStorage.setItem(storageKeys.responseMode, mode);
+  responseModeButtons.forEach((button) => {
+    button.classList.toggle("active", button.getAttribute("data-response-mode") === mode);
+  });
+}
+
 function syncScrollTopButton() {
   if (!scrollTopButton) return;
   scrollTopButton.classList.toggle("visible", window.scrollY > 240);
@@ -427,6 +438,17 @@ function detectGradeLevel(text) {
   });
 
   return best.stage;
+}
+
+function detectQuestionType(text) {
+  const normalized = normalizeText(text);
+  if (/صح|خطأ/.test(normalized)) return "صح وخطأ";
+  if (/أ\)|ب\)|ج\)|د\)|اختيار من متعدد|اختر/.test(text)) return "اختيار من متعدد";
+  if (/احسب|أوجد|حل المعادلة|مساحة|محيط|\d/.test(normalized)) return "مسألة";
+  if (/عرف|ما هو|ما هي|ماذا يعني/.test(normalized)) return "تعريف";
+  if (/قارن|الفرق بين|وازن بين/.test(normalized)) return "مقارنة";
+  if (/اشرح|فسر|وضح/.test(normalized)) return "شرح";
+  return "سؤال أكاديمي";
 }
 
 function determineInputType(userText, attachedFiles) {
@@ -792,6 +814,12 @@ function addMessage(type, author, body, options = {}) {
   if (!messageList) return null;
   const article = document.createElement("article");
   article.className = `message ${type}`;
+  if (options.metadata) {
+    article.dataset.subject = options.metadata.subject || "";
+    article.dataset.lesson = options.metadata.lesson || "";
+    article.dataset.questionType = options.metadata.questionType || "";
+    article.dataset.responseMode = options.metadata.mode || "";
+  }
   article.innerHTML = `
     <div class="message-title">${author}</div>
     <div class="message-body">${body}</div>
@@ -801,6 +829,10 @@ function addMessage(type, author, body, options = {}) {
     const tools = document.createElement("div");
     tools.className = "message-tools";
     tools.innerHTML = `
+      <button class="mini-btn" type="button" data-refine="simple">بسّط أكثر</button>
+      <button class="mini-btn" type="button" data-refine="short">باختصار</button>
+      <button class="mini-btn" type="button" data-refine="steps">اشرحها خطوة خطوة</button>
+      <button class="mini-btn" type="button" data-refine="quiz">اختبرني على هذا الدرس</button>
       <button class="mini-btn" type="button" data-like="${Date.now()}">👍 أعجبني</button>
       <button class="mini-btn disliked" type="button" data-dislike="${Date.now()}">👎 لم يعجبني</button>
     `;
@@ -941,6 +973,7 @@ function generateCurriculumQuestions(context) {
 
 function reviewResponse(intent, response) {
   const reviewed = { ...response };
+  reviewed.displayMode = selectedResponseMode;
 
   if (intent.type === "generate_questions") {
     reviewed.mode = "questions";
@@ -959,6 +992,11 @@ function reviewResponse(intent, response) {
     reviewed.mode = "chat";
   }
 
+  if (reviewed.displayMode === "quick" && reviewed.mode !== "questions" && reviewed.mode !== "quiz") {
+    reviewed.steps = Array.isArray(reviewed.steps) ? reviewed.steps.slice(0, 2) : [];
+    reviewed.mistakes = Array.isArray(reviewed.mistakes) ? reviewed.mistakes.slice(0, 1) : [];
+  }
+
   return reviewed;
 }
 
@@ -966,11 +1004,15 @@ const response_reviewer = reviewResponse;
 
 function createAcademicResponse(question, intent) {
   const context = retrieveCurriculumContext(question, subjectSelect?.value || "");
+  const questionType = detectQuestionType(question);
   const objective = solveObjectiveQuestion(question);
   if (objective) {
     return reviewResponse(intent, {
       ...objective,
       mode: "solve",
+      questionType,
+      subject: context.subject,
+      lesson: context.lesson,
       curriculumLink: `اعتمدت الإجابة على ${context.subject} للصف ${context.grade} في ${context.term}.`
     });
   }
@@ -980,6 +1022,9 @@ function createAcademicResponse(question, intent) {
     return reviewResponse(intent, {
       ...math,
       mode: "solve",
+      questionType,
+      subject: context.subject,
+      lesson: context.lesson,
       curriculumLink: `تم ربط السؤال بدرس ${context.lesson} في مادة ${context.subject} للصف ${context.grade}.`
     });
   }
@@ -987,6 +1032,9 @@ function createAcademicResponse(question, intent) {
   if (intent.type === "generate_questions") {
     return reviewResponse(intent, {
       mode: "questions",
+      questionType,
+      subject: context.subject,
+      lesson: context.lesson,
       intro: `هذه أسئلة تدريبية من ${context.subject} للصف ${context.grade} — ${context.term}.`,
       questions: generateCurriculumQuestions(context),
       curriculumLink: `التوليد تم بالاعتماد على موضوع ${context.lesson} ضمن ${context.subject}.`
@@ -997,6 +1045,9 @@ function createAcademicResponse(question, intent) {
     const questions = generateCurriculumQuestions(context);
     return reviewResponse(intent, {
       mode: "quiz",
+      questionType,
+      subject: context.subject,
+      lesson: context.lesson,
       finalAnswer: "سأبدأ الآن بسؤال واحد فقط.",
       explanation: `الاختبار مرتبط بمادة ${context.subject} للصف ${context.grade}.`,
       quizQuestion: questions[0],
@@ -1007,6 +1058,9 @@ function createAcademicResponse(question, intent) {
   if (intent.type === "summary") {
     return reviewResponse(intent, {
       mode: "summary",
+      questionType,
+      subject: context.subject,
+      lesson: context.lesson,
       finalAnswer: `هذا ملخص سريع لدرس ${context.lesson} في ${context.subject}.`,
       explanation: context.entry?.explanation || `الفكرة الأساسية في ${context.subject} هنا هي فهم المفهوم وتطبيقه بصورة مبسطة.`,
       bullets: [
@@ -1021,6 +1075,9 @@ function createAcademicResponse(question, intent) {
   if (intent.type === "answer_analysis") {
     return reviewResponse(intent, {
       mode: "answer_analysis",
+      questionType,
+      subject: context.subject,
+      lesson: context.lesson,
       finalAnswer: "سأحلل إجابتك بناءً على المطلوب والمعطيات الظاهرة في السؤال.",
       explanation: "أقارن بين المطلوب في السؤال وبين الإجابة المكتوبة، ثم أحدد إن كان الخطأ مفاهيميًا أو حسابيًا أو في الفهم.",
       steps: [
@@ -1040,6 +1097,9 @@ function createAcademicResponse(question, intent) {
   if (intent.type === "explain") {
     return reviewResponse(intent, {
       mode: "explain",
+      questionType,
+      subject: context.subject,
+      lesson: context.lesson,
       finalAnswer: `شرح مبسط لدرس ${context.lesson} في ${context.subject}.`,
       explanation:
         context.entry?.explanation ||
@@ -1060,6 +1120,9 @@ function createAcademicResponse(question, intent) {
 
   return reviewResponse(intent, {
     mode: "solve",
+    questionType,
+    subject: context.subject,
+    lesson: context.lesson,
     finalAnswer: context.entry
       ? `الإجابة الأقرب لهذا السؤال مرتبطة بدرس ${context.lesson} في مادة ${context.subject}.`
       : `سأتعامل مع السؤال على أنه من مادة ${context.subject} وفق صف ${context.grade}.`,
@@ -1083,9 +1146,15 @@ function createAcademicResponse(question, intent) {
 }
 
 function formatAssistantSections(response) {
+  const modeNote =
+    response.displayMode === "quick"
+      ? `<section class="answer-section answer-section-wide"><h4>⚡ وضع سريع</h4><p>هذا الرد مختصر. إذا أردت التفاصيل اضغط "اشرحها خطوة خطوة".</p></section>`
+      : "";
+
   if (response.mode === "questions") {
     return `
       <div class="answer-grid">
+        ${modeNote}
         <section class="answer-section answer-section-wide">
           <h4>📝 أسئلة من المنهج</h4>
           <p>${response.intro}</p>
@@ -1105,6 +1174,7 @@ function formatAssistantSections(response) {
   if (response.mode === "quiz") {
     return `
       <div class="answer-grid">
+        ${modeNote}
         <section class="answer-section answer-section-wide">
           <h4>🧪 اختبار قصير</h4>
           <p>${response.finalAnswer}</p>
@@ -1124,6 +1194,7 @@ function formatAssistantSections(response) {
   if (response.mode === "summary") {
     return `
       <div class="answer-grid">
+        ${modeNote}
         <section class="answer-section">
           <h4>✅ الملخص</h4>
           <p>${response.finalAnswer}</p>
@@ -1147,6 +1218,7 @@ function formatAssistantSections(response) {
   if (response.answerMode === "mcq" || response.answerMode === "truefalse") {
     return `
       <div class="answer-grid">
+        ${modeNote}
         <section class="answer-section answer-section-wide">
           <h4>${response.answerMode === "truefalse" ? "✅ الحكم النهائي" : "✅ الخيار الصحيح"}</h4>
           <p>${response.finalAnswer}</p>
@@ -1155,12 +1227,46 @@ function formatAssistantSections(response) {
           <h4>📘 التحليل المختصر</h4>
           <p>${response.explanation}</p>
         </section>
+        <section class="answer-section answer-section-wide">
+          <h4>🧩 نوع السؤال</h4>
+          <p>${response.questionType || "اختياري"}</p>
+        </section>
+      </div>
+    `;
+  }
+
+  if (response.displayMode === "quick") {
+    return `
+      <div class="answer-grid">
+        ${modeNote}
+        <section class="answer-section answer-section-wide">
+          <h4>✅ الجواب المختصر</h4>
+          <p>${response.finalAnswer}</p>
+        </section>
+        <section class="answer-section answer-section-wide">
+          <h4>📘 توضيح سريع</h4>
+          <p>${response.explanation}</p>
+        </section>
+        <section class="answer-section answer-section-wide">
+          <h4>🧩 نوع السؤال</h4>
+          <p>${response.questionType || "سؤال أكاديمي"}</p>
+        </section>
+        <section class="answer-section answer-section-wide">
+          <div class="practice-cta">
+            <p>هل تريد التحويل إلى شرح تعليمي أو اختبار سريع على نفس الدرس؟</p>
+            <div class="inline-actions">
+              <button class="inline-action-btn" type="button" data-fill-prompt="اشرح ${response.lesson || "هذا الدرس"} شرحًا تعليميًا كاملًا في ${response.subject || (subjectSelect?.value || "المادة الحالية")}">اشرحه تعليميًا</button>
+              <button class="inline-action-btn" type="button" data-fill-prompt="اختبرني في ${response.lesson || "هذا الدرس"} بسؤال واحد">${selectedResponseMode === "quick" ? "اختبار سريع" : "ابدأ اختبارًا قصيرًا"}</button>
+            </div>
+          </div>
+        </section>
       </div>
     `;
   }
 
   return `
     <div class="answer-grid">
+      ${modeNote}
       <section class="answer-section">
         <h4>✅ الإجابة</h4>
         <p>${response.finalAnswer}</p>
@@ -1184,6 +1290,19 @@ function formatAssistantSections(response) {
       <section class="answer-section answer-section-wide">
         <h4>📚 الربط بالمنهج</h4>
         <p>${response.curriculumLink}</p>
+      </section>
+      <section class="answer-section answer-section-wide">
+        <h4>🧩 نوع السؤال</h4>
+        <p>${response.questionType || "سؤال أكاديمي"}</p>
+      </section>
+      <section class="answer-section answer-section-wide">
+        <div class="practice-cta">
+          <p>هل تريد 3 أسئلة تدريبية أو اختبارًا قصيرًا على نفس الدرس؟</p>
+          <div class="inline-actions">
+            <button class="inline-action-btn" type="button" data-fill-prompt="اكتب لي 3 أسئلة تدريبية على ${response.lesson || "هذا الدرس"} في ${response.subject || (subjectSelect?.value || "المادة الحالية")}">3 أسئلة تدريبية</button>
+            <button class="inline-action-btn" type="button" data-fill-prompt="اختبرني في ${response.lesson || "هذا الدرس"} بسؤال واحد">${selectedResponseMode === "quick" ? "اختبار سريع" : "ابدأ اختبارًا قصيرًا"}</button>
+          </div>
+        </div>
       </section>
     </div>
   `;
@@ -1225,7 +1344,7 @@ function renderLearnedMemory() {
 function renderHistory() {
   if (!historyList) return;
   if (!isLoggedIn()) {
-    historyList.innerHTML = `<div class="history-item"><strong>التاريخ محفوظ للمستخدمين المسجلين</strong><span>يمكنك استخدام الشات الآن، لكن سجل المحادثات سيبدأ الحفظ بعد تسجيل الدخول.</span></div>`;
+    historyList.innerHTML = "";
     return;
   }
   if (!chatHistory.length) {
@@ -1258,10 +1377,25 @@ function renderInsights() {
     return;
   }
   const topSubject = Object.entries(analytics.subjects || {}).sort((a, b) => b[1] - a[1])[0]?.[0];
+  const weakSubject = Object.entries(analytics.subjects || {}).sort((a, b) => a[1] - b[1])[0]?.[0];
+  const recentLesson = aiLogs.find((item) => item.lesson || item.subject);
+  const level = Math.max(1, Math.floor((analytics.totalMessages || 0) / 4) + 1);
+  const badges = [];
+  if ((analytics.totalMessages || 0) >= 3) badges.push("مستكشف الدروس");
+  if ((analytics.likes || 0) >= 2) badges.push("متفاعل");
+  if ((analytics.totalMessages || 0) >= 8) badges.push("مجتهد");
+
   insightsList.innerHTML = [
     topSubject
       ? `أفضل تفاعل حاليًا في مادة ${topSubject}.`
       : "ابدأ أول سؤال لتظهر قراءة أولية لمستواك.",
+    `مستواك الحالي: المستوى ${level}${badges.length ? ` • الشارات: ${badges.join("، ")}` : ""}.`,
+    recentLesson
+      ? `آخر درس بارز لديك: ${recentLesson.lesson || recentLesson.subject}.`
+      : "سيظهر آخر درس راجعته هنا بعد الاستخدام.",
+    weakSubject
+      ? `اقتراح مراجعة: راجع ${weakSubject} بمثالين إضافيين لتثبيت الفهم.`
+      : "سيظهر اقتراح مراجعة مخصص بعد عدة أسئلة.",
     analytics.totalMessages
       ? `أرسلت ${analytics.totalMessages} رسالة تعليمية حتى الآن.`
       : "تحليل الطالب يظهر هنا بعد أول استخدام فعلي.",
@@ -1402,6 +1536,7 @@ function quickSolve() {
 }
 
 function saveHistory(question, subject) {
+  if (!isLoggedIn()) return;
   chatHistory.unshift({ question, subject, time: Date.now() });
   chatHistory = chatHistory.slice(0, 12);
   saveChatHistory();
@@ -1504,6 +1639,7 @@ async function handleSubmit(event) {
     question: question || "سؤال مرفق",
     intent: intent.type,
     subject: route.detected_subject || subjectSelect?.value || "عام",
+    lesson: responseForLog?.lesson || lessonInput?.value.trim() || "",
     responseMode: responseForLog?.mode || route.response_mode || intent.type,
     usedAttachments: hasAttachments,
     imageType: route.image_type,
@@ -1522,12 +1658,40 @@ function handleMessageInteractions(event) {
   const actionButton = event.target.closest("[data-action]");
   const likeButton = event.target.closest("[data-like]");
   const dislikeButton = event.target.closest("[data-dislike]");
+  const refineButton = event.target.closest("[data-refine]");
 
   if (fillButton) {
     setPromptValue(fillButton.getAttribute("data-fill-prompt") || "");
     const subject = fillButton.getAttribute("data-subject-fill");
     if (subject && subjectSelect) subjectSelect.value = subject;
     return;
+  }
+
+  if (refineButton) {
+    const card = refineButton.closest(".message");
+    const lesson = card?.dataset.lesson || "هذا الدرس";
+    const subject = card?.dataset.subject || subjectSelect?.value || "المادة الحالية";
+    const refine = refineButton.getAttribute("data-refine");
+
+    if (refine === "simple") {
+      setPromptValue(`اشرح ${lesson} في ${subject} كأني مبتدئ جدًا وبأسلوب مبسط.`);
+      return;
+    }
+
+    if (refine === "short") {
+      setPromptValue(`لخص ${lesson} في ${subject} باختصار شديد وفي نقاط قليلة.`);
+      return;
+    }
+
+    if (refine === "steps") {
+      setPromptValue(`اشرح ${lesson} في ${subject} خطوة خطوة مع ترتيب واضح.`);
+      return;
+    }
+
+    if (refine === "quiz") {
+      setPromptValue(`اختبرني في ${lesson} من مادة ${subject} بسؤال واحد ثم انتظر إجابتي.`);
+      return;
+    }
   }
 
   if (actionButton) {
@@ -1634,6 +1798,9 @@ function bootstrap() {
   subjectSelect?.addEventListener("change", updateSelectionSummary);
   termSelect?.addEventListener("change", updateSelectionSummary);
   lessonInput?.addEventListener("input", updateSelectionSummary);
+  responseModeButtons.forEach((button) => {
+    button.addEventListener("click", () => applyResponseMode(button.getAttribute("data-response-mode") || "educational"));
+  });
 
   startChatButton?.addEventListener("click", startChat);
   quickSolveButton?.addEventListener("click", quickSolve);
@@ -1658,6 +1825,7 @@ function bootstrap() {
   window.addEventListener("scroll", syncScrollTopButton, { passive: true });
   scrollTopButton?.addEventListener("click", () => window.scrollTo({ top: 0, behavior: "smooth" }));
   bindStarterButtons();
+  applyResponseMode(selectedResponseMode);
   syncScrollTopButton();
 }
 
