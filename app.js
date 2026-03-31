@@ -825,10 +825,11 @@ function addMessage(type, author, body, options = {}) {
     <div class="message-body">${body}</div>
   `;
 
-  if (type === "assistant" && !options.pending) {
+  if (type === "assistant" && !options.pending && options.enableTools) {
     const tools = document.createElement("div");
     tools.className = "message-tools";
     tools.innerHTML = `
+      <div class="message-tools-label">هل تريد تبسيط الإجابة أو متابعة التدريب؟</div>
       <button class="mini-btn" type="button" data-refine="simple">بسّط أكثر</button>
       <button class="mini-btn" type="button" data-refine="short">باختصار</button>
       <button class="mini-btn" type="button" data-refine="steps">اشرحها خطوة خطوة</button>
@@ -1505,6 +1506,11 @@ function setPromptValue(value, subject = "") {
   promptInput.focus();
 }
 
+function sendPresetPrompt(value, subject = "") {
+  setPromptValue(value, subject);
+  form?.requestSubmit();
+}
+
 function openImageUpload() {
   if (!isLoggedIn()) {
     addMessage(
@@ -1634,7 +1640,18 @@ async function handleSubmit(event) {
     pendingNode.remove();
   }
 
-  addMessage("assistant", "ملم يحل", body, { sources });
+  addMessage("assistant", "ملم يحل", body, {
+    sources,
+    enableTools: route.response_mode === "academic_solve" && Boolean(responseForLog),
+    metadata: responseForLog
+      ? {
+          subject: responseForLog.subject,
+          lesson: responseForLog.lesson,
+          questionType: responseForLog.questionType,
+          mode: responseForLog.mode
+        }
+      : undefined
+  });
   aiLogs.unshift({
     question: question || "سؤال مرفق",
     intent: intent.type,
@@ -1674,22 +1691,22 @@ function handleMessageInteractions(event) {
     const refine = refineButton.getAttribute("data-refine");
 
     if (refine === "simple") {
-      setPromptValue(`اشرح ${lesson} في ${subject} كأني مبتدئ جدًا وبأسلوب مبسط.`);
+      sendPresetPrompt(`اشرح ${lesson} في ${subject} كأني مبتدئ جدًا وبأسلوب مبسط.`, subject);
       return;
     }
 
     if (refine === "short") {
-      setPromptValue(`لخص ${lesson} في ${subject} باختصار شديد وفي نقاط قليلة.`);
+      sendPresetPrompt(`لخص ${lesson} في ${subject} باختصار شديد وفي نقاط قليلة.`, subject);
       return;
     }
 
     if (refine === "steps") {
-      setPromptValue(`اشرح ${lesson} في ${subject} خطوة خطوة مع ترتيب واضح.`);
+      sendPresetPrompt(`اشرح ${lesson} في ${subject} خطوة خطوة مع ترتيب واضح.`, subject);
       return;
     }
 
     if (refine === "quiz") {
-      setPromptValue(`اختبرني في ${lesson} من مادة ${subject} بسؤال واحد ثم انتظر إجابتي.`);
+      sendPresetPrompt(`اختبرني في ${lesson} من مادة ${subject} بسؤال واحد ثم انتظر إجابتي.`, subject);
       return;
     }
   }
