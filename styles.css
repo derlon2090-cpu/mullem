@@ -296,6 +296,42 @@ textarea {
   gap: 10px;
 }
 
+.stage-cards {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.stage-card {
+  text-align: right;
+  border: 1px solid rgba(34, 197, 94, 0.14);
+  background: rgba(255, 255, 255, 0.96);
+  color: var(--muted);
+  border-radius: 22px;
+  padding: 14px 16px;
+  cursor: pointer;
+  transition: 180ms ease;
+  display: grid;
+  gap: 6px;
+}
+
+.stage-card strong {
+  color: var(--brand-strong);
+  font-size: 1rem;
+}
+
+.stage-card span,
+.stage-card small {
+  color: var(--muted);
+  line-height: 1.7;
+}
+
+.stage-card.active {
+  background: linear-gradient(180deg, rgba(34, 197, 94, 0.12), rgba(255, 255, 255, 0.98));
+  border-color: rgba(34, 197, 94, 0.3);
+  box-shadow: 0 12px 24px rgba(34, 197, 94, 0.12);
+}
+
 .stage-chip {
   border: 1px solid rgba(34, 197, 94, 0.14);
   background: rgba(255, 255, 255, 0.96);
@@ -2196,6 +2232,10 @@ body.user-logged-in .selectors {
   .subject-pills,
   .stage-switch {
     flex-direction: column;
+  }
+
+  .stage-cards {
+    grid-template-columns: 1fr;
   }
 
   .solve-mode-row {

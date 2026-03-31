@@ -82,17 +82,11 @@
     const isLogged = Boolean(activeUser);
     document.body.classList.toggle("user-logged-in", isLogged);
 
-    if (isLogged && gradeSelect && activeUser.grade) {
+    if (gradeSelect && activeUser?.grade) {
       gradeSelect.value = activeUser.grade;
-      gradeSelect.disabled = true;
-      gradeSelect.closest(".field")?.classList?.add("field-disabled");
-    } else if (gradeSelect) {
-      gradeSelect.disabled = false;
     }
 
-    if (isLogged && stageSwitch) {
-      stageSwitch.style.display = "none";
-    } else if (stageSwitch) {
+    if (stageSwitch) {
       stageSwitch.style.display = "";
     }
 
@@ -104,12 +98,12 @@
       wrapper.className = "subject-runtime-wrap";
       subjectSelect.parentNode?.insertBefore(wrapper, subjectSelect);
       wrapper.appendChild(subjectSelect);
-      wrapper.classList.toggle("subject-runtime-hidden", isLogged);
-      wrapper.classList.toggle("subject-runtime-visible", !isLogged);
+      wrapper.classList.toggle("subject-runtime-hidden", false);
+      wrapper.classList.toggle("subject-runtime-visible", true);
     }
 
     if (focusSubjectButton) {
-      focusSubjectButton.textContent = isLogged ? "تغيير المادة" : "اختيار مادة";
+      focusSubjectButton.textContent = "تغيير المادة";
       focusSubjectButton.onclick = () => {
         const wrapper = subjectSelect?.closest(".subject-runtime-wrap");
         if (wrapper) {
@@ -126,8 +120,35 @@
       const lessonLabel = lessonInput?.value?.trim() || "الدرس غير محدد";
       selectionSummary.textContent = isLogged
         ? `${gradeLabel} · ${termLabel} · ${lessonLabel}`
-        : (selectionSummary.textContent || "ابدأ أول محادثة لك الآن.");
+        : "ابدأ أول محادثة لك الآن.";
     }
+  }
+
+  function clearGuestWorkspace() {
+    const hasActiveUser = typeof getActiveUser === "function" && Boolean(getActiveUser());
+    if (hasActiveUser) return;
+    const guestKeys = [
+      "mlm_liked_answers_guest",
+      "mlm_chat_history_guest",
+      "mlm_analytics_guest",
+      "mlm_feedback_log_guest",
+      "mlm_ai_logs_guest",
+      "mlm_chat_sessions_guest",
+      "mlm_active_session_guest"
+    ];
+    guestKeys.forEach((key) => localStorage.removeItem(key));
+
+    if (typeof likedAnswers !== "undefined") likedAnswers = [];
+    if (typeof chatHistory !== "undefined") chatHistory = [];
+    if (typeof analytics !== "undefined") analytics = { totalMessages: 0, xpUsed: 0, subjects: {}, likes: 0, dislikes: 0 };
+    if (typeof feedbackLog !== "undefined") feedbackLog = [];
+    if (typeof aiLogs !== "undefined") aiLogs = [];
+    if (typeof chatSessions !== "undefined") chatSessions = [];
+    if (typeof activeSessionId !== "undefined") activeSessionId = null;
+    if (typeof renderHistory === "function") renderHistory();
+    if (typeof renderInsights === "function") renderInsights();
+    if (typeof renderSessionList === "function") renderSessionList();
+    if (typeof resetConversationView === "function") resetConversationView();
   }
 
   function isUserNearBottom() {
@@ -506,6 +527,7 @@
     if (typeof updateXpBalance === "function") updateXpBalance();
   }
 
+  clearGuestWorkspace();
   applyUserStudyContext();
   document.addEventListener("submit", runtimeHandleSubmit, true);
 })();
