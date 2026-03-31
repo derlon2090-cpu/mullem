@@ -8,6 +8,7 @@ const storageKeys = {
   feedback: "mlm_feedback_log",
   aiLogs: "mlm_ai_logs",
   responseMode: "mlm_response_mode",
+  solveMode: "mlm_solve_mode",
   resumePrompt: "mlm_resume_prompt"
 };
 
@@ -238,6 +239,7 @@ const focusSubjectButton = document.querySelector("[data-focus-subject]");
 const clearChatButton = document.querySelector("[data-clear-chat]");
 const scrollTopButton = document.querySelector("[data-scroll-top]");
 const responseModeButtons = document.querySelectorAll("[data-response-mode]");
+const solveModeButtons = document.querySelectorAll("[data-solve-mode]");
 
 let attachments = [];
 let clarificationCursor = 0;
@@ -247,6 +249,7 @@ let analytics = createEmptyAnalytics();
 let feedbackLog = [];
 let aiLogs = [];
 let selectedResponseMode = localStorage.getItem(storageKeys.responseMode) || "educational";
+let selectedSolveMode = localStorage.getItem(storageKeys.solveMode) || "quick";
 
 function loadJson(key, fallback) {
   try {
@@ -433,6 +436,17 @@ function applyResponseMode(mode) {
   });
 }
 
+function applySolveMode(mode) {
+  selectedSolveMode = mode === "structured" ? "structured" : "quick";
+  localStorage.setItem(storageKeys.solveMode, selectedSolveMode);
+  solveModeButtons.forEach((button) => {
+    button.classList.toggle("active", button.getAttribute("data-solve-mode") === selectedSolveMode);
+  });
+  document.body.classList.toggle("solve-mode-structured", selectedSolveMode === "structured");
+  document.body.classList.toggle("solve-mode-quick", selectedSolveMode === "quick");
+  updateSelectionSummary();
+}
+
 function syncScrollTopButton() {
   if (!scrollTopButton) return;
   scrollTopButton.classList.toggle("visible", window.scrollY > 240);
@@ -552,21 +566,22 @@ function image_analyzer(attachedFiles, userText = "") {
   return { image_type: "unclear_image", extracted_text: "", confidence: 0.4 };
 }
 
-function curriculum_scope_checker({ userText, selectedGrade, selectedSubject, imageMeta }) {
+function curriculum_scope_checker({ userText, selectedGrade, selectedSubject, imageMeta, solveMode = "quick" }) {
   const sourceText = `${userText || ""} ${imageMeta?.extracted_text || ""}`;
   const detectedSubject = detectSubjectFromContent(sourceText);
   const detectedGradeLevel = detectGradeLevel(sourceText);
   const selectedStage = getSelectedStageLabel(selectedGrade);
+  const structured = solveMode === "structured";
 
   if (!detectedSubject) {
     return {
       detected_subject: "",
       detected_grade_level: detectedGradeLevel,
-      scope_status: "subject_unknown"
+      scope_status: structured && selectedSubject ? "subject_unknown" : "auto_detect_pending"
     };
   }
 
-  if (selectedSubject && detectedSubject && detectedSubject !== selectedSubject) {
+  if (structured && selectedSubject && detectedSubject && detectedSubject !== selectedSubject) {
     return {
       detected_subject: detectedSubject,
       detected_grade_level: detectedGradeLevel,
@@ -574,7 +589,7 @@ function curriculum_scope_checker({ userText, selectedGrade, selectedSubject, im
     };
   }
 
-  if (detectedGradeLevel && selectedStage && detectedGradeLevel !== selectedStage) {
+  if (structured && detectedGradeLevel && selectedStage && detectedGradeLevel !== selectedStage) {
     return {
       detected_subject: detectedSubject,
       detected_grade_level: detectedGradeLevel,
@@ -585,21 +600,23 @@ function curriculum_scope_checker({ userText, selectedGrade, selectedSubject, im
   return {
     detected_subject: detectedSubject,
     detected_grade_level: detectedGradeLevel,
-    scope_status: "matched"
+    scope_status: structured ? "matched" : "auto_detected"
   };
 }
 
-function request_router({ user_text, uploaded_files, selected_grade, selected_subject, user_profile }) {
+function request_router({ user_text, uploaded_files, selected_grade, selected_subject, user_profile, selected_solve_mode = "quick" }) {
   const input_type = determineInputType(user_text, uploaded_files);
   const image_type = input_type.includes("image")
     ? image_analyzer(uploaded_files, user_text)
     : { image_type: "none", extracted_text: "", confidence: 0 };
   const intent = intent_router(`${user_text || ""} ${image_type.extracted_text || ""}`, uploaded_files?.length > 0);
+  const quickMode = selected_solve_mode !== "structured";
   const scope = curriculum_scope_checker({
     userText: user_text,
     selectedGrade: selected_grade || user_profile?.grade || "",
-    selectedSubject: selected_subject || "",
-    imageMeta: image_type
+    selectedSubject: quickMode ? "" : (selected_subject || ""),
+    imageMeta: image_type,
+    solveMode: quickMode ? "quick" : "structured"
   });
 
   let response_mode = "academic_solve";
@@ -609,7 +626,7 @@ function request_router({ user_text, uploaded_files, selected_grade, selected_su
   else if (image_type.image_type === "non_educational_image" || image_type.image_type === "document_non_educational") response_mode = "reject_out_of_scope_image";
   else if (image_type.image_type === "unclear_image") response_mode = "ask_clearer_upload";
   else if (image_type.image_type === "educational_page" && !user_text.trim()) response_mode = "content_interpretation";
-  else if (scope.scope_status === "subject_mismatch" || scope.scope_status === "grade_mismatch" || scope.scope_status === "subject_unknown") response_mode = "ask_for_confirmation";
+  else if (!quickMode && (scope.scope_status === "subject_mismatch" || scope.scope_status === "grade_mismatch" || scope.scope_status === "subject_unknown")) response_mode = "ask_for_confirmation";
 
   return {
     input_type,
@@ -619,7 +636,8 @@ function request_router({ user_text, uploaded_files, selected_grade, selected_su
     detected_subject: scope.detected_subject,
     detected_grade_level: scope.detected_grade_level,
     scope_status: scope.scope_status,
-    response_mode
+    response_mode,
+    quick_mode: quickMode
   };
 }
 
@@ -1618,7 +1636,8 @@ async function handleSubmit(event) {
     uploaded_files: attachments,
     selected_grade: gradeSelect?.value || activeUser?.grade || "",
     selected_subject: subjectSelect?.value || "",
-    user_profile: activeUser || {}
+    user_profile: activeUser || {},
+    selected_solve_mode: selectedSolveMode
   });
   const intent = route.intent;
   if (hasAttachments && !isLoggedIn()) {
@@ -1671,17 +1690,20 @@ async function handleSubmit(event) {
   } else if (intent.type === "help") {
     body = formatSimpleReply(createHelpResponse());
   } else if (needsClarification(question, intent, hasAttachments)) {
-    body = formatClarificationReply(createClarificationResponse(question, intent));
+    body = formatClarificationReply(createClarificationResponse(question, intent, route));
   } else {
-    const response = createAcademicResponse(question || route.extracted_text || "حل السؤال من الملفات المرفقة", intent);
+    const response = createAcademicResponse(question || route.extracted_text || "حل السؤال من الملفات المرفقة", intent, {
+      preferredSubject: route.detected_subject || (selectedSolveMode === "structured" ? (subjectSelect?.value || "") : "")
+    });
     responseForLog = response;
     body = formatAssistantSections(response);
     sources = buildSources();
     analytics.totalMessages += 1;
     analytics.xpUsed += usageCost;
-    analytics.subjects[subjectSelect?.value || "عام"] = (analytics.subjects[subjectSelect?.value || "عام"] || 0) + 1;
+    analytics.subjects[response.subject || route.detected_subject || subjectSelect?.value || "عام"] =
+      (analytics.subjects[response.subject || route.detected_subject || subjectSelect?.value || "عام"] || 0) + 1;
     saveAnalytics();
-    saveHistory(question || "سؤال مرفق", subjectSelect?.value || "عام");
+    saveHistory(question || "سؤال مرفق", response.subject || route.detected_subject || subjectSelect?.value || "عام");
   }
 
   if (pendingNode) {
@@ -1835,6 +1857,299 @@ function bindStarterButtons() {
   });
 }
 
+function needsClarification(message, intent, hasAttachments = false) {
+  if (hasAttachments) return false;
+  if (intent?.type === "chat" || intent?.type === "help") return false;
+  const normalized = normalizeText(message);
+  const tokens = tokenize(message);
+  const generic = new Set(["حل", "حلها", "اشرح", "هذا", "ذي", "وش الحل", "سؤال", "اختبار", "أسئلة"]);
+  const specific = /احسب|اشرح|حدد|صح|خطأ|اختر|قارن|فسر|علل|صحح|ترجم|ما|كيف|لماذا|\d|دائرة|قانون|معادلة|رابطة|نيوتن|محيط|مساحة|درس|اختبار|سؤال/i;
+
+  if (intent?.type === "generate_questions" || intent?.type === "quiz") {
+    return !(/رياضيات|علوم|فيزياء|كيمياء|عربي|إنجليزي|أحياء|اجتماعيات/.test(normalized)) && tokens.length < 3;
+  }
+
+  if (/صواب|صح|خطأ|اختيار|اختر|ضع دائرة/.test(normalized) && tokens.length >= 2) return false;
+  if (specific.test(normalized) && tokens.length >= 2) return false;
+  if (tokens.length >= 3) return false;
+  return generic.has(normalized) || normalized.length <= 3 || intent?.type === "unclear";
+}
+
+function createClarificationResponse(message, intent, route = null) {
+  const normalized = normalizeText(message);
+  const variants = [
+    "أقدر أساعدك مباشرة، لكن ينقصني تفصيل صغير واحد فقط.",
+    "أفهم الفكرة العامة، وأحتاج منك توضيحًا قصيرًا حتى أرتب الجواب بدقة.",
+    "السؤال قريب من الوضوح، وأحتاج تحديدًا بسيطًا قبل أن أكمل الحل."
+  ];
+  const intro = variants[clarificationCursor % variants.length];
+  clarificationCursor += 1;
+
+  if (/(هذا|ذي|وش الحل)/.test(normalized)) {
+    return {
+      intro,
+      prompt: "هل يمكنك كتابة السؤال كاملًا أو رفع صورة واضحة له؟",
+      actions: [
+        { label: "رفع صورة السؤال", action: "upload-image" },
+        { label: "اكتب السؤال كاملًا", fill: "اكتب السؤال كاملًا هنا مع المعطيات والمطلوب." }
+      ]
+    };
+  }
+
+  if (/اشرح/.test(normalized)) {
+    return {
+      intro,
+      prompt: route?.detected_subject
+        ? `يبدو أن السؤال أقرب إلى ${route.detected_subject}. هل تريد شرحًا مبسطًا أم شرحًا تفصيليًا؟`
+        : "هل تريد شرحًا مبسطًا أم شرحًا تفصيليًا؟",
+      actions: [
+        { label: "شرح مبسط", fill: `${message} شرحًا مبسطًا` },
+        { label: "شرح تفصيلي", fill: `${message} شرحًا تفصيليًا مع مثال` }
+      ]
+    };
+  }
+
+  if (/صواب|صح|خطأ|اختيار|اختر|ضع دائرة/.test(normalized)) {
+    return {
+      intro,
+      prompt: route?.detected_subject
+        ? `يبدو أن السؤال من ${route.detected_subject}. أرسل العبارات كاملة وسأحدد الصحيح مباشرة.`
+        : "أرسل العبارات أو الخيارات كاملة، وسأحللها وأحدد الجواب الصحيح مباشرة.",
+      actions: [
+        { label: "أكمل كتابة السؤال", fill: "اكتب العبارات أو الخيارات كاملة هنا..." },
+        { label: "رفع صورة السؤال", action: "upload-image" }
+      ]
+    };
+  }
+
+  if (intent?.type === "generate_questions") {
+    return {
+      intro,
+      prompt: route?.detected_subject
+        ? `هل تريدني أن أكتب لك أسئلة في ${route.detected_subject}؟`
+        : "أي مادة تريدني أن أولد لك منها أسئلة؟",
+      actions: [
+        { label: "أسئلة رياضيات", fill: "اكتب لي 3 أسئلة رياضيات" },
+        { label: "أسئلة كيمياء", fill: "اكتب لي 3 أسئلة كيمياء" }
+      ]
+    };
+  }
+
+  if (intent?.type === "quiz") {
+    return {
+      intro,
+      prompt: route?.detected_subject
+        ? `هل تريد أن أبدأ اختبارًا قصيرًا في ${route.detected_subject}؟`
+        : "في أي مادة تريد أن أبدأ لك اختبارًا قصيرًا؟",
+      actions: [
+        { label: "اختبار علوم", fill: "اختبرني في العلوم" },
+        { label: "اختبار عربي", fill: "اختبرني في اللغة العربية" }
+      ]
+    };
+  }
+
+  return {
+    intro,
+    prompt: route?.detected_subject
+      ? `هل تقصد ${route.detected_subject}؟ إذا نعم أكمل السؤال قليلًا وسأتابع الحل مباشرة.`
+      : "اكتب المطلوب بشكل مباشر أكثر، أو أرسل صورة السؤال كاملة وسأتابع معك.",
+    actions: [
+      { label: "اكتب السؤال كاملًا", fill: "اكتب السؤال كاملًا مع المطلوب." },
+      { label: "رفع صورة السؤال", action: "upload-image" }
+    ]
+  };
+}
+
+function curriculum_scope_checker({ userText, selectedGrade, selectedSubject, imageMeta, solveMode = "quick" }) {
+  const sourceText = `${userText || ""} ${imageMeta?.extracted_text || ""}`;
+  const detectedSubject = detectSubjectFromContent(sourceText);
+  const detectedGradeLevel = detectGradeLevel(sourceText);
+  const selectedStage = getSelectedStageLabel(selectedGrade);
+  const structured = solveMode === "structured";
+
+  if (!detectedSubject) {
+    return {
+      detected_subject: "",
+      detected_grade_level: detectedGradeLevel,
+      scope_status: structured && selectedSubject ? "subject_unknown" : "auto_detect_pending"
+    };
+  }
+
+  if (structured && selectedSubject && detectedSubject !== selectedSubject) {
+    return {
+      detected_subject: detectedSubject,
+      detected_grade_level: detectedGradeLevel,
+      scope_status: "subject_mismatch"
+    };
+  }
+
+  if (structured && detectedGradeLevel && selectedStage && detectedGradeLevel !== selectedStage) {
+    return {
+      detected_subject: detectedSubject,
+      detected_grade_level: detectedGradeLevel,
+      scope_status: "grade_mismatch"
+    };
+  }
+
+  return {
+    detected_subject: detectedSubject,
+    detected_grade_level: detectedGradeLevel,
+    scope_status: structured ? "matched" : "auto_detected"
+  };
+}
+
+function request_router({ user_text, uploaded_files, selected_grade, selected_subject, user_profile, selected_solve_mode = "quick" }) {
+  const input_type = determineInputType(user_text, uploaded_files);
+  const image_type = input_type.includes("image")
+    ? image_analyzer(uploaded_files, user_text)
+    : { image_type: "none", extracted_text: "", confidence: 0 };
+  const intent = intent_router(`${user_text || ""} ${image_type.extracted_text || ""}`, uploaded_files?.length > 0);
+  const quickMode = selected_solve_mode !== "structured";
+  const scope = curriculum_scope_checker({
+    userText: user_text,
+    selectedGrade: selected_grade || user_profile?.grade || "",
+    selectedSubject: quickMode ? "" : (selected_subject || ""),
+    imageMeta: image_type,
+    solveMode: quickMode ? "quick" : "structured"
+  });
+
+  let response_mode = "academic_solve";
+
+  if (input_type === "file_only" && !user_text.trim()) response_mode = "content_interpretation";
+  if (image_type.image_type === "logo_or_branding") response_mode = "reject_logo_image";
+  else if (image_type.image_type === "non_educational_image" || image_type.image_type === "document_non_educational") response_mode = "reject_out_of_scope_image";
+  else if (image_type.image_type === "unclear_image") response_mode = "ask_clearer_upload";
+  else if (image_type.image_type === "educational_page" && !user_text.trim()) response_mode = "content_interpretation";
+  else if (!quickMode && (scope.scope_status === "subject_mismatch" || scope.scope_status === "grade_mismatch" || scope.scope_status === "subject_unknown")) response_mode = "ask_for_confirmation";
+
+  return {
+    input_type,
+    intent,
+    image_type: image_type.image_type,
+    extracted_text: image_type.extracted_text,
+    detected_subject: scope.detected_subject,
+    detected_grade_level: scope.detected_grade_level,
+    scope_status: scope.scope_status,
+    response_mode,
+    quick_mode: quickMode
+  };
+}
+
+function createImageRouterResponse(route) {
+  if (route.response_mode === "reject_logo_image") {
+    return formatSimpleReply("يبدو أن الصورة المرفقة ليست سؤالًا دراسيًا، بل أقرب إلى شعار أو تصميم. إذا كنت تريد المساعدة التعليمية، أرسل صورة السؤال أو اكتبه نصًا.");
+  }
+
+  if (route.response_mode === "reject_out_of_scope_image") {
+    return formatSimpleReply("الصورة المرفقة لا تبدو ضمن نطاق التعليم. تأكد من إرسال صورة سؤال أو صفحة دراسية واضحة.");
+  }
+
+  if (route.response_mode === "ask_clearer_upload") {
+    return formatSimpleReply("تعذر قراءة محتوى الصورة بشكل واضح. يرجى إعادة رفع صورة أوضح أو كتابة السؤال نصًا.");
+  }
+
+  if (route.response_mode === "ask_for_confirmation") {
+    if (route.scope_status === "subject_mismatch") {
+      return formatSimpleReply(`يبدو أن هذا السؤال أقرب إلى مادة ${route.detected_subject}. هل تريد أن أتابع على هذا الأساس، أم تفضل تغيير المادة المحددة أولًا؟`);
+    }
+    if (route.scope_status === "grade_mismatch") {
+      return formatSimpleReply("يبدو أن السؤال من مستوى دراسي مختلف عن الصف المحدد لديك. يمكنك تعديل الصف للحصول على جواب أدق، أو أتابع الحل كتقدير أولي.");
+    }
+    return formatSimpleReply(route.detected_subject ? `هل تقصد ${route.detected_subject}؟ إذا نعم أكمل الحل مباشرة، أو غيّر المادة يدويًا.` : "لم تتضح المادة بشكل كافٍ بعد. اكتب السؤال كاملًا أو أرسل صورة أوضح وسأحاول تحديدها تلقائيًا.");
+  }
+
+  if (route.response_mode === "content_interpretation") {
+    return formatClarificationReply({
+      intro: "تم التعرف على الصورة كمحتوى تعليمي.",
+      prompt: "هل تريد شرح المحتوى، تلخيصه، أم حل الأسئلة الموجودة فيه؟",
+      actions: [
+        { label: "شرح المحتوى", fill: "اشرح محتوى الصفحة التعليمية المرفقة" },
+        { label: "تلخيص الصفحة", fill: "لخص الصفحة التعليمية المرفقة" },
+        { label: "حل الأسئلة", fill: "حل الأسئلة الموجودة في الصفحة التعليمية المرفقة" }
+      ]
+    });
+  }
+
+  return formatSimpleReply("تم تجهيز السؤال للتحليل وسأتابع الحل الآن.");
+}
+
+function createAcademicResponse(question, intent, options = {}) {
+  const context = retrieveCurriculumContext(question, options.preferredSubject || "");
+  const questionType = detectQuestionType(question);
+  const objective = solveObjectiveQuestion(question);
+  if (objective) {
+    return reviewResponse(intent, {
+      ...objective,
+      mode: "solve",
+      questionType,
+      subject: context.subject,
+      lesson: context.lesson,
+      curriculumLink: `تم تحليل السؤال على أنه ${questionType} في ${context.subject}.`
+    });
+  }
+
+  const math = solveMathQuestion(question);
+  if (math) {
+    return reviewResponse(intent, {
+      ...math,
+      mode: "solve",
+      questionType,
+      subject: context.subject,
+      lesson: context.lesson,
+      curriculumLink: `تم ربط السؤال بموضوع ${context.lesson} في ${context.subject}.`
+    });
+  }
+
+  return reviewResponse(intent, {
+    mode: intent.type === "explain" ? "explain" : intent.type,
+    questionType,
+    subject: context.subject,
+    lesson: context.lesson,
+    finalAnswer: intent.type === "generate_questions"
+      ? `هذه أسئلة تدريبية مقترحة في ${context.subject}.`
+      : intent.type === "quiz"
+        ? "سأبدأ معك الآن بسؤال واحد على نفس الموضوع."
+        : `هذا هو الجواب الأقرب بناءً على تحليل السؤال في ${context.subject}.`,
+    explanation:
+      context.entry?.explanation ||
+      `تم تحليل السؤال تلقائيًا وتقدير أنه يندرج تحت ${context.subject}${context.lesson && context.lesson !== "غير محدد" ? `، وموضوعه الأقرب هو ${context.lesson}` : ""}.`,
+    steps: context.entry?.steps || [
+      "تحليل الكلمات المفتاحية في السؤال.",
+      "تحديد المادة ونوع السؤال تلقائيًا.",
+      "بناء الجواب الأقرب ثم مراجعته قبل الإرسال."
+    ],
+    mistakes: context.entry?.mistakes || [
+      "الخلط بين المطلوب والشرح العام.",
+      "قراءة السؤال بسرعة دون التركيز على الكلمات المفتاحية."
+    ],
+    similar: context.entry?.similar || `اكتب سؤالًا مشابهًا في ${context.subject} وسأعطيك تدريبًا إضافيًا.`,
+    intro: intent.type === "generate_questions" ? `هذه أسئلة مقترحة في ${context.subject}.` : undefined,
+    questions: intent.type === "generate_questions" ? generateCurriculumQuestions(context) : undefined,
+    quizQuestion: intent.type === "quiz" ? generateCurriculumQuestions(context)[0] : undefined,
+    bullets: intent.type === "summary" ? [
+      `المادة المتوقعة: ${context.subject}`,
+      `الصف التقريبي: ${context.grade}`,
+      `الموضوع الأقرب: ${context.lesson}`
+    ] : undefined,
+    curriculumLink: `التحليل التلقائي قدّر المادة: ${context.subject}${context.grade ? ` والصف: ${context.grade}` : ""}.`
+  });
+}
+
+function updateSelectionSummary() {
+  const summary = selectedSolveMode === "structured"
+    ? `${gradeSelect?.value || ""} · ${subjectSelect?.value || ""} · ${termSelect?.value || ""} · ${lessonInput?.value.trim() || "الدرس غير محدد"}`
+    : "الحل السريع مفعل — سأحاول استنتاج المادة والصف ونوع السؤال تلقائيًا.";
+  if (selectionSummary) selectionSummary.textContent = summary;
+  if (runtimeSummary) runtimeSummary.textContent = selectedSolveMode === "structured" ? `وضع الحل الدقيق: ${summary}` : summary;
+  if (statusChip) {
+    statusChip.textContent = isLoggedIn()
+      ? `${selectedSolveMode === "structured" ? (subjectSelect?.value || "الحل الدقيق") : "الحل السريع"} • ${getCurrentPoints()} نقطة`
+      : "وضع ضيف • الصور تتطلب دخول";
+  }
+  renderWajibatiLibrary();
+  renderTermCoverage();
+}
+
 function bootstrap() {
   applyTheme(localStorage.getItem(storageKeys.theme) || "light");
   loadUserState();
@@ -1867,6 +2182,9 @@ function bootstrap() {
   responseModeButtons.forEach((button) => {
     button.addEventListener("click", () => applyResponseMode(button.getAttribute("data-response-mode") || "educational"));
   });
+  solveModeButtons.forEach((button) => {
+    button.addEventListener("click", () => applySolveMode(button.getAttribute("data-solve-mode") || "quick"));
+  });
 
   startChatButton?.addEventListener("click", startChat);
   quickSolveButton?.addEventListener("click", quickSolve);
@@ -1892,6 +2210,7 @@ function bootstrap() {
   scrollTopButton?.addEventListener("click", () => window.scrollTo({ top: 0, behavior: "smooth" }));
   bindStarterButtons();
   applyResponseMode(selectedResponseMode);
+  applySolveMode(selectedSolveMode);
   syncScrollTopButton();
 
   const resumePrompt = localStorage.getItem(storageKeys.resumePrompt);

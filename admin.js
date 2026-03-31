@@ -14,41 +14,14 @@ const adminCredentials = {
   email: "admin@mullem.sa",
   password: "Mullem@2026"
 };
+
 const adminSessionKey = "mlm_admin_session";
 
-const analytics = loadAdminJson("mlm_analytics", {
-  totalMessages: 0,
-  totalLikes: 0,
-  totalDislikes: 0,
-  xpUsed: 0,
-  dailyMessages: {},
-  subjects: {},
-  grades: {},
-  feedback: [],
-  savedSessions: 0
-});
-const users = loadAdminJson("mlm_users", []);
-const likedMemory = loadAdminJson("mlm_liked_memory", []);
-const dislikedMemory = loadAdminJson("mlm_disliked_memory", []);
-const runtime = localStorage.getItem("mlm_runtime") || "vLLM Runtime";
-const trainingMode = localStorage.getItem("mlm_training_mode") || "Prompt + RAG";
-const safeAnalytics = {
-  totalMessages: 0,
-  totalLikes: 0,
-  totalDislikes: 0,
-  xpUsed: 0,
-  dailyMessages: {},
-  subjects: {},
-  grades: {},
-  feedback: [],
-  savedSessions: 0,
-  ...analytics
-};
-
-function loadAdminJson(key, fallback) {
+function loadJson(key, fallback) {
   try {
-    return JSON.parse(localStorage.getItem(key) || JSON.stringify(fallback));
-  } catch (error) {
+    const value = localStorage.getItem(key);
+    return value ? JSON.parse(value) : fallback;
+  } catch {
     return fallback;
   }
 }
@@ -59,24 +32,68 @@ function isAdminLoggedIn() {
 
 function updateAdminView() {
   const loggedIn = isAdminLoggedIn();
-  adminAuthRoot.hidden = loggedIn;
-  adminAppRoot.hidden = !loggedIn;
-  adminLogoutButton.hidden = !loggedIn;
+  if (adminAuthRoot) adminAuthRoot.hidden = loggedIn;
+  if (adminAppRoot) adminAppRoot.hidden = !loggedIn;
+  if (adminLogoutButton) adminLogoutButton.hidden = !loggedIn;
 }
 
 function getTopEntry(record, fallback) {
-  const sorted = Object.entries(record || {}).sort((a, b) => b[1] - a[1]);
-  return sorted.length ? `${sorted[0][0]} (${sorted[0][1]})` : fallback;
+  const top = Object.entries(record || {}).sort((a, b) => b[1] - a[1])[0];
+  return top ? `${top[0]} (${top[1]})` : fallback;
+}
+
+function getUsers() {
+  const users = loadJson("mlm_users", []);
+  return users.length
+    ? users
+    : [
+        {
+          name: "طالب تجريبي",
+          role: "Student",
+          package: "مجاني محدود",
+          xp: 100,
+          status: "نشط",
+          activity: "لا يوجد نشاط بعد"
+        }
+      ];
+}
+
+function getAnalytics() {
+  return {
+    totalMessages: 0,
+    totalLikes: 0,
+    totalDislikes: 0,
+    xpUsed: 0,
+    dailyMessages: {},
+    subjects: {},
+    savedSessions: 0,
+    ...loadJson("mlm_analytics", {})
+  };
+}
+
+function getFeedback() {
+  const liked = loadJson("mlm_liked_memory", []);
+  const disliked = loadJson("mlm_disliked_memory", []);
+  return {
+    liked,
+    disliked
+  };
 }
 
 function renderStats() {
+  if (!adminStatsRoot) return;
+  const analytics = getAnalytics();
+  const users = getUsers();
   const todayKey = new Date().toISOString().slice(0, 10);
+  const runtime = localStorage.getItem("mlm_runtime") || "vLLM Runtime";
+  const trainingMode = localStorage.getItem("mlm_training_mode") || "Prompt + RAG";
+
   const stats = [
-    { label: "عدد المستخدمين", value: users.length || 1, note: "إجمالي الحسابات الموجودة محليًا" },
-    { label: "الرسائل اليومية", value: safeAnalytics.dailyMessages[todayKey] || 0, note: "عدد الرسائل اليوم" },
-    { label: "الاشتراكات النشطة", value: users.filter((user) => user.status === "نشط").length || 1, note: "الحسابات الفعالة حاليًا" },
-    { label: "استهلاك XP", value: safeAnalytics.xpUsed || 0, note: "الاستهلاك المتراكم داخل النموذج الأولي" },
-    { label: "أكثر المواد استخدامًا", value: getTopEntry(safeAnalytics.subjects, "لا توجد بيانات"), note: "المادة الأعلى نشاطًا" },
+    { label: "عدد المستخدمين", value: users.length, note: "إجمالي الحسابات الموجودة" },
+    { label: "الرسائل اليومية", value: analytics.dailyMessages[todayKey] || 0, note: "عدد الرسائل اليوم" },
+    { label: "الحسابات النشطة", value: users.filter((user) => user.status === "نشط").length, note: "المستخدمون النشطون حاليًا" },
+    { label: "استهلاك XP", value: analytics.xpUsed || 0, note: "الاستهلاك التراكمي" },
+    { label: "أكثر مادة استخدامًا", value: getTopEntry(analytics.subjects, "لا توجد بيانات بعد"), note: "المادة الأعلى تفاعلًا" },
     { label: "وضع التشغيل", value: runtime, note: trainingMode }
   ];
 
@@ -94,25 +111,17 @@ function renderStats() {
 }
 
 function renderUsersTable() {
-  const rows = (users.length ? users : [
-    {
-      name: "طالب تجريبي",
-      role: "Student",
-      package: "مجاني محدود",
-      xp: 120,
-      status: "نشط",
-      activity: "لا يوجد نشاط بعد"
-    }
-  ])
+  if (!usersTableRoot) return;
+  const rows = getUsers()
     .map(
       (user) => `
         <tr>
-          <td>${user.name}</td>
-          <td>${user.role}</td>
-          <td>${user.package}</td>
-          <td>${user.xp}</td>
-          <td>${user.status}</td>
-          <td>${user.activity}</td>
+          <td>${user.name || "بدون اسم"}</td>
+          <td>${user.role || "Student"}</td>
+          <td>${user.package || "مجاني محدود"}</td>
+          <td>${user.xp ?? 0}</td>
+          <td>${user.status || "نشط"}</td>
+          <td>${user.activity || "لا يوجد نشاط مسجل"}</td>
         </tr>
       `
     )
@@ -136,41 +145,42 @@ function renderUsersTable() {
 }
 
 function renderFeedback() {
-  const feedbackEntries = [
-    ...likedMemory.slice(0, 3).map((item) => ({ type: "إعجاب", color: "إيجابي", ...item })),
-    ...dislikedMemory.slice(0, 3).map((item) => ({ type: "لم يعجبني", color: "بحاجة مراجعة", ...item }))
+  if (!feedbackListRoot) return;
+  const { liked, disliked } = getFeedback();
+  const entries = [
+    ...liked.slice(0, 3).map((item) => ({ type: "إعجاب", status: "إيجابي", ...item })),
+    ...disliked.slice(0, 3).map((item) => ({ type: "لم يعجبني", status: "بحاجة إلى مراجعة", ...item }))
   ];
 
-  if (feedbackEntries.length === 0) {
-    feedbackListRoot.innerHTML = `
-      <div class="admin-item">
-        <strong>لا توجد تفاعلات بعد</strong>
-        <span>عندما يبدأ الطلاب تقييم الإجابات ستظهر هنا آخر الردود المعجبة أو غير المعجبة.</span>
-      </div>
-    `;
-    return;
-  }
-
-  feedbackListRoot.innerHTML = feedbackEntries
-    .map(
-      (entry) => `
+  feedbackListRoot.innerHTML = entries.length
+    ? entries
+        .map(
+          (entry) => `
+            <div class="admin-item">
+              <strong>${entry.type} | ${entry.subject || "عام"} | ${entry.lesson || "بدون درس"}</strong>
+              <span>${entry.question || entry.preview || "لا يوجد نص محفوظ"}</span>
+              <span>${entry.status}</span>
+            </div>
+          `
+        )
+        .join("")
+    : `
         <div class="admin-item">
-          <strong>${entry.type} | ${entry.subject} | ${entry.lesson}</strong>
-          <span>${entry.question}</span>
-          <span>${entry.color}</span>
+          <strong>لا توجد تقييمات بعد</strong>
+          <span>ستظهر هنا الإعجابات وعدم الإعجاب عندما يبدأ الطلاب تقييم الإجابات.</span>
         </div>
-      `
-    )
-    .join("");
+      `;
 }
 
 function renderReports() {
+  if (!reportListRoot) return;
+  const analytics = getAnalytics();
   const reports = [
-    `إجمالي الرسائل التعليمية: ${safeAnalytics.totalMessages || 0}.`,
-    `الإعجابات: ${safeAnalytics.totalLikes || 0} | لم يعجبني: ${safeAnalytics.totalDislikes || 0}.`,
-    `المحادثات المحفوظة للمراجعة: ${safeAnalytics.savedSessions || 0}.`,
-    `أكثر نقطة تحتاج متابعة حاليًا: ${getTopEntry(safeAnalytics.subjects, "لا توجد مادة بارزة بعد")}.`,
-    `المحرك المحلي المختار: ${runtime} مع طبقة سلوكية ${trainingMode}.`
+    `إجمالي الرسائل التعليمية: ${analytics.totalMessages || 0}.`,
+    `الإعجابات: ${analytics.totalLikes || 0} | لم يعجبني: ${analytics.totalDislikes || 0}.`,
+    `المحادثات المحفوظة للمراجعة: ${analytics.savedSessions || 0}.`,
+    `أكثر مادة تحتاج متابعة: ${getTopEntry(analytics.subjects, "لا توجد مادة بارزة بعد")}.`,
+    `هذه اللوحة تعرض ملخص الاستخدام داخل النسخة الحالية من المنصة.`
   ];
 
   reportListRoot.innerHTML = reports
@@ -185,15 +195,14 @@ function renderReports() {
     .join("");
 }
 
-adminLoginForm.addEventListener("submit", (event) => {
+adminLoginForm?.addEventListener("submit", (event) => {
   event.preventDefault();
-
-  const email = adminEmailInput.value.trim().toLowerCase();
-  const password = adminPasswordInput.value;
+  const email = (adminEmailInput?.value || "").trim().toLowerCase();
+  const password = adminPasswordInput?.value || "";
 
   if (email === adminCredentials.email && password === adminCredentials.password) {
     localStorage.setItem(adminSessionKey, "1");
-    adminLoginState.textContent = "تم تسجيل الدخول بنجاح.";
+    if (adminLoginState) adminLoginState.textContent = "تم تسجيل دخول الأدمن بنجاح.";
     updateAdminView();
     renderStats();
     renderUsersTable();
@@ -202,14 +211,18 @@ adminLoginForm.addEventListener("submit", (event) => {
     return;
   }
 
-  adminLoginState.textContent = "بيانات الدخول غير صحيحة. تأكد من البريد وكلمة المرور.";
+  if (adminLoginState) {
+    adminLoginState.textContent = "بيانات دخول الأدمن غير صحيحة. تأكد من البريد وكلمة المرور.";
+  }
 });
 
-adminLogoutButton.addEventListener("click", () => {
+adminLogoutButton?.addEventListener("click", () => {
   localStorage.removeItem(adminSessionKey);
-  adminPasswordInput.value = "";
-  adminLoginState.textContent = "تم تسجيل الخروج.";
+  if (adminEmailInput) adminEmailInput.value = "";
+  if (adminPasswordInput) adminPasswordInput.value = "";
+  if (adminLoginState) adminLoginState.textContent = "تم تسجيل الخروج.";
   updateAdminView();
+  window.location.href = "login.html";
 });
 
 updateAdminView();

@@ -290,6 +290,42 @@ textarea {
   flex-wrap: wrap;
 }
 
+.solve-mode-row {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.solve-mode-btn {
+  text-align: right;
+  padding: 16px 18px;
+  border-radius: 20px;
+  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.96);
+  cursor: pointer;
+  transition: 180ms ease;
+  display: grid;
+  gap: 6px;
+}
+
+.solve-mode-btn strong {
+  color: var(--text);
+}
+
+.solve-mode-btn span {
+  color: var(--muted);
+  line-height: 1.7;
+}
+
+.solve-mode-btn.active {
+  border-color: rgba(34, 197, 94, 0.24);
+  background: var(--brand-soft);
+}
+
+body.solve-mode-quick .selectors-hero {
+  opacity: 0.8;
+}
+
 .subject-pill {
   border: 1px solid rgba(34, 197, 94, 0.14);
   background: rgba(255, 255, 255, 0.96);
@@ -612,7 +648,7 @@ textarea {
 
 .platform-insights-wrap {
   display: grid;
-  grid-template-columns: repeat(6, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 18px;
   padding: 28px;
   border-radius: 34px;
@@ -1205,7 +1241,7 @@ a.memory-item {
 
 .selectors {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 10px;
   margin-bottom: 12px;
 }
@@ -1510,13 +1546,14 @@ a.memory-item {
   position: fixed;
   left: 20px;
   bottom: 20px;
-  width: 54px;
-  height: 54px;
+  width: 58px;
+  height: 58px;
   border: 0;
-  border-radius: 18px;
+  border-radius: 20px;
   background: linear-gradient(135deg, var(--brand), var(--accent));
   color: #fff;
-  font-size: 1.5rem;
+  font-size: 1.7rem;
+  font-weight: 900;
   box-shadow: var(--shadow);
   cursor: pointer;
   opacity: 0;
@@ -2005,6 +2042,10 @@ a.memory-item {
   .example-list,
   .subject-pills {
     flex-direction: column;
+  }
+
+  .solve-mode-row {
+    grid-template-columns: 1fr;
   }
 
   .workspace-sidebar,

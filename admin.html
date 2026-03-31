@@ -3,23 +3,29 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>ملم يحل | لوحة الأدمن</title>
+  <meta name="theme-color" content="#22c55e">
+  <title>ملم | لوحة الأدمن</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800;900&display=swap" rel="stylesheet">
+  <link rel="icon" type="image/svg+xml" href="favicon.svg">
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
   <div class="shell">
     <header class="topbar">
       <div class="brand-wrap">
-        <div class="brand-mark">م</div>
+        <div class="brand-mark brand-mark-logo-image" aria-hidden="true">
+          <img src="favicon.svg" alt="">
+        </div>
         <div class="brand-text">
-          <div class="brand-name">لوحة أدمن ملم يحل</div>
-          <div class="brand-copy">إدارة المستخدمين، التفاعل، الاشتراكات، والاستهلاك التعليمي</div>
+          <div class="brand-name">لوحة أدمن ملم</div>
+          <div class="brand-copy">إدارة المستخدمين والتفاعل والاشتراكات والتقارير</div>
         </div>
       </div>
       <div class="topbar-actions">
-        <a class="top-chip top-link" href="index.html">العودة إلى الشات</a>
-        <button class="top-chip top-link" type="button" data-admin-logout>تسجيل الخروج</button>
-        <div class="top-chip">تحديث مباشر من بيانات المتصفح</div>
+        <a class="top-chip top-link" href="student.html">العودة إلى الشات</a>
+        <button class="top-chip top-link" type="button" data-admin-logout hidden>تسجيل الخروج</button>
       </div>
     </header>
   </div>
@@ -28,7 +34,7 @@
     <div class="shell admin-auth-shell" data-admin-auth>
       <section class="admin-login-card">
         <h2>دخول الأدمن</h2>
-        <p>أدخل بريد الأدمن وكلمة المرور للوصول إلى لوحة إدارة ملم يحل.</p>
+        <p>أدخل بريد الأدمن وكلمة المرور للوصول إلى لوحة الإدارة.</p>
         <form class="admin-login-form" data-admin-login-form>
           <input class="field" type="email" data-admin-email placeholder="البريد الإلكتروني">
           <input class="field" type="password" data-admin-password placeholder="كلمة المرور">
@@ -44,7 +50,7 @@
       <section class="admin-grid">
         <article class="admin-panel">
           <h3 class="admin-section-title">إدارة المستخدمين</h3>
-          <p class="admin-subtitle">عرض الطلاب والمعلمين والمشرفين مع حالة الحساب والباقة والرصيد.</p>
+          <p class="admin-subtitle">عرض الحسابات، الباقات، الرصيد، والحالة الحالية.</p>
           <div data-users-table></div>
         </article>
 
@@ -56,104 +62,20 @@
 
       <section class="admin-grid">
         <article class="admin-panel">
-          <h3 class="admin-section-title">إدارة الصلاحيات والاشتراكات</h3>
-          <div class="admin-list">
-            <div class="admin-item">
-              <strong>الأدوار</strong>
-              <span>Student, Teacher, Parent, Admin مع إمكانية ضبط الصلاحيات لكل دور في النسخة الخلفية لاحقًا.</span>
-            </div>
-            <div class="admin-item">
-              <strong>الباقات</strong>
-              <span>مجاني محدود، اشتراك طالب، اشتراك معلم، اشتراك مدارس مع حدود رسائل وXP مختلفة.</span>
-            </div>
-            <div class="admin-item">
-              <strong>الرصيد XP</strong>
-              <span>يُخصم محليًا مع كل رسالة داخل النموذج الأولي لإظهار الاستهلاك في لوحة الأدمن.</span>
-            </div>
-          </div>
-        </article>
-
-        <article class="admin-panel">
-          <h3 class="admin-section-title">إدارة الذكاء الاصطناعي</h3>
-          <div class="admin-list">
-            <div class="admin-item">
-              <strong>المعادلة المعتمدة</strong>
-              <span>نموذج مفتوح المصدر + RAG للمنهج السعودي + LoRA/SFT للسلوك + تشغيل محلي عبر vLLM أو Ollama.</span>
-            </div>
-            <div class="admin-item">
-              <strong>المعرفة مقابل السلوك</strong>
-              <span>الكتب والحلول والشروحات تبقى داخل طبقة المعرفة، بينما تنسيق الرد ونبرة ملم يحل تضبط عبر التدريب السلوكي.</span>
-            </div>
-            <div class="admin-item">
-              <strong>سياسة الرد</strong>
-              <span>الإجابة النهائية، الشرح، الخطوات، الأخطاء الشائعة، والسؤال المشابه وفق Policy Layer خاصة بالمنصة.</span>
-            </div>
-            <div class="admin-item">
-              <strong>طبقة التصنيف والمراجعة</strong>
-              <span>مصنف نية مستقل يحدد نوع الرسالة أولًا، ثم طبقة بحث ويب تجمع مراجع وتبني قرار ترجيح قبل إرسال الجواب للطالب.</span>
-            </div>
-          </div>
-        </article>
-      </section>
-
-      <section class="admin-grid">
-        <article class="admin-panel">
-          <h3 class="admin-section-title">إدارة المحتوى</h3>
+          <h3 class="admin-section-title">المحتوى والباقات</h3>
           <div class="chip-row">
             <div class="top-chip">الصفوف</div>
             <div class="top-chip">المواد</div>
             <div class="top-chip">الفصول</div>
             <div class="top-chip">الدروس</div>
             <div class="top-chip">بنك الأسئلة</div>
-            <div class="top-chip">رفع ملفات المنهج</div>
+            <div class="top-chip">الاشتراكات</div>
           </div>
         </article>
 
         <article class="admin-panel">
           <h3 class="admin-section-title">التقارير</h3>
           <div class="admin-list" data-report-list></div>
-        </article>
-      </section>
-
-      <section class="admin-grid">
-        <article class="admin-panel">
-          <h3 class="admin-section-title">مخازن البيانات المطلوبة</h3>
-          <div class="admin-list">
-            <div class="admin-item">
-              <strong>Knowledge Data</strong>
-              <span>كتب المنهج، الحلول النموذجية، الشروحات، الأسئلة السابقة، والتعاريف.</span>
-            </div>
-            <div class="admin-item">
-              <strong>Behavior Data</strong>
-              <span>عينات توضح كيف يشرح ملم يحل، متى يرفض الجواب المباشر، وكيف يرتب الرد حسب المادة والمرحلة.</span>
-            </div>
-            <div class="admin-item">
-              <strong>Evaluation Data</strong>
-              <span>مجموعة تقييم داخلية لقياس الدقة، الالتزام بالمنهج، جودة العربية، وصحة خطوات الحل.</span>
-            </div>
-          </div>
-        </article>
-
-        <article class="admin-panel">
-          <h3 class="admin-section-title">خطة التشغيل خلال 30 يوم</h3>
-          <div class="admin-list">
-            <div class="admin-item">
-              <strong>الأسبوع 1</strong>
-              <span>اختيار النموذج، تجهيز السيرفر، وبناء ingestion للمنهج مع embeddings وretrieval.</span>
-            </div>
-            <div class="admin-item">
-              <strong>الأسبوع 2</strong>
-              <span>بناء prompt موحد واختبار 100 سؤال وتجميع الفجوات.</span>
-            </div>
-            <div class="admin-item">
-              <strong>الأسبوع 3</strong>
-              <span>إعداد dataset سلوكي والبدء في SFT أو LoRA.</span>
-            </div>
-            <div class="admin-item">
-              <strong>الأسبوع 4</strong>
-              <span>تقييم، دمج adapter، وتشغيل داخلي مع A/B test.</span>
-            </div>
-          </div>
         </article>
       </section>
     </div>
