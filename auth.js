@@ -30,7 +30,9 @@ const storageKeys = {
   liked: "mlm_liked_answers",
   analytics: "mlm_analytics",
   aiLogs: "mlm_ai_logs",
-  feedback: "mlm_feedback_log"
+  feedback: "mlm_feedback_log",
+  sessions: "mlm_chat_sessions",
+  activeSession: "mlm_active_session"
 };
 
 const adminCredentials = {
@@ -54,8 +56,8 @@ function saveJson(key, value) {
 }
 
 function loadUsers() {
-  const users = loadJson(storageKeys.users, []);
-  if (users.length) return users;
+  const stored = loadJson(storageKeys.users, []);
+  if (stored.length) return stored;
   return [
     {
       id: "student-demo-1",
@@ -88,7 +90,6 @@ function setActivePanel(mode) {
   authTabs.forEach((tab) => {
     tab.classList.toggle("active", tab.getAttribute("data-auth-tab") === mode);
   });
-
   authPanels.forEach((panel) => {
     panel.hidden = panel.getAttribute("data-auth-panel") !== mode;
   });
@@ -103,26 +104,19 @@ function generateResetCode() {
 }
 
 function ensureUserWorkspace(userId) {
-  const analyticsKey = `${storageKeys.analytics}_${userId}`;
-  const historyKey = `${storageKeys.history}_${userId}`;
-  const likedKey = `${storageKeys.liked}_${userId}`;
-  const aiLogsKey = `${storageKeys.aiLogs}_${userId}`;
-  const feedbackKey = `${storageKeys.feedback}_${userId}`;
+  const keys = [
+    [`${storageKeys.analytics}_${userId}`, { totalMessages: 0, xpUsed: 0, subjects: {}, likes: 0, dislikes: 0 }],
+    [`${storageKeys.history}_${userId}`, []],
+    [`${storageKeys.liked}_${userId}`, []],
+    [`${storageKeys.aiLogs}_${userId}`, []],
+    [`${storageKeys.feedback}_${userId}`, []],
+    [`${storageKeys.sessions}_${userId}`, []]
+  ];
 
-  if (!localStorage.getItem(analyticsKey)) {
-    saveJson(analyticsKey, {
-      totalMessages: 0,
-      xpUsed: 0,
-      subjects: {},
-      likes: 0,
-      dislikes: 0
-    });
-  }
-
-  if (!localStorage.getItem(historyKey)) saveJson(historyKey, []);
-  if (!localStorage.getItem(likedKey)) saveJson(likedKey, []);
-  if (!localStorage.getItem(aiLogsKey)) saveJson(aiLogsKey, []);
-  if (!localStorage.getItem(feedbackKey)) saveJson(feedbackKey, []);
+  keys.forEach(([key, fallback]) => {
+    if (!localStorage.getItem(key)) saveJson(key, fallback);
+  });
+  localStorage.removeItem(`${storageKeys.activeSession}_${userId}`);
 }
 
 function saveResetRequest(request) {
@@ -138,18 +132,34 @@ function syncScrollTopButton() {
   scrollTopButton.classList.toggle("visible", window.scrollY > 220);
 }
 
+function resetForgotFlow() {
+  if (forgotEmailForm) forgotEmailForm.hidden = false;
+  if (codeForm) codeForm.hidden = true;
+  if (resetForm) resetForm.hidden = true;
+}
+
+function redirectToStudent() {
+  window.location.href = "student.html";
+}
+
 authTabs.forEach((tab) => {
   tab.addEventListener("click", () => {
     const mode = tab.getAttribute("data-auth-tab") || "login";
     setActivePanel(mode);
-    setState(mode === "register" ? "أنشئ حسابك ثم ابدأ الشات مباشرة." : "أدخل بياناتك للوصول إلى المنصة.");
+    if (mode === "register") {
+      setState("أنشئ حسابك ثم ابدأ الشات مباشرة.");
+    } else {
+      setState("أدخل بياناتك للوصول إلى المنصة.");
+    }
   });
 });
 
 setActivePanel("login");
+resetForgotFlow();
 
 loginForm?.addEventListener("submit", (event) => {
   event.preventDefault();
+
   const email = (loginEmail?.value || "").trim().toLowerCase();
   const password = loginPassword?.value || "";
 
@@ -181,11 +191,12 @@ loginForm?.addEventListener("submit", (event) => {
   localStorage.setItem(storageKeys.currentUser, user.id);
   ensureUserWorkspace(user.id);
   setState(`أهلًا ${user.name}، تم تسجيل الدخول بنجاح.`);
-  window.location.href = "student.html";
+  redirectToStudent();
 });
 
 registerForm?.addEventListener("submit", (event) => {
   event.preventDefault();
+
   const name = (registerName?.value || "").trim();
   const email = (registerEmail?.value || "").trim().toLowerCase();
   const password = registerPassword?.value || "";
@@ -235,23 +246,19 @@ registerForm?.addEventListener("submit", (event) => {
   localStorage.setItem(storageKeys.currentUser, user.id);
   ensureUserWorkspace(user.id);
   setState(`تم إنشاء الحساب بنجاح يا ${name}. سيتم تحويلك الآن.`);
-  window.location.href = "student.html";
+  redirectToStudent();
 });
 
 forgotButton?.addEventListener("click", () => {
   setActivePanel("forgot");
+  resetForgotFlow();
   setState("أدخل بريدك الإلكتروني لبدء استعادة كلمة المرور.");
-  if (forgotEmailForm) forgotEmailForm.hidden = false;
-  if (codeForm) codeForm.hidden = true;
-  if (resetForm) resetForm.hidden = true;
 });
 
 backButton?.addEventListener("click", () => {
   setActivePanel("login");
+  resetForgotFlow();
   setState("عدت إلى صفحة تسجيل الدخول.");
-  if (forgotEmailForm) forgotEmailForm.hidden = false;
-  if (codeForm) codeForm.hidden = true;
-  if (resetForm) resetForm.hidden = true;
 });
 
 forgotEmailForm?.addEventListener("submit", (event) => {
@@ -276,7 +283,7 @@ forgotEmailForm?.addEventListener("submit", (event) => {
 
   const code = generateResetCode();
   saveResetRequest({ email, code, verified: false });
-  forgotEmailForm.hidden = true;
+  if (forgotEmailForm) forgotEmailForm.hidden = true;
   if (codeForm) codeForm.hidden = false;
   setState(`تم إنشاء كود التحقق: ${code} — هذه نسخة تجريبية داخل الموقع.`);
 });
@@ -295,7 +302,7 @@ codeForm?.addEventListener("submit", (event) => {
   }
 
   saveResetRequest({ ...request, verified: true });
-  codeForm.hidden = true;
+  if (codeForm) codeForm.hidden = true;
   if (resetForm) resetForm.hidden = false;
   setState("تم التحقق من الكود. اكتب كلمة المرور الجديدة الآن.");
 });
@@ -327,6 +334,7 @@ resetForm?.addEventListener("submit", (event) => {
   saveUsers(users);
   localStorage.removeItem(storageKeys.passwordReset);
   setActivePanel("login");
+  resetForgotFlow();
   setState("تم تحديث كلمة المرور بنجاح. يمكنك تسجيل الدخول الآن.");
 });
 

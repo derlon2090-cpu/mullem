@@ -2450,6 +2450,83 @@ function bootstrap() {
   }
 }
 
+const stageGradeMap = {
+  ابتدائي: [
+    "الأول الابتدائي",
+    "الثاني الابتدائي",
+    "الثالث الابتدائي",
+    "الرابع الابتدائي",
+    "الخامس الابتدائي",
+    "السادس الابتدائي"
+  ],
+  متوسط: [
+    "الأول المتوسط",
+    "الثاني المتوسط",
+    "الثالث المتوسط"
+  ],
+  ثانوي: [
+    "الأول الثانوي",
+    "الثاني الثانوي",
+    "الثالث الثانوي"
+  ]
+};
+
+function inferStageFromGradeLabel(grade) {
+  if (!grade) return "ثانوي";
+  if (grade.includes("الابتدائي")) return "ابتدائي";
+  if (grade.includes("المتوسط")) return "متوسط";
+  return "ثانوي";
+}
+
+function populateGradeSelect(stage, preferredGrade = "") {
+  if (!gradeSelect) return;
+  const grades = stageGradeMap[stage] || stageGradeMap["ثانوي"];
+  const current = grades.includes(preferredGrade) ? preferredGrade : (grades[0] || preferredGrade);
+  gradeSelect.innerHTML = grades.map((grade) => `<option ${grade === current ? "selected" : ""}>${grade}</option>`).join("");
+}
+
+function populateSubjectSelect(grade, preferredSubject = "") {
+  if (!subjectSelect) return;
+  const materials = getGradeMaterials(grade);
+  const current = materials.includes(preferredSubject) ? preferredSubject : (materials[0] || preferredSubject || "");
+  subjectSelect.innerHTML = materials.map((subject) => `<option ${subject === current ? "selected" : ""}>${subject}</option>`).join("");
+}
+
+function syncStageButtons(stage) {
+  document.querySelectorAll("[data-stage-button]").forEach((button) => {
+    button.classList.toggle("active", button.getAttribute("data-stage-button") === stage);
+  });
+}
+
+function setupSmartSelectors() {
+  if (!gradeSelect) return;
+  const activeUser = getActiveUser();
+  const initialGrade = activeUser?.grade || gradeSelect.value || "الثاني الثانوي";
+  const initialStage = inferStageFromGradeLabel(initialGrade);
+
+  populateGradeSelect(initialStage, initialGrade);
+  populateSubjectSelect(initialGrade, activeUser?.subject || subjectSelect?.value || "");
+  syncStageButtons(initialStage);
+  updateSelectionSummary();
+
+  document.querySelectorAll("[data-stage-button]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const stage = button.getAttribute("data-stage-button") || "ثانوي";
+      syncStageButtons(stage);
+      populateGradeSelect(stage);
+      populateSubjectSelect(gradeSelect?.value || "");
+      updateSelectionSummary();
+    });
+  });
+
+  gradeSelect.addEventListener("change", () => {
+    populateSubjectSelect(gradeSelect.value, subjectSelect?.value || "");
+    updateSelectionSummary();
+  });
+}
+
+setupSmartSelectors();
+
 function intent_analyzer(message, hasAttachments = false) {
   const baseIntent = intent_router(message, hasAttachments);
   return {
