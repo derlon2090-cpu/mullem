@@ -177,5 +177,149 @@
 
   <button class="scroll-top-btn" type="button" data-scroll-top aria-label="العودة إلى أعلى الصفحة">↑</button>
   <script src="auth.js"></script>
+  <script>
+    (function () {
+      const storageKeys = {
+        users: "mlm_users",
+        currentUser: "mlm_current_user",
+        adminSession: "mlm_admin_session",
+        analytics: "mlm_analytics",
+        history: "mlm_chat_history",
+        liked: "mlm_liked_answers",
+        aiLogs: "mlm_ai_logs",
+        feedback: "mlm_feedback_log",
+        sessions: "mlm_chat_sessions",
+        activeSession: "mlm_active_session"
+      };
+
+      const authState = document.querySelector("[data-auth-state]");
+      const registerForm = document.querySelector("[data-auth-register-form]");
+      const registerName = document.querySelector("[data-auth-register-name]");
+      const registerEmail = document.querySelector("[data-auth-register-email]");
+      const registerPassword = document.querySelector("[data-auth-register-password]");
+      const registerGrade = document.querySelector("[data-auth-register-grade]");
+      const registerSubmit = document.querySelector("[data-register-submit]");
+
+      function setState(text) {
+        if (authState) authState.textContent = text;
+      }
+
+      function loadJson(key, fallback) {
+        try {
+          const value = localStorage.getItem(key);
+          return value ? JSON.parse(value) : fallback;
+        } catch {
+          return fallback;
+        }
+      }
+
+      function saveJson(key, value) {
+        localStorage.setItem(key, JSON.stringify(value));
+      }
+
+      function isValidEmail(email) {
+        return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+      }
+
+      function ensureUserWorkspace(userId) {
+        const defaults = [
+          [`${storageKeys.analytics}_${userId}`, { totalMessages: 0, xpUsed: 0, subjects: {}, likes: 0, dislikes: 0 }],
+          [`${storageKeys.history}_${userId}`, []],
+          [`${storageKeys.liked}_${userId}`, []],
+          [`${storageKeys.aiLogs}_${userId}`, []],
+          [`${storageKeys.feedback}_${userId}`, []],
+          [`${storageKeys.sessions}_${userId}`, []]
+        ];
+
+        defaults.forEach(([key, value]) => {
+          if (!localStorage.getItem(key)) saveJson(key, value);
+        });
+        localStorage.removeItem(`${storageKeys.activeSession}_${userId}`);
+      }
+
+      function openPanel(mode) {
+        document.querySelectorAll("[data-auth-tab]").forEach((tab) => {
+          tab.classList.toggle("active", tab.getAttribute("data-auth-tab") === mode);
+        });
+        document.querySelectorAll("[data-auth-panel]").forEach((panel) => {
+          panel.hidden = panel.getAttribute("data-auth-panel") !== mode;
+        });
+        if (mode === "register") {
+          setState("أنشئ حسابك ثم ابدأ الشات مباشرة.");
+        }
+      }
+
+      document.addEventListener("click", function (event) {
+        const switcher = event.target.closest("[data-auth-open], [data-auth-tab]");
+        if (!switcher) return;
+        const mode = switcher.getAttribute("data-auth-open") || switcher.getAttribute("data-auth-tab") || "login";
+        openPanel(mode);
+      }, true);
+
+      function handleRegister(event) {
+        event.preventDefault();
+        event.stopImmediatePropagation();
+
+        const name = (registerName && registerName.value || "").trim();
+        const email = (registerEmail && registerEmail.value || "").trim().toLowerCase();
+        const password = registerPassword && registerPassword.value || "";
+        const grade = registerGrade && registerGrade.value || "الثاني الثانوي";
+
+        if (!name || !email || !password) {
+          setState("أكمل جميع الحقول أولًا.");
+          return false;
+        }
+
+        if (!isValidEmail(email)) {
+          setState("البريد الإلكتروني غير صحيح.");
+          return false;
+        }
+
+        if (password.length < 6) {
+          setState("كلمة المرور يجب أن تكون 6 أحرف أو أكثر.");
+          return false;
+        }
+
+        const users = loadJson(storageKeys.users, []);
+        if (users.some((entry) => (entry.email || "").toLowerCase() === email)) {
+          setState("هذا البريد مسجل مسبقًا.");
+          return false;
+        }
+
+        const user = {
+          id: `student-${Date.now()}`,
+          name,
+          email,
+          password,
+          role: "Student",
+          grade,
+          subject: "الرياضيات",
+          package: "مجاني محدود",
+          xp: 100,
+          streakDays: 0,
+          lastActiveDate: "",
+          achievements: [],
+          status: "نشط",
+          activity: "أنشأ حسابًا جديدًا"
+        };
+
+        users.unshift(user);
+        saveJson(storageKeys.users, users);
+        localStorage.removeItem(storageKeys.adminSession);
+        localStorage.setItem(storageKeys.currentUser, user.id);
+        ensureUserWorkspace(user.id);
+        setState(`تم إنشاء الحساب بنجاح يا ${name}. سيتم تحويلك الآن.`);
+        window.location.href = "student.html";
+        return false;
+      }
+
+      registerForm && registerForm.addEventListener("submit", handleRegister, true);
+      registerSubmit && registerSubmit.addEventListener("click", handleRegister, true);
+
+      if (window.location.hash === "#register" || new URLSearchParams(window.location.search).get("mode") === "register") {
+        openPanel("register");
+      }
+    }());
+  </script>
 </body>
 </html>
