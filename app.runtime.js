@@ -8,12 +8,10 @@
   if (window.location.hash === "#chat") {
     history.replaceState(null, "", window.location.pathname + window.location.search);
   }
-  window.addEventListener("load", () => {
-    window.scrollTo({ top: 0, left: 0, behavior: "auto" });
-  });
 
   const form = document.querySelector("[data-chat-form]");
   const messageList = document.querySelector("[data-messages]");
+  const attachmentList = document.querySelector("[data-attachments]");
   const promptInput = document.querySelector("[data-prompt]");
   const fileInput = document.querySelector("[data-file-input]");
   const gradeSelect = document.querySelector("[data-grade]");
@@ -27,6 +25,14 @@
   const uploadButton = document.querySelector("[data-open-upload]");
   const uploadImageButton = document.querySelector("[data-upload-image]");
   const uploadFileButton = document.querySelector("[data-upload-file]");
+  const scrollTopButton = document.querySelector("[data-scroll-top]");
+  const clearChatTrigger = document.querySelector("[data-clear-chat]");
+  const newSessionTrigger = document.querySelector("[data-new-session]");
+  const studentNameNodes = document.querySelectorAll("[data-student-name]");
+  const studentStreakNodes = document.querySelectorAll("[data-streak-days]");
+  const dashboardCopyNode = document.querySelector("[data-dashboard-copy]");
+  const achievementsNode = document.querySelector("[data-achievements]");
+  const placeholderButtons = document.querySelectorAll("[data-chat-placeholder]");
 
   if (!form || !messageList || !promptInput) return;
 
@@ -180,6 +186,42 @@
     return (files || []).some((file) => file?.type?.startsWith("video/") || blockedVideoExtensions.test(file?.name || ""));
   }
 
+  function syncAttachmentFiles(files) {
+    if (!fileInput) return;
+    const dataTransfer = new DataTransfer();
+    (files || []).forEach((file) => dataTransfer.items.add(file));
+    fileInput.files = dataTransfer.files;
+    if (typeof attachments !== "undefined") {
+      attachments = [...(files || [])];
+    }
+    renderRuntimeAttachments();
+  }
+
+  function renderRuntimeAttachments() {
+    if (!attachmentList) return;
+    const currentFiles = typeof attachments !== "undefined" && Array.isArray(attachments)
+      ? attachments
+      : Array.from(fileInput?.files || []);
+    attachmentList.innerHTML = currentFiles
+      .map((file, index) => `<div class="attachment"><span>📎 ${file.name}</span><button class="attachment-remove" type="button" data-remove-attachment="${index}" aria-label="إلغاء ${file.name}">×</button></div>`)
+      .join("");
+  }
+
+  function clearRuntimeAttachments() {
+    if (fileInput) fileInput.value = "";
+    if (typeof attachments !== "undefined") {
+      attachments = [];
+    }
+    renderRuntimeAttachments();
+  }
+
+  function removeRuntimeAttachment(index) {
+    const files = Array.from(fileInput?.files || []);
+    if (index < 0 || index >= files.length) return;
+    files.splice(index, 1);
+    syncAttachmentFiles(files);
+  }
+
   function isCompoundLearningRequest(text) {
     const normalized = typeof normalizeText === "function" ? normalizeText(text) : (text || "");
     return /ثم|وبعدها|بعد ذلك/.test(normalized) && /اشرح|ابدأ بشرح|أساسيات/.test(normalized) && /حل|مثال|نموذجي/.test(normalized);
@@ -310,6 +352,79 @@
 
   window.auto_subject_detector = runtimeAutoSubjectDetector;
 
+  function getAchievementChips(activeUser) {
+    if (!activeUser) {
+      return [
+        '<span class="student-achievement-chip student-achievement-chip-muted">سجّل دخولك ليبدأ حفظ الإنجازات تلقائيًا.</span>'
+      ];
+    }
+
+    const labels = {
+      "5_days_streak": "🔥 5 أيام متتالية",
+      "30_days_streak": "🏆 شارة 30 يومًا"
+    };
+    const saved = Array.isArray(activeUser.achievements) ? activeUser.achievements : [];
+    const chips = saved
+      .map((item) => labels[item] || "")
+      .filter(Boolean)
+      .map((label) => `<span class="student-achievement-chip">${label}</span>`);
+
+    if ((typeof analytics !== "undefined" ? analytics.totalMessages || 0 : 0) >= 10) {
+      chips.push('<span class="student-achievement-chip">✨ 10 أسئلة منجزة</span>');
+    }
+    if ((activeUser.xp || 0) >= 150) {
+      chips.push('<span class="student-achievement-chip">⭐ رصيد نشط</span>');
+    }
+
+    return chips.length
+      ? chips
+      : ['<span class="student-achievement-chip student-achievement-chip-muted">ستظهر إنجازاتك هنا بعد أول عدة أسئلة.</span>'];
+  }
+
+  function syncStudentDashboardHeader() {
+    const activeUser = typeof getActiveUser === "function" ? getActiveUser() : null;
+    const gradeLabel = activeUser?.grade || gradeSelect?.value || "هذا الصف";
+    const displayName = activeUser?.name || "صديق ملم";
+    const streakDays = activeUser?.streakDays || 0;
+
+    studentNameNodes.forEach((node) => {
+      node.textContent = displayName;
+    });
+    studentStreakNodes.forEach((node) => {
+      node.textContent = String(streakDays);
+    });
+
+    if (dashboardCopyNode) {
+      dashboardCopyNode.textContent = activeUser
+        ? `جاهز اليوم لمراجعة ${gradeLabel} بسرعة وبخطوات واضحة. ابدأ بسؤالك وسيتولى ملم الباقي.`
+        : "ابدأ مباشرة كضيف في الشات النصي، وسجّل دخولك عندما تريد حفظ التقدم وتحليل الصور.";
+    }
+
+    if (achievementsNode) {
+      achievementsNode.innerHTML = getAchievementChips(activeUser).join("");
+    }
+  }
+
+  function bindPromptPlaceholderButtons() {
+    placeholderButtons.forEach((button) => {
+      button.addEventListener("click", () => {
+        const placeholder = button.getAttribute("data-chat-placeholder");
+        if (placeholder && promptInput) {
+          promptInput.placeholder = placeholder;
+        }
+      });
+    });
+
+    const resetPlaceholder = () => {
+      if (promptInput) {
+        promptInput.placeholder = "اكتب سؤالك من المنهج السعودي...";
+      }
+    };
+
+    clearChatTrigger?.addEventListener("click", resetPlaceholder);
+    newSessionTrigger?.addEventListener("click", resetPlaceholder);
+  }
+
   function applyUserStudyContext() {
     const activeUser = typeof getActiveUser === "function" ? getActiveUser() : null;
     const isLogged = Boolean(activeUser);
@@ -413,6 +528,15 @@
       messageList.dataset.runtimeAutoscroll = "disabled";
     }
   };
+
+  function syncRuntimeScrollButton() {
+    if (!scrollTopButton) return;
+    const nearTop = window.scrollY < 240;
+    scrollTopButton.classList.add("visible");
+    scrollTopButton.textContent = nearTop ? "↓" : "↑";
+    scrollTopButton.setAttribute("aria-label", nearTop ? "النزول إلى أسفل الصفحة" : "العودة إلى أعلى الصفحة");
+    scrollTopButton.setAttribute("title", nearTop ? "النزول إلى أسفل الصفحة" : "العودة إلى أعلى الصفحة");
+  }
 
   function detectRoute(question, attachments) {
     const activeUser = typeof getActiveUser === "function" ? getActiveUser() : null;
@@ -655,7 +779,7 @@
     if (!question && !hasAttachments) return;
     if (hasBlockedVideo(attachments)) {
       addMessage("assistant", "ظ…ظ„ظ… ظٹط­ظ„", formatSimpleReply("رفع الفيديو غير متاح في المنصة حاليًا. يمكنك رفع صورة أو ملف دراسي فقط بعد تسجيل الدخول."));
-      if (fileInput) fileInput.value = "";
+      clearRuntimeAttachments();
       return;
     }
 
@@ -710,7 +834,7 @@
 
     if (hasAttachments && typeof isLoggedIn === "function" && !isLoggedIn()) {
       addMessage("assistant", "ملم يحل", formatSimpleReply('تحليل الصور متاح بعد تسجيل الدخول فقط. يمكنك الآن كتابة السؤال نصيًا، أو <a class="top-link" href="login.html">تسجيل الدخول</a> لتفعيل تحليل الصور.'));
-      if (fileInput) fileInput.value = "";
+      clearRuntimeAttachments();
       return;
     }
 
@@ -733,6 +857,7 @@
       sessionTitle: question || "سؤال جديد"
     });
 
+    clearRuntimeAttachments();
     promptInput.value = "";
     autoGrow(promptInput);
 
@@ -789,10 +914,39 @@
 
     if (typeof renderSessionList === "function") renderSessionList();
     if (typeof updateXpBalance === "function") updateXpBalance();
+    syncStudentDashboardHeader();
   }
 
   clearGuestWorkspace();
   applyUserStudyContext();
+  syncStudentDashboardHeader();
+  bindPromptPlaceholderButtons();
+  gradeSelect?.addEventListener("change", syncStudentDashboardHeader);
+  window.renderAttachments = renderRuntimeAttachments;
+  try { renderAttachments = renderRuntimeAttachments; } catch (_) {}
+  fileInput?.addEventListener("change", () => {
+    if (typeof attachments !== "undefined") {
+      attachments = Array.from(fileInput.files || []);
+    }
+    renderRuntimeAttachments();
+  });
+  attachmentList?.addEventListener("click", (event) => {
+    const removeButton = event.target.closest("[data-remove-attachment]");
+    if (!removeButton) return;
+    removeRuntimeAttachment(Number(removeButton.getAttribute("data-remove-attachment")));
+  });
+  window.addEventListener("scroll", syncRuntimeScrollButton, { passive: true });
+  scrollTopButton?.addEventListener("click", (event) => {
+    event.preventDefault();
+    event.stopImmediatePropagation();
+    const nearTop = window.scrollY < 240;
+    window.scrollTo({
+      top: nearTop ? document.documentElement.scrollHeight : 0,
+      behavior: "smooth"
+    });
+  }, true);
+  syncRuntimeScrollButton();
+  renderRuntimeAttachments();
   document.addEventListener("submit", runtimeHandleSubmit, true);
 })();
 

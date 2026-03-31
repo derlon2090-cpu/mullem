@@ -22,9 +22,6 @@
       ].forEach((key) => localStorage.removeItem(key));
     }
 
-    window.addEventListener("load", () => {
-      window.scrollTo(0, 0);
-    });
   } catch (_) {
     // Ignore storage/bootstrap issues and let the app continue loading.
   }
