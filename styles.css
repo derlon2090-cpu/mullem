@@ -1267,6 +1267,13 @@ a.memory-item {
   margin: 0;
 }
 
+.guest-mode .plus-btn.is-locked,
+.guest-mode .helper-btn.is-locked {
+  opacity: 0.55;
+  cursor: not-allowed;
+  filter: grayscale(0.15);
+}
+
 .simple-reply p {
   margin: 0;
 }

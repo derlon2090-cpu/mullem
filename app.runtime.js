@@ -5,6 +5,9 @@
   if ("scrollRestoration" in window.history) {
     window.history.scrollRestoration = "manual";
   }
+  if (window.location.hash === "#chat") {
+    history.replaceState(null, "", window.location.pathname + window.location.search);
+  }
   window.addEventListener("load", () => {
     window.scrollTo({ top: 0, left: 0, behavior: "auto" });
   });
@@ -21,6 +24,9 @@
   const selectorsWrap = document.querySelector(".selectors");
   const focusSubjectButton = document.querySelector("[data-focus-subject]");
   const selectionSummary = document.querySelector("[data-selection-summary]");
+  const uploadButton = document.querySelector("[data-open-upload]");
+  const uploadImageButton = document.querySelector("[data-upload-image]");
+  const uploadFileButton = document.querySelector("[data-upload-file]");
 
   if (!form || !messageList || !promptInput) return;
 
@@ -88,6 +94,7 @@
     const activeUser = typeof getActiveUser === "function" ? getActiveUser() : null;
     const isLogged = Boolean(activeUser);
     document.body.classList.toggle("user-logged-in", isLogged);
+    document.body.classList.toggle("guest-mode", !isLogged);
 
     if (gradeSelect && activeUser?.grade) {
       gradeSelect.value = activeUser.grade;
@@ -121,6 +128,17 @@
       };
     }
 
+    [uploadButton, uploadImageButton, uploadFileButton].forEach((button) => {
+      if (!button) return;
+      button.disabled = !isLogged;
+      button.classList.toggle("is-locked", !isLogged);
+      if (!isLogged) {
+        button.setAttribute("title", "يتطلب تسجيل الدخول");
+      } else {
+        button.removeAttribute("title");
+      }
+    });
+
     if (selectionSummary) {
       const gradeLabel = activeUser?.grade || gradeSelect?.value || "";
       const termLabel = termSelect?.value || "";
@@ -144,6 +162,7 @@
       "mlm_active_session_guest"
     ];
     guestKeys.forEach((key) => localStorage.removeItem(key));
+    localStorage.removeItem("mlm_resume_prompt");
 
     if (typeof likedAnswers !== "undefined") likedAnswers = [];
     if (typeof chatHistory !== "undefined") chatHistory = [];
@@ -156,6 +175,7 @@
     if (typeof renderInsights === "function") renderInsights();
     if (typeof renderSessionList === "function") renderSessionList();
     if (typeof resetConversationView === "function") resetConversationView();
+    if (messageList) messageList.innerHTML = "";
   }
 
   function isUserNearBottom() {
