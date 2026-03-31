@@ -183,6 +183,24 @@ const usageCosts = {
   image: 15
 };
 
+const subjectKeywordMap = {
+  الرياضيات: ["رياضيات", "احسب", "مساحة", "محيط", "معادلة", "دائرة", "مثلث", "كسور", "جبر", "هندسة", "تفاضل"],
+  العلوم: ["علوم", "نبات", "حيوان", "ماء", "حرارة", "طاقة", "خلية", "تبخر"],
+  الفيزياء: ["فيزياء", "نيوتن", "قوة", "حركة", "تسارع", "سرعة", "زخم", "احتكاك"],
+  الكيمياء: ["كيمياء", "رابطة", "أيونية", "تساهمية", "تفاعل", "ذرة", "حمض", "قاعدة", "na", "cl"],
+  الأحياء: ["أحياء", "خلية", "وراثة", "تنفس", "انقسام", "نبات", "حيوان"],
+  "اللغة العربية": ["عربي", "نحو", "إعراب", "مبتدأ", "خبر", "نص", "بلاغة", "صرف"],
+  "اللغة الإنجليزية": ["english", "grammar", "translate", "sentence", "present", "past", "correct"],
+  الاجتماعيات: ["اجتماعيات", "تاريخ", "جغرافيا", "وطن", "حضارة", "خريطة"],
+  "المهارات الرقمية": ["مهارات رقمية", "حاسب", "برمجة", "شبكات", "بيانات", "إنترنت"]
+};
+
+const stageHeuristics = {
+  ابتدائي: ["جمع", "طرح", "ضرب", "قسمة", "الكسور", "النبات", "الماء", "الجملة الاسمية البسيطة"],
+  متوسط: ["نسبة", "تناسب", "معادلة", "طاقة", "ذرة", "الفاعل", "المفعول", "present simple"],
+  ثانوي: ["تفاضل", "تكامل", "نيوتن", "الرابطة", "مولارية", "وراثة", "بلاغة", "grammar"]
+};
+
 const messageList = document.querySelector("[data-messages]");
 const promptInput = document.querySelector("[data-prompt]");
 const fileInput = document.querySelector("[data-file-input]");
@@ -375,6 +393,166 @@ function tokenize(text) {
   return normalizeText(text).split(/\s+/).filter(Boolean);
 }
 
+function getSelectedStageLabel(grade) {
+  if (!grade) return "";
+  if (grade.includes("ابتدائي")) return "ابتدائي";
+  if (grade.includes("متوسط")) return "متوسط";
+  if (grade.includes("ثانوي")) return "ثانوي";
+  return "";
+}
+
+function detectSubjectFromContent(text) {
+  const normalized = normalizeText(text);
+  let best = null;
+
+  Object.entries(subjectKeywordMap).forEach(([subject, keywords]) => {
+    const score = keywords.reduce((total, keyword) => total + (normalized.includes(normalizeText(keyword)) ? 1 : 0), 0);
+    if (!best || score > best.score) {
+      best = { subject, score };
+    }
+  });
+
+  return best?.score ? best.subject : "";
+}
+
+function detectGradeLevel(text) {
+  const normalized = normalizeText(text);
+  let best = { stage: "", score: 0 };
+
+  Object.entries(stageHeuristics).forEach(([stage, keywords]) => {
+    const score = keywords.reduce((total, keyword) => total + (normalized.includes(normalizeText(keyword)) ? 1 : 0), 0);
+    if (score > best.score) {
+      best = { stage, score };
+    }
+  });
+
+  return best.stage;
+}
+
+function determineInputType(userText, attachedFiles) {
+  const hasText = Boolean(userText?.trim());
+  const hasFiles = Array.isArray(attachedFiles) && attachedFiles.length > 0;
+  if (hasText && hasFiles) return "text_and_file";
+  if (hasFiles) {
+    const hasImage = attachedFiles.some((file) => file.type.startsWith("image/"));
+    return hasImage ? "image_only" : "file_only";
+  }
+  return "text_only";
+}
+
+function image_analyzer(attachedFiles, userText = "") {
+  const image = (attachedFiles || []).find((file) => file.type.startsWith("image/"));
+  if (!image) return { image_type: "none", extracted_text: "", confidence: 0 };
+
+  const fileName = normalizeText(image.name);
+  const combined = `${fileName} ${normalizeText(userText)}`;
+
+  if (/logo|brand|favicon|icon|شعار|هوية|تصميم|ملم/.test(combined)) {
+    return { image_type: "logo_or_branding", extracted_text: "", confidence: 0.95 };
+  }
+
+  if (/blur|blurry|unclear|مشوش|ضبابي/.test(combined) || (!userText && image.size < 25000)) {
+    return { image_type: "unclear_image", extracted_text: "", confidence: 0.72 };
+  }
+
+  if (/page|lesson|book|chapter|worksheet|summary|ملخص|كتاب|ورقة|درس|صفحة/.test(combined)) {
+    return {
+      image_type: "educational_page",
+      extracted_text: userText || "تم التعرف على صفحة تعليمية أو ملخص دراسي.",
+      confidence: 0.81
+    };
+  }
+
+  if (/question|exercise|problem|homework|quiz|سؤال|مسألة|واجب|اختر|صح|خطأ/.test(combined) || userText.trim()) {
+    return {
+      image_type: "educational_question",
+      extracted_text: userText || "تم التعرف على صورة سؤال تعليمي.",
+      confidence: 0.84
+    };
+  }
+
+  if (/pdf|doc|document|statement|invoice|عقد|هوية|فاتورة/.test(combined)) {
+    return { image_type: "document_non_educational", extracted_text: "", confidence: 0.8 };
+  }
+
+  if (!userText && !/رياضيات|علوم|فيزياء|كيمياء|أحياء|عربي|english|تعليمي/.test(combined)) {
+    return { image_type: "non_educational_image", extracted_text: "", confidence: 0.75 };
+  }
+
+  return { image_type: "unclear_image", extracted_text: "", confidence: 0.4 };
+}
+
+function curriculum_scope_checker({ userText, selectedGrade, selectedSubject, imageMeta }) {
+  const sourceText = `${userText || ""} ${imageMeta?.extracted_text || ""}`;
+  const detectedSubject = detectSubjectFromContent(sourceText);
+  const detectedGradeLevel = detectGradeLevel(sourceText);
+  const selectedStage = getSelectedStageLabel(selectedGrade);
+
+  if (!detectedSubject) {
+    return {
+      detected_subject: "",
+      detected_grade_level: detectedGradeLevel,
+      scope_status: "subject_unknown"
+    };
+  }
+
+  if (selectedSubject && detectedSubject && detectedSubject !== selectedSubject) {
+    return {
+      detected_subject: detectedSubject,
+      detected_grade_level: detectedGradeLevel,
+      scope_status: "subject_mismatch"
+    };
+  }
+
+  if (detectedGradeLevel && selectedStage && detectedGradeLevel !== selectedStage) {
+    return {
+      detected_subject: detectedSubject,
+      detected_grade_level: detectedGradeLevel,
+      scope_status: "grade_mismatch"
+    };
+  }
+
+  return {
+    detected_subject: detectedSubject,
+    detected_grade_level: detectedGradeLevel,
+    scope_status: "matched"
+  };
+}
+
+function request_router({ user_text, uploaded_files, selected_grade, selected_subject, user_profile }) {
+  const input_type = determineInputType(user_text, uploaded_files);
+  const image_type = input_type.includes("image")
+    ? image_analyzer(uploaded_files, user_text)
+    : { image_type: "none", extracted_text: "", confidence: 0 };
+  const intent = intent_router(`${user_text || ""} ${image_type.extracted_text || ""}`, uploaded_files?.length > 0);
+  const scope = curriculum_scope_checker({
+    userText: user_text,
+    selectedGrade: selected_grade || user_profile?.grade || "",
+    selectedSubject: selected_subject || "",
+    imageMeta: image_type
+  });
+
+  let response_mode = "academic_solve";
+
+  if (input_type === "file_only" && !user_text.trim()) response_mode = "content_interpretation";
+  if (image_type.image_type === "logo_or_branding") response_mode = "reject_logo_image";
+  else if (image_type.image_type === "non_educational_image" || image_type.image_type === "document_non_educational") response_mode = "reject_out_of_scope_image";
+  else if (image_type.image_type === "unclear_image") response_mode = "ask_clearer_upload";
+  else if (image_type.image_type === "educational_page" && !user_text.trim()) response_mode = "content_interpretation";
+  else if (scope.scope_status === "subject_mismatch" || scope.scope_status === "grade_mismatch" || scope.scope_status === "subject_unknown") response_mode = "ask_for_confirmation";
+
+  return {
+    input_type,
+    intent,
+    image_type: image_type.image_type,
+    extracted_text: image_type.extracted_text,
+    detected_subject: scope.detected_subject,
+    detected_grade_level: scope.detected_grade_level,
+    scope_status: scope.scope_status,
+    response_mode
+  };
+}
+
 function classifyIntent(message, hasAttachments = false) {
   const normalized = normalizeText(message);
   const context = getCurrentContext();
@@ -538,6 +716,47 @@ function formatClarificationReply(payload) {
   `;
 }
 
+function createImageRouterResponse(route) {
+  if (route.response_mode === "reject_logo_image") {
+    return formatSimpleReply("يبدو أن الصورة المرفقة ليست سؤالًا دراسيًا، بل أقرب إلى شعار أو تصميم. إذا كنت تريد المساعدة التعليمية، أرسل صورة السؤال أو اكتبه نصًا.");
+  }
+
+  if (route.response_mode === "reject_out_of_scope_image") {
+    return formatSimpleReply("الصورة المرفقة لا تبدو ضمن نطاق التعليم. تأكد من إرسال صورة سؤال أو صفحة دراسية واضحة.");
+  }
+
+  if (route.response_mode === "ask_clearer_upload") {
+    return formatSimpleReply("تعذر قراءة محتوى الصورة بشكل واضح. يرجى إعادة رفع صورة أوضح أو كتابة السؤال نصًا.");
+  }
+
+  if (route.response_mode === "ask_for_confirmation") {
+    if (route.scope_status === "subject_mismatch") {
+      return formatSimpleReply(`يبدو أن هذا السؤال يتبع مادة ${route.detected_subject}، بينما المادة المحددة لديك هي ${subjectSelect?.value || "غير محددة"}. تأكد من المادة أو غيّرها حتى أجيبك بدقة.`);
+    }
+
+    if (route.scope_status === "grade_mismatch") {
+      return formatSimpleReply("هذا السؤال يبدو من مستوى دراسي مختلف عن الصف المحدد لديك. تأكد من الصف أو حدّثه لضمان إجابة مناسبة.");
+    }
+
+    return formatSimpleReply("لم أتمكن من تحديد المادة بدقة من السؤال الحالي. يرجى اختيار المادة أو كتابة السؤال بشكل أوضح.");
+  }
+
+  if (route.response_mode === "content_interpretation") {
+    return `
+      <div class="clarify-card">
+        <p>تم التعرف على المرفق كمحتوى تعليمي، لكن أحتاج تأكيد المطلوب تحديدًا: هل تريد شرحًا أم تلخيصًا أم حل الأسئلة الموجودة فيه؟</p>
+        <div class="inline-actions">
+          <button class="inline-action-btn" type="button" data-fill-prompt="اشرح محتوى هذه الصفحة التعليمية">شرح المحتوى</button>
+          <button class="inline-action-btn" type="button" data-fill-prompt="لخص محتوى هذه الصفحة التعليمية">تلخيص المحتوى</button>
+          <button class="inline-action-btn" type="button" data-fill-prompt="استخرج الأسئلة الموجودة في هذه الصفحة وحلها">حل الأسئلة</button>
+        </div>
+      </div>
+    `;
+  }
+
+  return "";
+}
+
 function createLoadingCopy() {
   const lines = [
     "جاري تحليل السؤال...",
@@ -561,8 +780,8 @@ function renderWelcomeMessage() {
       <div class="answer-grid">
         <section class="answer-section answer-section-wide">
           <h4>كيف أقدر أساعدك اليوم؟</h4>
-          <p>أنا مساعد أكاديمي للمنهج السعودي. أستطيع حل الأسئلة، شرح الدروس، تحليل الأخطاء، وتحديد الإجابة الصحيحة إذا كان السؤال اختيارات أو صح أو خطأ.</p>
-          <p class="logic-note">جرّب أحد هذه الأمثلة: احسب محيط دائرة نصف قطرها 7 | اشرح قانون نيوتن الثاني | حل هذا السؤال | حل سؤال من صورة</p>
+          <p>أنا مساعد أكاديمي للمنهج السعودي. أفهم السؤال أو الصورة أولًا، وأتحقق من المادة والصف قبل الإجابة، ثم أختار نوع الرد المناسب: حل أو شرح أو اختبار أو توليد أسئلة.</p>
+          <p class="logic-note">يمكنك استخدام الشات النصي مباشرة كزائر. أما الصور وتحليلها فتتطلب تسجيل الدخول.</p>
         </section>
       </div>
     `
@@ -1204,7 +1423,15 @@ async function handleSubmit(event) {
   const hasAttachments = attachments.length > 0;
   if (!question && !hasAttachments) return;
 
-  const intent = classifyIntent(question, hasAttachments);
+  const activeUser = getActiveUser();
+  const route = request_router({
+    user_text: question,
+    uploaded_files: attachments,
+    selected_grade: gradeSelect?.value || activeUser?.grade || "",
+    selected_subject: subjectSelect?.value || "",
+    user_profile: activeUser || {}
+  });
+  const intent = route.intent;
   if (hasAttachments && !isLoggedIn()) {
     addMessage(
       "assistant",
@@ -1217,15 +1444,21 @@ async function handleSubmit(event) {
     return;
   }
 
-  const usageCost = hasAttachments ? usageCosts.image : usageCosts.chat;
-  const pointsResult = spendPoints(usageCost, hasAttachments ? "تحليل صورة" : "استخدام الشات");
-  if (!pointsResult.ok) {
-    addMessage(
-      "assistant",
-      "ملم يحل",
-      formatSimpleReply(`رصيدك الحالي ${pointsResult.remaining} نقطة، وهذا لا يكفي لهذه العملية. تحتاج ${usageCost} نقطة. يمكنك شراء نقاط إضافية من <a class="top-link" href="subscriptions.html">صفحة الباقات</a>.`)
-    );
-    return;
+  const shouldCharge =
+    !hasAttachments ||
+    route.response_mode === "academic_solve" ||
+    route.response_mode === "content_interpretation";
+  const usageCost = shouldCharge ? (hasAttachments ? usageCosts.image : usageCosts.chat) : 0;
+  if (usageCost > 0) {
+    const pointsResult = spendPoints(usageCost, hasAttachments ? "تحليل صورة" : "استخدام الشات");
+    if (!pointsResult.ok) {
+      addMessage(
+        "assistant",
+        "ملم يحل",
+        formatSimpleReply(`رصيدك الحالي ${pointsResult.remaining} نقطة، وهذا لا يكفي لهذه العملية. تحتاج ${usageCost} نقطة. يمكنك شراء نقاط إضافية من <a class="top-link" href="subscriptions.html">صفحة الباقات</a>.`)
+      );
+      return;
+    }
   }
 
   const renderedQuestion = hasAttachments
@@ -1242,14 +1475,16 @@ async function handleSubmit(event) {
   let sources = [];
   let responseForLog = null;
 
-  if (intent.type === "chat") {
+  if (route.response_mode !== "academic_solve") {
+    body = createImageRouterResponse(route);
+  } else if (intent.type === "chat") {
     body = formatSimpleReply(createCasualResponse(question));
   } else if (intent.type === "help") {
     body = formatSimpleReply(createHelpResponse());
   } else if (needsClarification(question, intent, hasAttachments)) {
     body = formatClarificationReply(createClarificationResponse(question, intent));
   } else {
-    const response = createAcademicResponse(question || "حل السؤال من الملفات المرفقة", intent);
+    const response = createAcademicResponse(question || route.extracted_text || "حل السؤال من الملفات المرفقة", intent);
     responseForLog = response;
     body = formatAssistantSections(response);
     sources = buildSources();
@@ -1268,9 +1503,11 @@ async function handleSubmit(event) {
   aiLogs.unshift({
     question: question || "سؤال مرفق",
     intent: intent.type,
-    subject: subjectSelect?.value || "عام",
-    responseMode: responseForLog?.mode || intent.type,
+    subject: route.detected_subject || subjectSelect?.value || "عام",
+    responseMode: responseForLog?.mode || route.response_mode || intent.type,
     usedAttachments: hasAttachments,
+    imageType: route.image_type,
+    scopeStatus: route.scope_status,
     createdAt: Date.now()
   });
   aiLogs = aiLogs.slice(0, 40);
