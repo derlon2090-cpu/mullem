@@ -395,6 +395,103 @@ body.solve-mode-quick .selectors-hero {
   font-size: 1rem;
 }
 
+.sidebar-panel-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.sidebar-panel-head .sidebar-title {
+  margin-bottom: 0;
+}
+
+.session-list {
+  display: grid;
+  gap: 12px;
+}
+
+.session-empty {
+  padding: 14px 16px;
+  border-radius: 18px;
+  border: 1px dashed rgba(34, 197, 94, 0.24);
+  background: rgba(255, 255, 255, 0.84);
+  color: var(--muted);
+  line-height: 1.8;
+}
+
+.session-card {
+  padding: 14px;
+  border-radius: 18px;
+  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.96);
+  display: grid;
+  gap: 10px;
+  transition: 180ms ease;
+}
+
+.session-card.active {
+  border-color: rgba(34, 197, 94, 0.24);
+  background: var(--brand-soft);
+}
+
+.session-card.pinned {
+  box-shadow: inset 0 0 0 1px rgba(34, 197, 94, 0.18);
+}
+
+.session-card-head,
+.session-card-actions,
+.session-card-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.session-open-btn {
+  width: 100%;
+  text-align: right;
+  border: 0;
+  background: transparent;
+  padding: 0;
+  cursor: pointer;
+  color: inherit;
+  display: grid;
+  gap: 4px;
+}
+
+.session-card-title {
+  font-weight: 800;
+  line-height: 1.6;
+}
+
+.session-card-preview {
+  color: var(--muted);
+  font-size: 0.94rem;
+  line-height: 1.7;
+}
+
+.session-card-meta {
+  color: var(--muted);
+  font-size: 0.86rem;
+}
+
+.session-action-btn {
+  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.94);
+  color: var(--muted);
+  border-radius: 999px;
+  padding: 8px 12px;
+  cursor: pointer;
+}
+
+.session-action-btn:hover,
+.session-open-btn:hover .session-card-title {
+  color: var(--brand-strong);
+}
+
 .workspace-main {
   padding: 0;
   overflow: visible;

@@ -7,6 +7,8 @@ const storageKeys = {
   analytics: "mlm_analytics",
   feedback: "mlm_feedback_log",
   aiLogs: "mlm_ai_logs",
+  sessions: "mlm_chat_sessions",
+  activeSession: "mlm_active_session",
   responseMode: "mlm_response_mode",
   solveMode: "mlm_solve_mode",
   resumePrompt: "mlm_resume_prompt"
@@ -217,6 +219,7 @@ const runtimeSelect = document.querySelector("[data-runtime]");
 const trainingModeSelect = document.querySelector("[data-training-mode]");
 const learnList = document.querySelector("[data-learned]");
 const historyList = document.querySelector("[data-history]");
+const sessionList = document.querySelector("[data-session-list]");
 const insightsList = document.querySelector("[data-insights]");
 const questionBank = document.querySelector("[data-question-bank]");
 const wajibatiLibraryList = document.querySelector("[data-wajibati-library]");
@@ -237,6 +240,7 @@ const uploadImageButton = document.querySelector("[data-upload-image]");
 const uploadFileButton = document.querySelector("[data-upload-file]");
 const focusSubjectButton = document.querySelector("[data-focus-subject]");
 const clearChatButton = document.querySelector("[data-clear-chat]");
+const newSessionButton = document.querySelector("[data-new-session]");
 const scrollTopButton = document.querySelector("[data-scroll-top]");
 const responseModeButtons = document.querySelectorAll("[data-response-mode]");
 const solveModeButtons = document.querySelectorAll("[data-solve-mode]");
@@ -245,11 +249,13 @@ let attachments = [];
 let clarificationCursor = 0;
 let likedAnswers = [];
 let chatHistory = [];
+let chatSessions = [];
 let analytics = createEmptyAnalytics();
 let feedbackLog = [];
 let aiLogs = [];
 let selectedResponseMode = localStorage.getItem(storageKeys.responseMode) || "educational";
 let selectedSolveMode = localStorage.getItem(storageKeys.solveMode) || "quick";
+let activeSessionId = null;
 
 function loadJson(key, fallback) {
   try {
@@ -304,6 +310,8 @@ function loadUserState() {
   analytics = loadJson(getScopedStorageKey(storageKeys.analytics), createEmptyAnalytics());
   feedbackLog = loadJson(getScopedStorageKey(storageKeys.feedback), []);
   aiLogs = loadJson(getScopedStorageKey(storageKeys.aiLogs), []);
+  chatSessions = loadJson(getScopedStorageKey(storageKeys.sessions), []);
+  activeSessionId = localStorage.getItem(getScopedStorageKey(storageKeys.activeSession)) || chatSessions[0]?.id || null;
 }
 
 function saveLikedAnswers() {
@@ -324,6 +332,20 @@ function saveFeedbackLog() {
 
 function saveAiLogs() {
   saveJson(getScopedStorageKey(storageKeys.aiLogs), aiLogs);
+}
+
+function saveChatSessions() {
+  if (!isLoggedIn()) return;
+  saveJson(getScopedStorageKey(storageKeys.sessions), chatSessions);
+}
+
+function saveActiveSession() {
+  if (!isLoggedIn()) return;
+  if (activeSessionId) {
+    localStorage.setItem(getScopedStorageKey(storageKeys.activeSession), activeSessionId);
+  } else {
+    localStorage.removeItem(getScopedStorageKey(storageKeys.activeSession));
+  }
 }
 
 function getGradeMaterials(grade) {
@@ -1408,6 +1430,166 @@ function renderLearnedMemory() {
     .join("");
 }
 
+function stripHtml(html) {
+  return (html || "").replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim();
+}
+
+function createSessionTitle(question, subject = "") {
+  const plain = stripHtml(question || "");
+  const tokens = plain.split(/\s+/).filter(Boolean).slice(0, 7).join(" ");
+  if (!tokens) return subject ? `محادثة ${subject}` : "محادثة جديدة";
+  return tokens;
+}
+
+function sortSessions(list = []) {
+  return [...list].sort((a, b) => {
+    if (Boolean(b.pinned) !== Boolean(a.pinned)) return Number(b.pinned) - Number(a.pinned);
+    return (b.updatedAt || 0) - (a.updatedAt || 0);
+  });
+}
+
+function getActiveSession() {
+  return chatSessions.find((session) => session.id === activeSessionId) || null;
+}
+
+function createSession(question = "", subject = "") {
+  const now = Date.now();
+  const session = {
+    id: `session_${now}_${Math.random().toString(36).slice(2, 8)}`,
+    title: createSessionTitle(question, subject),
+    preview: stripHtml(question) || "ابدأ أول رسالة في هذه المحادثة.",
+    subject: subject || "",
+    createdAt: now,
+    updatedAt: now,
+    pinned: false,
+    messages: []
+  };
+  chatSessions.unshift(session);
+  chatSessions = sortSessions(chatSessions);
+  activeSessionId = session.id;
+  saveChatSessions();
+  saveActiveSession();
+  return session;
+}
+
+function ensureActiveSession(question = "", subject = "") {
+  if (!isLoggedIn()) return null;
+  let session = getActiveSession();
+  if (!session) {
+    session = createSession(question, subject);
+  }
+  return session;
+}
+
+function updateSession(sessionId, updater) {
+  const index = chatSessions.findIndex((session) => session.id === sessionId);
+  if (index === -1) return null;
+  const current = chatSessions[index];
+  const next = typeof updater === "function" ? updater(current) : { ...current, ...updater };
+  chatSessions[index] = next;
+  chatSessions = sortSessions(chatSessions);
+  saveChatSessions();
+  saveActiveSession();
+  return next;
+}
+
+function appendMessageToSession(type, author, body, options = {}) {
+  if (!isLoggedIn()) return;
+  const session = ensureActiveSession(options.sessionTitle || body, options.subject || "");
+  if (!session) return;
+  const now = Date.now();
+  updateSession(session.id, (current) => {
+    const messages = [...(current.messages || []), {
+      id: `msg_${now}_${Math.random().toString(36).slice(2, 8)}`,
+      type,
+      author,
+      body,
+      createdAt: now,
+      enableTools: Boolean(options.enableTools),
+      sources: Array.isArray(options.sources) ? options.sources : [],
+      metadata: options.metadata || undefined
+    }];
+    const title = current.messages?.length ? current.title : createSessionTitle(options.sessionTitle || body, options.subject || current.subject);
+    return {
+      ...current,
+      title,
+      subject: options.subject || current.subject || "",
+      preview: stripHtml(body).slice(0, 120) || current.preview,
+      updatedAt: now,
+      messages
+    };
+  });
+  renderSessionList();
+}
+
+function restoreSession(sessionId) {
+  const session = chatSessions.find((entry) => entry.id === sessionId);
+  if (!session || !messageList) return;
+  activeSessionId = sessionId;
+  saveActiveSession();
+  messageList.innerHTML = "";
+  attachments = [];
+  renderAttachments();
+  session.messages.forEach((message) => {
+    addMessage(message.type, message.author, message.body, {
+      metadata: message.metadata,
+      enableTools: message.enableTools,
+      sources: message.sources
+    });
+  });
+  if (!session.messages.length) renderWelcomeMessage();
+  renderSessionList();
+}
+
+function startFreshSession() {
+  attachments = [];
+  if (fileInput) fileInput.value = "";
+  renderAttachments();
+  if (!isLoggedIn()) {
+    resetConversationView();
+    return;
+  }
+  createSession("", subjectSelect?.value || "");
+  resetConversationView();
+  renderSessionList();
+}
+
+function renderSessionList() {
+  if (!sessionList) return;
+  if (!isLoggedIn()) {
+    sessionList.innerHTML = `<div class="session-empty">سجّل الدخول ليبدأ حفظ محادثاتك هنا، ثم يمكنك الرجوع لها وإكمالها في أي وقت.</div>`;
+    return;
+  }
+
+  if (!chatSessions.length) {
+    sessionList.innerHTML = `<div class="session-empty">لا توجد محادثات محفوظة بعد. ابدأ أول محادثة لك الآن وسيتم حفظها داخل حسابك تلقائيًا.</div>`;
+    return;
+  }
+
+  sessionList.innerHTML = sortSessions(chatSessions)
+    .map((session) => `
+      <article class="session-card ${session.id === activeSessionId ? "active" : ""} ${session.pinned ? "pinned" : ""}">
+        <button class="session-open-btn" type="button" data-open-session="${session.id}">
+          <div class="session-card-head">
+            <strong class="session-card-title">${session.title}</strong>
+            <span>${session.pinned ? "📌" : ""}</span>
+          </div>
+          <div class="session-card-preview">${session.preview || "ابدأ أول رسالة في هذه المحادثة."}</div>
+          <div class="session-card-meta">
+            <span>${session.subject || "عام"}</span>
+            <span>${new Date(session.updatedAt || session.createdAt || Date.now()).toLocaleDateString("ar-SA")}</span>
+          </div>
+        </button>
+        <div class="session-card-actions">
+          <button class="session-action-btn" type="button" data-pin-session="${session.id}">${session.pinned ? "إلغاء التثبيت" : "تثبيت"}</button>
+          <button class="session-action-btn" type="button" data-rename-session="${session.id}">إعادة تسمية</button>
+          <button class="session-action-btn" type="button" data-delete-session="${session.id}">حذف</button>
+        </div>
+      </article>
+    `)
+    .join("");
+}
+
 function renderHistory() {
   if (!historyList) return;
   if (!isLoggedIn()) {
@@ -1822,6 +2004,52 @@ function handleMessageInteractions(event) {
   }
 }
 
+function handleSessionInteractions(event) {
+  const openButton = event.target.closest("[data-open-session]");
+  const pinButton = event.target.closest("[data-pin-session]");
+  const renameButton = event.target.closest("[data-rename-session]");
+  const deleteButton = event.target.closest("[data-delete-session]");
+
+  if (openButton) {
+    restoreSession(openButton.getAttribute("data-open-session") || "");
+    return;
+  }
+
+  if (pinButton) {
+    const sessionId = pinButton.getAttribute("data-pin-session") || "";
+    updateSession(sessionId, (current) => ({ ...current, pinned: !current.pinned }));
+    renderSessionList();
+    return;
+  }
+
+  if (renameButton) {
+    const sessionId = renameButton.getAttribute("data-rename-session") || "";
+    const current = chatSessions.find((session) => session.id === sessionId);
+    const nextTitle = window.prompt("اكتب اسمًا جديدًا للمحادثة:", current?.title || "");
+    if (nextTitle && nextTitle.trim()) {
+      updateSession(sessionId, { title: nextTitle.trim() });
+      renderSessionList();
+    }
+    return;
+  }
+
+  if (deleteButton) {
+    const sessionId = deleteButton.getAttribute("data-delete-session") || "";
+    chatSessions = chatSessions.filter((session) => session.id !== sessionId);
+    if (activeSessionId === sessionId) {
+      activeSessionId = chatSessions[0]?.id || null;
+    }
+    saveChatSessions();
+    saveActiveSession();
+    renderSessionList();
+    if (activeSessionId) {
+      restoreSession(activeSessionId);
+    } else {
+      resetConversationView();
+    }
+  }
+}
+
 function handleLibraryInteractions(event) {
   const chip = event.target.closest("[data-library-subject]");
   if (!chip) return;
@@ -2222,4 +2450,724 @@ function bootstrap() {
   }
 }
 
+function intent_analyzer(message, hasAttachments = false) {
+  const baseIntent = intent_router(message, hasAttachments);
+  return {
+    ...baseIntent,
+    raw_message: message,
+    input_has_attachments: hasAttachments,
+    should_answer_directly: baseIntent.confidence >= 0.7 && baseIntent.type !== "unclear"
+  };
+}
+
+function extractConcepts(question, contextEntry = null) {
+  const normalized = normalizeText(question);
+  const conceptSet = new Set();
+
+  if (contextEntry?.lesson) conceptSet.add(contextEntry.lesson);
+  if (contextEntry?.unit) conceptSet.add(contextEntry.unit);
+
+  Object.values(subjectKeywordMap).flat().forEach((keyword) => {
+    const token = normalizeText(keyword);
+    if (token && token.length > 2 && normalized.includes(token)) {
+      conceptSet.add(keyword);
+    }
+  });
+
+  return [...conceptSet].slice(0, 6);
+}
+
+function estimateDifficulty(question, detectedGrade = "") {
+  const normalized = normalizeText(question);
+  const tokenCount = tokenize(question).length;
+  if (detectedGrade === "ثانوي" || /تفاضل|تكامل|مولارية|نيوتن|وراثة|بلاغة/.test(normalized)) return "عالية";
+  if (detectedGrade === "متوسط" || tokenCount >= 10) return "متوسطة";
+  return "أساسية";
+}
+
+function reasoning_engine(question, options = {}) {
+  const subjectPass = auto_subject_detector(question);
+  const gradePass = grade_estimator(question);
+  const context = retrieveCurriculumContext(question, options.preferredSubject || subjectPass.subject || "");
+  const questionType = detectQuestionType(question);
+  const concepts = extractConcepts(question, context.entry);
+
+  return {
+    questionType,
+    detectedSubject: options.detectedSubject || subjectPass.subject || context.subject,
+    detectedGrade: options.detectedGrade || gradePass.stage || context.grade,
+    subjectConfidence: options.subjectConfidence ?? subjectPass.confidence,
+    gradeConfidence: options.gradeConfidence ?? gradePass.confidence,
+    concepts,
+    difficulty: estimateDifficulty(question, gradePass.stage || context.grade),
+    lesson: context.lesson,
+    unit: context.unit,
+    context,
+    analysisPasses: subjectPass.passes || [],
+    needsConfirmation: (options.subjectConfidence ?? subjectPass.confidence) < 0.7
+  };
+}
+
+function curriculum_rag(question, options = {}) {
+  const context = retrieveCurriculumContext(question, options.preferredSubject || "");
+  const sources = buildSources();
+  return {
+    context,
+    lesson: context.lesson,
+    unit: context.unit,
+    subject: context.subject,
+    grade: context.grade,
+    entry: context.entry,
+    sources
+  };
+}
+
+function response_router(payload) {
+  const { intent, reasoning, route } = payload;
+
+  if (route?.response_mode && route.response_mode !== "academic_solve") {
+    return route.response_mode;
+  }
+
+  if (intent.type === "chat") return "conversation";
+  if (intent.type === "help") return "help";
+  if (intent.type === "generate_questions") return "questions";
+  if (intent.type === "quiz") return "quiz";
+  if (intent.type === "summary") return "summary";
+  if (intent.type === "answer_analysis") return "analysis";
+  if (reasoning.questionType === "صح وخطأ" || reasoning.questionType === "اختيار من متعدد") return "objective";
+  if (intent.type === "explain") return "explain";
+  return "solve";
+}
+
+function response_builder(payload) {
+  const { question, intent, reasoning, knowledge, mode } = payload;
+  const context = knowledge.context;
+  const objective = solveObjectiveQuestion(question);
+  const math = solveMathQuestion(question);
+
+  if (mode === "objective" && objective) {
+    return {
+      ...objective,
+      mode: "solve",
+      questionType: reasoning.questionType,
+      subject: reasoning.detectedSubject || knowledge.subject,
+      lesson: reasoning.lesson || knowledge.lesson,
+      curriculumLink: `تم تحليل السؤال على أنه ${reasoning.questionType} في ${reasoning.detectedSubject || knowledge.subject}.`
+    };
+  }
+
+  if (mode === "solve" && math) {
+    return {
+      ...math,
+      mode: "solve",
+      questionType: reasoning.questionType,
+      subject: reasoning.detectedSubject || knowledge.subject,
+      lesson: reasoning.lesson || knowledge.lesson,
+      curriculumLink: `تم ربط السؤال بموضوع ${reasoning.lesson || knowledge.lesson} في ${reasoning.detectedSubject || knowledge.subject}.`
+    };
+  }
+
+  const base = {
+    mode: mode === "explain" ? "explain" : intent.type,
+    questionType: reasoning.questionType,
+    subject: reasoning.detectedSubject || knowledge.subject,
+    lesson: reasoning.lesson || knowledge.lesson,
+    finalAnswer: `هذا هو الجواب الأقرب بناءً على تحليل السؤال في ${reasoning.detectedSubject || knowledge.subject}.`,
+    explanation: knowledge.entry?.explanation || `تم تحليل السؤال وتقدير أنه ضمن ${reasoning.detectedSubject || knowledge.subject}، مع التركيز على ${reasoning.lesson || "المفهوم الأقرب"}.`,
+    steps: knowledge.entry?.steps || [
+      "فهم المطلوب من صياغة السؤال.",
+      "تحديد المادة ونوع السؤال والمفهوم الرئيس.",
+      "بناء جواب مناسب ثم مراجعته قبل الإرسال."
+    ],
+    mistakes: knowledge.entry?.mistakes || [
+      "الانتقال للحل قبل تحديد المطلوب بدقة.",
+      "إهمال الكلمات المفتاحية في نص السؤال."
+    ],
+    similar: knowledge.entry?.similar || `جرّب سؤالًا مشابهًا في ${reasoning.detectedSubject || knowledge.subject} لتثبيت الفهم.`,
+    curriculumLink: `الجواب مرتبط بمحتوى ${reasoning.detectedSubject || knowledge.subject}${knowledge.lesson ? ` ودرس ${knowledge.lesson}` : ""}.`
+  };
+
+  if (mode === "questions") {
+    return {
+      ...base,
+      intro: `هذه أسئلة تدريبية مقترحة في ${reasoning.detectedSubject || knowledge.subject}.`,
+      questions: generateCurriculumQuestions(context)
+    };
+  }
+
+  if (mode === "quiz") {
+    return {
+      ...base,
+      finalAnswer: "سأبدأ معك الآن بسؤال واحد على نفس الموضوع.",
+      quizQuestion: generateCurriculumQuestions(context)[0]
+    };
+  }
+
+  if (mode === "summary") {
+    return {
+      ...base,
+      bullets: [
+        `المادة المتوقعة: ${reasoning.detectedSubject || knowledge.subject}`,
+        `الصف التقريبي: ${reasoning.detectedGrade || knowledge.grade || "غير محدد"}`,
+        `الموضوع الأقرب: ${reasoning.lesson || knowledge.lesson || "غير محدد"}`
+      ]
+    };
+  }
+
+  if (mode === "analysis") {
+    return {
+      ...base,
+      finalAnswer: "هذه قراءة أولية لإجابتك مع موضع الخطأ المحتمل والتحسين المقترح.",
+      explanation: "أقارن بين صياغة السؤال وما كتبته، ثم أحدد هل الخطأ مفاهيمي أم حسابي أم في الفهم.",
+      steps: [
+        "تحديد المطلوب الأصلي من السؤال.",
+        "مقارنة إجابتك بالمفهوم أو الخطوات الصحيحة.",
+        "اقتراح تعديل مباشر يحسن الإجابة."
+      ]
+    };
+  }
+
+  return base;
+}
+
+function self_checker(response, payload) {
+  const { reasoning, intent } = payload;
+  const checked = { ...response };
+
+  if (!checked.subject) checked.subject = reasoning.detectedSubject || "عام";
+  if (!checked.questionType) checked.questionType = reasoning.questionType || "سؤال أكاديمي";
+  if (!checked.explanation || checked.explanation.length < 24) {
+    checked.explanation = `تمت مراجعة الجواب ليتوافق مع ${checked.subject} وبأسلوب واضح ومباشر.`;
+  }
+  if (!Array.isArray(checked.steps) || !checked.steps.length) {
+    checked.steps = [
+      "فهم السؤال.",
+      "تحديد المفهوم المناسب.",
+      "بناء الجواب النهائي بشكل مرتب."
+    ];
+  }
+  if (intent.type === "generate_questions" && checked.finalAnswer?.includes("الجواب")) {
+    checked.finalAnswer = `هذه أسئلة تدريبية مناسبة في ${checked.subject}.`;
+  }
+  if (intent.type === "quiz" && checked.explanation?.length > 180) {
+    checked.explanation = "سأعطيك سؤالًا واحدًا أولًا، ثم أقيّم إجابتك قبل الانتقال للسؤال التالي.";
+  }
+  checked.review = {
+    clear: true,
+    alignedWithIntent: true,
+    difficulty: reasoning.difficulty,
+    concepts: reasoning.concepts
+  };
+
+  return checked;
+}
+
+function createAcademicResponse(question, intent, options = {}) {
+  const understanding = intent_analyzer(question, Boolean(options.hasAttachments));
+  const reasoning = reasoning_engine(question, {
+    preferredSubject: options.preferredSubject || "",
+    detectedSubject: options.detectedSubject || "",
+    detectedGrade: options.detectedGrade || "",
+    subjectConfidence: options.subjectConfidence,
+    gradeConfidence: options.gradeConfidence
+  });
+  const knowledge = curriculum_rag(question, {
+    preferredSubject: reasoning.detectedSubject || options.preferredSubject || ""
+  });
+  const mode = response_router({
+    intent: understanding,
+    reasoning,
+    route: options.route || null
+  });
+  const draft = response_builder({
+    question,
+    intent: understanding,
+    reasoning,
+    knowledge,
+    mode
+  });
+
+  return self_checker(draft, {
+    intent: understanding,
+    reasoning,
+    knowledge,
+    mode
+  });
+}
+
 bootstrap();
+
+function clampConfidence(value) {
+  return Math.max(0, Math.min(0.98, value || 0));
+}
+
+function auto_subject_detector(text) {
+  const normalized = normalizeText(text);
+  const scores = Object.fromEntries(Object.keys(subjectKeywordMap).map((subject) => [subject, 0]));
+  const passes = [];
+
+  Object.entries(subjectKeywordMap).forEach(([subject, keywords]) => {
+    keywords.forEach((keyword) => {
+      if (normalized.includes(normalizeText(keyword))) scores[subject] += 12;
+    });
+  });
+
+  if (/صواب|صح|خطأ|اختيار|اختر|ضع دائرة/.test(normalized)) {
+    passes.push("objective-pattern");
+    if (/رابطة|تفاعل|حمض|قاعدة|معادلة كيميائية|na|cl|ذرة/.test(normalized)) scores["الكيمياء"] += 24;
+    if (/تسارع|قوة|سرعة|نيوتن|زخم|احتكاك/.test(normalized)) scores["الفيزياء"] += 24;
+    if (/محيط|مساحة|نصف القطر|قطر|معادلة|كسر/.test(normalized)) scores["الرياضيات"] += 24;
+  }
+
+  if (/\d/.test(normalized) && /احسب|أوجد|محيط|مساحة|معادلة|دائرة|مثلث|جذر/.test(normalized)) {
+    passes.push("math-pattern");
+    scores["الرياضيات"] += 30;
+  }
+
+  if (/رابطة|أيونية|تساهمية|تعادل|مولارية|حمض|قاعدة|ذرة|إلكترون/.test(normalized)) {
+    passes.push("chemistry-pattern");
+    scores["الكيمياء"] += 34;
+  }
+
+  if (/قوة|تسارع|سرعة|نيوتن|زخم|حركة|احتكاك|طاقة حركية/.test(normalized)) {
+    passes.push("physics-pattern");
+    scores["الفيزياء"] += 34;
+  }
+
+  if (/خلية|تبخر|تكاثف|نبات|حيوان|دورة الماء|نظام بيئي/.test(normalized)) {
+    passes.push("science-pattern");
+    scores["العلوم"] += 28;
+  }
+
+  if (/مبتدأ|خبر|إعراب|نحو|بلاغة|استخرج|الجملة الاسمية/.test(normalized)) {
+    passes.push("arabic-pattern");
+    scores["اللغة العربية"] += 30;
+  }
+
+  if (/[a-z]/.test(normalized) || /translate|correct|grammar|present|past|english/.test(normalized)) {
+    passes.push("english-pattern");
+    scores["اللغة الإنجليزية"] += 30;
+  }
+
+  const lessonHit = knowledgeBase.find((entry) => entry.keywords.some((keyword) => normalized.includes(normalizeText(keyword))));
+  if (lessonHit) {
+    passes.push("knowledge-match");
+    scores[lessonHit.subject] += 26;
+  }
+
+  const ranking = Object.entries(scores)
+    .map(([subject, score]) => ({ subject, score }))
+    .sort((a, b) => b.score - a.score);
+  const top = ranking[0] || { subject: "", score: 0 };
+  const runnerUp = ranking[1] || { subject: "", score: 0 };
+
+  return {
+    subject: top.score ? top.subject : "",
+    confidence: top.score ? clampConfidence(top.score / 100 + Math.min(0.18, Math.max(0, (top.score - runnerUp.score) / 180))) : 0,
+    candidates: ranking.slice(0, 3),
+    passes
+  };
+}
+
+function grade_estimator(text) {
+  const normalized = normalizeText(text);
+  const scores = { ابتدائي: 0, متوسط: 0, ثانوي: 0 };
+
+  Object.entries(stageHeuristics).forEach(([stage, keywords]) => {
+    keywords.forEach((keyword) => {
+      if (normalized.includes(normalizeText(keyword))) scores[stage] += 12;
+    });
+  });
+
+  if (/تفاضل|تكامل|مولارية|نيوتن|رابطة أيونية|وراثة/.test(normalized)) scores["ثانوي"] += 26;
+  if (/نسبة|تناسب|فاعل|مفعول|present simple/.test(normalized)) scores["متوسط"] += 20;
+  if (/جمع|طرح|ضرب|قسمة|النبات|الماء/.test(normalized)) scores["ابتدائي"] += 16;
+
+  const ranking = Object.entries(scores)
+    .map(([stage, score]) => ({ stage, score }))
+    .sort((a, b) => b.score - a.score);
+  const top = ranking[0] || { stage: "", score: 0 };
+  const next = ranking[1] || { stage: "", score: 0 };
+
+  return {
+    stage: top.score ? top.stage : "",
+    confidence: top.score ? clampConfidence(top.score / 100 + Math.min(0.14, Math.max(0, (top.score - next.score) / 180))) : 0
+  };
+}
+
+function createClarificationResponse(message, intent, route = null) {
+  const objectiveLike = /صواب|صح|خطأ|اختيار|اختر|ضع دائرة/.test(normalizeText(message));
+  if (route?.detected_subject && route?.subject_confidence && route.subject_confidence < 0.7) {
+    return {
+      intro: "حللت السؤال أكثر من مرة حتى أحدد المادة الأقرب.",
+      prompt: `يبدو أن السؤال من ${route.detected_subject}. هل تريد أن أكمل الحل على هذا الأساس، أم تفضّل اختيار المادة يدويًا؟`,
+      actions: [
+        { label: objectiveLike ? "أرسل العبارات كاملة" : "اكتب المطلوب أوضح", fill: objectiveLike ? "اكتب العبارات أو الخيارات كاملة هنا..." : "اكتب السؤال كاملًا مع المطلوب." },
+        { label: "اختيار المادة", action: "focus-subject" }
+      ]
+    };
+  }
+
+  return {
+    intro: "أفهم الفكرة العامة من سؤالك، لكن ينقصني توضيح صغير حتى أرتب الجواب بدقة.",
+    prompt: objectiveLike
+      ? "أرسل العبارات أو الخيارات كاملة وسأحدد الصحيح مباشرة مع سبب مختصر."
+      : "اكتب السؤال بشكل أوضح قليلًا، أو أرسل صورة السؤال كاملة وسأكمل معك مباشرة.",
+    actions: [
+      { label: objectiveLike ? "أكمل الخيارات" : "اكتب السؤال كاملًا", fill: objectiveLike ? "اكتب العبارات أو الخيارات كاملة هنا..." : "اكتب السؤال كاملًا مع المطلوب والمعطيات." },
+      { label: "رفع صورة السؤال", action: "upload-image" }
+    ]
+  };
+}
+
+function curriculum_scope_checker({ userText, selectedGrade, selectedSubject, imageMeta, solveMode = "quick" }) {
+  const sourceText = `${userText || ""} ${imageMeta?.extracted_text || ""}`.trim();
+  const subjectAnalysis = auto_subject_detector(sourceText);
+  const gradeAnalysis = grade_estimator(sourceText);
+  const selectedStage = getSelectedStageLabel(selectedGrade);
+  const structured = solveMode === "structured";
+
+  if (!subjectAnalysis.subject) {
+    return {
+      detected_subject: "",
+      detected_grade_level: gradeAnalysis.stage,
+      subject_confidence: 0,
+      grade_confidence: gradeAnalysis.confidence,
+      scope_status: structured && selectedSubject ? "subject_unknown" : "auto_detect_pending",
+      subject_candidates: subjectAnalysis.candidates,
+      analysis_passes: subjectAnalysis.passes
+    };
+  }
+
+  if (structured && selectedSubject && subjectAnalysis.subject !== selectedSubject) {
+    return {
+      detected_subject: subjectAnalysis.subject,
+      detected_grade_level: gradeAnalysis.stage,
+      subject_confidence: subjectAnalysis.confidence,
+      grade_confidence: gradeAnalysis.confidence,
+      scope_status: "subject_mismatch",
+      subject_candidates: subjectAnalysis.candidates,
+      analysis_passes: subjectAnalysis.passes
+    };
+  }
+
+  if (structured && gradeAnalysis.stage && selectedStage && gradeAnalysis.stage !== selectedStage && gradeAnalysis.confidence >= 0.7) {
+    return {
+      detected_subject: subjectAnalysis.subject,
+      detected_grade_level: gradeAnalysis.stage,
+      subject_confidence: subjectAnalysis.confidence,
+      grade_confidence: gradeAnalysis.confidence,
+      scope_status: "grade_mismatch",
+      subject_candidates: subjectAnalysis.candidates,
+      analysis_passes: subjectAnalysis.passes
+    };
+  }
+
+  return {
+    detected_subject: subjectAnalysis.subject,
+    detected_grade_level: gradeAnalysis.stage,
+    subject_confidence: subjectAnalysis.confidence,
+    grade_confidence: gradeAnalysis.confidence,
+    scope_status: structured ? "matched" : (subjectAnalysis.confidence >= 0.7 ? "auto_detected" : "auto_detect_pending"),
+    subject_candidates: subjectAnalysis.candidates,
+    analysis_passes: subjectAnalysis.passes
+  };
+}
+
+function request_router({ user_text, uploaded_files, selected_grade, selected_subject, user_profile, selected_solve_mode = "quick" }) {
+  const input_type = determineInputType(user_text, uploaded_files);
+  const image_type = input_type.includes("image")
+    ? image_analyzer(uploaded_files, user_text)
+    : { image_type: "none", extracted_text: "", confidence: 0 };
+  const intent = intent_router(`${user_text || ""} ${image_type.extracted_text || ""}`, uploaded_files?.length > 0);
+  const quickMode = selected_solve_mode !== "structured";
+  const scope = curriculum_scope_checker({
+    userText: user_text,
+    selectedGrade: selected_grade || user_profile?.grade || "",
+    selectedSubject: quickMode ? "" : (selected_subject || ""),
+    imageMeta: image_type,
+    solveMode: quickMode ? "quick" : "structured"
+  });
+
+  let response_mode = "academic_solve";
+
+  if (input_type === "file_only" && !user_text.trim()) response_mode = "content_interpretation";
+  if (image_type.image_type === "logo_or_branding") response_mode = "reject_logo_image";
+  else if (image_type.image_type === "non_educational_image" || image_type.image_type === "document_non_educational") response_mode = "reject_out_of_scope_image";
+  else if (image_type.image_type === "unclear_image") response_mode = "ask_clearer_upload";
+  else if (image_type.image_type === "educational_page" && !user_text.trim()) response_mode = "content_interpretation";
+  else if (!quickMode && (scope.scope_status === "subject_mismatch" || scope.scope_status === "grade_mismatch" || scope.scope_status === "subject_unknown")) response_mode = "ask_for_confirmation";
+  else if (quickMode && intent.type !== "chat" && intent.type !== "help" && scope.subject_confidence < 0.7) response_mode = "ask_for_confirmation";
+
+  return {
+    input_type,
+    intent,
+    image_type: image_type.image_type,
+    extracted_text: image_type.extracted_text,
+    detected_subject: scope.detected_subject,
+    detected_grade_level: scope.detected_grade_level,
+    subject_confidence: scope.subject_confidence,
+    grade_confidence: scope.grade_confidence,
+    subject_candidates: scope.subject_candidates,
+    analysis_passes: scope.analysis_passes,
+    scope_status: scope.scope_status,
+    response_mode,
+    quick_mode: quickMode
+  };
+}
+
+function createImageRouterResponse(route) {
+  if (route.response_mode === "ask_for_confirmation") {
+    if (route.scope_status === "subject_mismatch") {
+      return formatSimpleReply(`يبدو أن هذا السؤال أقرب إلى مادة ${route.detected_subject}، بينما المادة المحددة لديك مختلفة. غيّر المادة أو أخبرني أن أكمل على هذا الأساس.`);
+    }
+    if (route.scope_status === "grade_mismatch") {
+      return formatSimpleReply("هذا السؤال يبدو من مستوى دراسي مختلف عن الصف المحدد لديك. يمكنك تعديل الصف، أو المتابعة كتقدير أولي إذا كان هذا مقصودًا.");
+    }
+    if (route.detected_subject) {
+      return formatClarificationReply({
+        intro: "حللت السؤال أكثر من مرة لأحدد مادته بشكل أقرب.",
+        prompt: `يبدو أن السؤال من ${route.detected_subject}. هل تريد أن أكمل الحل على هذا الأساس؟`,
+        actions: [
+          { label: "اختيار المادة", action: "focus-subject" },
+          { label: "اكتب السؤال أوضح", fill: "اكتب السؤال كاملًا مع المطلوب." }
+        ]
+      });
+    }
+    return formatSimpleReply("لم تتضح المادة بشكل كافٍ حتى الآن. اكتب السؤال بصورة أوضح قليلًا، أو اختر المادة يدويًا وسأكمل معك مباشرة.");
+  }
+
+  if (route.response_mode === "reject_logo_image") {
+    return formatSimpleReply("يبدو أن الصورة المرفقة ليست سؤالًا دراسيًا، بل أقرب إلى شعار أو تصميم. إذا كنت تريد المساعدة التعليمية، أرسل صورة السؤال أو اكتبه نصًا.");
+  }
+
+  if (route.response_mode === "reject_out_of_scope_image") {
+    return formatSimpleReply("الصورة المرفقة لا تبدو ضمن المحتوى التعليمي. يرجى إرسال سؤال دراسي أو صورة واضحة من كتاب أو ورقة عمل.");
+  }
+
+  if (route.response_mode === "ask_clearer_upload") {
+    return formatSimpleReply("الصورة غير واضحة بما يكفي لقراءة السؤال. حاول إعادة رفع صورة أوضح أو اكتب السؤال نصًا.");
+  }
+
+  if (route.response_mode === "content_interpretation") {
+    return formatClarificationReply({
+      intro: "تم التعرف على المرفق كمحتوى تعليمي عام.",
+      prompt: "هل تريد شرح المحتوى، تلخيصه، أم حل الأسئلة الموجودة فيه؟",
+      actions: [
+        { label: "شرح المحتوى", fill: "اشرح محتوى الصفحة التعليمية المرفقة." },
+        { label: "تلخيص المحتوى", fill: "لخّص الصفحة التعليمية المرفقة." },
+        { label: "حل الأسئلة", fill: "حل الأسئلة الموجودة في الصفحة التعليمية المرفقة." }
+      ]
+    });
+  }
+
+  return formatSimpleReply("تم تجهيز الطلب للتحليل وسأتابع الحل الآن.");
+}
+
+async function handleSubmit(event) {
+  event.preventDefault();
+  const question = promptInput?.value.trim() || "";
+  const hasAttachments = attachments.length > 0;
+  if (!question && !hasAttachments) return;
+
+  const activeUser = getActiveUser();
+  const route = request_router({
+    user_text: question,
+    uploaded_files: attachments,
+    selected_grade: gradeSelect?.value || activeUser?.grade || "",
+    selected_subject: subjectSelect?.value || "",
+    user_profile: activeUser || {},
+    selected_solve_mode: selectedSolveMode
+  });
+  const intent = route.intent;
+
+  if (hasAttachments && !isLoggedIn()) {
+    addMessage("assistant", "ملم يحل", formatSimpleReply('تحليل الصور متاح بعد تسجيل الدخول فقط. يمكنك الآن كتابة السؤال نصيًا، أو <a class="top-link" href="login.html">تسجيل الدخول</a> لتفعيل تحليل الصور.'));
+    attachments = [];
+    if (fileInput) fileInput.value = "";
+    renderAttachments();
+    return;
+  }
+
+  const shouldCharge =
+    !hasAttachments ||
+    route.response_mode === "academic_solve" ||
+    route.response_mode === "content_interpretation";
+  const usageCost = shouldCharge ? (hasAttachments ? usageCosts.image : usageCosts.chat) : 0;
+  if (usageCost > 0) {
+    const pointsResult = spendPoints(usageCost, hasAttachments ? "تحليل صورة" : "استخدام الشات");
+    if (!pointsResult.ok) {
+      addMessage("assistant", "ملم يحل", formatSimpleReply(`رصيدك الحالي ${pointsResult.remaining} نقطة، وهذا لا يكفي لهذه العملية. تحتاج ${usageCost} نقطة. يمكنك شراء نقاط إضافية من <a class="top-link" href="subscriptions.html">صفحة الباقات</a>.`));
+      return;
+    }
+  }
+
+  const renderedQuestion = hasAttachments
+    ? `${question || "أرفقت صورة أو ملفًا مع السؤال."}<br><span class="muted-inline">المرفقات: ${attachments.map((item) => item.name).join("، ")}</span>`
+    : question;
+
+  addMessage("user", "أنت", renderedQuestion);
+  appendMessageToSession("user", "أنت", renderedQuestion, {
+    subject: route.detected_subject || (selectedSolveMode === "structured" ? (subjectSelect?.value || "") : ""),
+    sessionTitle: question || "سؤال جديد"
+  });
+
+  promptInput.value = "";
+  autoGrow(promptInput);
+
+  const pendingNode = addMessage("assistant", "ملم يحل", createLoadingCopy(), { pending: true });
+  let body = "";
+  let sources = [];
+  let responseForLog = null;
+
+  if (route.response_mode !== "academic_solve") {
+    body = createImageRouterResponse(route);
+  } else if (intent.type === "chat") {
+    body = formatSimpleReply(createCasualResponse(question));
+  } else if (intent.type === "help") {
+    body = formatSimpleReply(createHelpResponse());
+  } else if (needsClarification(question, intent, hasAttachments)) {
+    body = formatClarificationReply(createClarificationResponse(question, intent, route));
+  } else {
+    const response = createAcademicResponse(question || route.extracted_text || "حل السؤال من الملفات المرفقة", intent, {
+      preferredSubject: route.detected_subject || (selectedSolveMode === "structured" ? (subjectSelect?.value || "") : "")
+    });
+    responseForLog = response;
+    body = formatAssistantSections(response);
+    sources = buildSources();
+    analytics.totalMessages += 1;
+    analytics.xpUsed += usageCost;
+    analytics.subjects[response.subject || route.detected_subject || subjectSelect?.value || "عام"] =
+      (analytics.subjects[response.subject || route.detected_subject || subjectSelect?.value || "عام"] || 0) + 1;
+    saveAnalytics();
+    saveHistory(
+      question || "سؤال مرفق",
+      response.subject || route.detected_subject || subjectSelect?.value || "عام",
+      response.questionType || detectQuestionType(question || route.extracted_text || ""),
+      "تمت المراجعة"
+    );
+  }
+
+  pendingNode?.remove();
+
+  const assistantMeta = responseForLog
+    ? {
+        subject: responseForLog.subject,
+        lesson: responseForLog.lesson,
+        questionType: responseForLog.questionType,
+        mode: responseForLog.mode
+      }
+    : undefined;
+
+  addMessage("assistant", "ملم يحل", body, {
+    sources,
+    enableTools: route.response_mode === "academic_solve" && Boolean(responseForLog),
+    metadata: assistantMeta
+  });
+  appendMessageToSession("assistant", "ملم يحل", body, {
+    sources,
+    enableTools: route.response_mode === "academic_solve" && Boolean(responseForLog),
+    metadata: assistantMeta,
+    subject: responseForLog?.subject || route.detected_subject || (selectedSolveMode === "structured" ? (subjectSelect?.value || "") : "")
+  });
+
+  aiLogs.unshift({
+    question: question || "سؤال مرفق",
+    intent: intent.type,
+    subject: route.detected_subject || subjectSelect?.value || "عام",
+    lesson: responseForLog?.lesson || lessonInput?.value.trim() || "",
+    responseMode: responseForLog?.mode || route.response_mode || intent.type,
+    usedAttachments: hasAttachments,
+    imageType: route.image_type,
+    scopeStatus: route.scope_status,
+    createdAt: Date.now()
+  });
+  aiLogs = aiLogs.slice(0, 40);
+  saveAiLogs();
+  renderInsights();
+  renderLearnedMemory();
+  renderSessionList();
+  updateXpBalance();
+}
+
+function bootstrap() {
+  applyTheme(localStorage.getItem(storageKeys.theme) || "light");
+  loadUserState();
+  const activeUser = syncUserStreakOnVisit() || getActiveUser();
+  loadUserState();
+  if (gradeSelect && activeUser?.grade) gradeSelect.value = activeUser.grade;
+  updateXpBalance();
+  renderLearnedMemory();
+  renderHistory();
+  renderInsights();
+  renderQuestionBank();
+  renderWebPolicy();
+  renderSessionList();
+
+  if (gradeSelect) gradeSelect.value = gradeSelect.value || activeUser?.grade || gradeOptions[10];
+  if (subjectSelect) subjectSelect.value = subjectSelect.value || subjectOptions[0];
+  updateSelectionSummary();
+
+  const currentSession = getActiveSession();
+  if (currentSession?.messages?.length) {
+    restoreSession(currentSession.id);
+  } else {
+    resetConversationView();
+  }
+
+  promptInput?.addEventListener("input", () => autoGrow(promptInput));
+  form?.addEventListener("submit", handleSubmit);
+  fileInput?.addEventListener("change", (event) => {
+    attachments = Array.from(event.target.files || []);
+    renderAttachments();
+  });
+
+  gradeSelect?.addEventListener("change", updateSelectionSummary);
+  subjectSelect?.addEventListener("change", updateSelectionSummary);
+  termSelect?.addEventListener("change", updateSelectionSummary);
+  lessonInput?.addEventListener("input", updateSelectionSummary);
+  responseModeButtons.forEach((button) => {
+    button.addEventListener("click", () => applyResponseMode(button.getAttribute("data-response-mode") || "educational"));
+  });
+  solveModeButtons.forEach((button) => {
+    button.addEventListener("click", () => applySolveMode(button.getAttribute("data-solve-mode") || "quick"));
+  });
+
+  startChatButton?.addEventListener("click", startChat);
+  quickSolveButton?.addEventListener("click", quickSolve);
+  heroExampleButton?.addEventListener("click", () => {
+    setPromptValue("احسب محيط دائرة نصف قطرها 7", "الرياضيات");
+    startChat();
+  });
+  heroUploadButton?.addEventListener("click", openImageUpload);
+  uploadButton?.addEventListener("click", openGenericUpload);
+  uploadImageButton?.addEventListener("click", openImageUpload);
+  uploadFileButton?.addEventListener("click", openGenericUpload);
+  focusSubjectButton?.addEventListener("click", () => subjectSelect?.focus());
+  clearChatButton?.addEventListener("click", startFreshSession);
+  newSessionButton?.addEventListener("click", startFreshSession);
+  themeToggleButton?.addEventListener("click", () => {
+    const next = document.body.classList.contains("theme-dark") ? "light" : "dark";
+    localStorage.setItem(storageKeys.theme, next);
+    applyTheme(next);
+  });
+
+  messageList?.addEventListener("click", handleMessageInteractions);
+  sessionList?.addEventListener("click", handleSessionInteractions);
+  wajibatiLibraryList?.addEventListener("click", handleLibraryInteractions);
+  window.addEventListener("scroll", syncScrollTopButton, { passive: true });
+  scrollTopButton?.addEventListener("click", () => window.scrollTo({ top: 0, behavior: "smooth" }));
+  bindStarterButtons();
+  applyResponseMode(selectedResponseMode);
+  applySolveMode(selectedSolveMode);
+  syncScrollTopButton();
+
+  const resumePrompt = localStorage.getItem(storageKeys.resumePrompt);
+  if (resumePrompt) {
+    setPromptValue(resumePrompt);
+    localStorage.removeItem(storageKeys.resumePrompt);
+    promptInput?.focus();
+    messageList?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
+}
