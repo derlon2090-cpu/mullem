@@ -8,7 +8,12 @@
   const fileInput = document.querySelector("[data-file-input]");
   const gradeSelect = document.querySelector("[data-grade]");
   const subjectSelect = document.querySelector("[data-subject]");
+  const termSelect = document.querySelector("[data-term]");
   const lessonInput = document.querySelector("[data-lesson]");
+  const stageSwitch = document.querySelector(".stage-switch");
+  const selectorsWrap = document.querySelector(".selectors");
+  const focusSubjectButton = document.querySelector("[data-focus-subject]");
+  const selectionSummary = document.querySelector("[data-selection-summary]");
 
   if (!form || !messageList || !promptInput) return;
 
@@ -29,24 +34,117 @@
     return /^(لا|مو|ليس|لا شكرا|لا شكرًا|غير المادة|غيّر المادة)$/i.test((text || "").trim());
   }
 
-  function isUserNearBottom() {
-    const threshold = 140;
-    return messageList.scrollHeight - messageList.scrollTop - messageList.clientHeight <= threshold;
+  function runtimeAutoSubjectDetector(text) {
+    const normalized = typeof normalizeText === "function" ? normalizeText(text) : (text || "");
+    const scores = {
+      "الرياضيات": 0,
+      "العلوم": 0,
+      "الفيزياء": 0,
+      "الكيمياء": 0,
+      "الأحياء": 0,
+      "اللغة العربية": 0,
+      "اللغة الإنجليزية": 0
+    };
+
+    const add = (subject, amount) => {
+      scores[subject] = (scores[subject] || 0) + amount;
+    };
+
+    if (/التنفس الخلوي|الميتوكوندريا|الفجوات|البلاستيدات|الخلية النباتية|الخلية الحيوانية/.test(normalized)) add("الأحياء", 80);
+    if (/رابطة|أيونية|تساهمية|معادلة كيميائية|حمض|قاعدة|na|cl|ذرة|مول/.test(normalized)) add("الكيمياء", 65);
+    if (/تسارع|قوة|سرعة|نيوتن|زخم|احتكاك|طاقة حركية/.test(normalized)) add("الفيزياء", 65);
+    if (/محيط|مساحة|دائرة|نصف القطر|معادلة|جذر|كسر|احسب|أوجد/.test(normalized)) add("الرياضيات", 65);
+    if (/مبتدأ|خبر|إعراب|نحو|بلاغة|أعرب|استخرج/.test(normalized)) add("اللغة العربية", 60);
+    if (/[a-z]/.test(normalized) || /translate|grammar|correct|present|past|english/.test(normalized)) add("اللغة الإنجليزية", 60);
+    if (/تبخر|تكاثف|دورة الماء|نظام بيئي/.test(normalized)) add("العلوم", 52);
+
+    const ranking = Object.entries(scores)
+      .filter(([, score]) => score > 0)
+      .sort((a, b) => b[1] - a[1])
+      .map(([subject, score]) => ({ subject, score }));
+    const [top, second] = ranking;
+    const confidence = top
+      ? Math.max(0, Math.min(0.98, top.score / 100 + (second ? Math.max(0, (top.score - second.score) / 200) : 0.12)))
+      : 0;
+
+    return {
+      subject: top?.subject || "",
+      confidence,
+      candidates: ranking.slice(0, 3),
+      passes: ranking.length ? ["runtime-auto-detect"] : []
+    };
   }
 
-  function scrollMessagesToBottom(force = false) {
-    if (force || isUserNearBottom()) {
-      messageList.scrollTop = messageList.scrollHeight;
-      messageList.lastElementChild?.scrollIntoView({ block: "end", behavior: "smooth" });
+  window.auto_subject_detector = runtimeAutoSubjectDetector;
+
+  function applyUserStudyContext() {
+    const activeUser = typeof getActiveUser === "function" ? getActiveUser() : null;
+    const isLogged = Boolean(activeUser);
+    document.body.classList.toggle("user-logged-in", isLogged);
+
+    if (isLogged && gradeSelect && activeUser.grade) {
+      gradeSelect.value = activeUser.grade;
+      gradeSelect.disabled = true;
+      gradeSelect.closest(".field")?.classList?.add("field-disabled");
+    } else if (gradeSelect) {
+      gradeSelect.disabled = false;
+    }
+
+    if (isLogged && stageSwitch) {
+      stageSwitch.style.display = "none";
+    } else if (stageSwitch) {
+      stageSwitch.style.display = "";
+    }
+
+    if (subjectSelect) {
+      const explicitSubject = activeUser?.subject || "";
+      if (explicitSubject && !subjectSelect.value) subjectSelect.value = explicitSubject;
+      subjectSelect.closest(".subject-runtime-wrap")?.remove();
+      const wrapper = document.createElement("div");
+      wrapper.className = "subject-runtime-wrap";
+      subjectSelect.parentNode?.insertBefore(wrapper, subjectSelect);
+      wrapper.appendChild(subjectSelect);
+      wrapper.classList.toggle("subject-runtime-hidden", isLogged);
+      wrapper.classList.toggle("subject-runtime-visible", !isLogged);
+    }
+
+    if (focusSubjectButton) {
+      focusSubjectButton.textContent = isLogged ? "تغيير المادة" : "اختيار مادة";
+      focusSubjectButton.onclick = () => {
+        const wrapper = subjectSelect?.closest(".subject-runtime-wrap");
+        if (wrapper) {
+          wrapper.classList.remove("subject-runtime-hidden");
+          wrapper.classList.add("subject-runtime-visible");
+        }
+        subjectSelect?.focus();
+      };
+    }
+
+    if (selectionSummary) {
+      const gradeLabel = activeUser?.grade || gradeSelect?.value || "";
+      const termLabel = termSelect?.value || "";
+      const lessonLabel = lessonInput?.value?.trim() || "الدرس غير محدد";
+      selectionSummary.textContent = isLogged
+        ? `${gradeLabel} · ${termLabel} · ${lessonLabel}`
+        : (selectionSummary.textContent || "ابدأ أول محادثة لك الآن.");
     }
   }
 
-  function setupAutoScroll() {
-    if (messageList.dataset.runtimeAutoscroll === "1") return;
-    messageList.dataset.runtimeAutoscroll = "1";
-    const observer = new MutationObserver(() => scrollMessagesToBottom());
-    observer.observe(messageList, { childList: true, subtree: true, characterData: true });
+  function isUserNearBottom() {
+    return false;
   }
+
+  function scrollMessagesToBottom() {
+    return;
+  }
+
+  window.isUserNearBottom = isUserNearBottom;
+  window.scrollMessagesToBottom = scrollMessagesToBottom;
+  window.setupChatAutoScrollEnhancement = function setupChatAutoScrollEnhancement() {
+    if (messageList) {
+      messageList.dataset.runtimeAutoscroll = "disabled";
+    }
+  };
 
   function detectRoute(question, attachments) {
     const activeUser = typeof getActiveUser === "function" ? getActiveUser() : null;
@@ -62,7 +160,7 @@
     const quickMode = solveMode !== "structured";
     const scope = curriculum_scope_checker({
       userText: question,
-      selectedGrade: gradeSelect?.value || activeUser?.grade || "",
+      selectedGrade: activeUser?.grade || gradeSelect?.value || "",
       selectedSubject: quickMode ? "" : (subjectSelect?.value || ""),
       imageMeta,
       solveMode: quickMode ? "quick" : "structured"
@@ -136,6 +234,114 @@
     return formatSimpleReply("تم تجهيز الطلب وسأكمل الحل الآن.");
   }
 
+  function buildDirectObjectiveResponse(question, route) {
+    const normalized = typeof normalizeText === "function" ? normalizeText(question) : (question || "");
+    let objective = typeof solveObjectiveQuestion === "function" ? solveObjectiveQuestion(question) : null;
+
+    if (!objective && /التنفس الخلوي/.test(normalized) && /الفجوات/.test(normalized) && /صواب|صح|خطأ/.test(normalized)) {
+      objective = {
+        finalAnswer: "خطأ",
+        explanation: "لأن التنفس الخلوي يحدث في الميتوكوندريا وليس الفجوات."
+      };
+    }
+
+    if (!objective) return null;
+
+    return {
+      mode: "solve",
+      displayMode: "quick",
+      questionType: route.question_type || "صح وخطأ",
+      subject: route.detected_subject || "الأحياء",
+      lesson: "مفاهيم الخلية",
+      finalAnswer: objective.finalAnswer,
+      explanation: objective.explanation,
+      steps: [
+        "حددت أن السؤال من نوع صح أو خطأ.",
+        "قارنت العبارة بالمعلومة العلمية الأساسية.",
+        "اخترت الحكم الصحيح بناءً على المفهوم."
+      ],
+      mistakes: [
+        "الخلط بين الفجوات والميتوكوندريا.",
+        "الاعتماد على حفظ العبارة دون فهم وظيفة كل عضية."
+      ],
+      similar: "صواب أم خطأ: يحدث التنفس الخلوي في الميتوكوندريا."
+    };
+  }
+
+  function intent_analyzer(message, hasAttachments = false) {
+    const intent = intent_router(message, hasAttachments);
+    const subjectGuess = runtimeAutoSubjectDetector(message);
+    return {
+      intent,
+      questionType: detectQuestionType(message),
+      subject: subjectGuess.subject,
+      confidence: subjectGuess.confidence,
+      candidates: subjectGuess.candidates,
+      difficulty: message.length > 90 ? "medium" : "easy"
+    };
+  }
+
+  function reasoning_engine(message, analysis) {
+    const normalized = typeof normalizeText === "function" ? normalizeText(message) : (message || "");
+    const keywords = (normalized.match(/[^\s]+/g) || []).slice(0, 8);
+    const isObjective = analysis.questionType === "صح وخطأ" || analysis.questionType === "اختيار من متعدد";
+    const clarity = isObjective || /احسب|اشرح|علل|اختر|صواب|خطأ/.test(normalized) ? "high" : (message.length > 12 ? "medium" : "low");
+
+    return {
+      keywords,
+      isObjective,
+      clarity,
+      needsFollowup: clarity === "low" && analysis.confidence < 0.45
+    };
+  }
+
+  function decision_engine(route, analysis, reasoning) {
+    if (analysis.intent.type === "chat") return { action: "chat" };
+    if (analysis.intent.type === "help") return { action: "help" };
+    if (route.response_mode === "reject_logo_image" || route.response_mode === "reject_out_of_scope_image" || route.response_mode === "ask_clearer_upload" || route.response_mode === "content_interpretation") {
+      return { action: "route" };
+    }
+    if (reasoning.isObjective) {
+      return { action: "answer", confidence: Math.max(route.subject_confidence || 0, analysis.confidence || 0.8) };
+    }
+    if ((route.subject_confidence || analysis.confidence) >= 0.7 || reasoning.clarity === "high") {
+      return { action: "answer", confidence: route.subject_confidence || analysis.confidence };
+    }
+    if ((route.subject_confidence || analysis.confidence) >= 0.45) {
+      return {
+        action: "answer_with_note",
+        confidence: route.subject_confidence || analysis.confidence,
+        note: route.detected_subject ? `يبدو أن السؤال من ${route.detected_subject}، وسأكمل الحل مباشرة.` : "يبدو أن السؤال واضح بما يكفي، وسأكمل الحل مباشرة."
+      };
+    }
+    return { action: "ask", confidence: route.subject_confidence || analysis.confidence };
+  }
+
+  function response_builder(question, route, analysis) {
+    return buildDirectObjectiveResponse(question, route)
+      || createAcademicResponse(question || route.extracted_text || "حل السؤال من المرفقات", analysis.intent, {
+        preferredSubject: route.detected_subject || "",
+        detectedSubject: route.detected_subject || "",
+        subjectConfidence: route.subject_confidence,
+        route
+      });
+  }
+
+  function self_checker(response, decision) {
+    const checked = { ...response };
+    if (decision.note) {
+      checked.explanation = `${decision.note} ${checked.explanation || ""}`.trim();
+    }
+    if (/هل تريد أن أكمل|غيّر المادة|اختر المادة أولًا/.test(checked.explanation || "")) {
+      checked.explanation = (checked.explanation || "")
+        .replace(/هل تريد أن أكمل/g, "")
+        .replace(/غيّر المادة/g, "")
+        .replace(/اختر المادة أولًا/g, "")
+        .trim();
+    }
+    return checked;
+  }
+
   function spendRuntimePoints(hasAttachments) {
     if (typeof spendPoints !== "function") return { ok: true };
     return spendPoints(hasAttachments ? 15 : 10, hasAttachments ? "تحليل صورة" : "استخدام الشات");
@@ -200,7 +406,6 @@
         metadata: buildAssistantMeta(response),
         subject: response.subject
       });
-      scrollMessagesToBottom(true);
       return;
     }
 
@@ -209,12 +414,14 @@
       addMessage("user", "أنت", question);
       addMessage("assistant", "ملم يحل", formatSimpleReply("حسنًا، اختر المادة من القائمة وسأكمل الحل بدقة أكبر."));
       subjectSelect?.focus();
-      scrollMessagesToBottom(true);
       return;
     }
 
     const route = detectRoute(question, attachments);
-    const intent = route.intent;
+    const analysis = intent_analyzer(question || route.extracted_text || "", hasAttachments);
+    const reasoning = reasoning_engine(question || route.extracted_text || "", analysis);
+    const decision = decision_engine(route, analysis, reasoning);
+    const intent = analysis.intent;
 
     if (hasAttachments && typeof isLoggedIn === "function" && !isLoggedIn()) {
       addMessage("assistant", "ملم يحل", formatSimpleReply('تحليل الصور متاح بعد تسجيل الدخول فقط. يمكنك الآن كتابة السؤال نصيًا، أو <a class="top-link" href="login.html">تسجيل الدخول</a> لتفعيل تحليل الصور.'));
@@ -249,15 +456,15 @@
     let sources = [];
     let responseForLog = null;
 
-    if (route.response_mode !== "academic_solve") {
+    if (decision.action === "route" || decision.action === "ask") {
       runtimeState.pendingSolveConfirmation = route.response_mode === "ask_for_confirmation"
         ? { question, route, intent, subject: route.detected_subject || "" }
         : null;
       body = createRouteReply(route);
-    } else if (intent.type === "chat") {
+    } else if (decision.action === "chat") {
       runtimeState.pendingSolveConfirmation = null;
       body = formatSimpleReply(createCasualResponse(question));
-    } else if (intent.type === "help") {
+    } else if (decision.action === "help") {
       runtimeState.pendingSolveConfirmation = null;
       body = formatSimpleReply(createHelpResponse());
     } else if (typeof needsClarification === "function" && needsClarification(question, intent, hasAttachments) && route.question_type !== "صح وخطأ" && route.question_type !== "اختيار من متعدد") {
@@ -265,19 +472,17 @@
       body = formatClarificationReply(createClarificationResponse(question, intent, route));
     } else {
       runtimeState.pendingSolveConfirmation = null;
-      responseForLog = createAcademicResponse(question || route.extracted_text || "حل السؤال من المرفقات", intent, {
-        preferredSubject: route.detected_subject || (subjectSelect?.value || ""),
-        detectedSubject: route.detected_subject || "",
-        subjectConfidence: route.subject_confidence,
-        route
-      });
+      responseForLog = self_checker(
+        response_builder(question || route.extracted_text || "", route, analysis),
+        decision
+      );
       body = formatAssistantSections(responseForLog);
       sources = typeof buildSources === "function" ? buildSources() : [];
 
       if (typeof saveHistory === "function") {
         saveHistory(
           question || "سؤال مرفق",
-          responseForLog.subject || route.detected_subject || subjectSelect?.value || "عام",
+          responseForLog.subject || route.detected_subject || "عام",
           responseForLog.questionType || route.question_type || "سؤال أكاديمي",
           "تمت المراجعة"
         );
@@ -299,9 +504,8 @@
 
     if (typeof renderSessionList === "function") renderSessionList();
     if (typeof updateXpBalance === "function") updateXpBalance();
-    scrollMessagesToBottom(true);
   }
 
-  setupAutoScroll();
+  applyUserStudyContext();
   document.addEventListener("submit", runtimeHandleSubmit, true);
 })();

@@ -1472,6 +1472,26 @@ a.memory-item {
   color: var(--muted);
 }
 
+body.user-logged-in .selectors [data-grade] {
+  display: none;
+}
+
+body.user-logged-in .selectors {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.subject-runtime-wrap {
+  display: block;
+}
+
+.subject-runtime-hidden {
+  display: none !important;
+}
+
+.subject-runtime-visible {
+  display: block !important;
+}
+
 .mcq-highlight {
   color: var(--brand-strong);
   font-weight: 800;
