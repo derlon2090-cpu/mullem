@@ -18,15 +18,16 @@
 
 body.theme-dark {
   --bg: #0b130d;
-  --bg-soft: #121c15;
-  --surface: rgba(14, 21, 16, 0.92);
-  --surface-strong: #101a13;
-  --line: rgba(255, 255, 255, 0.08);
-  --text: #edf9ef;
-  --muted: #a8b8ac;
-  --brand-soft: rgba(34, 197, 94, 0.16);
-  --accent-soft: rgba(22, 163, 74, 0.14);
-  --warning-bg: rgba(62, 44, 8, 0.45);
+  --bg-soft: #122016;
+  --surface: rgba(17, 27, 20, 0.96);
+  --surface-strong: #162419;
+  --line: rgba(255, 255, 255, 0.14);
+  --text: #f2fbf4;
+  --muted: #c0cec3;
+  --brand-strong: #5ee38b;
+  --brand-soft: rgba(34, 197, 94, 0.22);
+  --accent-soft: rgba(22, 163, 74, 0.2);
+  --warning-bg: rgba(90, 64, 12, 0.5);
   --shadow: 0 24px 80px rgba(0, 0, 0, 0.35);
 }
 
@@ -48,6 +49,162 @@ body {
     radial-gradient(circle at top right, rgba(255, 255, 255, 0.95), transparent 18%),
     radial-gradient(circle at bottom right, rgba(34, 197, 94, 0.1), transparent 18%),
     linear-gradient(180deg, #fbfef9 0%, var(--bg) 100%);
+}
+
+body.theme-dark {
+  background:
+    radial-gradient(circle at top left, rgba(34, 197, 94, 0.14), transparent 22%),
+    radial-gradient(circle at top right, rgba(255, 255, 255, 0.04), transparent 18%),
+    radial-gradient(circle at bottom right, rgba(34, 197, 94, 0.08), transparent 18%),
+    linear-gradient(180deg, #0d1510 0%, var(--bg) 100%);
+}
+
+body.theme-dark .topbar,
+body.theme-dark .quick-card,
+body.theme-dark .onboarding-card,
+body.theme-dark .workspace-sidebar,
+body.theme-dark .workspace-main,
+body.theme-dark .sidebar-brand-card,
+body.theme-dark .sidebar-panel,
+body.theme-dark .auth-card,
+body.theme-dark .auth-preview,
+body.theme-dark .auth-mode-copy,
+body.theme-dark .profile-sidebar-card,
+body.theme-dark .profile-panel,
+body.theme-dark .info-hero-card,
+body.theme-dark .info-page-card,
+body.theme-dark .student-hero-card,
+body.theme-dark .student-summary-strip,
+body.theme-dark .student-quick-card,
+body.theme-dark .student-settings-card,
+body.theme-dark .student-section-card,
+body.theme-dark .stage-card,
+body.theme-dark .session-card,
+body.theme-dark .stat-card,
+body.theme-dark .admin-panel,
+body.theme-dark .admin-login-card,
+body.theme-dark .history-card,
+body.theme-dark .achievement-chip,
+body.theme-dark .about-feature-item,
+body.theme-dark .policy-item,
+body.theme-dark .strength-card {
+  background:
+    radial-gradient(circle at top left, rgba(34, 197, 94, 0.08), transparent 26%),
+    linear-gradient(180deg, rgba(20, 31, 24, 0.98), rgba(14, 22, 17, 0.96));
+  border-color: rgba(255, 255, 255, 0.1);
+}
+
+body.theme-dark .top-chip,
+body.theme-dark .theme-toggle,
+body.theme-dark .tag,
+body.theme-dark .stage-chip,
+body.theme-dark .auth-tab,
+body.theme-dark .profile-nav-link,
+body.theme-dark .memory-item,
+body.theme-dark .field,
+body.theme-dark .history-item,
+body.theme-dark .session-action-btn,
+body.theme-dark .inline-action-btn,
+body.theme-dark .mini-btn,
+body.theme-dark .helper-btn,
+body.theme-dark .attachment,
+body.theme-dark .source-link,
+body.theme-dark .student-mini-card,
+body.theme-dark .student-achievement-chip {
+  background: rgba(19, 31, 23, 0.96);
+  border-color: rgba(255, 255, 255, 0.12);
+  color: var(--text);
+}
+
+body.theme-dark .chat-shell,
+body.theme-dark .chat-top,
+body.theme-dark .composer-area,
+body.theme-dark .composer {
+  background: rgba(16, 25, 19, 0.96);
+  border-color: rgba(255, 255, 255, 0.12);
+}
+
+body.theme-dark .message.assistant,
+body.theme-dark .message.user,
+body.theme-dark .answer-section,
+body.theme-dark .practice-cta,
+body.theme-dark .clarify-card,
+body.theme-dark .smart-note,
+body.theme-dark .chat-trust-note {
+  background: rgba(20, 31, 24, 0.98);
+  border-color: rgba(255, 255, 255, 0.1);
+  color: var(--text);
+}
+
+body.theme-dark .message.assistant {
+  box-shadow: inset 3px 0 0 var(--brand);
+}
+
+body.theme-dark .message.user {
+  background: linear-gradient(135deg, rgba(34, 197, 94, 0.18), rgba(20, 31, 24, 0.98));
+}
+
+body.theme-dark .example-chip {
+  background: rgba(18, 39, 26, 0.96);
+  border-color: rgba(94, 227, 139, 0.24);
+  color: #b7f5c9;
+}
+
+body.theme-dark .plus-btn {
+  background: rgba(34, 197, 94, 0.18);
+  color: #b7f5c9;
+}
+
+body.theme-dark .prompt-input,
+body.theme-dark .prompt-input::placeholder,
+body.theme-dark .brand-copy,
+body.theme-dark .chat-top p,
+body.theme-dark .quick-card span,
+body.theme-dark .starter-card span,
+body.theme-dark .session-card-preview,
+body.theme-dark .session-card-meta,
+body.theme-dark .history-item span,
+body.theme-dark .memory-item span,
+body.theme-dark .policy-item span,
+body.theme-dark .about-feature-item span,
+body.theme-dark .student-quick-card span,
+body.theme-dark .student-mini-card span,
+body.theme-dark .student-hero-copy p,
+body.theme-dark .chat-trust-note,
+body.theme-dark .logic-note,
+body.theme-dark .muted-inline,
+body.theme-dark .panel-copy,
+body.theme-dark .admin-subtitle,
+body.theme-dark .profile-stat-card span,
+body.theme-dark .profile-stat-card small {
+  color: var(--muted);
+}
+
+body.theme-dark .main-nav a,
+body.theme-dark .helper-btn-ghost,
+body.theme-dark .top-link {
+  color: #d8f6df;
+}
+
+body.theme-dark .top-chip,
+body.theme-dark .field,
+body.theme-dark .prompt-input,
+body.theme-dark .message-body,
+body.theme-dark .answer-section p,
+body.theme-dark .answer-section ul,
+body.theme-dark .history-card p,
+body.theme-dark .history-card strong,
+body.theme-dark .memory-item,
+body.theme-dark .session-card-title,
+body.theme-dark .student-section-head h3,
+body.theme-dark .student-quick-card strong,
+body.theme-dark .student-mini-card strong {
+  color: var(--text);
+}
+
+body.theme-dark .send-btn {
+  background: linear-gradient(135deg, #22c55e, #16a34a);
+  color: #07150c;
 }
 
 a {
@@ -1552,6 +1709,10 @@ a.memory-item {
   color: var(--muted);
   line-height: 1.9;
   font-size: 0.93rem;
+}
+
+.chat-trust-note-top {
+  margin: 14px 0 0;
 }
 
 body.user-logged-in .selectors {

@@ -1773,6 +1773,14 @@ function openImageUpload() {
 }
 
 function openGenericUpload() {
+  if (!isLoggedIn()) {
+    addMessage(
+      "assistant",
+      "ملم يحل",
+      formatSimpleReply('رفع الملفات والصور متاح بعد تسجيل الدخول فقط. يمكنك الآن كتابة سؤالك نصيًا، أو <a class="top-link" href="login.html">تسجيل الدخول</a> لتفعيل المرفقات.')
+    );
+    return;
+  }
   if (!fileInput) return;
   fileInput.setAttribute("accept", ".pdf,.doc,.docx,.png,.jpg,.jpeg,.txt,.md");
   fileInput.click();

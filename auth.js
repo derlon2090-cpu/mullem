@@ -200,7 +200,18 @@ loginForm?.addEventListener("submit", (event) => {
     return;
   }
 
-  const user = loadUsers().find((entry) => entry.email.toLowerCase() === email && entry.password === password);
+  const userByEmail = loadUsers().find((entry) => entry.email.toLowerCase() === email);
+  if (!userByEmail) {
+    setState("البريد الإلكتروني غير مسجل في المنصة.");
+    return;
+  }
+
+  if (userByEmail.password !== password) {
+    setState("كلمة المرور غير صحيحة.");
+    return;
+  }
+
+  const user = userByEmail;
   if (!user) {
     setState("كلمة المرور غير صحيحة أو الحساب غير موجود.");
     return;
