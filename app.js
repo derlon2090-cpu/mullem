@@ -1780,7 +1780,6 @@ function openGenericUpload() {
 }
 
 function startChat() {
-  document.querySelector("#chat")?.scrollIntoView({ behavior: "smooth", block: "start" });
   promptInput?.focus();
 }
 
@@ -2446,7 +2445,6 @@ function bootstrap() {
     setPromptValue(resumePrompt);
     localStorage.removeItem(storageKeys.resumePrompt);
     promptInput?.focus();
-    messageList?.scrollIntoView({ behavior: "smooth", block: "start" });
   }
 }
 
@@ -4739,6 +4737,5 @@ function bootstrap() {
     setPromptValue(resumePrompt);
     localStorage.removeItem(storageKeys.resumePrompt);
     promptInput?.focus();
-    messageList?.scrollIntoView({ behavior: "smooth", block: "start" });
   }
 }

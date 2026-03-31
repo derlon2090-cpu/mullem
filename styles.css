@@ -1472,10 +1472,6 @@ a.memory-item {
   color: var(--muted);
 }
 
-body.user-logged-in .selectors [data-grade] {
-  display: none;
-}
-
 body.user-logged-in .selectors {
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
