@@ -2,6 +2,13 @@
   if (window.__mullemRuntimePatched) return;
   window.__mullemRuntimePatched = true;
 
+  if ("scrollRestoration" in window.history) {
+    window.history.scrollRestoration = "manual";
+  }
+  window.addEventListener("load", () => {
+    window.scrollTo({ top: 0, left: 0, behavior: "auto" });
+  });
+
   const form = document.querySelector("[data-chat-form]");
   const messageList = document.querySelector("[data-messages]");
   const promptInput = document.querySelector("[data-prompt]");
@@ -573,4 +580,11 @@
     messageList.innerHTML = "";
     renderRuntimeWelcomeMessage();
   }
+
+  requestAnimationFrame(() => {
+    const promptInput = document.querySelector("[data-prompt]");
+    if (document.activeElement === promptInput) {
+      promptInput.blur();
+    }
+  });
 })();

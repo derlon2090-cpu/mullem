@@ -2444,7 +2444,6 @@ function bootstrap() {
   if (resumePrompt) {
     setPromptValue(resumePrompt);
     localStorage.removeItem(storageKeys.resumePrompt);
-    promptInput?.focus();
   }
 }
 
@@ -4736,6 +4735,5 @@ function bootstrap() {
   if (resumePrompt) {
     setPromptValue(resumePrompt);
     localStorage.removeItem(storageKeys.resumePrompt);
-    promptInput?.focus();
   }
 }
