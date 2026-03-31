@@ -66,8 +66,8 @@
         <p>اختر بين تسجيل الدخول أو إنشاء حساب جديد، ثم انتقل مباشرة إلى الشات الدراسي.</p>
 
         <div class="auth-tabs">
-          <button class="auth-tab active" type="button" data-auth-tab="login">تسجيل الدخول</button>
-          <button class="auth-tab" type="button" data-auth-tab="register">إنشاء حساب</button>
+          <button class="auth-tab active" type="button" data-auth-tab="login" data-auth-open="login">تسجيل الدخول</button>
+          <button class="auth-tab" type="button" data-auth-tab="register" data-auth-open="register">إنشاء حساب</button>
         </div>
 
         <div class="auth-panels">
@@ -86,6 +86,7 @@
 
               <div class="auth-links">
                 <button class="auth-link-btn" type="button" data-auth-forgot>نسيت كلمة المرور؟</button>
+                <button class="auth-link-btn" type="button" data-auth-open="register">ليس لديك حساب؟ أنشئ حسابًا</button>
               </div>
 
               <button class="primary-btn" type="submit">ادخل وابدأ حل واجباتك</button>
@@ -125,7 +126,7 @@
                 <option>الثالث الثانوي</option>
               </select>
 
-              <button class="primary-btn" type="submit">إنشاء الحساب</button>
+              <button class="primary-btn" type="submit" data-register-submit>إنشاء الحساب</button>
             </form>
           </section>
 

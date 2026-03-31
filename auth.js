@@ -20,6 +20,7 @@ const googleButton = document.querySelector("[data-auth-google]");
 const forgotButton = document.querySelector("[data-auth-forgot]");
 const backButton = document.querySelector("[data-auth-back]");
 const scrollTopButton = document.querySelector("[data-scroll-top]");
+const registerSubmitButton = document.querySelector("[data-register-submit]");
 
 const storageKeys = {
   users: "mlm_users",
@@ -95,6 +96,23 @@ function setActivePanel(mode) {
   });
 }
 
+function openAuthMode(mode) {
+  setActivePanel(mode);
+  if (mode === "register") {
+    setState("أنشئ حسابك ثم ابدأ الشات مباشرة.");
+    registerName?.focus();
+    return;
+  }
+  if (mode === "forgot") {
+    resetForgotFlow();
+    setState("أدخل بريدك الإلكتروني لبدء استعادة كلمة المرور.");
+    forgotEmail?.focus();
+    return;
+  }
+  setState("أدخل بياناتك للوصول إلى المنصة.");
+  loginEmail?.focus();
+}
+
 function isValidEmail(email) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
 }
@@ -144,17 +162,18 @@ function redirectToStudent() {
 
 authTabs.forEach((tab) => {
   tab.addEventListener("click", () => {
-    const mode = tab.getAttribute("data-auth-tab") || "login";
-    setActivePanel(mode);
-    if (mode === "register") {
-      setState("أنشئ حسابك ثم ابدأ الشات مباشرة.");
-    } else {
-      setState("أدخل بياناتك للوصول إلى المنصة.");
-    }
+    openAuthMode(tab.getAttribute("data-auth-tab") || "login");
   });
 });
 
-setActivePanel("login");
+document.addEventListener("click", (event) => {
+  const switchButton = event.target.closest("[data-auth-open]");
+  if (!switchButton) return;
+  const mode = switchButton.getAttribute("data-auth-open") || "login";
+  openAuthMode(mode);
+});
+
+openAuthMode(new URLSearchParams(window.location.search).get("mode") || (window.location.hash === "#register" ? "register" : "login"));
 resetForgotFlow();
 
 loginForm?.addEventListener("submit", (event) => {
@@ -250,15 +269,11 @@ registerForm?.addEventListener("submit", (event) => {
 });
 
 forgotButton?.addEventListener("click", () => {
-  setActivePanel("forgot");
-  resetForgotFlow();
-  setState("أدخل بريدك الإلكتروني لبدء استعادة كلمة المرور.");
+  openAuthMode("forgot");
 });
 
 backButton?.addEventListener("click", () => {
-  setActivePanel("login");
-  resetForgotFlow();
-  setState("عدت إلى صفحة تسجيل الدخول.");
+  openAuthMode("login");
 });
 
 forgotEmailForm?.addEventListener("submit", (event) => {
@@ -340,6 +355,10 @@ resetForm?.addEventListener("submit", (event) => {
 
 googleButton?.addEventListener("click", () => {
   window.location.href = googleAuthUrl;
+});
+
+registerSubmitButton?.addEventListener("click", () => {
+  registerForm?.requestSubmit();
 });
 
 window.addEventListener("scroll", syncScrollTopButton, { passive: true });
