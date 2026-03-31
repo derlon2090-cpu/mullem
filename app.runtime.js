@@ -459,7 +459,7 @@
           wrapper.classList.remove("subject-runtime-hidden");
           wrapper.classList.add("subject-runtime-visible");
         }
-        subjectSelect?.focus();
+        return;
       };
     }
 
@@ -822,7 +822,7 @@
       runtimeState.pendingSolveConfirmation = null;
       addMessage("user", "أنت", question);
       addMessage("assistant", "ملم يحل", formatSimpleReply("حسنًا، اختر المادة من القائمة وسأكمل الحل بدقة أكبر."));
-      subjectSelect?.focus();
+      return;
       return;
     }
 

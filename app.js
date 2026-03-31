@@ -1751,7 +1751,6 @@ function setPromptValue(value, subject = "") {
   promptInput.value = value;
   if (subject && subjectSelect) subjectSelect.value = subject;
   autoGrow(promptInput);
-  promptInput.focus();
 }
 
 function sendPresetPrompt(value, subject = "") {
@@ -1780,7 +1779,7 @@ function openGenericUpload() {
 }
 
 function startChat() {
-  promptInput?.focus();
+  return;
 }
 
 function quickSolve() {
@@ -1965,7 +1964,7 @@ function handleMessageInteractions(event) {
   if (actionButton) {
     const action = actionButton.getAttribute("data-action");
     if (action === "upload-image") openImageUpload();
-    if (action === "focus-subject") subjectSelect?.focus();
+    if (action === "focus-subject") return;
     return;
   }
 
@@ -2423,7 +2422,7 @@ function bootstrap() {
   uploadButton?.addEventListener("click", openGenericUpload);
   uploadImageButton?.addEventListener("click", openImageUpload);
   uploadFileButton?.addEventListener("click", openGenericUpload);
-  focusSubjectButton?.addEventListener("click", () => subjectSelect?.focus());
+  focusSubjectButton?.addEventListener("click", () => {});
   clearChatButton?.addEventListener("click", resetConversationView);
   themeToggleButton?.addEventListener("click", () => {
     const next = document.body.classList.contains("theme-dark") ? "light" : "dark";
@@ -2618,7 +2617,7 @@ async function handleSubmit(event) {
     pendingSolveConfirmation = null;
     addMessage("user", "أنت", question);
     addMessage("assistant", "ملم يحل", formatSimpleReply("حسنًا، اختر المادة من القائمة وسأكمل الحل بدقة أكبر."));
-    subjectSelect?.focus();
+    return;
     scrollMessagesToBottom(true);
     return;
   }
@@ -2773,24 +2772,11 @@ function isUserNearBottom() {
 }
 
 function scrollMessagesToBottom(force = false) {
-  if (!messageList) return;
-  if (force || isUserNearBottom()) {
-    messageList.scrollTop = messageList.scrollHeight;
-    messageList.lastElementChild?.scrollIntoView({ block: "end", behavior: "smooth" });
-  }
+  return;
 }
 
 function setupChatAutoScrollEnhancement() {
-  if (!messageList || messageList.dataset.autoscrollEnhanced === "1") return;
-  messageList.dataset.autoscrollEnhanced = "1";
-  const observer = new MutationObserver(() => {
-    scrollMessagesToBottom();
-  });
-  observer.observe(messageList, {
-    childList: true,
-    subtree: true,
-    characterData: true
-  });
+  return;
 }
 
 function addMessage(type, author, body, options = {}) {
@@ -3090,7 +3076,7 @@ async function handleSubmit(event) {
     pendingSolveConfirmation = null;
     addMessage("user", "أنت", question);
     addMessage("assistant", "ملم يحل", formatSimpleReply("حسنًا، اختر المادة من القائمة وسأكمل الحل بدقة أكبر."));
-    subjectSelect?.focus();
+    return;
     scrollMessagesToBottom(true);
     return;
   }
@@ -3244,18 +3230,11 @@ function isUserNearBottom() {
 }
 
 function scrollMessagesToBottom(force = false) {
-  if (!messageList) return;
-  if (force || isUserNearBottom()) {
-    messageList.scrollTop = messageList.scrollHeight;
-    messageList.lastElementChild?.scrollIntoView({ block: "end", behavior: "smooth" });
-  }
+  return;
 }
 
 function setupChatAutoScrollEnhancement() {
-  if (!messageList || messageList.dataset.autoScrollReady === "1") return;
-  messageList.dataset.autoScrollReady = "1";
-  const observer = new MutationObserver(() => scrollMessagesToBottom());
-  observer.observe(messageList, { childList: true, subtree: true, characterData: true });
+  return;
 }
 
 function addMessage(type, author, body, options = {}) {
@@ -3437,7 +3416,7 @@ async function handleSubmit(event) {
     pendingSolveConfirmation = null;
     addMessage("user", "أنت", question);
     addMessage("assistant", "ملم يحل", formatSimpleReply("حسنًا، اختر المادة المناسبة من القائمة وسأكمل الحل بدقة أكبر."));
-    subjectSelect?.focus();
+    return;
     return;
   }
 
@@ -3526,20 +3505,11 @@ function isUserNearBottom() {
 }
 
 function scrollMessagesToBottom(force = false) {
-  if (!messageList) return;
-  if (force || isUserNearBottom()) {
-    messageList.scrollTop = messageList.scrollHeight;
-    messageList.lastElementChild?.scrollIntoView({ block: "end", behavior: "smooth" });
-  }
+  return;
 }
 
 function setupChatAutoScrollEnhancement() {
-  if (!messageList || messageList.dataset.autoscrollReady === "1") return;
-  messageList.dataset.autoscrollReady = "1";
-  const observer = new MutationObserver(() => {
-    scrollMessagesToBottom();
-  });
-  observer.observe(messageList, { childList: true, subtree: true, characterData: true });
+  return;
 }
 
 function addMessage(type, author, body, options = {}) {
@@ -3799,7 +3769,7 @@ async function handleSubmit(event) {
     pendingSolveConfirmation = null;
     addMessage("user", "أنت", question);
     addMessage("assistant", "ملم يحل", formatSimpleReply("حسنًا، اختر المادة المناسبة من القائمة وسأكمل الحل بدقة أكبر."), { pending: false });
-    subjectSelect?.focus();
+    return;
     return;
   }
 
@@ -4712,7 +4682,7 @@ function bootstrap() {
   uploadButton?.addEventListener("click", openGenericUpload);
   uploadImageButton?.addEventListener("click", openImageUpload);
   uploadFileButton?.addEventListener("click", openGenericUpload);
-  focusSubjectButton?.addEventListener("click", () => subjectSelect?.focus());
+  focusSubjectButton?.addEventListener("click", () => {});
   clearChatButton?.addEventListener("click", startFreshSession);
   newSessionButton?.addEventListener("click", startFreshSession);
   themeToggleButton?.addEventListener("click", () => {
