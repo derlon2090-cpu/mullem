@@ -34,9 +34,229 @@
     pendingSolveConfirmation: null
   };
 
+  const blockedVideoExtensions = /\.(mp4|mov|avi|mkv|webm|m4v)$/i;
+  const foundationCatalog = {
+    "الفيزياء": {
+      basics: [
+        "الحركة: هي تغير موقع الجسم مع الزمن.",
+        "السرعة: مقدار المسافة المقطوعة خلال زمن معين.",
+        "التسارع: معدل تغير السرعة.",
+        "القوة: مؤثر يسبب تغيرًا في حركة الجسم."
+      ],
+      sampleQuestion: "إذا أثرت قوة مقدارها 12 نيوتن على جسم كتلته 4 كجم، فما تسارعه؟",
+      sampleSolution: [
+        "القانون: القوة = الكتلة × التسارع.",
+        "التسارع = القوة ÷ الكتلة.",
+        "التسارع = 12 ÷ 4 = 3 م/ث²."
+      ],
+      sampleAnswer: "تسارع الجسم = 3 م/ث².",
+      mistakes: [
+        "الخلط بين السرعة والتسارع.",
+        "نسيان تحويل المطلوب من القانون الأصلي."
+      ]
+    },
+    "الرياضيات": {
+      basics: [
+        "تحديد المعطيات بدقة قبل البدء.",
+        "اختيار القانون أو القاعدة المناسبة.",
+        "التعويض خطوة بخطوة.",
+        "التحقق من الناتج بعد الحل."
+      ],
+      sampleQuestion: "احسب محيط دائرة نصف قطرها 7 سم.",
+      sampleSolution: [
+        "القانون: محيط الدائرة = 2 × ط × نق.",
+        "التعويض: 2 × ط × 7.",
+        "الناتج = 14ط ≈ 43.96 سم."
+      ],
+      sampleAnswer: "محيط الدائرة ≈ 43.96 سم.",
+      mistakes: [
+        "الخلط بين المحيط والمساحة.",
+        "استخدام القطر بدل نصف القطر."
+      ]
+    },
+    "الكيمياء": {
+      basics: [
+        "فهم نوع المادة وتركيبها.",
+        "تمييز الروابط والتفاعلات والمفاهيم الأساسية.",
+        "قراءة الرموز الكيميائية بدقة.",
+        "ربط السؤال بالمفهوم قبل اختيار الإجابة."
+      ],
+      sampleQuestion: "ما نوع الرابطة في مركب كلوريد الصوديوم NaCl؟",
+      sampleSolution: [
+        "الصوديوم فلز، والكلور لا فلز.",
+        "الفلزات مع اللافلزات تكوّن غالبًا رابطة أيونية.",
+        "إذن نوع الرابطة هو أيونية."
+      ],
+      sampleAnswer: "الرابطة في NaCl أيونية.",
+      mistakes: [
+        "الخلط بين الرابطة الأيونية والتساهمية.",
+        "الحكم على الرابطة دون تحديد نوع العناصر."
+      ]
+    },
+    "الأحياء": {
+      basics: [
+        "ربط السؤال بوظيفة العضية أو الجهاز الحيوي.",
+        "تمييز المصطلحات الحيوية الأساسية.",
+        "التركيز على مكان حدوث العملية الحيوية.",
+        "الاعتماد على المفهوم لا على الحفظ فقط."
+      ],
+      sampleQuestion: "في أي عضية يحدث التنفس الخلوي؟",
+      sampleSolution: [
+        "التنفس الخلوي عملية لإنتاج الطاقة داخل الخلية.",
+        "المكان المرتبط بإنتاج الطاقة هو الميتوكوندريا.",
+        "إذن يحدث التنفس الخلوي في الميتوكوندريا."
+      ],
+      sampleAnswer: "يحدث التنفس الخلوي في الميتوكوندريا.",
+      mistakes: [
+        "الخلط بين الميتوكوندريا والفجوات.",
+        "اختيار العضية بناءً على التشابه اللفظي فقط."
+      ]
+    },
+    "العلوم": {
+      basics: [
+        "فهم المفهوم العلمي أولًا.",
+        "ربط الظاهرة بسببها العلمي.",
+        "ملاحظة الكلمات المفتاحية في السؤال.",
+        "اختيار المثال الأقرب من الدرس."
+      ],
+      sampleQuestion: "لماذا يتبخر الماء عند التسخين؟",
+      sampleSolution: [
+        "التسخين يزيد طاقة جزيئات الماء.",
+        "عندما تزداد الطاقة تتحرر الجزيئات من السطح.",
+        "لهذا يتحول الماء من سائل إلى بخار."
+      ],
+      sampleAnswer: "لأن التسخين يزيد طاقة جزيئات الماء فتتحول إلى بخار.",
+      mistakes: [
+        "وصف الظاهرة دون ذكر السبب العلمي.",
+        "الخلط بين التبخر والغليان."
+      ]
+    },
+    "اللغة العربية": {
+      basics: [
+        "فهم المطلوب أولًا: نحو أو بلاغة أو نص.",
+        "تحديد الكلمات المفتاحية في الجملة.",
+        "تطبيق القاعدة على المثال مباشرة.",
+        "التأكد من سلامة الصياغة والإعراب."
+      ],
+      sampleQuestion: "حدد المبتدأ والخبر في جملة: المدرسة نظيفة.",
+      sampleSolution: [
+        "الجملة اسمية لأنها بدأت باسم.",
+        "المبتدأ هو: المدرسة.",
+        "الخبر هو: نظيفة."
+      ],
+      sampleAnswer: "المبتدأ: المدرسة، والخبر: نظيفة.",
+      mistakes: [
+        "الخلط بين المبتدأ والفاعل.",
+        "إهمال نوع الجملة قبل الإعراب."
+      ]
+    },
+    "اللغة الإنجليزية": {
+      basics: [
+        "تحديد نوع الجملة والزمن المطلوب.",
+        "مراجعة الفاعل والفعل.",
+        "التأكد من القاعدة المرتبطة بالجملة.",
+        "تصحيح الصياغة مع مثال واضح."
+      ],
+      sampleQuestion: "صحح الجملة: She go to school every day.",
+      sampleSolution: [
+        "الفاعل هو She، وهو مفرد غائب.",
+        "في المضارع البسيط نضيف s للفعل مع المفرد الغائب.",
+        "تصبح الجملة: She goes to school every day."
+      ],
+      sampleAnswer: "She goes to school every day.",
+      mistakes: [
+        "نسيان إضافة s مع المفرد الغائب.",
+        "الخلط بين المضارع البسيط والمستمر."
+      ]
+    }
+  };
+
   function getSolveMode() {
     const active = document.querySelector("[data-solve-mode].active");
     return active?.getAttribute("data-solve-mode") || "quick";
+  }
+
+  function hasBlockedVideo(files) {
+    return (files || []).some((file) => file?.type?.startsWith("video/") || blockedVideoExtensions.test(file?.name || ""));
+  }
+
+  function isCompoundLearningRequest(text) {
+    const normalized = typeof normalizeText === "function" ? normalizeText(text) : (text || "");
+    return /ثم|وبعدها|بعد ذلك/.test(normalized) && /اشرح|ابدأ بشرح|أساسيات/.test(normalized) && /حل|مثال|نموذجي/.test(normalized);
+  }
+
+  function query_decomposer(text, subject) {
+    if (!isCompoundLearningRequest(text)) return [];
+    const safeSubject = subject || "المادة";
+    return [
+      `شرح أساسيات ${safeSubject}`,
+      "اختيار موضوع مناسب من الفصل أو الدرس المطلوب",
+      "تجهيز سؤال نموذجي مناسب",
+      "حل السؤال خطوة بخطوة",
+      "اقتراح متابعة تدريبية بعد إكمال الطلب"
+    ];
+  }
+
+  function resolveStudyContext(route) {
+    const activeUser = typeof getActiveUser === "function" ? getActiveUser() : null;
+    const grade = activeUser?.grade || gradeSelect?.value || "";
+    const term = termSelect?.value || "الفصل الدراسي الأول";
+    const subject = route?.detected_subject || activeUser?.subject || subjectSelect?.value || "المادة";
+    return {
+      grade,
+      term,
+      subject,
+      stage: typeof getSelectedStageLabel === "function" ? getSelectedStageLabel(grade) : ""
+    };
+  }
+
+  function curriculum_rag(subject, context) {
+    const entry = foundationCatalog[subject] || foundationCatalog["العلوم"];
+    return {
+      subject,
+      grade: context.grade,
+      term: context.term,
+      basics: entry.basics,
+      sampleQuestion: entry.sampleQuestion,
+      sampleSolution: entry.sampleSolution,
+      sampleAnswer: entry.sampleAnswer,
+      mistakes: entry.mistakes
+    };
+  }
+
+  function task_planner(question, subject, context) {
+    return {
+      isCompound: isCompoundLearningRequest(question),
+      tasks: query_decomposer(question, subject),
+      context
+    };
+  }
+
+  function buildCompoundResponse(question, route) {
+    const context = resolveStudyContext(route);
+    const knowledge = curriculum_rag(context.subject, context);
+    const plan = task_planner(question, context.subject, context);
+    if (!plan.isCompound) return null;
+
+    return {
+      mode: "solve",
+      questionType: "شرح + تطبيق",
+      subject: context.subject,
+      lesson: `أساسيات ${context.subject}`,
+      finalAnswer: `سأبدأ بشرح أساسيات ${context.subject} المناسبة لـ ${context.grade || "هذا الصف"}، ثم أطبّق على سؤال نموذجي من ${context.term}.`,
+      explanation: `في ${context.subject} لهذا المستوى، الأساسيات التي تحتاجها عادة هي: ${knowledge.basics.join(" ")}`,
+      steps: [
+        ...knowledge.basics.map((item, index) => `${index + 1}. ${item}`),
+        `سؤال نموذجي من ${context.term}: ${knowledge.sampleQuestion}`,
+        ...knowledge.sampleSolution,
+        `النتيجة النهائية: ${knowledge.sampleAnswer}`
+      ],
+      mistakes: knowledge.mistakes,
+      similar: "هل تريد الآن 3 أسئلة تدريبية أو اختبارًا قصيرًا على نفس الدرس؟",
+      curriculumLink: `اعتمدت في الشرح على ${context.subject} المناسب لـ ${context.grade || "مرحلتك الحالية"} ضمن ${context.term}.`,
+      hideSources: true,
+      planTasks: plan.tasks
+    };
   }
 
   function isAffirmativeReply(text) {
@@ -319,13 +539,16 @@
   function intent_analyzer(message, hasAttachments = false) {
     const intent = intent_router(message, hasAttachments);
     const subjectGuess = runtimeAutoSubjectDetector(message);
+    const decomposedTasks = query_decomposer(message, subjectGuess.subject);
     return {
       intent,
       questionType: detectQuestionType(message),
       subject: subjectGuess.subject,
       confidence: subjectGuess.confidence,
       candidates: subjectGuess.candidates,
-      difficulty: message.length > 90 ? "medium" : "easy"
+      difficulty: message.length > 90 ? "medium" : "easy",
+      decomposedTasks,
+      compound: decomposedTasks.length > 0
     };
   }
 
@@ -339,13 +562,18 @@
       keywords,
       isObjective,
       clarity,
-      needsFollowup: clarity === "low" && analysis.confidence < 0.45
+      needsFollowup: clarity === "low" && analysis.confidence < 0.45,
+      compound: analysis.compound,
+      taskCount: analysis.decomposedTasks?.length || 0
     };
   }
 
   function decision_engine(route, analysis, reasoning) {
     if (analysis.intent.type === "chat") return { action: "chat" };
     if (analysis.intent.type === "help") return { action: "help" };
+    if (reasoning.compound && (route.subject_confidence || analysis.confidence) >= 0.55) {
+      return { action: "answer", confidence: Math.max(route.subject_confidence || 0, analysis.confidence || 0.55), composite: true };
+    }
     if (route.response_mode === "reject_logo_image" || route.response_mode === "reject_out_of_scope_image" || route.response_mode === "ask_clearer_upload" || route.response_mode === "content_interpretation") {
       return { action: "route" };
     }
@@ -366,7 +594,8 @@
   }
 
   function response_builder(question, route, analysis) {
-    return buildDirectObjectiveResponse(question, route)
+    return buildCompoundResponse(question, route)
+      || buildDirectObjectiveResponse(question, route)
       || createAcademicResponse(question || route.extracted_text || "حل السؤال من المرفقات", analysis.intent, {
         preferredSubject: route.detected_subject || "",
         detectedSubject: route.detected_subject || "",
@@ -386,6 +615,9 @@
         .replace(/غيّر المادة/g, "")
         .replace(/اختر المادة أولًا/g, "")
         .trim();
+    }
+    if (checked.planTasks?.length) {
+      checked.explanation = `${checked.explanation || ""} خطة التنفيذ: ${checked.planTasks.join(" ← ")}.`.trim();
     }
     return checked;
   }
@@ -421,6 +653,11 @@
     const attachments = Array.from(fileInput?.files || []);
     const hasAttachments = attachments.length > 0;
     if (!question && !hasAttachments) return;
+    if (hasBlockedVideo(attachments)) {
+      addMessage("assistant", "ظ…ظ„ظ… ظٹط­ظ„", formatSimpleReply("رفع الفيديو غير متاح في المنصة حاليًا. يمكنك رفع صورة أو ملف دراسي فقط بعد تسجيل الدخول."));
+      if (fileInput) fileInput.value = "";
+      return;
+    }
 
     if (runtimeState.pendingSolveConfirmation && isAffirmativeReply(question) && !hasAttachments) {
       const stored = runtimeState.pendingSolveConfirmation;
@@ -525,7 +762,7 @@
         decision
       );
       body = formatAssistantSections(responseForLog);
-      sources = typeof buildSources === "function" ? buildSources() : [];
+      sources = responseForLog?.hideSources ? [] : (typeof buildSources === "function" ? buildSources() : []);
 
       if (typeof saveHistory === "function") {
         saveHistory(
