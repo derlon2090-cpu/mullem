@@ -7,7 +7,8 @@ const storageKeys = {
   analytics: "mlm_analytics",
   feedback: "mlm_feedback_log",
   aiLogs: "mlm_ai_logs",
-  responseMode: "mlm_response_mode"
+  responseMode: "mlm_response_mode",
+  resumePrompt: "mlm_resume_prompt"
 };
 
 const gradeOptions = [
@@ -345,6 +346,18 @@ function getCurrentPoints() {
   return getActiveUser()?.xp ?? 0;
 }
 
+function getTodayStamp() {
+  const now = new Date();
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+}
+
+function diffDays(fromStamp, toStamp) {
+  if (!fromStamp || !toStamp) return 0;
+  const from = new Date(`${fromStamp}T00:00:00`);
+  const to = new Date(`${toStamp}T00:00:00`);
+  return Math.round((to - from) / 86400000);
+}
+
 function updateUserRecord(partial) {
   const activeUser = getActiveUser();
   if (!activeUser) return null;
@@ -355,6 +368,41 @@ function updateUserRecord(partial) {
   );
   saveJson(storageKeys.users, users);
   return users.find((user) => user.id === activeUser.id) || null;
+}
+
+function syncUserStreakOnVisit() {
+  const activeUser = getActiveUser();
+  if (!activeUser) return null;
+
+  const today = getTodayStamp();
+  const lastActiveDate = activeUser.lastActiveDate || "";
+  if (lastActiveDate === today) return activeUser;
+
+  let streakDays = activeUser.streakDays ?? 0;
+  if (!lastActiveDate) {
+    streakDays = 1;
+  } else {
+    const gap = diffDays(lastActiveDate, today);
+    if (gap === 1) {
+      streakDays += 1;
+    } else if (gap > 1) {
+      streakDays = 0;
+    }
+  }
+
+  const achievements = Array.isArray(activeUser.achievements) ? [...activeUser.achievements] : [];
+  if (streakDays >= 5 && !achievements.includes("5_days_streak")) achievements.push("5_days_streak");
+  if (streakDays >= 30 && !achievements.includes("30_days_streak")) achievements.push("30_days_streak");
+
+  return updateUserRecord({
+    streakDays,
+    lastActiveDate: today,
+    motivationGoal: 30,
+    achievements,
+    activity: streakDays
+      ? `يحافظ على سلسلة الحماس منذ ${streakDays} يوم`
+      : "عاد إلى المنصة بعد انقطاع وتحتاج السلسلة إلى إعادة البناء"
+  });
 }
 
 function spendPoints(amount, reason) {
@@ -1541,9 +1589,9 @@ function quickSolve() {
   startChat();
 }
 
-function saveHistory(question, subject) {
+function saveHistory(question, subject, questionType = "", status = "تمت المراجعة") {
   if (!isLoggedIn()) return;
-  chatHistory.unshift({ question, subject, time: Date.now() });
+  chatHistory.unshift({ question, subject, questionType, status, time: Date.now() });
   chatHistory = chatHistory.slice(0, 12);
   saveChatHistory();
   renderHistory();
@@ -1790,7 +1838,8 @@ function bindStarterButtons() {
 function bootstrap() {
   applyTheme(localStorage.getItem(storageKeys.theme) || "light");
   loadUserState();
-  const activeUser = getActiveUser();
+  const activeUser = syncUserStreakOnVisit() || getActiveUser();
+  loadUserState();
   if (gradeSelect && activeUser?.grade) gradeSelect.value = activeUser.grade;
   updateXpBalance();
   renderLearnedMemory();
@@ -1844,6 +1893,14 @@ function bootstrap() {
   bindStarterButtons();
   applyResponseMode(selectedResponseMode);
   syncScrollTopButton();
+
+  const resumePrompt = localStorage.getItem(storageKeys.resumePrompt);
+  if (resumePrompt) {
+    setPromptValue(resumePrompt);
+    localStorage.removeItem(storageKeys.resumePrompt);
+    promptInput?.focus();
+    messageList?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
 }
 
 bootstrap();
