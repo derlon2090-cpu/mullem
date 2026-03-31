@@ -307,23 +307,24 @@ textarea {
   border: 1px solid rgba(34, 197, 94, 0.14);
   background: rgba(255, 255, 255, 0.96);
   color: var(--muted);
-  border-radius: 22px;
-  padding: 14px 16px;
+  border-radius: 18px;
+  padding: 10px 12px;
   cursor: pointer;
   transition: 180ms ease;
   display: grid;
-  gap: 6px;
+  gap: 4px;
 }
 
 .stage-card strong {
   color: var(--brand-strong);
-  font-size: 1rem;
+  font-size: 0.95rem;
 }
 
 .stage-card span,
 .stage-card small {
   color: var(--muted);
-  line-height: 1.7;
+  line-height: 1.5;
+  font-size: 0.9rem;
 }
 
 .stage-card.active {
@@ -1254,6 +1255,16 @@ a.memory-item {
 
 .message-body {
   line-height: 1.9;
+}
+
+.welcome-card {
+  display: grid;
+  gap: 8px;
+}
+
+.welcome-card h4,
+.welcome-card p {
+  margin: 0;
 }
 
 .simple-reply p {

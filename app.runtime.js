@@ -531,3 +531,46 @@
   applyUserStudyContext();
   document.addEventListener("submit", runtimeHandleSubmit, true);
 })();
+
+(() => {
+  const messageList = document.querySelector("[data-messages]");
+  if (!messageList) return;
+
+  function runtimeLoadingCopy() {
+    const lines = [
+      "جاري الحل...",
+      "جاري تحليل السؤال...",
+      "جاري تجهيز الإجابة..."
+    ];
+    const index = Math.floor(Date.now() / 1000) % lines.length;
+    return `
+      <div class="clarify-card">
+        <p>${lines[index]}</p>
+        <p class="muted-inline">${lines[(index + 1) % lines.length]}</p>
+      </div>
+    `;
+  }
+
+  function renderRuntimeWelcomeMessage() {
+    if (!messageList || messageList.children.length) return;
+    if (typeof addMessage !== "function") return;
+    addMessage(
+      "assistant",
+      "ملم يحل",
+      `
+        <div class="welcome-card">
+          <h4>أنا هنا لمساعدتك</h4>
+          <p>اكتب سؤالك، وسأحاول حله لك بشكل واضح ومباشر.</p>
+          <p class="logic-note">يمكنك البدء بالنص فورًا، أما رفع الصور فيحتاج تسجيل الدخول.</p>
+        </div>
+      `
+    );
+  }
+
+  window.createLoadingCopy = runtimeLoadingCopy;
+
+  if (!messageList.children.length) {
+    messageList.innerHTML = "";
+    renderRuntimeWelcomeMessage();
+  }
+})();
