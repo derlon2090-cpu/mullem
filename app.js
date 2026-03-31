@@ -2450,6 +2450,1500 @@ function bootstrap() {
   }
 }
 
+pendingSolveConfirmation = pendingSolveConfirmation || null;
+
+function solveObjectiveQuestion(question) {
+  const normalized = normalizeText(question);
+
+  if (/التنفس الخلوي/.test(normalized) && /الفجوات/.test(normalized) && /صواب|صح|خطأ/.test(normalized)) {
+    return {
+      answerMode: "truefalse",
+      finalAnswer: "خطأ",
+      explanation: "لأن التنفس الخلوي يحدث في الميتوكوندريا وليس في الفجوات."
+    };
+  }
+
+  if (/صواب|صح|خطأ/.test(normalized) && /الرابطة/.test(normalized) && /nacl/.test(normalized) && /تساهمية/.test(normalized)) {
+    return {
+      answerMode: "truefalse",
+      finalAnswer: "خطأ",
+      explanation: "لأن الرابطة في NaCl أيونية وليست تساهمية."
+    };
+  }
+
+  return null;
+}
+
+function request_router({ user_text, uploaded_files, selected_grade, selected_subject, user_profile, selected_solve_mode = "quick" }) {
+  const input_type = determineInputType(user_text, uploaded_files);
+  const image_type = input_type.includes("image")
+    ? image_analyzer(uploaded_files, user_text)
+    : { image_type: "none", extracted_text: "", confidence: 0 };
+  const questionText = `${user_text || ""} ${image_type.extracted_text || ""}`.trim();
+  const intent = intent_router(questionText, uploaded_files?.length > 0);
+  const quickMode = selected_solve_mode !== "structured";
+  const questionType = detectQuestionType(questionText);
+  const isObjective = questionType === "صح وخطأ" || questionType === "اختيار من متعدد";
+  const scope = curriculum_scope_checker({
+    userText: user_text,
+    selectedGrade: selected_grade || user_profile?.grade || "",
+    selectedSubject: quickMode ? "" : (selected_subject || ""),
+    imageMeta: image_type,
+    solveMode: quickMode ? "quick" : "structured"
+  });
+
+  let response_mode = "academic_solve";
+
+  if (input_type === "file_only" && !user_text.trim()) response_mode = "content_interpretation";
+  if (image_type.image_type === "logo_or_branding") response_mode = "reject_logo_image";
+  else if (image_type.image_type === "non_educational_image" || image_type.image_type === "document_non_educational") response_mode = "reject_out_of_scope_image";
+  else if (image_type.image_type === "unclear_image") response_mode = "ask_clearer_upload";
+  else if (image_type.image_type === "educational_page" && !user_text.trim()) response_mode = "content_interpretation";
+  else if (!quickMode && (scope.scope_status === "subject_mismatch" || scope.scope_status === "grade_mismatch" || scope.scope_status === "subject_unknown")) response_mode = "ask_for_confirmation";
+  else if (quickMode && intent.type !== "chat" && intent.type !== "help" && scope.subject_confidence < 0.7 && !isObjective) response_mode = "ask_for_confirmation";
+
+  return {
+    input_type,
+    intent,
+    image_type: image_type.image_type,
+    extracted_text: image_type.extracted_text,
+    detected_subject: scope.detected_subject,
+    detected_grade_level: scope.detected_grade_level,
+    subject_confidence: scope.subject_confidence,
+    grade_confidence: scope.grade_confidence,
+    subject_candidates: scope.subject_candidates,
+    analysis_passes: scope.analysis_passes,
+    scope_status: scope.scope_status,
+    response_mode,
+    quick_mode: quickMode,
+    question_type: questionType
+  };
+}
+
+function createImageRouterResponse(route) {
+  if (route.response_mode === "ask_for_confirmation") {
+    if (route.scope_status === "subject_mismatch") {
+      return formatSimpleReply(`يبدو أن السؤال أقرب إلى مادة ${route.detected_subject}، بينما المادة المحددة لديك مختلفة. غيّر المادة أو أخبرني أن أكمل على هذا الأساس.`);
+    }
+    if (route.scope_status === "grade_mismatch") {
+      return formatSimpleReply("هذا السؤال يبدو من مستوى دراسي مختلف عن الصف المحدد لديك. يمكنك تعديل الصف أو المتابعة كتقدير أولي إذا كان هذا مقصودًا.");
+    }
+    if (route.detected_subject) {
+      return formatClarificationReply({
+        intro: "حللت السؤال أكثر من مرة للوصول لأقرب مادة ممكنة.",
+        prompt: `يبدو أن السؤال من ${route.detected_subject}. هل تريد أن أكمل الحل؟`,
+        actions: [
+          { label: "أكمل الحل", fill: "نعم" },
+          { label: "اختيار المادة", action: "focus-subject" }
+        ]
+      });
+    }
+    return formatSimpleReply("لم تتضح المادة بشكل كافٍ بعد. اكتب السؤال بصورة أوضح قليلًا أو اختر المادة يدويًا وسأكمل معك مباشرة.");
+  }
+
+  if (route.response_mode === "reject_logo_image") {
+    return formatSimpleReply("يبدو أن الصورة المرفقة ليست سؤالًا تعليميًا، بل أقرب إلى شعار أو تصميم. أرسل صورة السؤال أو اكتبه نصًا.");
+  }
+
+  if (route.response_mode === "reject_out_of_scope_image") {
+    return formatSimpleReply("الصورة المرفقة لا تبدو ضمن المحتوى التعليمي. يرجى إرسال سؤال دراسي أو صورة واضحة من كتاب أو ورقة عمل.");
+  }
+
+  if (route.response_mode === "ask_clearer_upload") {
+    return formatSimpleReply("الصورة غير واضحة بما يكفي لقراءة السؤال. حاول إعادة رفع صورة أوضح أو اكتب السؤال نصًا.");
+  }
+
+  if (route.response_mode === "content_interpretation") {
+    return formatClarificationReply({
+      intro: "تم التعرف على الصورة كمحتوى تعليمي.",
+      prompt: "هل تريد شرح المحتوى أم تلخيصه أم حل الأسئلة الموجودة فيه؟",
+      actions: [
+        { label: "شرح المحتوى", fill: "اشرح محتوى الصورة التعليمية." },
+        { label: "تلخيص المحتوى", fill: "لخص محتوى الصورة التعليمية." },
+        { label: "حل الأسئلة", fill: "حل الأسئلة الموجودة في الصورة التعليمية." }
+      ]
+    });
+  }
+
+  return formatSimpleReply("تم تجهيز الطلب وسأكمل الحل الآن.");
+}
+
+async function handleSubmit(event) {
+  event.preventDefault();
+  const question = promptInput?.value.trim() || "";
+  const hasAttachments = attachments.length > 0;
+  if (!question && !hasAttachments) return;
+
+  if (pendingSolveConfirmation && isAffirmativeReply(question) && !hasAttachments) {
+    const stored = pendingSolveConfirmation;
+    pendingSolveConfirmation = null;
+    addMessage("user", "أنت", question);
+    promptInput.value = "";
+    autoGrow(promptInput);
+
+    const pendingNode = addMessage("assistant", "ملم يحل", createLoadingCopy(), { pending: true });
+    const response = createAcademicResponse(stored.question, stored.intent, {
+      preferredSubject: stored.route.detected_subject || stored.subject || "",
+      detectedSubject: stored.route.detected_subject || stored.subject || "",
+      subjectConfidence: Math.max(0.71, stored.route.subject_confidence || 0.71),
+      route: { ...stored.route, response_mode: "academic_solve" }
+    });
+    pendingNode?.remove();
+
+    const body = formatAssistantSections(response);
+    const sources = buildSources();
+    addMessage("assistant", "ملم يحل", body, {
+      sources,
+      enableTools: true,
+      metadata: {
+        subject: response.subject,
+        lesson: response.lesson,
+        questionType: response.questionType,
+        mode: response.mode
+      }
+    });
+    appendMessageToSession("assistant", "ملم يحل", body, {
+      sources,
+      enableTools: true,
+      metadata: {
+        subject: response.subject,
+        lesson: response.lesson,
+        questionType: response.questionType,
+        mode: response.mode
+      },
+      subject: response.subject
+    });
+    scrollMessagesToBottom(true);
+    return;
+  }
+
+  if (pendingSolveConfirmation && isNegativeReply(question) && !hasAttachments) {
+    pendingSolveConfirmation = null;
+    addMessage("user", "أنت", question);
+    addMessage("assistant", "ملم يحل", formatSimpleReply("حسنًا، اختر المادة من القائمة وسأكمل الحل بدقة أكبر."));
+    subjectSelect?.focus();
+    scrollMessagesToBottom(true);
+    return;
+  }
+
+  const activeUser = getActiveUser();
+  const route = request_router({
+    user_text: question,
+    uploaded_files: attachments,
+    selected_grade: gradeSelect?.value || activeUser?.grade || "",
+    selected_subject: subjectSelect?.value || "",
+    user_profile: activeUser || {},
+    selected_solve_mode: selectedSolveMode
+  });
+  const intent = route.intent;
+
+  if (hasAttachments && !isLoggedIn()) {
+    addMessage("assistant", "ملم يحل", formatSimpleReply('تحليل الصور متاح بعد تسجيل الدخول فقط. يمكنك الآن كتابة السؤال نصيًا، أو <a class="top-link" href="login.html">تسجيل الدخول</a> لتفعيل تحليل الصور.'));
+    attachments = [];
+    if (fileInput) fileInput.value = "";
+    renderAttachments();
+    return;
+  }
+
+  const shouldCharge =
+    !hasAttachments ||
+    route.response_mode === "academic_solve" ||
+    route.response_mode === "content_interpretation";
+  const usageCost = shouldCharge ? (hasAttachments ? usageCosts.image : usageCosts.chat) : 0;
+  if (usageCost > 0) {
+    const pointsResult = spendPoints(usageCost, hasAttachments ? "تحليل صورة" : "استخدام الشات");
+    if (!pointsResult.ok) {
+      addMessage("assistant", "ملم يحل", formatSimpleReply(`رصيدك الحالي ${pointsResult.remaining} نقطة، وهذا لا يكفي لهذه العملية. تحتاج ${usageCost} نقطة. يمكنك شراء نقاط إضافية من <a class="top-link" href="subscriptions.html">صفحة الباقات</a>.`));
+      return;
+    }
+  }
+
+  const renderedQuestion = hasAttachments
+    ? `${question || "أرفقت صورة أو ملفًا مع السؤال."}<br><span class="muted-inline">المرفقات: ${attachments.map((item) => item.name).join("، ")}</span>`
+    : question;
+
+  addMessage("user", "أنت", renderedQuestion);
+  appendMessageToSession("user", "أنت", renderedQuestion, {
+    subject: route.detected_subject || (selectedSolveMode === "structured" ? (subjectSelect?.value || "") : ""),
+    sessionTitle: question || "سؤال جديد"
+  });
+
+  promptInput.value = "";
+  autoGrow(promptInput);
+
+  const pendingNode = addMessage("assistant", "ملم يحل", createLoadingCopy(), { pending: true });
+  let body = "";
+  let sources = [];
+  let responseForLog = null;
+
+  if (route.response_mode !== "academic_solve") {
+    pendingSolveConfirmation = route.response_mode === "ask_for_confirmation"
+      ? { question, route, intent, subject: route.detected_subject || "" }
+      : null;
+    body = createImageRouterResponse(route);
+  } else if (intent.type === "chat") {
+    pendingSolveConfirmation = null;
+    body = formatSimpleReply(createCasualResponse(question));
+  } else if (intent.type === "help") {
+    pendingSolveConfirmation = null;
+    body = formatSimpleReply(createHelpResponse());
+  } else if (needsClarification(question, intent, hasAttachments) && route.question_type !== "صح وخطأ" && route.question_type !== "اختيار من متعدد") {
+    pendingSolveConfirmation = null;
+    body = formatClarificationReply(createClarificationResponse(question, intent, route));
+  } else {
+    pendingSolveConfirmation = null;
+    const response = createAcademicResponse(question || route.extracted_text || "حل السؤال من المرفقات", intent, {
+      preferredSubject: route.detected_subject || (selectedSolveMode === "structured" ? (subjectSelect?.value || "") : ""),
+      detectedSubject: route.detected_subject || "",
+      subjectConfidence: route.subject_confidence,
+      route
+    });
+    responseForLog = response;
+    body = formatAssistantSections(response);
+    sources = buildSources();
+    analytics.totalMessages += 1;
+    analytics.xpUsed += usageCost;
+    analytics.subjects[response.subject || route.detected_subject || subjectSelect?.value || "عام"] =
+      (analytics.subjects[response.subject || route.detected_subject || subjectSelect?.value || "عام"] || 0) + 1;
+    saveAnalytics();
+    saveHistory(
+      question || "سؤال مرفق",
+      response.subject || route.detected_subject || subjectSelect?.value || "عام",
+      response.questionType || detectQuestionType(question || route.extracted_text || ""),
+      "تمت المراجعة"
+    );
+  }
+
+  pendingNode?.remove();
+
+  const assistantMeta = responseForLog
+    ? {
+        subject: responseForLog.subject,
+        lesson: responseForLog.lesson,
+        questionType: responseForLog.questionType,
+        mode: responseForLog.mode
+      }
+    : undefined;
+
+  addMessage("assistant", "ملم يحل", body, {
+    sources,
+    enableTools: route.response_mode === "academic_solve" && Boolean(responseForLog),
+    metadata: assistantMeta
+  });
+  appendMessageToSession("assistant", "ملم يحل", body, {
+    sources,
+    enableTools: route.response_mode === "academic_solve" && Boolean(responseForLog),
+    metadata: assistantMeta,
+    subject: responseForLog?.subject || route.detected_subject || (selectedSolveMode === "structured" ? (subjectSelect?.value || "") : "")
+  });
+
+  aiLogs.unshift({
+    question: question || "سؤال مرفق",
+    intent: intent.type,
+    subject: route.detected_subject || subjectSelect?.value || "عام",
+    lesson: responseForLog?.lesson || lessonInput?.value.trim() || "",
+    responseMode: responseForLog?.mode || route.response_mode || intent.type,
+    usedAttachments: hasAttachments,
+    imageType: route.image_type,
+    scopeStatus: route.scope_status,
+    createdAt: Date.now()
+  });
+  aiLogs = aiLogs.slice(0, 40);
+  saveAiLogs();
+  renderInsights();
+  renderLearnedMemory();
+  renderSessionList();
+  updateXpBalance();
+  scrollMessagesToBottom(true);
+}
+
+setupChatAutoScrollEnhancement();
+
+pendingSolveConfirmation = pendingSolveConfirmation || null;
+
+function isAffirmativeReply(text) {
+  return /^(نعم|اي|أيوه|ايوه|أكيد|اكمل|كمل|تمام|موافق|نعم أكمل)$/i.test((text || "").trim());
+}
+
+function isNegativeReply(text) {
+  return /^(لا|مو|ليس|لا شكرا|لا شكرًا|غير المادة|غيّر المادة)$/i.test((text || "").trim());
+}
+
+function isUserNearBottom() {
+  if (!messageList) return false;
+  const threshold = 140;
+  return messageList.scrollHeight - messageList.scrollTop - messageList.clientHeight <= threshold;
+}
+
+function scrollMessagesToBottom(force = false) {
+  if (!messageList) return;
+  if (force || isUserNearBottom()) {
+    messageList.scrollTop = messageList.scrollHeight;
+    messageList.lastElementChild?.scrollIntoView({ block: "end", behavior: "smooth" });
+  }
+}
+
+function setupChatAutoScrollEnhancement() {
+  if (!messageList || messageList.dataset.autoscrollEnhanced === "1") return;
+  messageList.dataset.autoscrollEnhanced = "1";
+  const observer = new MutationObserver(() => {
+    scrollMessagesToBottom();
+  });
+  observer.observe(messageList, {
+    childList: true,
+    subtree: true,
+    characterData: true
+  });
+}
+
+function addMessage(type, author, body, options = {}) {
+  if (!messageList) return null;
+  const shouldStick = isUserNearBottom() || type !== "user";
+  const article = document.createElement("article");
+  article.className = `message ${type}`;
+  if (options.metadata) {
+    article.dataset.subject = options.metadata.subject || "";
+    article.dataset.lesson = options.metadata.lesson || "";
+    article.dataset.questionType = options.metadata.questionType || "";
+    article.dataset.responseMode = options.metadata.mode || "";
+  }
+
+  article.innerHTML = `
+    <div class="message-title">${author}</div>
+    <div class="message-body">${body}</div>
+  `;
+
+  if (type === "assistant" && !options.pending && options.enableTools) {
+    const tools = document.createElement("div");
+    tools.className = "message-tools";
+    tools.innerHTML = `
+      <div class="message-tools-label">هل تريد تبسيط الإجابة أو متابعة التدريب؟</div>
+      <button class="mini-btn" type="button" data-refine="simple">بسّط أكثر</button>
+      <button class="mini-btn" type="button" data-refine="short">باختصار</button>
+      <button class="mini-btn" type="button" data-refine="steps">اشرحها خطوة خطوة</button>
+      <button class="mini-btn" type="button" data-refine="quiz">اختبرني على هذا الدرس</button>
+      <button class="mini-btn" type="button" data-like="${Date.now()}">👍 أعجبني</button>
+      <button class="mini-btn disliked" type="button" data-dislike="${Date.now()}">👎 لم يعجبني</button>
+    `;
+    article.appendChild(tools);
+  }
+
+  if (type === "assistant" && !options.pending && Array.isArray(options.sources) && options.sources.length) {
+    const sources = document.createElement("div");
+    sources.className = "sources-list";
+    sources.innerHTML = options.sources
+      .map((source) => `<a class="source-link" href="${source.url}" target="_blank" rel="noreferrer">${source.type}: ${source.label}</a>`)
+      .join("");
+    article.appendChild(sources);
+  }
+
+  messageList.appendChild(article);
+  if (shouldStick) scrollMessagesToBottom(true);
+  return article;
+}
+
+function solveObjectiveQuestion(question) {
+  const normalized = normalizeText(question);
+
+  if (/التنفس الخلوي/.test(normalized) && /الفجوات/.test(normalized) && /صواب|صح|خطأ/.test(normalized)) {
+    return {
+      answerMode: "truefalse",
+      finalAnswer: "خطأ",
+      explanation: "لأن التنفس الخلوي يحدث أساسًا داخل الميتوكوندريا، وليس داخل الفجوات."
+    };
+  }
+
+  if (/الميتوكوندريا/.test(normalized) && /صواب|صح|خطأ/.test(normalized)) {
+    return {
+      answerMode: "truefalse",
+      finalAnswer: "صواب",
+      explanation: "الميتوكوندريا هي العضية المسؤولة عن معظم عمليات التنفس الخلوي وإنتاج الطاقة."
+    };
+  }
+
+  if (/صواب|صح|خطأ/.test(normalized) && /الرابطة/.test(normalized) && /nacl/.test(normalized) && /تساهمية/.test(normalized)) {
+    return {
+      answerMode: "truefalse",
+      finalAnswer: "خطأ",
+      explanation: "لأن الرابطة في NaCl أيونية وليست تساهمية."
+    };
+  }
+
+  if (/nacl/.test(normalized) && /أ\)|ب\)|ج\)|د\)|اختيار|اختر/.test(question)) {
+    return {
+      answerMode: "mcq",
+      finalAnswer: "الخيار الصحيح هو (ب) أيونية.",
+      explanation: "لأن كلوريد الصوديوم يتكون من فلز ولافلز، فتنتقل الإلكترونات وتتكون رابطة أيونية."
+    };
+  }
+
+  return null;
+}
+
+function auto_subject_detector(text) {
+  const result = {
+    subject: "",
+    confidence: 0,
+    candidates: [],
+    passes: []
+  };
+
+  const normalized = normalizeText(text);
+  const scores = Object.fromEntries(Object.keys(subjectKeywordMap).map((subject) => [subject, 0]));
+
+  Object.entries(subjectKeywordMap).forEach(([subject, keywords]) => {
+    keywords.forEach((keyword) => {
+      if (normalized.includes(normalizeText(keyword))) scores[subject] += 10;
+    });
+  });
+
+  if (/التنفس الخلوي|الميتوكوندريا|الفجوات|البلاستيدات|الخلية النباتية|الخلية الحيوانية/.test(normalized)) {
+    scores["الأحياء"] += 46;
+    result.passes.push("biology-pattern");
+  }
+
+  if (/صواب|صح|خطأ|اختيار|اختر|ضع دائرة/.test(normalized)) {
+    result.passes.push("objective-pattern");
+    if (/التنفس الخلوي|الميتوكوندريا|الفجوات/.test(normalized)) scores["الأحياء"] += 28;
+    if (/رابطة|معادلة كيميائية|حمض|قاعدة|تفاعل|ذرة|مول|na|cl/.test(normalized)) scores["الكيمياء"] += 26;
+    if (/تسارع|قوة|سرعة|نيوتن|زخم/.test(normalized)) scores["الفيزياء"] += 26;
+    if (/محيط|مساحة|قطر|نصف القطر|معادلة|جذر|كسر/.test(normalized)) scores["الرياضيات"] += 26;
+  }
+
+  if (/\d/.test(normalized) && /محيط|مساحة|احسب|أوجد|معادلة|دائرة|مثلث/.test(normalized)) {
+    scores["الرياضيات"] += 28;
+    result.passes.push("math-pattern");
+  }
+
+  if (/رابطة|أيونية|تساهمية|تعادل|عنصر|مركب|معادلة كيميائية|الكترون|إلكترون|بروتون|حمض|قاعدة/.test(normalized)) {
+    scores["الكيمياء"] += 30;
+    result.passes.push("chemistry-pattern");
+  }
+
+  if (/نيوتن|تسارع|سرعة|قوة|احتكاك|حركة|زخم|طاقة حركية/.test(normalized)) {
+    scores["الفيزياء"] += 30;
+    result.passes.push("physics-pattern");
+  }
+
+  if (/مبتدأ|خبر|إعراب|نحو|بلاغة|استخرج|أعرب|الجملة الاسمية|الجملة الاسمية/.test(normalized)) {
+    scores["اللغة العربية"] += 28;
+    result.passes.push("arabic-pattern");
+  }
+
+  const ranking = Object.entries(scores)
+    .filter(([, score]) => score > 0)
+    .sort((a, b) => b[1] - a[1])
+    .map(([subject, score]) => ({ subject, score }));
+
+  const [top, second] = ranking;
+  if (top) {
+    result.subject = top.subject;
+    result.confidence = second
+      ? clampConfidence(top.score / 100 + Math.min(0.2, Math.max(0, (top.score - second.score) / 160)))
+      : clampConfidence(top.score / 100);
+  }
+  result.candidates = ranking.slice(0, 3);
+  return result;
+}
+
+function createImageRouterResponse(route) {
+  if (route.response_mode === "ask_for_confirmation") {
+    if (route.scope_status === "subject_mismatch") {
+      return formatSimpleReply(`يبدو أن السؤال أقرب إلى مادة ${route.detected_subject}، بينما المادة المحددة لديك مختلفة. غيّر المادة أو أخبرني أن أكمل على هذا الأساس.`);
+    }
+    if (route.scope_status === "grade_mismatch") {
+      return formatSimpleReply("هذا السؤال يبدو من مستوى دراسي مختلف عن الصف المحدد لديك. يمكنك تعديل الصف، أو المتابعة كتقدير أولي إذا كان هذا مقصودًا.");
+    }
+    if (route.detected_subject) {
+      return formatClarificationReply({
+        intro: "حللت السؤال أكثر من مرة لتحديد مادته بشكل أقرب.",
+        prompt: `يبدو أن السؤال من ${route.detected_subject}. هل تريد أن أكمل الحل؟`,
+        actions: [
+          { label: "أكمل الحل", fill: "نعم" },
+          { label: "اختيار المادة", action: "focus-subject" }
+        ]
+      });
+    }
+    return formatSimpleReply("لم تتضح المادة بشكل كافٍ حتى الآن. اكتب السؤال بصورة أوضح قليلًا أو اختر المادة يدويًا وسأكمل معك مباشرة.");
+  }
+
+  if (route.response_mode === "reject_logo_image") {
+    return formatSimpleReply("يبدو أن الصورة المرفقة ليست سؤالًا تعليميًا، بل أقرب إلى شعار أو تصميم. إذا كنت تريد المساعدة التعليمية، أرسل صورة السؤال أو اكتبه نصًا.");
+  }
+
+  if (route.response_mode === "reject_out_of_scope_image") {
+    return formatSimpleReply("الصورة المرفقة لا تبدو ضمن المحتوى التعليمي. يرجى إرسال سؤال دراسي أو صورة واضحة من كتاب أو ورقة عمل.");
+  }
+
+  if (route.response_mode === "ask_clearer_upload") {
+    return formatSimpleReply("الصورة غير واضحة بما يكفي لقراءة السؤال. حاول إعادة رفع صورة أوضح أو اكتب السؤال نصًا.");
+  }
+
+  if (route.response_mode === "content_interpretation") {
+    return formatClarificationReply({
+      intro: "تم التعرف على الصورة كمحتوى تعليمي.",
+      prompt: "هل تريد شرح المحتوى أم تلخيصه أم حل الأسئلة الموجودة فيه؟",
+      actions: [
+        { label: "شرح المحتوى", fill: "اشرح محتوى الصورة التعليمية." },
+        { label: "تلخيص المحتوى", fill: "لخص محتوى الصورة التعليمية." },
+        { label: "حل الأسئلة", fill: "حل الأسئلة الموجودة في الصورة التعليمية." }
+      ]
+    });
+  }
+
+  return formatSimpleReply("تم تجهيز الطلب وسأكمل الحل الآن.");
+}
+
+function request_router({ user_text, uploaded_files, selected_grade, selected_subject, user_profile, selected_solve_mode = "quick" }) {
+  const input_type = determineInputType(user_text, uploaded_files);
+  const image_type = input_type.includes("image")
+    ? image_analyzer(uploaded_files, user_text)
+    : { image_type: "none", extracted_text: "", confidence: 0 };
+  const questionText = `${user_text || ""} ${image_type.extracted_text || ""}`.trim();
+  const intent = intent_router(questionText, uploaded_files?.length > 0);
+  const quickMode = selected_solve_mode !== "structured";
+  const questionType = detectQuestionType(questionText);
+  const isObjective = questionType === "صح وخطأ" || questionType === "اختيار من متعدد";
+  const scope = curriculum_scope_checker({
+    userText: user_text,
+    selectedGrade: selected_grade || user_profile?.grade || "",
+    selectedSubject: quickMode ? "" : (selected_subject || ""),
+    imageMeta: image_type,
+    solveMode: quickMode ? "quick" : "structured"
+  });
+
+  let response_mode = "academic_solve";
+
+  if (input_type === "file_only" && !user_text.trim()) response_mode = "content_interpretation";
+  if (image_type.image_type === "logo_or_branding") response_mode = "reject_logo_image";
+  else if (image_type.image_type === "non_educational_image" || image_type.image_type === "document_non_educational") response_mode = "reject_out_of_scope_image";
+  else if (image_type.image_type === "unclear_image") response_mode = "ask_clearer_upload";
+  else if (image_type.image_type === "educational_page" && !user_text.trim()) response_mode = "content_interpretation";
+  else if (!quickMode && (scope.scope_status === "subject_mismatch" || scope.scope_status === "grade_mismatch" || scope.scope_status === "subject_unknown")) response_mode = "ask_for_confirmation";
+  else if (quickMode && intent.type !== "chat" && intent.type !== "help" && scope.subject_confidence < 0.7 && !isObjective) response_mode = "ask_for_confirmation";
+
+  return {
+    input_type,
+    intent,
+    image_type: image_type.image_type,
+    extracted_text: image_type.extracted_text,
+    detected_subject: scope.detected_subject,
+    detected_grade_level: scope.detected_grade_level,
+    subject_confidence: scope.subject_confidence,
+    grade_confidence: scope.grade_confidence,
+    subject_candidates: scope.subject_candidates,
+    analysis_passes: scope.analysis_passes,
+    scope_status: scope.scope_status,
+    response_mode,
+    quick_mode: quickMode,
+    question_type: questionType
+  };
+}
+
+async function handleSubmit(event) {
+  event.preventDefault();
+  const question = promptInput?.value.trim() || "";
+  const hasAttachments = attachments.length > 0;
+  if (!question && !hasAttachments) return;
+
+  if (pendingSolveConfirmation && isAffirmativeReply(question) && !hasAttachments) {
+    const stored = pendingSolveConfirmation;
+    pendingSolveConfirmation = null;
+    addMessage("user", "أنت", question);
+    promptInput.value = "";
+    autoGrow(promptInput);
+
+    const pendingNode = addMessage("assistant", "ملم يحل", createLoadingCopy(), { pending: true });
+    const response = createAcademicResponse(stored.question, stored.intent, {
+      preferredSubject: stored.route.detected_subject || stored.subject || "",
+      detectedSubject: stored.route.detected_subject || stored.subject || "",
+      subjectConfidence: Math.max(0.71, stored.route.subject_confidence || 0.71),
+      route: { ...stored.route, response_mode: "academic_solve" }
+    });
+    pendingNode?.remove();
+
+    const body = formatAssistantSections(response);
+    const sources = buildSources();
+    addMessage("assistant", "ملم يحل", body, {
+      sources,
+      enableTools: true,
+      metadata: {
+        subject: response.subject,
+        lesson: response.lesson,
+        questionType: response.questionType,
+        mode: response.mode
+      }
+    });
+    appendMessageToSession("assistant", "ملم يحل", body, {
+      sources,
+      enableTools: true,
+      metadata: {
+        subject: response.subject,
+        lesson: response.lesson,
+        questionType: response.questionType,
+        mode: response.mode
+      },
+      subject: response.subject
+    });
+    scrollMessagesToBottom(true);
+    return;
+  }
+
+  if (pendingSolveConfirmation && isNegativeReply(question) && !hasAttachments) {
+    pendingSolveConfirmation = null;
+    addMessage("user", "أنت", question);
+    addMessage("assistant", "ملم يحل", formatSimpleReply("حسنًا، اختر المادة من القائمة وسأكمل الحل بدقة أكبر."));
+    subjectSelect?.focus();
+    scrollMessagesToBottom(true);
+    return;
+  }
+
+  const activeUser = getActiveUser();
+  const route = request_router({
+    user_text: question,
+    uploaded_files: attachments,
+    selected_grade: gradeSelect?.value || activeUser?.grade || "",
+    selected_subject: subjectSelect?.value || "",
+    user_profile: activeUser || {},
+    selected_solve_mode: selectedSolveMode
+  });
+  const intent = route.intent;
+
+  if (hasAttachments && !isLoggedIn()) {
+    addMessage("assistant", "ملم يحل", formatSimpleReply('تحليل الصور متاح بعد تسجيل الدخول فقط. يمكنك الآن كتابة السؤال نصيًا، أو <a class="top-link" href="login.html">تسجيل الدخول</a> لتفعيل تحليل الصور.'));
+    attachments = [];
+    if (fileInput) fileInput.value = "";
+    renderAttachments();
+    return;
+  }
+
+  const shouldCharge =
+    !hasAttachments ||
+    route.response_mode === "academic_solve" ||
+    route.response_mode === "content_interpretation";
+  const usageCost = shouldCharge ? (hasAttachments ? usageCosts.image : usageCosts.chat) : 0;
+  if (usageCost > 0) {
+    const pointsResult = spendPoints(usageCost, hasAttachments ? "تحليل صورة" : "استخدام الشات");
+    if (!pointsResult.ok) {
+      addMessage("assistant", "ملم يحل", formatSimpleReply(`رصيدك الحالي ${pointsResult.remaining} نقطة، وهذا لا يكفي لهذه العملية. تحتاج ${usageCost} نقطة. يمكنك شراء نقاط إضافية من <a class="top-link" href="subscriptions.html">صفحة الباقات</a>.`));
+      return;
+    }
+  }
+
+  const renderedQuestion = hasAttachments
+    ? `${question || "أرفقت صورة أو ملفًا مع السؤال."}<br><span class="muted-inline">المرفقات: ${attachments.map((item) => item.name).join("، ")}</span>`
+    : question;
+
+  addMessage("user", "أنت", renderedQuestion);
+  appendMessageToSession("user", "أنت", renderedQuestion, {
+    subject: route.detected_subject || (selectedSolveMode === "structured" ? (subjectSelect?.value || "") : ""),
+    sessionTitle: question || "سؤال جديد"
+  });
+
+  promptInput.value = "";
+  autoGrow(promptInput);
+
+  const pendingNode = addMessage("assistant", "ملم يحل", createLoadingCopy(), { pending: true });
+  let body = "";
+  let sources = [];
+  let responseForLog = null;
+
+  if (route.response_mode !== "academic_solve") {
+    pendingSolveConfirmation = route.response_mode === "ask_for_confirmation"
+      ? { question, route, intent, subject: route.detected_subject || "" }
+      : null;
+    body = createImageRouterResponse(route);
+  } else if (intent.type === "chat") {
+    pendingSolveConfirmation = null;
+    body = formatSimpleReply(createCasualResponse(question));
+  } else if (intent.type === "help") {
+    pendingSolveConfirmation = null;
+    body = formatSimpleReply(createHelpResponse());
+  } else if (needsClarification(question, intent, hasAttachments) && route.question_type !== "صح وخطأ" && route.question_type !== "اختيار من متعدد") {
+    pendingSolveConfirmation = null;
+    body = formatClarificationReply(createClarificationResponse(question, intent, route));
+  } else {
+    pendingSolveConfirmation = null;
+    const response = createAcademicResponse(question || route.extracted_text || "حل السؤال من المرفقات", intent, {
+      preferredSubject: route.detected_subject || (selectedSolveMode === "structured" ? (subjectSelect?.value || "") : ""),
+      detectedSubject: route.detected_subject || "",
+      subjectConfidence: route.subject_confidence,
+      route
+    });
+    responseForLog = response;
+    body = formatAssistantSections(response);
+    sources = buildSources();
+    analytics.totalMessages += 1;
+    analytics.xpUsed += usageCost;
+    analytics.subjects[response.subject || route.detected_subject || subjectSelect?.value || "عام"] =
+      (analytics.subjects[response.subject || route.detected_subject || subjectSelect?.value || "عام"] || 0) + 1;
+    saveAnalytics();
+    saveHistory(
+      question || "سؤال مرفق",
+      response.subject || route.detected_subject || subjectSelect?.value || "عام",
+      response.questionType || detectQuestionType(question || route.extracted_text || ""),
+      "تمت المراجعة"
+    );
+  }
+
+  pendingNode?.remove();
+
+  const assistantMeta = responseForLog
+    ? {
+        subject: responseForLog.subject,
+        lesson: responseForLog.lesson,
+        questionType: responseForLog.questionType,
+        mode: responseForLog.mode
+      }
+    : undefined;
+
+  addMessage("assistant", "ملم يحل", body, {
+    sources,
+    enableTools: route.response_mode === "academic_solve" && Boolean(responseForLog),
+    metadata: assistantMeta
+  });
+  appendMessageToSession("assistant", "ملم يحل", body, {
+    sources,
+    enableTools: route.response_mode === "academic_solve" && Boolean(responseForLog),
+    metadata: assistantMeta,
+    subject: responseForLog?.subject || route.detected_subject || (selectedSolveMode === "structured" ? (subjectSelect?.value || "") : "")
+  });
+
+  aiLogs.unshift({
+    question: question || "سؤال مرفق",
+    intent: intent.type,
+    subject: route.detected_subject || subjectSelect?.value || "عام",
+    lesson: responseForLog?.lesson || lessonInput?.value.trim() || "",
+    responseMode: responseForLog?.mode || route.response_mode || intent.type,
+    usedAttachments: hasAttachments,
+    imageType: route.image_type,
+    scopeStatus: route.scope_status,
+    createdAt: Date.now()
+  });
+  aiLogs = aiLogs.slice(0, 40);
+  saveAiLogs();
+  renderInsights();
+  renderLearnedMemory();
+  renderSessionList();
+  updateXpBalance();
+  scrollMessagesToBottom(true);
+}
+
+setupChatAutoScrollEnhancement();
+
+var pendingSolveConfirmation = null;
+
+function isAffirmativeReply(text) {
+  return /^(نعم|اي|أيوه|ايوه|أكيد|اكمل|كمل|تمام|موافق|نعم أكمل)$/i.test((text || "").trim());
+}
+
+function isNegativeReply(text) {
+  return /^(لا|لا شكرا|لا شكرًا|غيّر المادة|غير المادة)$/i.test((text || "").trim());
+}
+
+function isUserNearBottom() {
+  if (!messageList) return false;
+  return messageList.scrollHeight - messageList.scrollTop - messageList.clientHeight < 140;
+}
+
+function scrollMessagesToBottom(force = false) {
+  if (!messageList) return;
+  if (force || isUserNearBottom()) {
+    messageList.scrollTop = messageList.scrollHeight;
+    messageList.lastElementChild?.scrollIntoView({ block: "end", behavior: "smooth" });
+  }
+}
+
+function setupChatAutoScrollEnhancement() {
+  if (!messageList || messageList.dataset.autoScrollReady === "1") return;
+  messageList.dataset.autoScrollReady = "1";
+  const observer = new MutationObserver(() => scrollMessagesToBottom());
+  observer.observe(messageList, { childList: true, subtree: true, characterData: true });
+}
+
+function addMessage(type, author, body, options = {}) {
+  if (!messageList) return null;
+  const shouldStick = isUserNearBottom() || type !== "user";
+  const article = document.createElement("article");
+  article.className = `message ${type}`;
+  if (options.metadata) {
+    article.dataset.subject = options.metadata.subject || "";
+    article.dataset.lesson = options.metadata.lesson || "";
+    article.dataset.questionType = options.metadata.questionType || "";
+    article.dataset.responseMode = options.metadata.mode || "";
+  }
+  article.innerHTML = `
+    <div class="message-title">${author}</div>
+    <div class="message-body">${body}</div>
+  `;
+  if (type === "assistant" && !options.pending && options.enableTools) {
+    const tools = document.createElement("div");
+    tools.className = "message-tools";
+    tools.innerHTML = `
+      <div class="message-tools-label">هل تريد تبسيط الإجابة أو متابعة التدريب؟</div>
+      <button class="mini-btn" type="button" data-refine="simple">بسّط أكثر</button>
+      <button class="mini-btn" type="button" data-refine="short">باختصار</button>
+      <button class="mini-btn" type="button" data-refine="steps">اشرحها خطوة خطوة</button>
+      <button class="mini-btn" type="button" data-refine="quiz">اختبرني على هذا الدرس</button>
+      <button class="mini-btn" type="button" data-like="${Date.now()}">👍 أعجبني</button>
+      <button class="mini-btn disliked" type="button" data-dislike="${Date.now()}">👎 لم يعجبني</button>
+    `;
+    article.appendChild(tools);
+    if (Array.isArray(options.sources) && options.sources.length) {
+      const sources = document.createElement("div");
+      sources.className = "sources-list";
+      sources.innerHTML = options.sources.map((source) => `<a class="source-link" href="${source.url}" target="_blank" rel="noreferrer">${source.type}: ${source.label}</a>`).join("");
+      article.appendChild(sources);
+    }
+  }
+  messageList.appendChild(article);
+  if (shouldStick) scrollMessagesToBottom(true);
+  return article;
+}
+
+function solveObjectiveQuestion(question) {
+  const normalized = normalizeText(question);
+  if (/التنفس الخلوي/.test(normalized) && /الفجوات/.test(normalized) && /صواب|صح|خطأ/.test(normalized)) {
+    return {
+      answerMode: "truefalse",
+      finalAnswer: "خطأ",
+      explanation: "السبب: التنفس الخلوي يحدث في الميتوكوندريا، وليس داخل الفجوات."
+    };
+  }
+  if (/صواب|صح|خطأ/.test(normalized) && /الرابطة/.test(normalized) && /nacl/.test(normalized) && /تساهمية/.test(normalized)) {
+    return {
+      answerMode: "truefalse",
+      finalAnswer: "خطأ",
+      explanation: "لأن الرابطة في NaCl أيونية وليست تساهمية."
+    };
+  }
+  if (/nacl/.test(normalized) && /أ\)|ب\)|ج\)|د\)|اختيار|اختر/.test(question)) {
+    return {
+      answerMode: "mcq",
+      finalAnswer: "الخيار الصحيح هو (ب) أيونية.",
+      explanation: "لأن كلوريد الصوديوم يتكون من فلز ولافلز فتنتقل الإلكترونات وتتكون رابطة أيونية."
+    };
+  }
+  return null;
+}
+
+function auto_subject_detector(text) {
+  const normalized = normalizeText(text);
+  const scores = Object.fromEntries(Object.keys(subjectKeywordMap).map((subject) => [subject, 0]));
+  const passes = [];
+  Object.entries(subjectKeywordMap).forEach(([subject, keywords]) => {
+    keywords.forEach((keyword) => {
+      if (normalized.includes(normalizeText(keyword))) scores[subject] += 10;
+    });
+  });
+  if (/التنفس الخلوي|الميتوكوندريا|الفجوات|البلاستيدات|الخلية النباتية|الخلية الحيوانية/.test(normalized)) {
+    scores["الأحياء"] += 40;
+    passes.push("biology-pattern");
+  }
+  if (/صواب|صح|خطأ|اختيار|اختر|ضع دائرة/.test(normalized)) {
+    passes.push("objective-pattern");
+    if (/التنفس الخلوي|الميتوكوندريا|الفجوات/.test(normalized)) scores["الأحياء"] += 24;
+    if (/رابطة|حمض|قاعدة|تفاعل|ذرة|na|cl/.test(normalized)) scores["الكيمياء"] += 24;
+    if (/تسارع|قوة|سرعة|نيوتن|زخم/.test(normalized)) scores["الفيزياء"] += 24;
+    if (/محيط|مساحة|قطر|نصف القطر|معادلة|كسر/.test(normalized)) scores["الرياضيات"] += 24;
+  }
+  const lessonHit = knowledgeBase.find((entry) => entry.keywords.some((keyword) => normalized.includes(normalizeText(keyword))));
+  if (lessonHit) {
+    scores[lessonHit.subject] += 22;
+    passes.push("knowledge-match");
+  }
+  const ranking = Object.entries(scores).map(([subject, score]) => ({ subject, score })).sort((a, b) => b.score - a.score);
+  const top = ranking[0] || { subject: "", score: 0 };
+  const second = ranking[1] || { subject: "", score: 0 };
+  return {
+    subject: top.score ? top.subject : "",
+    confidence: top.score ? clampConfidence(top.score / 100 + Math.min(0.2, Math.max(0, (top.score - second.score) / 160))) : 0,
+    candidates: ranking.slice(0, 3),
+    passes
+  };
+}
+
+function request_router({ user_text, uploaded_files, selected_grade, selected_subject, user_profile, selected_solve_mode = "quick" }) {
+  const input_type = determineInputType(user_text, uploaded_files);
+  const image_type = input_type.includes("image") ? image_analyzer(uploaded_files, user_text) : { image_type: "none", extracted_text: "", confidence: 0 };
+  const intent = intent_router(`${user_text || ""} ${image_type.extracted_text || ""}`, uploaded_files?.length > 0);
+  const quickMode = selected_solve_mode !== "structured";
+  const questionType = detectQuestionType(user_text || image_type.extracted_text || "");
+  const scope = curriculum_scope_checker({
+    userText: user_text,
+    selectedGrade: selected_grade || user_profile?.grade || "",
+    selectedSubject: quickMode ? "" : (selected_subject || ""),
+    imageMeta: image_type,
+    solveMode: quickMode ? "quick" : "structured"
+  });
+
+  let response_mode = "academic_solve";
+  const isObjective = questionType === "صح وخطأ" || questionType === "اختيار من متعدد";
+  if (input_type === "file_only" && !user_text.trim()) response_mode = "content_interpretation";
+  if (image_type.image_type === "logo_or_branding") response_mode = "reject_logo_image";
+  else if (image_type.image_type === "non_educational_image" || image_type.image_type === "document_non_educational") response_mode = "reject_out_of_scope_image";
+  else if (image_type.image_type === "unclear_image") response_mode = "ask_clearer_upload";
+  else if (image_type.image_type === "educational_page" && !user_text.trim()) response_mode = "content_interpretation";
+  else if (!quickMode && (scope.scope_status === "subject_mismatch" || scope.scope_status === "grade_mismatch" || scope.scope_status === "subject_unknown")) response_mode = "ask_for_confirmation";
+  else if (quickMode && intent.type !== "chat" && intent.type !== "help" && scope.subject_confidence < 0.7 && !isObjective) response_mode = "ask_for_confirmation";
+
+  return {
+    input_type,
+    intent,
+    image_type: image_type.image_type,
+    extracted_text: image_type.extracted_text,
+    detected_subject: scope.detected_subject,
+    detected_grade_level: scope.detected_grade_level,
+    subject_confidence: scope.subject_confidence,
+    grade_confidence: scope.grade_confidence,
+    subject_candidates: scope.subject_candidates,
+    analysis_passes: scope.analysis_passes,
+    scope_status: scope.scope_status,
+    response_mode,
+    quick_mode: quickMode,
+    question_type: questionType
+  };
+}
+
+async function handleSubmit(event) {
+  event.preventDefault();
+  const question = promptInput?.value.trim() || "";
+  const hasAttachments = attachments.length > 0;
+  if (!question && !hasAttachments) return;
+
+  if (pendingSolveConfirmation && isAffirmativeReply(question) && !hasAttachments) {
+    const stored = pendingSolveConfirmation;
+    pendingSolveConfirmation = null;
+    addMessage("user", "أنت", question);
+    promptInput.value = "";
+    autoGrow(promptInput);
+    const pendingNode = addMessage("assistant", "ملم يحل", createLoadingCopy(), { pending: true });
+    const response = createAcademicResponse(stored.question, stored.intent, {
+      preferredSubject: stored.route.detected_subject || stored.subject || "",
+      detectedSubject: stored.route.detected_subject || stored.subject || "",
+      subjectConfidence: Math.max(0.71, stored.route.subject_confidence || 0.71),
+      route: { ...stored.route, response_mode: "academic_solve" }
+    });
+    pendingNode?.remove();
+    const body = formatAssistantSections(response);
+    const sources = buildSources();
+    addMessage("assistant", "ملم يحل", body, {
+      sources,
+      enableTools: true,
+      metadata: { subject: response.subject, lesson: response.lesson, questionType: response.questionType, mode: response.mode }
+    });
+    scrollMessagesToBottom(true);
+    return;
+  }
+
+  if (pendingSolveConfirmation && isNegativeReply(question) && !hasAttachments) {
+    pendingSolveConfirmation = null;
+    addMessage("user", "أنت", question);
+    addMessage("assistant", "ملم يحل", formatSimpleReply("حسنًا، اختر المادة المناسبة من القائمة وسأكمل الحل بدقة أكبر."));
+    subjectSelect?.focus();
+    return;
+  }
+
+  const activeUser = getActiveUser();
+  const route = request_router({
+    user_text: question,
+    uploaded_files: attachments,
+    selected_grade: gradeSelect?.value || activeUser?.grade || "",
+    selected_subject: subjectSelect?.value || "",
+    user_profile: activeUser || {},
+    selected_solve_mode: selectedSolveMode
+  });
+  const intent = route.intent;
+
+  if (hasAttachments && !isLoggedIn()) {
+    addMessage("assistant", "ملم يحل", formatSimpleReply('تحليل الصور متاح بعد تسجيل الدخول فقط. يمكنك الآن كتابة السؤال نصيًا، أو <a class="top-link" href="login.html">تسجيل الدخول</a> لتفعيل تحليل الصور.'));
+    attachments = [];
+    if (fileInput) fileInput.value = "";
+    renderAttachments();
+    return;
+  }
+
+  const renderedQuestion = hasAttachments
+    ? `${question || "أرفقت صورة أو ملفًا مع السؤال."}<br><span class="muted-inline">المرفقات: ${attachments.map((item) => item.name).join("، ")}</span>`
+    : question;
+
+  addMessage("user", "أنت", renderedQuestion);
+  promptInput.value = "";
+  autoGrow(promptInput);
+
+  const pendingNode = addMessage("assistant", "ملم يحل", createLoadingCopy(), { pending: true });
+  let body = "";
+  let sources = [];
+  let responseForLog = null;
+
+  if (route.response_mode !== "academic_solve") {
+    pendingSolveConfirmation = route.response_mode === "ask_for_confirmation" ? { question, route, intent, subject: route.detected_subject || "" } : null;
+    body = createImageRouterResponse(route);
+  } else if (intent.type === "chat") {
+    pendingSolveConfirmation = null;
+    body = formatSimpleReply(createCasualResponse(question));
+  } else if (intent.type === "help") {
+    pendingSolveConfirmation = null;
+    body = formatSimpleReply(createHelpResponse());
+  } else if (needsClarification(question, intent, hasAttachments) && route.question_type !== "صح وخطأ" && route.question_type !== "اختيار من متعدد") {
+    pendingSolveConfirmation = null;
+    body = formatClarificationReply(createClarificationResponse(question, intent, route));
+  } else {
+    pendingSolveConfirmation = null;
+    const response = createAcademicResponse(question || route.extracted_text || "حل السؤال من الملفات المرفقة", intent, {
+      preferredSubject: route.detected_subject || (selectedSolveMode === "structured" ? (subjectSelect?.value || "") : ""),
+      detectedSubject: route.detected_subject || "",
+      subjectConfidence: route.subject_confidence,
+      route
+    });
+    responseForLog = response;
+    body = formatAssistantSections(response);
+    sources = buildSources();
+  }
+
+  pendingNode?.remove();
+  addMessage("assistant", "ملم يحل", body, {
+    sources,
+    enableTools: route.response_mode === "academic_solve" && Boolean(responseForLog),
+    metadata: responseForLog ? { subject: responseForLog.subject, lesson: responseForLog.lesson, questionType: responseForLog.questionType, mode: responseForLog.mode } : undefined
+  });
+  scrollMessagesToBottom(true);
+}
+
+setupChatAutoScrollEnhancement();
+
+pendingSolveConfirmation = pendingSolveConfirmation || null;
+
+function isAffirmativeReply(text) {
+  return /^(نعم|اي|أيوه|ايوه|أكيد|اكمل|كمل|نعم أكمل|تمام|وافق|موافق)$/i.test((text || "").trim());
+}
+
+function isNegativeReply(text) {
+  return /^(لا|مو|ليس|لا شكرا|لا شكرًا|غير المادة|غيّر المادة)$/i.test((text || "").trim());
+}
+
+function isUserNearBottom() {
+  if (!messageList) return false;
+  const threshold = 120;
+  return messageList.scrollHeight - messageList.scrollTop - messageList.clientHeight <= threshold;
+}
+
+function scrollMessagesToBottom(force = false) {
+  if (!messageList) return;
+  if (force || isUserNearBottom()) {
+    messageList.scrollTop = messageList.scrollHeight;
+    messageList.lastElementChild?.scrollIntoView({ block: "end", behavior: "smooth" });
+  }
+}
+
+function setupChatAutoScrollEnhancement() {
+  if (!messageList || messageList.dataset.autoscrollReady === "1") return;
+  messageList.dataset.autoscrollReady = "1";
+  const observer = new MutationObserver(() => {
+    scrollMessagesToBottom();
+  });
+  observer.observe(messageList, { childList: true, subtree: true, characterData: true });
+}
+
+function addMessage(type, author, body, options = {}) {
+  if (!messageList) return null;
+  const shouldStick = isUserNearBottom() || type !== "user";
+  const article = document.createElement("article");
+  article.className = `message ${type}`;
+  if (options.metadata) {
+    article.dataset.subject = options.metadata.subject || "";
+    article.dataset.lesson = options.metadata.lesson || "";
+    article.dataset.questionType = options.metadata.questionType || "";
+    article.dataset.responseMode = options.metadata.mode || "";
+  }
+  article.innerHTML = `
+    <div class="message-title">${author}</div>
+    <div class="message-body">${body}</div>
+  `;
+
+  if (type === "assistant" && !options.pending && options.enableTools) {
+    const tools = document.createElement("div");
+    tools.className = "message-tools";
+    tools.innerHTML = `
+      <div class="message-tools-label">هل تريد تبسيط الإجابة أو متابعة التدريب؟</div>
+      <button class="mini-btn" type="button" data-refine="simple">بسّط أكثر</button>
+      <button class="mini-btn" type="button" data-refine="short">باختصار</button>
+      <button class="mini-btn" type="button" data-refine="steps">اشرحها خطوة خطوة</button>
+      <button class="mini-btn" type="button" data-refine="quiz">اختبرني على هذا الدرس</button>
+      <button class="mini-btn" type="button" data-like="${Date.now()}">👍 أعجبني</button>
+      <button class="mini-btn disliked" type="button" data-dislike="${Date.now()}">👎 لم يعجبني</button>
+    `;
+    article.appendChild(tools);
+
+    if (Array.isArray(options.sources) && options.sources.length) {
+      const sources = document.createElement("div");
+      sources.className = "sources-list";
+      sources.innerHTML = options.sources
+        .map((source) => `<a class="source-link" href="${source.url}" target="_blank" rel="noreferrer">${source.type}: ${source.label}</a>`)
+        .join("");
+      article.appendChild(sources);
+    }
+  }
+
+  messageList.appendChild(article);
+  if (shouldStick) {
+    scrollMessagesToBottom(true);
+  }
+  return article;
+}
+
+function solveObjectiveQuestion(question) {
+  const normalized = normalizeText(question);
+
+  if (/التنفس الخلوي/.test(normalized) && /الفجوات/.test(normalized) && /صواب|صح|خطأ/.test(normalized)) {
+    return {
+      answerMode: "truefalse",
+      finalAnswer: "خطأ",
+      explanation: "لأن التنفس الخلوي يحدث أساسًا داخل الميتوكوندريا، وليس داخل الفجوات."
+    };
+  }
+
+  if (/الميتوكوندريا/.test(normalized) && /صواب|صح|خطأ/.test(normalized)) {
+    return {
+      answerMode: "truefalse",
+      finalAnswer: "صواب",
+      explanation: "الميتوكوندريا هي العضية المسؤولة عن معظم عمليات التنفس الخلوي وإنتاج الطاقة."
+    };
+  }
+
+  if (/صواب|صح|خطأ/.test(normalized) && /الرابطة/.test(normalized) && /nacl/.test(normalized) && /تساهمية/.test(normalized)) {
+    return {
+      answerMode: "truefalse",
+      finalAnswer: "خطأ",
+      explanation: "لأن الرابطة في NaCl أيونية وليست تساهمية."
+    };
+  }
+
+  if (/nacl/.test(normalized) && /أ\)|ب\)|ج\)|د\)|اختيار|اختر/.test(question)) {
+    return {
+      answerMode: "mcq",
+      finalAnswer: "الخيار الصحيح هو (ب) أيونية.",
+      explanation: "لأن كلوريد الصوديوم يتكون من فلز ولافلز، فتنتقل الإلكترونات وتتكون رابطة أيونية."
+    };
+  }
+
+  return null;
+}
+
+function auto_subject_detector(text) {
+  const result = {
+    subject: "",
+    confidence: 0,
+    candidates: [],
+    passes: []
+  };
+
+  const normalized = normalizeText(text);
+  const scores = Object.fromEntries(Object.keys(subjectKeywordMap).map((subject) => [subject, 0]));
+
+  Object.entries(subjectKeywordMap).forEach(([subject, keywords]) => {
+    keywords.forEach((keyword) => {
+      if (normalized.includes(normalizeText(keyword))) scores[subject] += 10;
+    });
+  });
+
+  if (/التنفس الخلوي|الميتوكوندريا|الفجوات|البلاستيدات|الخلية النباتية|الخلية الحيوانية/.test(normalized)) {
+    scores["الأحياء"] += 42;
+    result.passes.push("biology-pattern");
+  }
+
+  if (/صواب|صح|خطأ|اختيار|اختر|ضع دائرة/.test(normalized)) {
+    result.passes.push("objective-pattern");
+    if (/التنفس الخلوي|الميتوكوندريا|الفجوات/.test(normalized)) scores["الأحياء"] += 26;
+    if (/رابطة|معادلة كيميائية|حمض|قاعدة|تفاعل|ذرة|مول|na|cl/.test(normalized)) scores["الكيمياء"] += 26;
+    if (/تسارع|قوة|سرعة|نيوتن|زخم/.test(normalized)) scores["الفيزياء"] += 26;
+    if (/محيط|مساحة|قطر|نصف القطر|معادلة|جذر|كسر/.test(normalized)) scores["الرياضيات"] += 26;
+  }
+
+  if (/\d/.test(normalized) && /محيط|مساحة|احسب|أوجد|معادلة|دائرة|مثلث/.test(normalized)) {
+    scores["الرياضيات"] += 28;
+    result.passes.push("math-pattern");
+  }
+
+  if (/رابطة|أيونية|تساهمية|تعادل|عنصر|مركب|معادلة كيميائية|الكترون|بروتون|حمض|قاعدة/.test(normalized)) {
+    scores["الكيمياء"] += 30;
+    result.passes.push("chemistry-pattern");
+  }
+
+  if (/نيوتن|تسارع|سرعة|قوة|احتكاك|حركة|زخم|طاقة حركية/.test(normalized)) {
+    scores["الفيزياء"] += 30;
+    result.passes.push("physics-pattern");
+  }
+
+  if (/مبتدأ|خبر|إعراب|نحو|بلاغة|استخرج|أعرب|الجملة الاسمية/.test(normalized)) {
+    scores["اللغة العربية"] += 28;
+    result.passes.push("arabic-pattern");
+  }
+
+  if (/[a-z]/.test(normalized) || /translate|correct|grammar|present|past|english/.test(normalized)) {
+    scores["اللغة الإنجليزية"] += 28;
+    result.passes.push("english-pattern");
+  }
+
+  const lessonHit = knowledgeBase.find((entry) => entry.keywords.some((keyword) => normalized.includes(normalizeText(keyword))));
+  if (lessonHit) {
+    scores[lessonHit.subject] += 24;
+    result.passes.push("knowledge-match");
+  }
+
+  const ranking = Object.entries(scores)
+    .map(([subject, score]) => ({ subject, score }))
+    .sort((a, b) => b.score - a.score);
+  const top = ranking[0] || { subject: "", score: 0 };
+  const second = ranking[1] || { subject: "", score: 0 };
+
+  result.subject = top.score ? top.subject : "";
+  result.confidence = top.score
+    ? clampConfidence(top.score / 100 + Math.min(0.2, Math.max(0, (top.score - second.score) / 160)))
+    : 0;
+  result.candidates = ranking.slice(0, 3);
+  return result;
+}
+
+function request_router({ user_text, uploaded_files, selected_grade, selected_subject, user_profile, selected_solve_mode = "quick" }) {
+  const input_type = determineInputType(user_text, uploaded_files);
+  const image_type = input_type.includes("image")
+    ? image_analyzer(uploaded_files, user_text)
+    : { image_type: "none", extracted_text: "", confidence: 0 };
+  const intent = intent_router(`${user_text || ""} ${image_type.extracted_text || ""}`, uploaded_files?.length > 0);
+  const quickMode = selected_solve_mode !== "structured";
+  const questionType = detectQuestionType(user_text || image_type.extracted_text || "");
+  const scope = curriculum_scope_checker({
+    userText: user_text,
+    selectedGrade: selected_grade || user_profile?.grade || "",
+    selectedSubject: quickMode ? "" : (selected_subject || ""),
+    imageMeta: image_type,
+    solveMode: quickMode ? "quick" : "structured"
+  });
+
+  let response_mode = "academic_solve";
+  const isObjective = questionType === "صح وخطأ" || questionType === "اختيار من متعدد";
+
+  if (input_type === "file_only" && !user_text.trim()) response_mode = "content_interpretation";
+  if (image_type.image_type === "logo_or_branding") response_mode = "reject_logo_image";
+  else if (image_type.image_type === "non_educational_image" || image_type.image_type === "document_non_educational") response_mode = "reject_out_of_scope_image";
+  else if (image_type.image_type === "unclear_image") response_mode = "ask_clearer_upload";
+  else if (image_type.image_type === "educational_page" && !user_text.trim()) response_mode = "content_interpretation";
+  else if (!quickMode && (scope.scope_status === "subject_mismatch" || scope.scope_status === "grade_mismatch" || scope.scope_status === "subject_unknown")) response_mode = "ask_for_confirmation";
+  else if (quickMode && intent.type !== "chat" && intent.type !== "help" && scope.subject_confidence < 0.7 && !isObjective) response_mode = "ask_for_confirmation";
+  else response_mode = "academic_solve";
+
+  return {
+    input_type,
+    intent,
+    image_type: image_type.image_type,
+    extracted_text: image_type.extracted_text,
+    detected_subject: scope.detected_subject,
+    detected_grade_level: scope.detected_grade_level,
+    subject_confidence: scope.subject_confidence,
+    grade_confidence: scope.grade_confidence,
+    subject_candidates: scope.subject_candidates,
+    analysis_passes: scope.analysis_passes,
+    scope_status: scope.scope_status,
+    response_mode,
+    quick_mode: quickMode,
+    question_type: questionType
+  };
+}
+
+async function handleSubmit(event) {
+  event.preventDefault();
+  const question = promptInput?.value.trim() || "";
+  const hasAttachments = attachments.length > 0;
+  if (!question && !hasAttachments) return;
+
+  if (pendingSolveConfirmation && isAffirmativeReply(question) && !hasAttachments) {
+    const stored = pendingSolveConfirmation;
+    pendingSolveConfirmation = null;
+    promptInput.value = "";
+    autoGrow(promptInput);
+    addMessage("user", "أنت", question);
+    const pendingNode = addMessage("assistant", "ملم يحل", createLoadingCopy(), { pending: true });
+    const response = createAcademicResponse(stored.question, stored.intent, {
+      preferredSubject: stored.route.detected_subject || stored.subject || "",
+      detectedSubject: stored.route.detected_subject || stored.subject || "",
+      subjectConfidence: Math.max(0.71, stored.route.subject_confidence || 0.71),
+      route: { ...stored.route, response_mode: "academic_solve" }
+    });
+    pendingNode?.remove();
+    const body = formatAssistantSections(response);
+    const sources = buildSources();
+    addMessage("assistant", "ملم يحل", body, {
+      sources,
+      enableTools: true,
+      metadata: {
+        subject: response.subject,
+        lesson: response.lesson,
+        questionType: response.questionType,
+        mode: response.mode
+      }
+    });
+    appendMessageToSession("assistant", "ملم يحل", body, {
+      sources,
+      enableTools: true,
+      metadata: {
+        subject: response.subject,
+        lesson: response.lesson,
+        questionType: response.questionType,
+        mode: response.mode
+      },
+      subject: response.subject
+    });
+    scrollMessagesToBottom(true);
+    return;
+  }
+
+  if (pendingSolveConfirmation && isNegativeReply(question) && !hasAttachments) {
+    pendingSolveConfirmation = null;
+    addMessage("user", "أنت", question);
+    addMessage("assistant", "ملم يحل", formatSimpleReply("حسنًا، اختر المادة المناسبة من القائمة وسأكمل الحل بدقة أكبر."), { pending: false });
+    subjectSelect?.focus();
+    return;
+  }
+
+  const activeUser = getActiveUser();
+  const route = request_router({
+    user_text: question,
+    uploaded_files: attachments,
+    selected_grade: gradeSelect?.value || activeUser?.grade || "",
+    selected_subject: subjectSelect?.value || "",
+    user_profile: activeUser || {},
+    selected_solve_mode: selectedSolveMode
+  });
+  const intent = route.intent;
+
+  if (hasAttachments && !isLoggedIn()) {
+    addMessage("assistant", "ملم يحل", formatSimpleReply('تحليل الصور متاح بعد تسجيل الدخول فقط. يمكنك الآن كتابة السؤال نصيًا، أو <a class="top-link" href="login.html">تسجيل الدخول</a> لتفعيل تحليل الصور.'));
+    attachments = [];
+    if (fileInput) fileInput.value = "";
+    renderAttachments();
+    return;
+  }
+
+  const shouldCharge =
+    !hasAttachments ||
+    route.response_mode === "academic_solve" ||
+    route.response_mode === "content_interpretation";
+  const usageCost = shouldCharge ? (hasAttachments ? usageCosts.image : usageCosts.chat) : 0;
+  if (usageCost > 0) {
+    const pointsResult = spendPoints(usageCost, hasAttachments ? "تحليل صورة" : "استخدام الشات");
+    if (!pointsResult.ok) {
+      addMessage("assistant", "ملم يحل", formatSimpleReply(`رصيدك الحالي ${pointsResult.remaining} نقطة، وهذا لا يكفي لهذه العملية. تحتاج ${usageCost} نقطة. يمكنك شراء نقاط إضافية من <a class="top-link" href="subscriptions.html">صفحة الباقات</a>.`));
+      return;
+    }
+  }
+
+  const renderedQuestion = hasAttachments
+    ? `${question || "أرفقت صورة أو ملفًا مع السؤال."}<br><span class="muted-inline">المرفقات: ${attachments.map((item) => item.name).join("، ")}</span>`
+    : question;
+
+  addMessage("user", "أنت", renderedQuestion);
+  appendMessageToSession("user", "أنت", renderedQuestion, {
+    subject: route.detected_subject || (selectedSolveMode === "structured" ? (subjectSelect?.value || "") : ""),
+    sessionTitle: question || "سؤال جديد"
+  });
+
+  promptInput.value = "";
+  autoGrow(promptInput);
+
+  const pendingNode = addMessage("assistant", "ملم يحل", createLoadingCopy(), { pending: true });
+  let body = "";
+  let sources = [];
+  let responseForLog = null;
+
+  if (route.response_mode !== "academic_solve") {
+    pendingSolveConfirmation = route.response_mode === "ask_for_confirmation"
+      ? {
+          question,
+          route,
+          intent,
+          subject: route.detected_subject || ""
+        }
+      : null;
+    body = createImageRouterResponse(route);
+  } else if (intent.type === "chat") {
+    pendingSolveConfirmation = null;
+    body = formatSimpleReply(createCasualResponse(question));
+  } else if (intent.type === "help") {
+    pendingSolveConfirmation = null;
+    body = formatSimpleReply(createHelpResponse());
+  } else if (needsClarification(question, intent, hasAttachments) && route.question_type !== "صح وخطأ" && route.question_type !== "اختيار من متعدد") {
+    pendingSolveConfirmation = null;
+    body = formatClarificationReply(createClarificationResponse(question, intent, route));
+  } else {
+    pendingSolveConfirmation = null;
+    const response = createAcademicResponse(question || route.extracted_text || "حل السؤال من الملفات المرفقة", intent, {
+      preferredSubject: route.detected_subject || (selectedSolveMode === "structured" ? (subjectSelect?.value || "") : ""),
+      detectedSubject: route.detected_subject || "",
+      subjectConfidence: route.subject_confidence,
+      route
+    });
+    responseForLog = response;
+    body = formatAssistantSections(response);
+    sources = buildSources();
+    analytics.totalMessages += 1;
+    analytics.xpUsed += usageCost;
+    analytics.subjects[response.subject || route.detected_subject || subjectSelect?.value || "عام"] =
+      (analytics.subjects[response.subject || route.detected_subject || subjectSelect?.value || "عام"] || 0) + 1;
+    saveAnalytics();
+    saveHistory(
+      question || "سؤال مرفق",
+      response.subject || route.detected_subject || subjectSelect?.value || "عام",
+      response.questionType || detectQuestionType(question || route.extracted_text || ""),
+      "تمت المراجعة"
+    );
+  }
+
+  pendingNode?.remove();
+
+  const assistantMeta = responseForLog
+    ? {
+        subject: responseForLog.subject,
+        lesson: responseForLog.lesson,
+        questionType: responseForLog.questionType,
+        mode: responseForLog.mode
+      }
+    : undefined;
+
+  addMessage("assistant", "ملم يحل", body, {
+    sources,
+    enableTools: route.response_mode === "academic_solve" && Boolean(responseForLog),
+    metadata: assistantMeta
+  });
+  appendMessageToSession("assistant", "ملم يحل", body, {
+    sources,
+    enableTools: route.response_mode === "academic_solve" && Boolean(responseForLog),
+    metadata: assistantMeta,
+    subject: responseForLog?.subject || route.detected_subject || (selectedSolveMode === "structured" ? (subjectSelect?.value || "") : "")
+  });
+
+  aiLogs.unshift({
+    question: question || "سؤال مرفق",
+    intent: intent.type,
+    subject: route.detected_subject || subjectSelect?.value || "عام",
+    lesson: responseForLog?.lesson || lessonInput?.value.trim() || "",
+    responseMode: responseForLog?.mode || route.response_mode || intent.type,
+    usedAttachments: hasAttachments,
+    imageType: route.image_type,
+    scopeStatus: route.scope_status,
+    createdAt: Date.now()
+  });
+  aiLogs = aiLogs.slice(0, 40);
+  saveAiLogs();
+  renderInsights();
+  renderLearnedMemory();
+  renderSessionList();
+  updateXpBalance();
+  scrollMessagesToBottom(true);
+}
+
+setupChatAutoScrollEnhancement();
+
 const stageGradeMap = {
   ابتدائي: [
     "الأول الابتدائي",
