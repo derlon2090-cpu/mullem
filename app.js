@@ -4,7 +4,9 @@ const storageKeys = {
   currentUser: "mlm_current_user",
   history: "mlm_chat_history",
   liked: "mlm_liked_answers",
-  analytics: "mlm_analytics"
+  analytics: "mlm_analytics",
+  feedback: "mlm_feedback_log",
+  aiLogs: "mlm_ai_logs"
 };
 
 const gradeOptions = [
@@ -170,6 +172,17 @@ const questionBankItems = [
   "صحح هذه الجملة بالإنجليزية"
 ];
 
+const packagePlans = [
+  { name: "الباقة المجانية", points: 100, price: "0 ريال", note: "للبداية وتجربة الشات النصي" },
+  { name: "باقة الطالب", points: 300, price: "19 ريال", note: "أسئلة أكثر وتحليل صور أكثر" },
+  { name: "باقة المتقدم", points: 700, price: "39 ريال", note: "مناسبة للمراجعات الكثيفة والاختبارات" }
+];
+
+const usageCosts = {
+  chat: 10,
+  image: 15
+};
+
 const messageList = document.querySelector("[data-messages]");
 const promptInput = document.querySelector("[data-prompt]");
 const fileInput = document.querySelector("[data-file-input]");
@@ -210,6 +223,8 @@ let clarificationCursor = 0;
 let likedAnswers = [];
 let chatHistory = [];
 let analytics = createEmptyAnalytics();
+let feedbackLog = [];
+let aiLogs = [];
 
 function loadJson(key, fallback) {
   try {
@@ -232,7 +247,7 @@ function getUsers() {
       email: "student@mullem.sa",
       role: "Student",
       package: "مجاني محدود",
-      xp: 120
+      xp: 100
     }
   ]);
 }
@@ -240,7 +255,7 @@ function getUsers() {
 function getActiveUser() {
   const users = getUsers();
   const currentId = localStorage.getItem(storageKeys.currentUser);
-  return users.find((user) => user.id === currentId) || users[0];
+  return users.find((user) => user.id === currentId) || null;
 }
 
 function createEmptyAnalytics() {
@@ -262,6 +277,8 @@ function loadUserState() {
   likedAnswers = loadJson(getScopedStorageKey(storageKeys.liked), []);
   chatHistory = loadJson(getScopedStorageKey(storageKeys.history), []);
   analytics = loadJson(getScopedStorageKey(storageKeys.analytics), createEmptyAnalytics());
+  feedbackLog = loadJson(getScopedStorageKey(storageKeys.feedback), []);
+  aiLogs = loadJson(getScopedStorageKey(storageKeys.aiLogs), []);
 }
 
 function saveLikedAnswers() {
@@ -276,8 +293,63 @@ function saveAnalytics() {
   saveJson(getScopedStorageKey(storageKeys.analytics), analytics);
 }
 
+function saveFeedbackLog() {
+  saveJson(getScopedStorageKey(storageKeys.feedback), feedbackLog);
+}
+
+function saveAiLogs() {
+  saveJson(getScopedStorageKey(storageKeys.aiLogs), aiLogs);
+}
+
 function getGradeMaterials(grade) {
   return gradeSubjectCatalog[grade] || subjectOptions;
+}
+
+function getCurrentContext() {
+  const activeUser = getActiveUser();
+  return {
+    user: activeUser,
+    grade: gradeSelect?.value || activeUser?.grade || "الثاني الثانوي",
+    subject: subjectSelect?.value || activeUser?.subject || "الرياضيات",
+    term: termSelect?.value || "الفصل الدراسي الأول",
+    lesson: lessonInput?.value.trim() || ""
+  };
+}
+
+function isLoggedIn() {
+  return Boolean(getActiveUser());
+}
+
+function getCurrentPoints() {
+  return getActiveUser()?.xp ?? 0;
+}
+
+function updateUserRecord(partial) {
+  const activeUser = getActiveUser();
+  if (!activeUser) return null;
+  const users = getUsers().map((user) =>
+    user.id === activeUser.id
+      ? { ...user, ...partial }
+      : user
+  );
+  saveJson(storageKeys.users, users);
+  return users.find((user) => user.id === activeUser.id) || null;
+}
+
+function spendPoints(amount, reason) {
+  const activeUser = getActiveUser();
+  if (!activeUser) return { ok: true, guest: true };
+  if ((activeUser.xp ?? 0) < amount) {
+    return { ok: false, guest: false, remaining: activeUser.xp ?? 0 };
+  }
+
+  const updatedUser = updateUserRecord({
+    xp: Math.max(0, (activeUser.xp ?? 0) - amount),
+    activity: `استخدم ${reason}`
+  });
+
+  updateXpBalance();
+  return { ok: true, guest: false, remaining: updatedUser?.xp ?? 0 };
 }
 
 function applyTheme(theme) {
@@ -305,23 +377,66 @@ function tokenize(text) {
 
 function classifyIntent(message, hasAttachments = false) {
   const normalized = normalizeText(message);
-  if (hasAttachments) return "academic";
-  if (!normalized) return "help";
-  if (/(كيف حالك|السلام عليكم|مرحبا|هلا|شكرا)/.test(normalized)) return "chat";
-  if (/(كيف استخدم|طريقة الاستخدام|ساعدني في الموقع|مساعدة)/.test(normalized)) return "help";
-  return "academic";
+  const context = getCurrentContext();
+
+  if (!normalized && !hasAttachments) return { type: "help", confidence: 0.4 };
+  if (/(السلام عليكم|مرحبا|هلا|كيف حالك|شلونك|شكرا|يعطيك العافية)/.test(normalized)) {
+    return { type: "chat", confidence: 0.98 };
+  }
+
+  if (/(كيف استخدم|طريقة الاستخدام|مساعدة|ساعدني في الموقع|وش أسوي)/.test(normalized)) {
+    return { type: "help", confidence: 0.95 };
+  }
+
+  if (/(اكتب لي|ولد|انشئ|أنشئ).*(أسئلة|سؤال)|أسئلة.*(كيمياء|فيزياء|رياضيات|عربي|علوم|إنجليزي)/.test(normalized)) {
+    return { type: "generate_questions", confidence: 0.94 };
+  }
+
+  if (/(اختبرني|اختبار|كويز|امتحنني)/.test(normalized)) {
+    return { type: "quiz", confidence: 0.95 };
+  }
+
+  if (/(لخص|تلخيص|اختصر|ملخص)/.test(normalized)) {
+    return { type: "summary", confidence: 0.92 };
+  }
+
+  if (/(اشرح|وش يعني|عرف|عرف|فسر|بسط)/.test(normalized)) {
+    return { type: "explain", confidence: 0.9 };
+  }
+
+  if (/(إجابتي|جوابي|حللت|هل حلي صحيح|صحح إجابتي|قيم إجابتي|وين الخطأ)/.test(normalized)) {
+    return { type: "answer_analysis", confidence: 0.94 };
+  }
+
+  if (hasAttachments || /(احسب|حل|أوجد|اختر|صح|خطأ|قارن|استخرج|حدد|صحح|ترجم|\d)/.test(normalized)) {
+    return { type: "solve", confidence: 0.9 };
+  }
+
+  if (context.subject || /(رياضيات|علوم|فيزياء|كيمياء|عربي|إنجليزي|أحياء|اجتماعيات)/.test(normalized)) {
+    return { type: "academic_question", confidence: 0.72 };
+  }
+
+  return { type: "unclear", confidence: 0.3 };
 }
 
-function needsClarification(message, hasAttachments = false) {
+const intent_router = classifyIntent;
+
+function needsClarification(message, intent, hasAttachments = false) {
   if (hasAttachments) return false;
+  if (intent?.type === "chat" || intent?.type === "help") return false;
   const normalized = normalizeText(message);
   const tokens = tokenize(message);
-  const generic = new Set(["حل", "حلها", "اشرح", "هذا", "ذي", "وش الحل", "سؤال"]);
-  const specific = /احسب|اشرح|حدد|صح|خطأ|اختر|قارن|فسر|علل|صحح|ترجم|ما|كيف|لماذا|\d|دائرة|قانون|معادلة|رابطة|نيوتن|محيط|مساحة/i;
+  const generic = new Set(["حل", "حلها", "اشرح", "هذا", "ذي", "وش الحل", "سؤال", "اختبار", "أسئلة"]);
+  const specific = /احسب|اشرح|حدد|صح|خطأ|اختر|قارن|فسر|علل|صحح|ترجم|ما|كيف|لماذا|\d|دائرة|قانون|معادلة|رابطة|نيوتن|محيط|مساحة|درس|اختبار|سؤال/i;
+
+  if (intent?.type === "generate_questions" || intent?.type === "quiz") {
+    return !(subjectSelect?.value || /رياضيات|علوم|فيزياء|كيمياء|عربي|إنجليزي|أحياء/.test(normalized));
+  }
+
   if (specific.test(normalized) && tokens.length >= 2) return false;
   if (lessonInput?.value.trim() && tokens.length >= 2) return false;
   if (tokens.length >= 3) return false;
-  return generic.has(normalized) || normalized.length <= 3;
+  return generic.has(normalized) || normalized.length <= 3 || intent?.type === "unclear";
 }
 
 function createCasualResponse(message) {
@@ -333,10 +448,10 @@ function createCasualResponse(message) {
 }
 
 function createHelpResponse() {
-  return "ابدأ باختيار الصف والمادة، ثم اكتب سؤالك أو ارفع صورة السؤال. وإذا كان السؤال اختيارات أو صح وخطأ فسأحلله وأحدد الجواب الصحيح مباشرة.";
+  return "ابدأ باختيار الصف والمادة، ثم اكتب سؤالك. يمكنك استخدام الشات النصي مباشرة حتى كزائر، أما رفع الصور وتحليلها فيتطلب تسجيل الدخول. وإذا كان السؤال اختيارات أو صح وخطأ فسأحلله وأحدد الجواب الصحيح مباشرة.";
 }
 
-function createClarificationResponse(message) {
+function createClarificationResponse(message, intent) {
   const normalized = normalizeText(message);
   const variants = [
     "أحتاج جزءًا صغيرًا إضافيًا من السؤال حتى أجيب بدقة.",
@@ -364,6 +479,28 @@ function createClarificationResponse(message) {
       actions: [
         { label: "اختيار المادة", action: "focus-subject" },
         { label: "اشرح قانون نيوتن الثاني", fill: "اشرح قانون نيوتن الثاني" }
+      ]
+    };
+  }
+
+  if (intent?.type === "generate_questions") {
+    return {
+      intro,
+      prompt: "كم تريد من الأسئلة، وما المادة أو الدرس الذي تريد التوليد منه؟",
+      actions: [
+        { label: "أسئلة كيمياء", fill: "اكتب لي 5 أسئلة كيمياء من هذا الدرس" },
+        { label: "اختيار المادة", action: "focus-subject" }
+      ]
+    };
+  }
+
+  if (intent?.type === "quiz") {
+    return {
+      intro,
+      prompt: "هل تريد اختبارًا قصيرًا في الرياضيات أو العلوم أو مادة أخرى؟",
+      actions: [
+        { label: "اختبرني في الفيزياء", fill: "اختبرني في الفيزياء بسؤال واحد" },
+        { label: "اختيار المادة", action: "focus-subject" }
       ]
     };
   }
@@ -524,52 +661,270 @@ function solveMathQuestion(question) {
   return null;
 }
 
-function createAcademicResponse(question) {
-  const selection = {
-    grade: gradeSelect?.value || "الثاني الثانوي",
-    subject: subjectSelect?.value || "الرياضيات",
-    term: termSelect?.value || "الفصل الدراسي الأول",
-    lesson: lessonInput?.value.trim() || "غير محدد"
-  };
+function retrieveCurriculumContext(question, preferredSubject = "") {
+  const context = getCurrentContext();
+  const inferredSubject =
+    preferredSubject ||
+    knowledgeBase.find((entry) => normalizeText(question).includes(normalizeText(entry.subject)))?.subject ||
+    context.subject;
 
-  const objective = solveObjectiveQuestion(question);
-  if (objective) return objective;
-
-  const math = solveMathQuestion(question);
-  if (math) return math;
-
-  const lesson = findLesson(question, selection.subject);
-  const subject = lesson?.subject || selection.subject;
-  const topic = lesson?.lesson || selection.lesson;
-
+  const lesson = findLesson(question, inferredSubject);
   return {
-    finalAnswer: lesson
-      ? `الإجابة الأقرب لهذا السؤال مرتبطة بدرس ${topic} في مادة ${subject}.`
-      : `هذا السؤال يبدو ضمن مادة ${subject}، وسأشرحه لك بشكل مبسط ومباشر.`,
-    explanation: lesson
-      ? lesson.explanation
-      : `فهمت سؤالك على أنه سؤال أكاديمي في ${subject}. إذا أردت دقة أعلى يمكنك كتابة اسم الدرس أو إرسال صورة السؤال.`,
-    steps: lesson
-      ? lesson.steps
-      : [
-          "قراءة السؤال وتحديد المطلوب.",
-          `الرجوع إلى مفاهيم مادة ${subject}.`,
-          "تقديم حل أو شرح مبسط يناسب المرحلة."
-        ],
-    mistakes: lesson
-      ? lesson.mistakes
-      : [
-          "القفز إلى الإجابة قبل فهم المطلوب.",
-          "عدم تحديد المعطيات بشكل كامل."
-        ],
-    similar: lesson?.similar || `اكتب سؤالًا آخر من نفس الدرس في ${subject} وسأعطيك تدريبًا مشابهًا.`,
-    curriculumLink: lesson
-      ? `يرتبط هذا السؤال بدرس ${topic} من وحدة ${lesson.unit}.`
-      : `يمكن تحسين الربط بالمنهج إذا كتبت اسم الدرس أو أرسلت صورة السؤال.`
+    grade: context.grade,
+    subject: lesson?.subject || inferredSubject || context.subject,
+    term: context.term,
+    lesson: lesson?.lesson || context.lesson || "غير محدد",
+    unit: lesson?.unit || "منهج المادة",
+    entry: lesson
   };
 }
 
+function generateCurriculumQuestions(context) {
+  const bank = {
+    الرياضيات: [
+      "احسب محيط دائرة نصف قطرها 6 سم.",
+      "أوجد مساحة مستطيل طوله 8 سم وعرضه 3 سم.",
+      "حل المعادلة: 3س + 5 = 20."
+    ],
+    الفيزياء: [
+      "ما العلاقة بين القوة والكتلة والتسارع؟",
+      "احسب القوة إذا كانت الكتلة 5 كجم والتسارع 2 م/ث².",
+      "فسر لماذا يحتاج الجسم إلى قوة لتغيير سرعته."
+    ],
+    الكيمياء: [
+      "ما الفرق بين الرابطة الأيونية والرابطة التساهمية؟",
+      "ماذا يحدث عند اتحاد الصوديوم مع الكلور؟",
+      "عرف التفاعل الكيميائي."
+    ],
+    العلوم: [
+      "اشرح دورة الماء في الطبيعة.",
+      "ما أهمية الجذور للنبات؟",
+      "كيف تنتقل الحرارة بين الأجسام؟"
+    ],
+    "اللغة العربية": [
+      "حدد المبتدأ والخبر في الجملة التالية.",
+      "استخرج الفاعل من الجملة.",
+      "اذكر قاعدة نحوية مرتبطة بهذا الدرس."
+    ],
+    "اللغة الإنجليزية": [
+      "صحح الجملة باستخدام الزمن المناسب.",
+      "حوّل الجملة إلى سؤال.",
+      "اكتب جملة في المضارع البسيط."
+    ]
+  };
+
+  return bank[context.subject] || [
+    `اكتب سؤالًا مفاهيميًا من مادة ${context.subject}.`,
+    `اكتب سؤالًا تطبيقيًا من ${context.subject}.`,
+    `اكتب سؤالًا قصيرًا للمراجعة في ${context.subject}.`
+  ];
+}
+
+function reviewResponse(intent, response) {
+  const reviewed = { ...response };
+
+  if (intent.type === "generate_questions") {
+    reviewed.mode = "questions";
+    reviewed.questions = Array.isArray(reviewed.questions) ? reviewed.questions.slice(0, 6) : [];
+    delete reviewed.steps;
+    delete reviewed.mistakes;
+    delete reviewed.similar;
+  }
+
+  if (intent.type === "quiz") {
+    reviewed.mode = "quiz";
+    reviewed.finalAnswer = "سأبدأ باختبار قصير. أجب عن السؤال التالي فقط، وبعدها أعطيك التغذية الراجعة.";
+  }
+
+  if (intent.type === "chat") {
+    reviewed.mode = "chat";
+  }
+
+  return reviewed;
+}
+
+const response_reviewer = reviewResponse;
+
+function createAcademicResponse(question, intent) {
+  const context = retrieveCurriculumContext(question, subjectSelect?.value || "");
+  const objective = solveObjectiveQuestion(question);
+  if (objective) {
+    return reviewResponse(intent, {
+      ...objective,
+      mode: "solve",
+      curriculumLink: `اعتمدت الإجابة على ${context.subject} للصف ${context.grade} في ${context.term}.`
+    });
+  }
+
+  const math = solveMathQuestion(question);
+  if (math) {
+    return reviewResponse(intent, {
+      ...math,
+      mode: "solve",
+      curriculumLink: `تم ربط السؤال بدرس ${context.lesson} في مادة ${context.subject} للصف ${context.grade}.`
+    });
+  }
+
+  if (intent.type === "generate_questions") {
+    return reviewResponse(intent, {
+      mode: "questions",
+      intro: `هذه أسئلة تدريبية من ${context.subject} للصف ${context.grade} — ${context.term}.`,
+      questions: generateCurriculumQuestions(context),
+      curriculumLink: `التوليد تم بالاعتماد على موضوع ${context.lesson} ضمن ${context.subject}.`
+    });
+  }
+
+  if (intent.type === "quiz") {
+    const questions = generateCurriculumQuestions(context);
+    return reviewResponse(intent, {
+      mode: "quiz",
+      finalAnswer: "سأبدأ الآن بسؤال واحد فقط.",
+      explanation: `الاختبار مرتبط بمادة ${context.subject} للصف ${context.grade}.`,
+      quizQuestion: questions[0],
+      curriculumLink: `تم اختيار السؤال من نطاق ${context.subject} في ${context.term}.`
+    });
+  }
+
+  if (intent.type === "summary") {
+    return reviewResponse(intent, {
+      mode: "summary",
+      finalAnswer: `هذا ملخص سريع لدرس ${context.lesson} في ${context.subject}.`,
+      explanation: context.entry?.explanation || `الفكرة الأساسية في ${context.subject} هنا هي فهم المفهوم وتطبيقه بصورة مبسطة.`,
+      bullets: [
+        `الصف المستهدف: ${context.grade}`,
+        `الفصل الدراسي: ${context.term}`,
+        `المفهوم الأبرز: ${context.lesson}`
+      ],
+      curriculumLink: `الملخص مرتبط بالوحدة: ${context.unit}.`
+    });
+  }
+
+  if (intent.type === "answer_analysis") {
+    return reviewResponse(intent, {
+      mode: "answer_analysis",
+      finalAnswer: "سأحلل إجابتك بناءً على المطلوب والمعطيات الظاهرة في السؤال.",
+      explanation: "أقارن بين المطلوب في السؤال وبين الإجابة المكتوبة، ثم أحدد إن كان الخطأ مفاهيميًا أو حسابيًا أو في الفهم.",
+      steps: [
+        "تحديد المطلوب بدقة.",
+        "مطابقة طريقة الحل مع مفهوم الدرس.",
+        "الإشارة إلى موضع الخطأ واقتراح تحسين مباشر."
+      ],
+      mistakes: [
+        "الانتقال إلى الناتج النهائي دون تبرير.",
+        "نسيان القانون أو القاعدة المرتبطة بالدرس."
+      ],
+      similar: `أرسل إجابتك كاملة على سؤال من ${context.subject} وسأعطيك تحليلًا أدق.`,
+      curriculumLink: `التحليل سيتم وفق درس ${context.lesson} من ${context.unit}.`
+    });
+  }
+
+  if (intent.type === "explain") {
+    return reviewResponse(intent, {
+      mode: "explain",
+      finalAnswer: `شرح مبسط لدرس ${context.lesson} في ${context.subject}.`,
+      explanation:
+        context.entry?.explanation ||
+        `هذا الشرح مرتبط بمادة ${context.subject} للصف ${context.grade}، وسأعرضه بشكل مبسط وواضح.`,
+      steps: [
+        "تعريف المفهوم الأساسي.",
+        "تبسيط الفكرة بلغتك الدراسية.",
+        "إعطاء مثال تطبيقي قصير."
+      ],
+      mistakes: [
+        "حفظ التعريف دون فهم التطبيق.",
+        "الخلط بين المفهوم والمثال."
+      ],
+      similar: `اطلب مني مثالًا إضافيًا على ${context.lesson}.`,
+      curriculumLink: `الشرح مرتبط بالوحدة ${context.unit} في ${context.term}.`
+    });
+  }
+
+  return reviewResponse(intent, {
+    mode: "solve",
+    finalAnswer: context.entry
+      ? `الإجابة الأقرب لهذا السؤال مرتبطة بدرس ${context.lesson} في مادة ${context.subject}.`
+      : `سأتعامل مع السؤال على أنه من مادة ${context.subject} وفق صف ${context.grade}.`,
+    explanation:
+      context.entry?.explanation ||
+      `فهمت سؤالك على أنه سؤال أكاديمي في ${context.subject}، وسأبني الجواب على المنهج المناسب لصفك.`,
+    steps:
+      context.entry?.steps || [
+        "تحديد المطلوب من السؤال.",
+        `الرجوع إلى مفاهيم ${context.subject} المناسبة.`,
+        "تقديم الحل أو الشرح الأقرب للمنهج."
+      ],
+    mistakes:
+      context.entry?.mistakes || [
+        "الانتقال إلى الحل قبل فهم المطلوب.",
+        "عدم ربط السؤال بقاعدة أو مفهوم من الدرس."
+      ],
+    similar: context.entry?.similar || `اكتب سؤالًا آخر من ${context.subject} وسأعطيك تدريبًا مشابهًا.`,
+    curriculumLink: `المعالجة تمت على أساس ${context.subject} للصف ${context.grade} في ${context.term}.`
+  });
+}
+
 function formatAssistantSections(response) {
+  if (response.mode === "questions") {
+    return `
+      <div class="answer-grid">
+        <section class="answer-section answer-section-wide">
+          <h4>📝 أسئلة من المنهج</h4>
+          <p>${response.intro}</p>
+        </section>
+        <section class="answer-section answer-section-wide">
+          <h4>📚 قائمة الأسئلة</h4>
+          <ul>${(response.questions || []).map((question) => `<li>${question}</li>`).join("")}</ul>
+        </section>
+        <section class="answer-section answer-section-wide">
+          <h4>📚 الربط بالمنهج</h4>
+          <p>${response.curriculumLink}</p>
+        </section>
+      </div>
+    `;
+  }
+
+  if (response.mode === "quiz") {
+    return `
+      <div class="answer-grid">
+        <section class="answer-section answer-section-wide">
+          <h4>🧪 اختبار قصير</h4>
+          <p>${response.finalAnswer}</p>
+        </section>
+        <section class="answer-section answer-section-wide">
+          <h4>❓ السؤال</h4>
+          <p>${response.quizQuestion}</p>
+        </section>
+        <section class="answer-section answer-section-wide">
+          <h4>📚 الربط بالمنهج</h4>
+          <p>${response.curriculumLink}</p>
+        </section>
+      </div>
+    `;
+  }
+
+  if (response.mode === "summary") {
+    return `
+      <div class="answer-grid">
+        <section class="answer-section">
+          <h4>✅ الملخص</h4>
+          <p>${response.finalAnswer}</p>
+        </section>
+        <section class="answer-section">
+          <h4>📘 الفكرة الأساسية</h4>
+          <p>${response.explanation}</p>
+        </section>
+        <section class="answer-section answer-section-wide">
+          <h4>📌 نقاط سريعة</h4>
+          <ul>${(response.bullets || []).map((item) => `<li>${item}</li>`).join("")}</ul>
+        </section>
+        <section class="answer-section answer-section-wide">
+          <h4>📚 الربط بالمنهج</h4>
+          <p>${response.curriculumLink}</p>
+        </section>
+      </div>
+    `;
+  }
+
   if (response.answerMode === "mcq" || response.answerMode === "truefalse") {
     return `
       <div class="answer-grid">
@@ -634,6 +989,10 @@ function renderAttachments() {
 
 function renderLearnedMemory() {
   if (!learnList) return;
+  if (!isLoggedIn()) {
+    learnList.innerHTML = `<div class="memory-item"><strong>سجل الإعجابات محفوظ بعد الدخول</strong><span>سجّل دخولك ليتم حفظ الإجابات التي أعجبتك داخل حسابك.</span></div>`;
+    return;
+  }
   if (!likedAnswers.length) {
     learnList.innerHTML = `<div class="memory-item"><strong>لا توجد إجابات مفضلة بعد</strong><span>عندما تضغط على إعجاب في أي إجابة ستظهر هنا.</span></div>`;
     return;
@@ -646,6 +1005,10 @@ function renderLearnedMemory() {
 
 function renderHistory() {
   if (!historyList) return;
+  if (!isLoggedIn()) {
+    historyList.innerHTML = `<div class="history-item"><strong>التاريخ محفوظ للمستخدمين المسجلين</strong><span>يمكنك استخدام الشات الآن، لكن سجل المحادثات سيبدأ الحفظ بعد تسجيل الدخول.</span></div>`;
+    return;
+  }
   if (!chatHistory.length) {
     historyList.innerHTML = `<div class="history-item"><strong>لا توجد محادثات محفوظة بعد</strong><span>ابدأ أول سؤال وسيظهر السجل هنا.</span></div>`;
     return;
@@ -665,6 +1028,16 @@ function renderHistory() {
 
 function renderInsights() {
   if (!insightsList) return;
+  if (!isLoggedIn()) {
+    insightsList.innerHTML = [
+      "يمكنك استخدام الذكاء الاصطناعي النصي الآن كزائر.",
+      "بعد تسجيل الدخول يبدأ حفظ تقدمك وتحليلك الشخصي.",
+      "تحليل الصور والنقاط متاحان بعد تسجيل الدخول."
+    ]
+      .map((text) => `<div class="memory-item"><strong>وضع الضيف</strong><span>${text}</span></div>`)
+      .join("");
+    return;
+  }
   const topSubject = Object.entries(analytics.subjects || {}).sort((a, b) => b[1] - a[1])[0]?.[0];
   insightsList.innerHTML = [
     topSubject
@@ -755,7 +1128,11 @@ function updateSelectionSummary() {
   const summary = `${gradeSelect?.value || ""} · ${subjectSelect?.value || ""} · ${termSelect?.value || ""} · ${lessonInput?.value.trim() || "الدرس غير محدد"}`;
   if (selectionSummary) selectionSummary.textContent = summary;
   if (runtimeSummary) runtimeSummary.textContent = `الوضع الحالي: ${summary}`;
-  if (statusChip) statusChip.textContent = subjectSelect?.value || "جاهز للمساعدة";
+  if (statusChip) {
+    statusChip.textContent = isLoggedIn()
+      ? `${subjectSelect?.value || "جاهز"} • ${getCurrentPoints()} نقطة`
+      : "وضع ضيف • الصور تتطلب دخول";
+  }
   renderWajibatiLibrary();
   renderTermCoverage();
 }
@@ -763,7 +1140,7 @@ function updateSelectionSummary() {
 function updateXpBalance() {
   const user = getActiveUser();
   xpBalanceNodes.forEach((node) => {
-    node.textContent = String(user?.xp ?? 120);
+    node.textContent = user ? String(user.xp ?? 100) : "0";
   });
 }
 
@@ -776,6 +1153,14 @@ function setPromptValue(value, subject = "") {
 }
 
 function openImageUpload() {
+  if (!isLoggedIn()) {
+    addMessage(
+      "assistant",
+      "ملم يحل",
+      formatSimpleReply('يمكنك استخدام الشات النصي مباشرة، لكن رفع الصور وتحليلها يتطلب تسجيل الدخول أولًا. <a class="top-link" href="login.html">سجّل دخولك من هنا</a>.')
+    );
+    return;
+  }
   if (!fileInput) return;
   fileInput.setAttribute("accept", ".png,.jpg,.jpeg,.webp");
   fileInput.click();
@@ -819,6 +1204,30 @@ async function handleSubmit(event) {
   const hasAttachments = attachments.length > 0;
   if (!question && !hasAttachments) return;
 
+  const intent = classifyIntent(question, hasAttachments);
+  if (hasAttachments && !isLoggedIn()) {
+    addMessage(
+      "assistant",
+      "ملم يحل",
+      formatSimpleReply('تحليل الصور متاح بعد تسجيل الدخول فقط. يمكنك الآن كتابة السؤال نصيًا، أو <a class="top-link" href="login.html">تسجيل الدخول</a> لتفعيل تحليل الصور.')
+    );
+    attachments = [];
+    if (fileInput) fileInput.value = "";
+    renderAttachments();
+    return;
+  }
+
+  const usageCost = hasAttachments ? usageCosts.image : usageCosts.chat;
+  const pointsResult = spendPoints(usageCost, hasAttachments ? "تحليل صورة" : "استخدام الشات");
+  if (!pointsResult.ok) {
+    addMessage(
+      "assistant",
+      "ملم يحل",
+      formatSimpleReply(`رصيدك الحالي ${pointsResult.remaining} نقطة، وهذا لا يكفي لهذه العملية. تحتاج ${usageCost} نقطة. يمكنك شراء نقاط إضافية من <a class="top-link" href="subscriptions.html">صفحة الباقات</a>.`)
+    );
+    return;
+  }
+
   const renderedQuestion = hasAttachments
     ? `${question || "أرفقت صورة أو ملفًا مع السؤال."}<br><span class="muted-inline">المرفقات: ${attachments.map((item) => item.name).join("، ")}</span>`
     : question;
@@ -828,23 +1237,24 @@ async function handleSubmit(event) {
   autoGrow(promptInput);
 
   const pendingNode = addMessage("assistant", "ملم يحل", createLoadingCopy(), { pending: true });
-  const intent = classifyIntent(question, hasAttachments);
 
   let body = "";
   let sources = [];
+  let responseForLog = null;
 
-  if (intent === "chat") {
+  if (intent.type === "chat") {
     body = formatSimpleReply(createCasualResponse(question));
-  } else if (intent === "help") {
+  } else if (intent.type === "help") {
     body = formatSimpleReply(createHelpResponse());
-  } else if (needsClarification(question, hasAttachments)) {
-    body = formatClarificationReply(createClarificationResponse(question));
+  } else if (needsClarification(question, intent, hasAttachments)) {
+    body = formatClarificationReply(createClarificationResponse(question, intent));
   } else {
-    const response = createAcademicResponse(question || "حل السؤال من الملفات المرفقة");
+    const response = createAcademicResponse(question || "حل السؤال من الملفات المرفقة", intent);
+    responseForLog = response;
     body = formatAssistantSections(response);
     sources = buildSources();
     analytics.totalMessages += 1;
-    analytics.xpUsed += 5;
+    analytics.xpUsed += usageCost;
     analytics.subjects[subjectSelect?.value || "عام"] = (analytics.subjects[subjectSelect?.value || "عام"] || 0) + 1;
     saveAnalytics();
     saveHistory(question || "سؤال مرفق", subjectSelect?.value || "عام");
@@ -855,6 +1265,16 @@ async function handleSubmit(event) {
   }
 
   addMessage("assistant", "ملم يحل", body, { sources });
+  aiLogs.unshift({
+    question: question || "سؤال مرفق",
+    intent: intent.type,
+    subject: subjectSelect?.value || "عام",
+    responseMode: responseForLog?.mode || intent.type,
+    usedAttachments: hasAttachments,
+    createdAt: Date.now()
+  });
+  aiLogs = aiLogs.slice(0, 40);
+  saveAiLogs();
   renderInsights();
   renderLearnedMemory();
   updateXpBalance();
@@ -887,8 +1307,11 @@ function handleMessageInteractions(event) {
     likedAnswers.unshift({ title, preview });
     likedAnswers = likedAnswers.slice(0, 8);
     analytics.likes += 1;
+    feedbackLog.unshift({ type: "like", title, preview, createdAt: Date.now() });
+    feedbackLog = feedbackLog.slice(0, 50);
     saveAnalytics();
     saveLikedAnswers();
+    saveFeedbackLog();
     renderLearnedMemory();
     renderInsights();
     likeButton.classList.add("active");
@@ -897,7 +1320,15 @@ function handleMessageInteractions(event) {
 
   if (dislikeButton) {
     analytics.dislikes += 1;
+    feedbackLog.unshift({
+      type: "dislike",
+      title: dislikeButton.closest(".message")?.querySelector(".message-title")?.textContent || "إجابة",
+      preview: dislikeButton.closest(".message")?.querySelector(".message-body")?.textContent?.trim().slice(0, 140) || "",
+      createdAt: Date.now()
+    });
+    feedbackLog = feedbackLog.slice(0, 50);
     saveAnalytics();
+    saveFeedbackLog();
     renderInsights();
     dislikeButton.classList.add("active");
   }
@@ -941,17 +1372,19 @@ function bindStarterButtons() {
 function bootstrap() {
   applyTheme(localStorage.getItem(storageKeys.theme) || "light");
   loadUserState();
+  const activeUser = getActiveUser();
+  if (gradeSelect && activeUser?.grade) gradeSelect.value = activeUser.grade;
   updateXpBalance();
   renderLearnedMemory();
   renderHistory();
   renderInsights();
   renderQuestionBank();
   renderWebPolicy();
+
+  if (gradeSelect) gradeSelect.value = gradeSelect.value || activeUser?.grade || gradeOptions[10];
+  if (subjectSelect) subjectSelect.value = subjectSelect.value || subjectOptions[0];
   updateSelectionSummary();
   resetConversationView();
-
-  if (gradeSelect) gradeSelect.value = gradeSelect.value || gradeOptions[10];
-  if (subjectSelect) subjectSelect.value = subjectSelect.value || subjectOptions[0];
 
   promptInput?.addEventListener("input", () => autoGrow(promptInput));
   form?.addEventListener("submit", handleSubmit);

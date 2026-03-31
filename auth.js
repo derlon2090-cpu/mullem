@@ -55,7 +55,7 @@ function loadUsers() {
       email: "student@mullem.sa",
       role: "Student",
       package: "مجاني محدود",
-      xp: 120,
+      xp: 100,
       status: "نشط",
       activity: "بدأ استخدام المنصة",
       password: "Student@2026"
@@ -211,7 +211,7 @@ registerForm?.addEventListener("submit", (event) => {
     role: "Student",
     grade,
     package: "مجاني محدود",
-    xp: 120,
+    xp: 100,
     status: "نشط",
     activity: "أنشأ حسابًا جديدًا"
   };
