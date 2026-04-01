@@ -86,7 +86,10 @@
               <input class="field" id="login-email" type="email" data-auth-login-email placeholder="أدخل بريدك الإلكتروني">
 
               <label class="field-label" for="login-password">كلمة المرور</label>
-              <input class="field" id="login-password" type="password" data-auth-login-password placeholder="أدخل كلمة المرور">
+              <div class="password-field">
+                <input class="field" id="login-password" type="password" data-auth-login-password placeholder="أدخل كلمة المرور">
+                <button class="password-toggle" type="button" data-password-toggle="login-password" aria-label="إظهار كلمة المرور" aria-pressed="false">👁</button>
+              </div>
 
               <div class="auth-links">
                 <button class="auth-link-btn" type="button" data-auth-forgot>نسيت كلمة المرور؟</button>
@@ -112,7 +115,10 @@
               <input class="field" id="register-email" type="email" data-auth-register-email placeholder="أدخل بريدك الإلكتروني">
 
               <label class="field-label" for="register-password">كلمة المرور</label>
-              <input class="field" id="register-password" type="password" data-auth-register-password placeholder="أنشئ كلمة مرور قوية">
+              <div class="password-field">
+                <input class="field" id="register-password" type="password" data-auth-register-password placeholder="أنشئ كلمة مرور قوية">
+                <button class="password-toggle" type="button" data-password-toggle="register-password" aria-label="إظهار كلمة المرور" aria-pressed="false">👁</button>
+              </div>
 
               <label class="field-label" for="register-grade">الصف الدراسي</label>
               <select class="field" id="register-grade" data-auth-register-grade>
@@ -154,10 +160,16 @@
 
             <form class="auth-form" data-auth-reset-form hidden>
               <label class="field-label" for="new-password">كلمة المرور الجديدة</label>
-              <input class="field" id="new-password" type="password" data-auth-new-password placeholder="اكتب كلمة المرور الجديدة">
+              <div class="password-field">
+                <input class="field" id="new-password" type="password" data-auth-new-password placeholder="اكتب كلمة المرور الجديدة">
+                <button class="password-toggle" type="button" data-password-toggle="new-password" aria-label="إظهار كلمة المرور" aria-pressed="false">👁</button>
+              </div>
 
               <label class="field-label" for="confirm-password">تأكيد كلمة المرور الجديدة</label>
-              <input class="field" id="confirm-password" type="password" data-auth-confirm-password placeholder="أعد كتابة كلمة المرور الجديدة">
+              <div class="password-field">
+                <input class="field" id="confirm-password" type="password" data-auth-confirm-password placeholder="أعد كتابة كلمة المرور الجديدة">
+                <button class="password-toggle" type="button" data-password-toggle="confirm-password" aria-label="إظهار كلمة المرور" aria-pressed="false">👁</button>
+              </div>
 
               <button class="primary-btn" type="submit">تحديث كلمة المرور</button>
             </form>

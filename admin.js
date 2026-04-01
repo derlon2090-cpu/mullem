@@ -2,6 +2,8 @@ const adminStatsRoot = document.querySelector("[data-admin-stats]");
 const usersTableRoot = document.querySelector("[data-users-table]");
 const feedbackListRoot = document.querySelector("[data-feedback-list]");
 const reportListRoot = document.querySelector("[data-report-list]");
+const roleListRoot = document.querySelector("[data-role-list]");
+const activityListRoot = document.querySelector("[data-activity-list]");
 const adminAuthRoot = document.querySelector("[data-admin-auth]");
 const adminAppRoot = document.querySelector("[data-admin-app]");
 const adminLoginForm = document.querySelector("[data-admin-login-form]");
@@ -9,6 +11,7 @@ const adminEmailInput = document.querySelector("[data-admin-email]");
 const adminPasswordInput = document.querySelector("[data-admin-password]");
 const adminLoginState = document.querySelector("[data-admin-login-state]");
 const adminLogoutButton = document.querySelector("[data-admin-logout]");
+const passwordToggleButtons = document.querySelectorAll("[data-password-toggle]");
 
 const adminCredentials = {
   email: "admin@mullem.sa",
@@ -16,6 +19,33 @@ const adminCredentials = {
 };
 
 const adminSessionKey = "mlm_admin_session";
+const adminRoles = [
+  {
+    name: "Super Admin",
+    description: "تحكم كامل في المنصة، المستخدمين، التقارير، الصلاحيات، والتصدير.",
+    permissions: ["مشاهدة المستخدمين", "تعديل المستخدمين", "حظر المستخدمين", "إدارة المحتوى", "إدارة الاشتراكات", "مشاهدة التقارير", "تصدير البيانات", "سجل النشاطات"]
+  },
+  {
+    name: "Admin",
+    description: "إدارة تشغيلية يومية للمستخدمين والمحتوى والاشتراكات.",
+    permissions: ["مشاهدة المستخدمين", "تعديل المستخدمين", "حظر المستخدمين", "إدارة المحتوى", "إدارة الاشتراكات", "مشاهدة التقارير", "سجل النشاطات"]
+  },
+  {
+    name: "Moderator",
+    description: "متابعة الحسابات والبلاغات والإشراف على السلوك والمحتوى العام.",
+    permissions: ["مشاهدة المستخدمين", "حظر المستخدمين", "إدارة المحتوى", "مشاهدة التقارير", "سجل النشاطات"]
+  },
+  {
+    name: "Support",
+    description: "مساندة المستخدمين ومتابعة المشاكل والحسابات من منظور الدعم.",
+    permissions: ["مشاهدة المستخدمين", "تعديل المستخدمين", "مشاهدة التقارير", "سجل النشاطات"]
+  },
+  {
+    name: "Content Manager",
+    description: "إدارة الدروس، الملفات، وبنوك الأسئلة والمحتوى التعليمي.",
+    permissions: ["إدارة المحتوى", "مشاهدة التقارير", "تصدير البيانات", "سجل النشاطات"]
+  }
+];
 
 function loadJson(key, fallback) {
   try {
@@ -172,6 +202,54 @@ function renderFeedback() {
       `;
 }
 
+function renderRoleMatrix() {
+  if (!roleListRoot) return;
+  roleListRoot.innerHTML = adminRoles
+    .map(
+      (role) => `
+        <div class="admin-item">
+          <strong>${role.name}</strong>
+          <span>${role.description}</span>
+          <div class="permission-grid">
+            ${role.permissions.map((permission) => `<span class="permission-chip">${permission}</span>`).join("")}
+          </div>
+        </div>
+      `
+    )
+    .join("");
+}
+
+function renderActivityLog() {
+  if (!activityListRoot) return;
+  const users = getUsers();
+  const activities = users
+    .slice(0, 8)
+    .map((user) => ({
+      title: `${user.name || "مستخدم"} — ${user.role || "Student"}`,
+      detail: user.activity || "لا يوجد نشاط مسجل بعد.",
+      meta: `${user.status || "نشط"}${user.package ? ` • ${user.package}` : ""}`
+    }));
+
+  activityListRoot.innerHTML = activities.length
+    ? activities
+        .map(
+          (item) => `
+            <div class="admin-item">
+              <strong>${item.title}</strong>
+              <span>${item.detail}</span>
+              <span>${item.meta}</span>
+            </div>
+          `
+        )
+        .join("")
+    : `
+        <div class="admin-item">
+          <strong>لا توجد نشاطات بعد</strong>
+          <span>سيظهر هنا آخر ما تم داخل المنصة عندما يبدأ المستخدمون والأدمن بالتفاعل.</span>
+        </div>
+      `;
+}
+
 function renderReports() {
   if (!reportListRoot) return;
   const analytics = getAnalytics();
@@ -195,6 +273,20 @@ function renderReports() {
     .join("");
 }
 
+function bindPasswordToggles() {
+  passwordToggleButtons.forEach((button) => {
+    button.addEventListener("click", () => {
+      const targetId = button.getAttribute("data-password-toggle");
+      const input = targetId ? document.getElementById(targetId) : null;
+      if (!input) return;
+      const shouldShow = input.type === "password";
+      input.type = shouldShow ? "text" : "password";
+      button.setAttribute("aria-pressed", shouldShow ? "true" : "false");
+      button.setAttribute("aria-label", shouldShow ? "إخفاء كلمة المرور" : "إظهار كلمة المرور");
+    });
+  });
+}
+
 adminLoginForm?.addEventListener("submit", (event) => {
   event.preventDefault();
   const email = (adminEmailInput?.value || "").trim().toLowerCase();
@@ -207,6 +299,8 @@ adminLoginForm?.addEventListener("submit", (event) => {
     renderStats();
     renderUsersTable();
     renderFeedback();
+    renderRoleMatrix();
+    renderActivityLog();
     renderReports();
     return;
   }
@@ -226,10 +320,13 @@ adminLogoutButton?.addEventListener("click", () => {
 });
 
 updateAdminView();
+bindPasswordToggles();
 
 if (isAdminLoggedIn()) {
   renderStats();
   renderUsersTable();
   renderFeedback();
+  renderRoleMatrix();
+  renderActivityLog();
   renderReports();
 }

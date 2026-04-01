@@ -1198,6 +1198,47 @@ select.field {
   padding-left: 34px;
 }
 
+.password-field {
+  position: relative;
+}
+
+.password-field .field {
+  padding-left: 54px;
+}
+
+.password-toggle {
+  position: absolute;
+  top: 50%;
+  left: 12px;
+  transform: translateY(-50%);
+  width: 36px;
+  height: 36px;
+  border-radius: 12px;
+  border: 1px solid rgba(34, 197, 94, 0.18);
+  background: rgba(255, 255, 255, 0.96);
+  color: var(--brand-strong);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: 0.2s ease;
+}
+
+.password-toggle:hover {
+  background: rgba(34, 197, 94, 0.08);
+  border-color: rgba(34, 197, 94, 0.3);
+}
+
+.password-toggle[aria-pressed="true"] {
+  background: rgba(34, 197, 94, 0.12);
+}
+
+body.theme-dark .password-toggle {
+  background: rgba(15, 23, 42, 0.92);
+  border-color: rgba(134, 239, 172, 0.18);
+  color: #bbf7d0;
+}
+
 .toggle-row {
   display: flex;
   align-items: center;
@@ -2082,6 +2123,26 @@ body.user-logged-in .selectors {
   color: var(--muted);
   font-size: 0.9rem;
   line-height: 1.7;
+}
+
+.admin-item .permission-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.permission-chip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 6px 10px;
+  border-radius: 999px;
+  background: rgba(34, 197, 94, 0.1);
+  border: 1px solid rgba(34, 197, 94, 0.14);
+  color: var(--brand-strong);
+  font-size: 0.84rem;
+  font-weight: 700;
 }
 
 .table {

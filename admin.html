@@ -41,7 +41,10 @@
         <p>أدخل بريد الأدمن وكلمة المرور للوصول إلى لوحة الإدارة.</p>
         <form class="admin-login-form" data-admin-login-form>
           <input class="field" type="email" data-admin-email placeholder="البريد الإلكتروني">
-          <input class="field" type="password" data-admin-password placeholder="كلمة المرور">
+          <div class="password-field">
+            <input class="field" id="admin-password" type="password" data-admin-password placeholder="كلمة المرور">
+            <button class="password-toggle" type="button" data-password-toggle="admin-password" aria-label="إظهار كلمة المرور" aria-pressed="false">👁</button>
+          </div>
           <button class="primary-btn" type="submit">دخول لوحة الأدمن</button>
           <div class="small-copy" data-admin-login-state>الدخول محمي ببريد وكلمة مرور.</div>
         </form>
@@ -61,6 +64,20 @@
         <article class="admin-panel">
           <h3 class="admin-section-title">الإعجابات وعدم الإعجاب</h3>
           <div class="admin-list" data-feedback-list></div>
+        </article>
+      </section>
+
+      <section class="admin-grid">
+        <article class="admin-panel">
+          <h3 class="admin-section-title">الأدوار والصلاحيات</h3>
+          <p class="admin-subtitle">كل دور إداري له نطاق واضح من الصلاحيات داخل المنصة.</p>
+          <div class="admin-list" data-role-list></div>
+        </article>
+
+        <article class="admin-panel">
+          <h3 class="admin-section-title">سجل النشاطات</h3>
+          <p class="admin-subtitle">آخر الأنشطة الإدارية والتعليمية الظاهرة في هذه النسخة.</p>
+          <div class="admin-list" data-activity-list></div>
         </article>
       </section>
 

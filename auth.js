@@ -21,6 +21,7 @@ const forgotButton = document.querySelector("[data-auth-forgot]");
 const backButton = document.querySelector("[data-auth-back]");
 const scrollTopButton = document.querySelector("[data-scroll-top]");
 const registerSubmitButton = document.querySelector("[data-register-submit]");
+const passwordToggleButtons = document.querySelectorAll("[data-password-toggle]");
 
 const storageKeys = {
   users: "mlm_users",
@@ -172,6 +173,20 @@ function redirectToStudent() {
   window.location.href = "student.html";
 }
 
+function bindPasswordToggles() {
+  passwordToggleButtons.forEach((button) => {
+    button.addEventListener("click", () => {
+      const targetId = button.getAttribute("data-password-toggle");
+      const input = targetId ? document.getElementById(targetId) : null;
+      if (!input) return;
+      const shouldShow = input.type === "password";
+      input.type = shouldShow ? "text" : "password";
+      button.setAttribute("aria-pressed", shouldShow ? "true" : "false");
+      button.setAttribute("aria-label", shouldShow ? "إخفاء كلمة المرور" : "إظهار كلمة المرور");
+    });
+  });
+}
+
 authTabs.forEach((tab) => {
   tab.addEventListener("click", () => {
     openAuthMode(tab.getAttribute("data-auth-tab") || "login");
@@ -187,6 +202,7 @@ document.addEventListener("click", (event) => {
 
 openAuthMode(new URLSearchParams(window.location.search).get("mode") || (window.location.hash === "#register" ? "register" : "login"));
 resetForgotFlow();
+bindPasswordToggles();
 
 loginForm?.addEventListener("submit", (event) => {
   event.preventDefault();
