@@ -2424,7 +2424,7 @@ function bootstrap() {
   quickSolveButton?.addEventListener("click", quickSolve);
   heroExampleButton?.addEventListener("click", () => {
     setPromptValue("احسب محيط دائرة نصف قطرها 7", "الرياضيات");
-    startChat();
+    form?.requestSubmit();
   });
   heroUploadButton?.addEventListener("click", openImageUpload);
   uploadButton?.addEventListener("click", openGenericUpload);
@@ -4684,7 +4684,7 @@ function bootstrap() {
   quickSolveButton?.addEventListener("click", quickSolve);
   heroExampleButton?.addEventListener("click", () => {
     setPromptValue("احسب محيط دائرة نصف قطرها 7", "الرياضيات");
-    startChat();
+    form?.requestSubmit();
   });
   heroUploadButton?.addEventListener("click", openImageUpload);
   uploadButton?.addEventListener("click", openGenericUpload);

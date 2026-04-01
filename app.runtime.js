@@ -768,6 +768,23 @@
       : undefined;
   }
 
+  function needsDeliberateAnalysis(question, analysis, reasoning, route) {
+    const text = (question || route?.extracted_text || "").trim();
+    if (!text) return false;
+    if ((route?.question_type || "") === "طµط­ ظˆط®ط·ط£") return false;
+    if ((route?.question_type || "") === "ط§ط®طھظٹط§ط± ظ…ظ† ظ…طھط¹ط¯ط¯") return false;
+
+    const multiStepSignals = /ثم|وبعدها|بعد ذلك|ابدأ بشرح|اشرح.*ثم|لخص.*ثم|حل.*ثم|قارن|حلل|فسر|علل/i;
+    const isLong = text.length >= 90;
+    const hasMultiStepIntent = Boolean(analysis?.intent?.compound || reasoning?.compound || (reasoning?.taskCount || 0) > 1);
+
+    return hasMultiStepIntent || multiStepSignals.test(text) || isLong;
+  }
+
+  function waitForDeliberateAnalysis() {
+    return new Promise((resolve) => window.setTimeout(resolve, 5000));
+  }
+
   async function runtimeHandleSubmit(event) {
     if (event.target !== form) return;
     event.preventDefault();
@@ -860,6 +877,11 @@
     clearRuntimeAttachments();
     promptInput.value = "";
     autoGrow(promptInput);
+    if (needsDeliberateAnalysis(question, analysis, reasoning, route)) {
+      const analysisNode = addMessage("assistant", "ملم يحل", createLoadingCopy(), { pending: true });
+      await waitForDeliberateAnalysis();
+      analysisNode?.remove();
+    }
 
     const pendingNode = addMessage("assistant", "ملم يحل", createLoadingCopy(), { pending: true });
     let body = "";
@@ -979,7 +1001,7 @@
         <div class="welcome-card">
           <h4>أنا هنا لمساعدتك</h4>
           <p>اكتب سؤالك، وسأحاول حله لك بشكل واضح ومباشر.</p>
-          <p class="logic-note">يمكنك البدء بالنص فورًا، أما رفع الصور فيحتاج تسجيل الدخول.</p>
+          <p class="logic-note">قد تصدر عن الشات الذكي ملم بعض الأخطاء غير المقصودة، لذلك يُستحسن التحقق من المعلومات المهمة قبل اعتمادها.</p>
         </div>
       `
     );
