@@ -441,6 +441,7 @@
         messageList.innerHTML = "";
       }
     });
+    scrollToChatSection();
   }
 
   function preservePageScroll(action) {
@@ -452,6 +453,12 @@
     window.setTimeout(restore, 0);
     window.setTimeout(restore, 80);
     window.setTimeout(restore, 220);
+  }
+
+  function scrollToChatSection() {
+    const chatSection = document.getElementById("chat") || document.querySelector(".chat-shell");
+    if (!chatSection) return;
+    chatSection.scrollIntoView({ behavior: "smooth", block: "start" });
   }
 
   function applyUserStudyContext() {
@@ -975,7 +982,7 @@
   gradeSelect?.addEventListener("change", syncStudentDashboardHeader);
   function submitHeroExample() {
     if (!form || !promptInput) return;
-    submitPresetPrompt("احسب محيط دائرة نصف قطرها 7", "الرياضيات");
+    submitPresetPrompt("احسب محيط دائرة نصف قطرها 7", "الرياضيات", { scrollToChat: true });
   }
 
   function applyRuntimeSubject(subject) {
@@ -991,7 +998,7 @@
     subjectSelect.dispatchEvent(new Event("change", { bubbles: true }));
   }
 
-  function submitPresetPrompt(prompt, subject = "") {
+  function submitPresetPrompt(prompt, subject = "", options = {}) {
     if (!form || !promptInput) return;
     preservePageScroll(() => {
       clearRuntimeAttachments();
@@ -1000,6 +1007,9 @@
       applyRuntimeSubject(subject);
       form.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
     });
+    if (options.scrollToChat) {
+      scrollToChatSection();
+    }
   }
 
   window.mullemTryExample = submitHeroExample;
