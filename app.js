@@ -1330,23 +1330,38 @@ function formatAssistantSections(response) {
       `;
     }
 
-    return `
-      <div class="answer-grid">
-        ${modeNote}
-        <section class="answer-section answer-section-wide">
-          <h4>${response.answerMode === "truefalse" ? "✅ الحكم النهائي" : "✅ الخيار الصحيح"}</h4>
-          <p>${response.answerMode === "truefalse" ? safeFinalAnswer : response.finalAnswer}</p>
-        </section>
-        <section class="answer-section answer-section-wide">
-          <h4>📘 التحليل المختصر</h4>
-          <p>${response.explanation}</p>
-        </section>
-        <section class="answer-section answer-section-wide">
-          <h4>🧩 نوع السؤال</h4>
-          <p>${response.questionType || "اختياري"}</p>
-        </section>
-      </div>
-    `;
+    if (response.answerMode === "truefalse") {
+      return `
+        <div class="answer-grid">
+          ${modeNote}
+          <section class="answer-section answer-section-wide">
+            <h4>✅ الإجابة</h4>
+            <p>${safeFinalAnswer}</p>
+          </section>
+          <section class="answer-section answer-section-wide">
+            <h4>📘 السبب</h4>
+            <p>${response.explanation}</p>
+          </section>
+        </div>
+      `;
+    }
+
+    if (response.answerMode === "mcq") {
+      return `
+        <div class="answer-grid">
+          ${modeNote}
+          <section class="answer-section answer-section-wide">
+            <h4>✅ الإجابة</h4>
+            <p>${response.finalAnswer}</p>
+          </section>
+          <section class="answer-section answer-section-wide">
+            <h4>📘 السبب</h4>
+            <p>${response.explanation}</p>
+          </section>
+        </div>
+      `;
+    }
+
   }
 
   if (response.displayMode === "quick") {

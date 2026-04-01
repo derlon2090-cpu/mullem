@@ -412,6 +412,16 @@
       finalAnswer: answer,
       explanation,
       trueFalseReason: explanation,
+      confidence: typeof extra.confidence === "number" ? extra.confidence : 0.95,
+      structuredResult: {
+        question_type: "true_false",
+        subject: extra.subject || route.detected_subject || "general",
+        grade: extra.grade || route.detected_grade_level || "unknown",
+        term: extra.term || "unknown",
+        final_answer: answer,
+        reason: explanation,
+        confidence: typeof extra.confidence === "number" ? extra.confidence : 0.95
+      },
       steps: [],
       mistakes: [],
       similar: extra.similar || ""
@@ -428,6 +438,7 @@
       lesson: extra.lesson || route.detected_subject || "اختيار من متعدد",
       finalAnswer: answer,
       explanation,
+      confidence: typeof extra.confidence === "number" ? extra.confidence : 0.92,
       steps: [],
       mistakes: [],
       similar: extra.similar || ""
@@ -475,6 +486,7 @@
       return buildTrueFalseResponse("صواب", "لأن الكبسولة البلاستولية هي المرحلة التي تصل إلى الرحم وتبدأ عملية الانغراس في بطانته.", route, {
         subject: "الأحياء",
         lesson: "مراحل النمو الجنيني",
+        confidence: 0.96,
         similar: "صواب أم خطأ: تبدأ عملية الانغراس بعد وصول الكبسولة البلاستولية إلى الرحم."
       });
     }
@@ -482,7 +494,25 @@
     if (/محيط الدائرة/.test(normalized) && /ط/.test(normalized) && /نق²|نق2|نق\^2/.test(normalized)) {
       return buildTrueFalseResponse("خطأ", "لأن ط × نق² هو قانون مساحة الدائرة، أما المحيط فيساوي 2 × ط × نق.", route, {
         subject: "الرياضيات",
-        lesson: "محيط الدائرة"
+        lesson: "محيط الدائرة",
+        confidence: 0.98
+      });
+    }
+
+    if (/الهيدروكربونات الأروماتية|الأروماتية|aromatic|aromaticity|benzene|بنزين/.test(normalized) && /الثبات|stable|stability|resonance|رنين|delocalization/.test(normalized)) {
+      const isLowStabilityClaim = /منخفضة من الثبات|ثبات منخفض|less stable|low stability/.test(normalized);
+      if (isLowStabilityClaim) {
+        return buildTrueFalseResponse("خطأ", "لأن الهيدروكربونات الأروماتية تمتاز بثبات أعلى بسبب delocalization والرنين للإلكترونات π، لا بثبات منخفض.", route, {
+          subject: "الكيمياء",
+          lesson: "الهيدروكربونات الأروماتية",
+          confidence: 0.96,
+          similar: "صواب أم خطأ: البنزين أكثر ثباتًا من المتوقع بسبب الأروماتية."
+        });
+      }
+      return buildTrueFalseResponse("صواب", "لأن الأروماتية ترتبط بزيادة الثبات نتيجة delocalization والرنين في النظام الحلقي.", route, {
+        subject: "الكيمياء",
+        lesson: "الهيدروكربونات الأروماتية",
+        confidence: 0.93
       });
     }
 
@@ -685,8 +715,8 @@
       scores[subject] = (scores[subject] || 0) + amount;
     };
 
-    if (/التنفس الخلوي|الميتوكوندريا|الفجوات|البلاستيدات|الخلية النباتية|الخلية الحيوانية|stress|sick|health|disease|cell|respiration|mitochondria|vacuole/.test(normalized)) add("الأحياء", 80);
-    if (/رابطة|أيونية|تساهمية|معادلة كيميائية|حمض|قاعدة|na|cl|ذرة|مول/.test(normalized)) add("الكيمياء", 65);
+    if (/التنفس الخلوي|الميتوكوندريا|الفجوات|البلاستيدات|الخلية النباتية|الخلية الحيوانية|stress|sick|health|disease|cell|respiration|mitochondria|vacuole|انغراس|البلاستولية|جنين|الرحم/.test(normalized)) add("الأحياء", 80);
+    if (/رابطة|أيونية|تساهمية|معادلة كيميائية|حمض|قاعدة|na|cl|ذرة|مول|الهيدروكربونات الأروماتية|الأروماتية|aromatic|aromaticity|benzene|بنزين|resonance|رنين|pi electron|delocalization/.test(normalized)) add("الكيمياء", 72);
     if (/تسارع|قوة|سرعة|نيوتن|زخم|احتكاك|طاقة حركية/.test(normalized)) add("الفيزياء", 65);
     if (/محيط|مساحة|دائرة|نصف القطر|معادلة|جذر|كسر|احسب|أوجد/.test(normalized)) add("الرياضيات", 65);
     if (/مبتدأ|خبر|إعراب|نحو|بلاغة|أعرب|استخرج/.test(normalized)) add("اللغة العربية", 60);
