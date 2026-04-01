@@ -5,6 +5,7 @@ const registerForm = document.querySelector("[data-auth-register-form]");
 const forgotEmailForm = document.querySelector("[data-auth-forgot-email-form]");
 const codeForm = document.querySelector("[data-auth-code-form]");
 const resetForm = document.querySelector("[data-auth-reset-form]");
+const verifyForm = document.querySelector("[data-auth-verify-form]");
 const authState = document.querySelector("[data-auth-state]");
 const loginEmail = document.querySelector("[data-auth-login-email]");
 const loginPassword = document.querySelector("[data-auth-login-password]");
@@ -16,6 +17,9 @@ const forgotEmail = document.querySelector("[data-auth-forgot-email]");
 const forgotCode = document.querySelector("[data-auth-code]");
 const newPassword = document.querySelector("[data-auth-new-password]");
 const confirmPassword = document.querySelector("[data-auth-confirm-password]");
+const verifyCodeInput = document.querySelector("[data-auth-verify-code]");
+const verifyCopy = document.querySelector("[data-auth-verify-copy]");
+const verifyNote = document.querySelector("[data-auth-verify-note]");
 const googleButton = document.querySelector("[data-auth-google]");
 const forgotButton = document.querySelector("[data-auth-forgot]");
 const backButton = document.querySelector("[data-auth-back]");
@@ -28,6 +32,7 @@ const storageKeys = {
   currentUser: "mlm_current_user",
   adminSession: "mlm_admin_session",
   passwordReset: "mlm_password_reset",
+  pendingAuth: "mlm_pending_auth",
   history: "mlm_chat_history",
   liked: "mlm_liked_answers",
   analytics: "mlm_analytics",
@@ -111,18 +116,28 @@ function setActivePanel(mode) {
 
 function openAuthMode(mode) {
   setActivePanel(mode);
+  if (mode === "verify") {
+    renderPendingAuth(loadPendingAuth());
+    return;
+  }
   if (mode === "register") {
-    setState("أنشئ حسابك ثم ابدأ الشات مباشرة.");
+    clearPendingAuth();
+    if (verifyNote) verifyNote.hidden = true;
+    setState("أنشئ حسابك ثم أدخل رمز التحقق لإكمال الدخول إلى المنصة.");
     registerName?.focus();
     return;
   }
   if (mode === "forgot") {
+    clearPendingAuth();
+    if (verifyNote) verifyNote.hidden = true;
     resetForgotFlow();
     setState("أدخل بريدك الإلكتروني لبدء استعادة كلمة المرور.");
     forgotEmail?.focus();
     return;
   }
-  setState("أدخل بياناتك للوصول إلى المنصة.");
+  clearPendingAuth();
+  if (verifyNote) verifyNote.hidden = true;
+  setState("أدخل بياناتك ثم أكمل التحقق للوصول إلى المنصة.");
   loginEmail?.focus();
 }
 
@@ -131,6 +146,10 @@ function isValidEmail(email) {
 }
 
 function generateResetCode() {
+  return String(Math.floor(100000 + Math.random() * 900000));
+}
+
+function generateVerificationCode() {
   return String(Math.floor(100000 + Math.random() * 900000));
 }
 
@@ -158,6 +177,18 @@ function loadResetRequest() {
   return loadJson(storageKeys.passwordReset, null);
 }
 
+function savePendingAuth(request) {
+  saveJson(storageKeys.pendingAuth, request);
+}
+
+function loadPendingAuth() {
+  return loadJson(storageKeys.pendingAuth, null);
+}
+
+function clearPendingAuth() {
+  localStorage.removeItem(storageKeys.pendingAuth);
+}
+
 function syncScrollTopButton() {
   if (!scrollTopButton) return;
   scrollTopButton.classList.toggle("visible", window.scrollY > 220);
@@ -167,6 +198,36 @@ function resetForgotFlow() {
   if (forgotEmailForm) forgotEmailForm.hidden = false;
   if (codeForm) codeForm.hidden = true;
   if (resetForm) resetForm.hidden = true;
+}
+
+function renderPendingAuth(request) {
+  if (!request) return;
+  if (verifyCopy) {
+    verifyCopy.textContent =
+      request.flow === "register"
+        ? `أدخل رمز التحقق لإتمام إنشاء حساب ${request.name || ""} والدخول إلى المنصة.`
+        : `أدخل رمز التحقق لإكمال الدخول إلى حساب ${request.email || ""}.`;
+  }
+
+  if (verifyNote) {
+    verifyNote.hidden = false;
+    verifyNote.textContent = `تم تجهيز رمز تحقق لهذا البريد. في النسخة الحالية من المنصة سيظهر لك الرمز هنا إلى حين ربط خدمة بريد فعلية: ${request.code}`;
+  }
+}
+
+function startAuthVerification(request) {
+  savePendingAuth(request);
+  renderPendingAuth(request);
+  setActivePanel("verify");
+  if (verifyCodeInput) {
+    verifyCodeInput.value = "";
+    verifyCodeInput.focus();
+  }
+  setState(
+    request.flow === "register"
+      ? "أدخل رمز التحقق لإتمام إنشاء الحساب والدخول إلى المنصة."
+      : "أدخل رمز التحقق لإكمال تسجيل الدخول إلى حسابك."
+  );
 }
 
 function redirectToStudent() {
@@ -251,10 +312,13 @@ loginForm?.addEventListener("submit", (event) => {
   }
 
   localStorage.removeItem(storageKeys.adminSession);
-  localStorage.setItem(storageKeys.currentUser, user.id);
-  ensureUserWorkspace(user.id);
-  setState(`أهلًا ${user.name}، تم تسجيل الدخول بنجاح.`);
-  redirectToStudent();
+  startAuthVerification({
+    flow: "login",
+    userId: user.id,
+    name: user.name,
+    email: user.email,
+    code: generateVerificationCode()
+  });
 });
 
 registerForm?.addEventListener("submit", (event) => {
@@ -286,30 +350,29 @@ registerForm?.addEventListener("submit", (event) => {
     return;
   }
 
-  const user = {
-    id: `student-${Date.now()}`,
+  localStorage.removeItem(storageKeys.adminSession);
+  startAuthVerification({
+    flow: "register",
+    code: generateVerificationCode(),
     name,
     email,
-    password,
-    role: "Student",
-    grade,
-    subject: "الرياضيات",
-    package: "مجاني محدود",
-    xp: 100,
-    streakDays: 0,
-    lastActiveDate: "",
-    achievements: [],
-    status: "نشط",
-    activity: "أنشأ حسابًا جديدًا"
-  };
-
-  users.unshift(user);
-  saveUsers(users);
-  localStorage.removeItem(storageKeys.adminSession);
-  localStorage.setItem(storageKeys.currentUser, user.id);
-  ensureUserWorkspace(user.id);
-  setState(`تم إنشاء الحساب بنجاح يا ${name}. سيتم تحويلك الآن.`);
-  redirectToStudent();
+    user: {
+      id: `student-${Date.now()}`,
+      name,
+      email,
+      password,
+      role: "Student",
+      grade,
+      subject: "الرياضيات",
+      package: "مجاني محدود",
+      xp: 100,
+      streakDays: 0,
+      lastActiveDate: "",
+      achievements: [],
+      status: "نشط",
+      activity: "أنشأ حسابًا جديدًا"
+    }
+  });
 });
 
 forgotButton?.addEventListener("click", () => {
@@ -397,6 +460,64 @@ resetForm?.addEventListener("submit", (event) => {
   setState("تم تحديث كلمة المرور بنجاح. يمكنك تسجيل الدخول الآن.");
 });
 
+verifyForm?.addEventListener("submit", (event) => {
+  event.preventDefault();
+  const request = loadPendingAuth();
+  if (!request) {
+    setState("لا يوجد طلب تحقق نشط حاليًا. أعد تسجيل الدخول أو إنشاء الحساب.");
+    openAuthMode("login");
+    return;
+  }
+
+  if ((verifyCodeInput?.value || "").trim() !== request.code) {
+    setState("رمز التحقق غير صحيح.");
+    return;
+  }
+
+  if (request.flow === "register") {
+    const users = loadUsers();
+    if (users.some((entry) => entry.email.toLowerCase() === request.email.toLowerCase())) {
+      clearPendingAuth();
+      setState("هذا البريد مسجل مسبقًا.");
+      openAuthMode("login");
+      return;
+    }
+
+    const newUser = request.user;
+    users.unshift(newUser);
+    saveUsers(users);
+    localStorage.removeItem(storageKeys.adminSession);
+    localStorage.setItem(storageKeys.currentUser, newUser.id);
+    ensureUserWorkspace(newUser.id);
+    clearPendingAuth();
+    setState(`تم إنشاء الحساب بنجاح يا ${newUser.name}.`);
+    redirectToStudent();
+    return;
+  }
+
+  const user = loadUsers().find((entry) => entry.id === request.userId);
+  if (!user) {
+    clearPendingAuth();
+    setState("تعذر العثور على الحساب. أعد تسجيل الدخول من جديد.");
+    openAuthMode("login");
+    return;
+  }
+
+  if (user.status === "محظور") {
+    clearPendingAuth();
+    setState("هذا الحساب محظور حاليًا. تواصل مع إدارة المنصة إذا كنت ترى أن هذا الإجراء غير صحيح.");
+    openAuthMode("login");
+    return;
+  }
+
+  localStorage.removeItem(storageKeys.adminSession);
+  localStorage.setItem(storageKeys.currentUser, user.id);
+  ensureUserWorkspace(user.id);
+  clearPendingAuth();
+  setState(`أهلًا ${user.name}، تم تسجيل الدخول بنجاح.`);
+  redirectToStudent();
+});
+
 googleButton?.addEventListener("click", () => {
   window.location.href = googleAuthUrl;
 });
@@ -404,6 +525,11 @@ googleButton?.addEventListener("click", () => {
 registerSubmitButton?.addEventListener("click", () => {
   registerForm?.requestSubmit();
 });
+
+const pendingAuth = loadPendingAuth();
+if (pendingAuth) {
+  openAuthMode("verify");
+}
 
 window.addEventListener("scroll", syncScrollTopButton, { passive: true });
 scrollTopButton?.addEventListener("click", () => window.scrollTo({ top: 0, behavior: "smooth" }));

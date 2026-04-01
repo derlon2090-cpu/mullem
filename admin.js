@@ -2,7 +2,7 @@ const adminStatsRoot = document.querySelector("[data-admin-stats]");
 const usersTableRoot = document.querySelector("[data-users-table]");
 const feedbackListRoot = document.querySelector("[data-feedback-list]");
 const reportListRoot = document.querySelector("[data-report-list]");
-const roleListRoot = document.querySelector("[data-role-list]");
+const subscribersListRoot = document.querySelector("[data-subscribers-list]");
 const activityListRoot = document.querySelector("[data-activity-list]");
 const adminAuthRoot = document.querySelector("[data-admin-auth]");
 const adminAppRoot = document.querySelector("[data-admin-app]");
@@ -126,7 +126,7 @@ function refreshAdminData() {
   renderStats();
   renderUsersTable();
   renderFeedback();
-  renderRoleMatrix();
+  renderSubscribersOverview();
   renderActivityLog();
   renderReports();
 }
@@ -231,6 +231,27 @@ function toggleBanUser(userId) {
   window.alert(willBan ? "تم حظر الحساب." : "تم فك الحظر عن الحساب.");
 }
 
+function editUserPoints(userId) {
+  const user = getUsers().find((entry) => entry.id === userId);
+  if (!user) return;
+
+  const xpRaw = window.prompt(`تعديل نقاط ${user.name}`, String(user.xp ?? 0));
+  if (xpRaw === null) return;
+
+  const xp = Number(xpRaw);
+  if (!Number.isFinite(xp)) {
+    window.alert("قيمة النقاط يجب أن تكون رقمًا صحيحًا.");
+    return;
+  }
+
+  updateUserRecord(userId, () => ({
+    xp,
+    activity: "تم تعديل النقاط من لوحة الأدمن"
+  }));
+
+  window.alert("تم تحديث النقاط بنجاح.");
+}
+
 function getAnalytics() {
   return {
     totalMessages: 0,
@@ -299,6 +320,7 @@ function renderUsersTable() {
           <td>
             <div class="admin-table-actions">
               <button type="button" class="mini-btn" data-admin-edit="${user.id}">تعديل</button>
+              <button type="button" class="mini-btn admin-action-points" data-admin-points="${user.id}">تعديل النقاط</button>
               <button
                 type="button"
                 class="mini-btn ${user.status === "محظور" ? "admin-action-unban" : "admin-action-ban"}"
@@ -360,22 +382,46 @@ function renderFeedback() {
       `;
 }
 
-function renderRoleMatrix() {
-  if (!roleListRoot) return;
-  roleListRoot.innerHTML = adminRoles
-    .map(
-      (role) => `
+function renderSubscribersOverview() {
+  if (!subscribersListRoot) return;
+  const users = getUsers();
+  const groups = users.reduce((result, user) => {
+    const packageName = user.package || "مجاني محدود";
+    if (!result[packageName]) result[packageName] = [];
+    result[packageName].push(user);
+    return result;
+  }, {});
+
+  const entries = Object.entries(groups);
+  subscribersListRoot.innerHTML = entries.length
+    ? entries
+        .map(
+          ([packageName, packageUsers]) => `
+            <div class="admin-item">
+              <strong>${packageName}</strong>
+              <span>عدد المشتركين: ${packageUsers.length}</span>
+              <div class="permission-grid">
+                ${packageUsers
+                  .slice(0, 6)
+                  .map(
+                    (user) => `
+                      <span class="permission-chip">
+                        ${user.name} • ${user.status} • ${user.xp} XP
+                      </span>
+                    `
+                  )
+                  .join("")}
+              </div>
+            </div>
+          `
+        )
+        .join("")
+    : `
         <div class="admin-item">
-          <strong>${role.name}</strong>
-          <span>${role.description}</span>
-          ${role.name === "Super Admin" ? `<span>تنطبق هذه الصلاحيات على جميع المستخدمين المسجلين في المنصة.</span>` : ""}
-          <div class="permission-grid">
-            ${role.permissions.map((permission) => `<span class="permission-chip">${permission}</span>`).join("")}
-          </div>
+          <strong>لا يوجد مشتركون بعد</strong>
+          <span>ستظهر هنا الحسابات المقسمة حسب الباقات بعد بدء التسجيل في المنصة.</span>
         </div>
-      `
-    )
-    .join("");
+      `;
 }
 
 function renderActivityLog() {
@@ -450,6 +496,12 @@ usersTableRoot?.addEventListener("click", (event) => {
   const editButton = event.target.closest("[data-admin-edit]");
   if (editButton) {
     editUserRecord(editButton.getAttribute("data-admin-edit"));
+    return;
+  }
+
+  const pointsButton = event.target.closest("[data-admin-points]");
+  if (pointsButton) {
+    editUserPoints(pointsButton.getAttribute("data-admin-points"));
     return;
   }
 
