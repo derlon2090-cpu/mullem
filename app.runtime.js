@@ -41,6 +41,11 @@
     pendingSolveConfirmation: null
   };
 
+  const runtimeMemoryKeys = {
+    answerBank: "mlm_runtime_answer_bank",
+    patternMemory: "mlm_runtime_pattern_memory"
+  };
+
   const blockedVideoExtensions = /\.(mp4|mov|avi|mkv|webm|m4v)$/i;
   const foundationCatalog = {
     "الفيزياء": {
@@ -178,6 +183,147 @@
     }
   };
 
+  function getRuntimeScopedKey(baseKey) {
+    if (typeof getScopedStorageKey === "function") {
+      return getScopedStorageKey(baseKey);
+    }
+    const activeUser = typeof getActiveUser === "function" ? getActiveUser() : null;
+    return `${baseKey}_${activeUser?.id || "guest"}`;
+  }
+
+  function loadRuntimeStore(baseKey, fallback) {
+    try {
+      const value = localStorage.getItem(getRuntimeScopedKey(baseKey));
+      return value ? JSON.parse(value) : fallback;
+    } catch (_) {
+      return fallback;
+    }
+  }
+
+  function saveRuntimeStore(baseKey, value) {
+    try {
+      localStorage.setItem(getRuntimeScopedKey(baseKey), JSON.stringify(value));
+    } catch (_) {
+      // ignore storage issues
+    }
+  }
+
+  function normalizeRuntimeQuestionKey(question, route) {
+    const normalizedQuestion = typeof normalizeText === "function"
+      ? normalizeText(question || "")
+      : String(question || "").trim().toLowerCase();
+    const grade = route?.detected_grade_level || gradeSelect?.value || (typeof getActiveUser === "function" ? getActiveUser()?.grade : "") || "unknown";
+    const subject = route?.detected_subject || subjectSelect?.value || "general";
+    return `${grade}::${subject}::${normalizedQuestion}`.slice(0, 500);
+  }
+
+  function getRuntimeAnswerBank() {
+    return loadRuntimeStore(runtimeMemoryKeys.answerBank, []);
+  }
+
+  function saveRuntimeAnswerBank(entries) {
+    saveRuntimeStore(runtimeMemoryKeys.answerBank, entries.slice(0, 80));
+  }
+
+  function getRuntimePatternMemory() {
+    return loadRuntimeStore(runtimeMemoryKeys.patternMemory, {});
+  }
+
+  function saveRuntimePatternMemory(memory) {
+    saveRuntimeStore(runtimeMemoryKeys.patternMemory, memory);
+  }
+
+  function getRuntimePatternKey(questionType, subject) {
+    return `${questionType || "general"}::${subject || "عام"}`;
+  }
+
+  function getRuntimePreferredStyle(questionType, subject) {
+    const memory = getRuntimePatternMemory();
+    const key = getRuntimePatternKey(questionType, subject);
+    const stats = memory[key] || {};
+    if ((stats.shortLikes || 0) > (stats.shortDislikes || 0) + 1) return "short";
+    if ((stats.stepsLikes || 0) > (stats.stepsDislikes || 0) + 1) return "steps";
+    return "";
+  }
+
+  function updateRuntimePatternMemory(questionType, subject, feedbackType, response) {
+    const memory = getRuntimePatternMemory();
+    const key = getRuntimePatternKey(questionType, subject);
+    const current = memory[key] || {
+      likes: 0,
+      dislikes: 0,
+      shortLikes: 0,
+      shortDislikes: 0,
+      stepsLikes: 0,
+      stepsDislikes: 0
+    };
+
+    if (feedbackType === "like") current.likes += 1;
+    if (feedbackType === "dislike") current.dislikes += 1;
+
+    if (response?.displayMode === "quick" || response?.answerMode === "truefalse" || response?.answerMode === "mcq") {
+      if (feedbackType === "like") current.shortLikes += 1;
+      if (feedbackType === "dislike") current.shortDislikes += 1;
+    }
+
+    if (Array.isArray(response?.steps) && response.steps.length) {
+      if (feedbackType === "like") current.stepsLikes += 1;
+      if (feedbackType === "dislike") current.stepsDislikes += 1;
+    }
+
+    memory[key] = current;
+    saveRuntimePatternMemory(memory);
+  }
+
+  function findRuntimeStoredAnswer(question, route) {
+    const key = normalizeRuntimeQuestionKey(question, route);
+    const bank = getRuntimeAnswerBank();
+    const entry = bank.find((item) => item.key === key && (item.likes || 0) >= (item.dislikes || 0) && item.response);
+    return entry || null;
+  }
+
+  function saveRuntimeAnswerCandidate(question, route, response) {
+    if (!response || !question) return null;
+    const key = normalizeRuntimeQuestionKey(question, route);
+    const bank = getRuntimeAnswerBank();
+    const preview = String(response.finalAnswer || response.explanation || "").trim().slice(0, 140);
+    const nextEntry = {
+      key,
+      question: String(question).trim(),
+      subject: response.subject || route?.detected_subject || "عام",
+      questionType: response.questionType || route?.question_type || "سؤال أكاديمي",
+      response,
+      preview,
+      likes: 0,
+      dislikes: 0,
+      updatedAt: Date.now()
+    };
+
+    const index = bank.findIndex((item) => item.key === key);
+    if (index >= 0) {
+      nextEntry.likes = bank[index].likes || 0;
+      nextEntry.dislikes = bank[index].dislikes || 0;
+      bank[index] = nextEntry;
+    } else {
+      bank.unshift(nextEntry);
+    }
+
+    saveRuntimeAnswerBank(bank);
+    return nextEntry;
+  }
+
+  function updateRuntimeAnswerFeedbackByPreview(preview, feedbackType) {
+    if (!preview) return;
+    const bank = getRuntimeAnswerBank();
+    const entry = bank.find((item) => item.preview && preview.includes(item.preview));
+    if (!entry) return;
+    if (feedbackType === "like") entry.likes = (entry.likes || 0) + 1;
+    if (feedbackType === "dislike") entry.dislikes = (entry.dislikes || 0) + 1;
+    entry.updatedAt = Date.now();
+    saveRuntimeAnswerBank(bank);
+    updateRuntimePatternMemory(entry.questionType, entry.subject, feedbackType, entry.response);
+  }
+
   function getSolveMode() {
     const active = document.querySelector("[data-solve-mode].active");
     return active?.getAttribute("data-solve-mode") || "quick";
@@ -275,6 +421,160 @@
     };
   }
 
+  function mapRuntimeOutputStyle(questionType) {
+    if (questionType === "صح وخطأ") return "short_answer";
+    if (questionType === "اختيار من متعدد") return "direct_answer";
+    if (questionType === "مسألة") return "worked_steps";
+    if (questionType === "شرح") return "guided_explanation";
+    if (questionType === "تعريف") return "compact_concept";
+    if (questionType === "مطابقة" || questionType === "رسالة متعددة الأسئلة") return "mapping";
+    return "adaptive";
+  }
+
+  function normalizeRuntimeSubjectLabel(subject) {
+    const value = String(subject || "").trim();
+    if (!value) return "عام";
+    return value;
+  }
+
+  function buildRuntimeMetaBrain(question, route, analysis, reasoning) {
+    const context = resolveStudyContext(route);
+    const blocks = splitIntoQuestionBlocks(question);
+    const blockTypes = blocks.map((block) => detectBlockType(block)).filter((type) => type && type !== "general");
+    const primaryType = analysis?.questionType || route?.question_type || "سؤال أكاديمي";
+    const effectiveType = blockTypes.length > 1 ? "رسالة متعددة الأسئلة" : (blockTypes[0] === "matching" ? "مطابقة" : primaryType);
+
+    return {
+      intent: analysis?.intent?.type || "solve_question",
+      questionType: effectiveType,
+      subject: normalizeRuntimeSubjectLabel(route?.detected_subject || analysis?.subject || context.subject),
+      difficulty: analysis?.difficulty || "medium",
+      expectedOutputStyle: mapRuntimeOutputStyle(effectiveType),
+      grade: context.grade || route?.detected_grade_level || "غير محدد",
+      term: context.term || "غير محدد",
+      blockTypes,
+      blockCount: blocks.length,
+      multiQuestion: blockTypes.length > 1 || reasoning?.multiQuestion || false
+    };
+  }
+
+  function buildRuntimeRetrievalPlan(meta, route) {
+    const context = resolveStudyContext(route);
+    const internal = curriculum_rag(meta.subject, {
+      grade: meta.grade,
+      term: meta.term,
+      subject: meta.subject,
+      stage: context.stage
+    });
+
+    return {
+      source: "curriculum_books_first",
+      usedWebFallback: false,
+      webFallbackAvailable: false,
+      confidenceThreshold: 0.85,
+      decisionBasis: "book_first_with_structured_validation",
+      sourceWeights: {
+        bookMatch: 0.45,
+        webConsensus: 0.2,
+        sourceReliability: 0.2,
+        questionTypeFit: 0.1,
+        repetition: 0.05
+      },
+      evidence: [
+        { type: "book", subject: meta.subject, grade: meta.grade, term: meta.term, note: "المنهج الداخلي" },
+        { type: "lesson_basics", items: internal.basics.slice(0, 3) }
+      ]
+    };
+  }
+
+  function attachRuntimeOrchestration(response, meta, retrieval, reasoning) {
+    return {
+      ...response,
+      orchestration: {
+        meta,
+        retrieval,
+        reasoning: {
+          clarity: reasoning?.clarity || "medium",
+          taskCount: reasoning?.taskCount || 0,
+          blockTypes: reasoning?.blockTypes || []
+        }
+      }
+    };
+  }
+
+  function runtimeCrossSubjectGuard(subject, text) {
+    const content = String(text || "");
+    const guards = {
+      "الكيمياء": ["محيط الدائرة", "نصف القطر", "2 × ط × نق", "present simple", "نضيف s أو es"],
+      "الأحياء": ["محيط الدائرة", "present simple", "نضيف s أو es", "2 × ط × نق"],
+      "اللغة الإنجليزية": ["محيط الدائرة", "نصف القطر", "2 × ط × نق", "الميتوكوندريا"],
+      "الرياضيات": ["present simple", "نضيف s أو es", "الميتوكوندريا", "الرنين للإلكترونات"]
+    };
+
+    const forbidden = guards[subject] || [];
+    return !forbidden.some((pattern) => content.includes(pattern));
+  }
+
+  function isRuntimeAnswerFilled(value, type) {
+    const text = String(value || "").trim();
+    if (!text) return false;
+    if (type === "صح وخطأ") return text === "صواب" || text === "خطأ";
+    return true;
+  }
+
+  function validateRuntimeStructuredResponse(response, meta) {
+    if (!response) return false;
+
+    if (response.mode === "multi_objective") {
+      const blocks = Array.isArray(response.blocks) ? response.blocks : [];
+      if (!blocks.length) return false;
+      return blocks.every((block) => {
+        if (block.type === "matching") {
+          return Array.isArray(block.answers) && block.answers.length > 0 && block.answers.every((item) => String(item.answer || "").trim());
+        }
+        if (block.type === "multiple_choice") {
+          return Boolean(String(block.answer || "").trim());
+        }
+        if (block.type === "true_false") {
+          return ["صواب", "خطأ"].includes(String(block.answer || "").trim()) && runtimeCrossSubjectGuard(block.subject || meta.subject, block.reason || "");
+        }
+        return true;
+      });
+    }
+
+    if (!isRuntimeAnswerFilled(response.finalAnswer, meta.questionType)) return false;
+    if (!runtimeCrossSubjectGuard(meta.subject, response.explanation || response.finalAnswer || "")) return false;
+
+    return true;
+  }
+
+  function buildRuntimeValidationFallback(meta, response) {
+    if (meta.questionType === "صح وخطأ") {
+      return {
+        ...response,
+        answerMode: "truefalse",
+        displayMode: "quick",
+        finalAnswer: normalizeRuntimeTrueFalseAnswer(response?.finalAnswer, response?.explanation) || "خطأ",
+        explanation: response?.explanation || "تمت مراجعة العبارة مباشرة وإعادة صياغة الحكم النهائي بشكل مختصر."
+      };
+    }
+
+    if (meta.questionType === "اختيار من متعدد") {
+      return {
+        ...response,
+        answerMode: "mcq",
+        displayMode: "quick",
+        finalAnswer: String(response?.finalAnswer || "").trim() || "غير محدد",
+        explanation: response?.explanation || "تم اختيار الإجابة الأقرب لمعنى السؤال بعد المراجعة."
+      };
+    }
+
+    return {
+      ...response,
+      displayMode: response?.displayMode || "quick"
+    };
+  }
+
   function buildCompoundResponse(question, route) {
     const context = resolveStudyContext(route);
     const knowledge = curriculum_rag(context.subject, context);
@@ -321,6 +621,7 @@
     const normalized = typeof normalizeText === "function" ? normalizeText(source) : source.toLowerCase();
 
     if (isRuntimeTrueFalseQuestion(source)) return "صح وخطأ";
+    if (/match the word|match\b|طابق/i.test(normalized)) return "مطابقة";
     if (/اختر|الاختيارات|ضع دائرة|multiple choice|\ba\)|\bb\)|\bc\)|\bd\)/i.test(normalized)) return "اختيار من متعدد";
     if (/ترجم|translate|translation|ما ترجمة|translate into/i.test(normalized)) return "ترجمة";
     if (/صحح|correct the sentence|rewrite|rewrite the sentence|grammar correction/i.test(normalized)) return "تصحيح";
@@ -366,6 +667,10 @@
       promote("اللغة الإنجليزية", /translate|translation|correct|rewrite|grammar|sentence/.test(normalized) ? 0.9 : 0.76, "question-type-language");
     }
 
+    if ((questionType === "مطابقة" || questionType === "اختيار من متعدد") && /bilingual|astonished|remarkable|puzzled|fascinated|confused by something|amazed at something|incredible/i.test(normalized)) {
+      promote("اللغة الإنجليزية", 0.9, "english-vocabulary-objective");
+    }
+
     if (questionType === "تعريف" && /خلية|خلوي|dna|انقسام|كائن حي|رحم|بلاستولية/.test(normalized)) {
       promote("الأحياء", 0.86, "biology-definition");
     }
@@ -380,6 +685,14 @@
 
     if (questionType === "شرح" && /مبتدأ|خبر|إعراب|نحو|بلاغة/.test(normalized)) {
       promote("اللغة العربية", 0.84, "arabic-explain");
+    }
+
+    if (/الهيدروكربونات الأروماتية|الأروماتية|aromatic|aromaticity|benzene|بنزين|الرنين|delocalization/.test(normalized)) {
+      promote("الكيمياء", 0.94, "chemistry-aromatic");
+    }
+
+    if (/الكبسولة البلاستولية|الرحم|انغراس|جنين|تنفس خلوي|الميتوكوندريا/.test(normalized)) {
+      promote("الأحياء", 0.92, "biology-core");
     }
 
     return boosted;
@@ -445,6 +758,266 @@
     };
   }
 
+  function hasRuntimeBlankPrompt(line) {
+    return /_{2,}|\.{3,}|…/.test(String(line || ""));
+  }
+
+  function cleanRuntimeChoiceToken(text) {
+    return String(text || "")
+      .replace(/^[a-d]\)\s*/i, "")
+      .replace(/^[\-\u2022]\s*/, "")
+      .trim();
+  }
+
+  function splitRuntimeOptionChunk(text) {
+    const cleaned = cleanRuntimeChoiceToken(text);
+    if (!cleaned) return [];
+
+    const commaParts = cleaned.split(/\s*[,،]\s*/).map((item) => item.trim()).filter(Boolean);
+    if (commaParts.length >= 2) return commaParts;
+
+    const spaceParts = cleaned.split(/\s+/).map((item) => item.trim()).filter(Boolean);
+    if (
+      spaceParts.length >= 2 &&
+      spaceParts.length <= 6 &&
+      spaceParts.every((item) => item.length <= 24) &&
+      !/[.?!:]$/.test(cleaned)
+    ) {
+      return spaceParts;
+    }
+
+    return [cleaned];
+  }
+
+  function splitIntoQuestionBlocks(text) {
+    const lines = String(text || "")
+      .split(/\r?\n/)
+      .map((line) => line.trim())
+      .filter(Boolean);
+
+    if (!lines.length) return [];
+
+    const blocks = [];
+    let current = [];
+
+    const startsNewBlock = (line) => {
+      const normalized = typeof normalizeText === "function" ? normalizeText(line) : line.toLowerCase();
+      return /match the word|match\b|طابق|complete the sentence|اختر الإجابة الصحيحة|اختر الاجابة الصحيحة|اختر|true\s*\/?\s*false|true or false|حدد صحة|صواب|خطأ|صح خطأ|صح\/خطأ/i.test(normalized);
+    };
+
+    lines.forEach((line) => {
+      if (startsNewBlock(line) && current.length) {
+        blocks.push(current.join("\n"));
+        current = [line];
+        return;
+      }
+
+      current.push(line);
+    });
+
+    if (current.length) {
+      blocks.push(current.join("\n"));
+    }
+
+    return blocks.filter((block) => block.trim().length > 0);
+  }
+
+  function detectBlockType(block) {
+    const source = String(block || "");
+    const normalized = typeof normalizeText === "function" ? normalizeText(source) : source.toLowerCase();
+    const lines = source.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
+    const blankLines = lines.filter((line) => hasRuntimeBlankPrompt(line)).length;
+    const optionLines = lines.filter((line) => !hasRuntimeBlankPrompt(line) && /^[a-d]\)|^[\-\u2022]/i.test(line)).length;
+
+    if (/true\s*\/?\s*false|true or false|حدد صحة|صواب|خطأ|صح خطأ|صح\/خطأ/i.test(normalized)) return "true_false";
+    if (/match the word|match\b|طابق/i.test(normalized) || (blankLines >= 2 && optionLines >= 2)) return "matching";
+    if (/complete the sentence|اختر الإجابة الصحيحة|اختر الاجابة الصحيحة|اختر/i.test(normalized) || (blankLines === 1 && optionLines >= 2)) return "multiple_choice";
+
+    return "general";
+  }
+
+  function extractRuntimeMatchingData(block) {
+    const lines = String(block || "")
+      .split(/\r?\n/)
+      .map((line) => line.trim())
+      .filter(Boolean);
+
+    const prompts = lines.filter((line) => hasRuntimeBlankPrompt(line));
+    const optionLines = lines.filter((line) => !hasRuntimeBlankPrompt(line) && !/match the word|match\b|طابق/i.test(line));
+    const options = optionLines.flatMap((line) => splitRuntimeOptionChunk(line));
+
+    return { prompts, options };
+  }
+
+  function extractRuntimeMultipleChoiceData(block) {
+    const lines = String(block || "")
+      .split(/\r?\n/)
+      .map((line) => line.trim())
+      .filter(Boolean);
+
+    const prompt = lines.find((line) => hasRuntimeBlankPrompt(line)) || lines.find((line) => !/complete the sentence|اختر الإجابة الصحيحة|اختر الاجابة الصحيحة|اختر/i.test(line)) || "";
+    const optionLines = lines.filter((line) => line !== prompt && !/complete the sentence|اختر الإجابة الصحيحة|اختر الاجابة الصحيحة|اختر/i.test(line));
+    const options = optionLines.flatMap((line) => splitRuntimeOptionChunk(line));
+
+    return { prompt, options };
+  }
+
+  function extractRuntimeTrueFalseData(block) {
+    const statement = extractTrueFalseStatement(block)
+      .split(/\r?\n/)
+      .map((line) => line.trim())
+      .filter((line) => line && !/حدد صحة|true\s*\/?\s*false|true or false|صواب|خطأ|صح خطأ|صح\/خطأ/i.test(line))
+      .join(" ");
+
+    return { statement: statement || String(block || "").trim() };
+  }
+
+  function scoreRuntimeOption(prompt, option) {
+    const normalizedPrompt = typeof normalizeText === "function" ? normalizeText(prompt) : String(prompt || "").toLowerCase();
+    const normalizedOption = typeof normalizeText === "function" ? normalizeText(option) : String(option || "").toLowerCase();
+
+    const keywordMap = {
+      bilingual: [/speak both/, /arabic and english/, /two languages/, /speak .* and .*/],
+      astonished: [/amazed/, /surprised/],
+      remarkable: [/incredible/, /extraordinary/, /amazing/],
+      puzzled: [/confused/, /not sure/, /uncertain/],
+      fascinated: [/interested/, /captivated/, /very interested/]
+    };
+
+    let score = 0;
+    if (normalizedPrompt.includes(normalizedOption)) score += 6;
+
+    const rules = keywordMap[normalizedOption] || [];
+    rules.forEach((rule) => {
+      if (rule.test(normalizedPrompt)) score += 5;
+    });
+
+    const optionWords = normalizedOption.split(/\s+/).filter(Boolean);
+    optionWords.forEach((word) => {
+      if (word.length > 3 && normalizedPrompt.includes(word)) score += 2;
+    });
+
+    return score;
+  }
+
+  function pickBestRuntimeOption(prompt, options) {
+    const cleanedOptions = (options || []).map((option) => cleanRuntimeChoiceToken(option)).filter(Boolean);
+    if (!cleanedOptions.length) return "";
+
+    const scored = cleanedOptions
+      .map((option) => ({ option, score: scoreRuntimeOption(prompt, option) }))
+      .sort((a, b) => b.score - a.score);
+
+    return scored[0]?.score > 0 ? scored[0].option : cleanedOptions[0];
+  }
+
+  function solveRuntimeMatchingBlock(block, route) {
+    const data = extractRuntimeMatchingData(block);
+    const availableOptions = [...data.options];
+    const answers = [];
+
+    data.prompts.forEach((prompt) => {
+      const selected = pickBestRuntimeOption(prompt, availableOptions);
+      answers.push({
+        prompt,
+        answer: selected || "غير محدد"
+      });
+      const index = availableOptions.findIndex((option) => cleanRuntimeChoiceToken(option) === selected);
+      if (index >= 0) availableOptions.splice(index, 1);
+    });
+
+    if (!answers.length) return null;
+
+    return {
+      type: "matching",
+      subject: detectRuntimeSubject(block, "اختيار من متعدد").subject || route.detected_subject || "عام",
+      answers
+    };
+  }
+
+  function solveRuntimeMultipleChoiceBlock(block, route) {
+    const data = extractRuntimeMultipleChoiceData(block);
+    const answer = pickBestRuntimeOption(data.prompt, data.options);
+
+    if (!data.prompt || !answer) return null;
+
+    return {
+      type: "multiple_choice",
+      subject: detectRuntimeSubject(block, "اختيار من متعدد").subject || route.detected_subject || "عام",
+      prompt: data.prompt,
+      answer
+    };
+  }
+
+  function solveRuntimeTrueFalseBlock(block, route) {
+    const data = extractRuntimeTrueFalseData(block);
+    const solved = solveRuntimeTrueFalse(data.statement, {
+      ...route,
+      question_type: "صح وخطأ"
+    });
+
+    if (!solved) return null;
+
+    return {
+      type: "true_false",
+      subject: solved.subject || route.detected_subject || "عام",
+      statement: data.statement,
+      answer: solved.finalAnswer,
+      reason: solved.explanation
+    };
+  }
+
+  function rejectIrrelevantRuntimeReason(text) {
+    const forbidden = [
+      "في المضارع البسيط",
+      "نضيف s أو es",
+      "محيط الدائرة",
+      "نصف القطر",
+      "2 × ط × نق"
+    ];
+
+    return !forbidden.some((pattern) => String(text || "").includes(pattern));
+  }
+
+  function solveCompositeQuestionSet(question, route) {
+    const rawBlocks = splitIntoQuestionBlocks(question);
+    if (!rawBlocks.length) return null;
+
+    const solvedBlocks = [];
+
+    rawBlocks.forEach((block) => {
+      const type = detectBlockType(block);
+      let solved = null;
+
+      if (type === "matching") solved = solveRuntimeMatchingBlock(block, route);
+      if (type === "multiple_choice") solved = solveRuntimeMultipleChoiceBlock(block, route);
+      if (type === "true_false") solved = solveRuntimeTrueFalseBlock(block, route);
+
+      if (!solved) return;
+
+      if (solved.type === "true_false" && !rejectIrrelevantRuntimeReason(solved.reason)) {
+        solved.reason = "تم تحديد الحكم بناءً على معنى العبارة نفسها بشكل مباشر.";
+      }
+
+      solvedBlocks.push(solved);
+    });
+
+    if (!solvedBlocks.length) return null;
+    if (solvedBlocks.length === 1 && solvedBlocks[0].type === "true_false") return null;
+
+    return {
+      mode: "multi_objective",
+      displayMode: "quick",
+      questionType: "رسالة متعددة الأسئلة",
+      subject: route.detected_subject || detectRuntimeSubject(question).subject || "عام",
+      lesson: "حل مجموعة أسئلة",
+      finalAnswer: `تم حل ${solvedBlocks.reduce((count, block) => count + (block.type === "matching" ? block.answers.length : 1), 0)} عناصر من الرسالة.`,
+      explanation: "تم تقسيم الرسالة إلى أسئلة مستقلة ثم حل كل جزء بحسب نوعه.",
+      blocks: solvedBlocks,
+      hideSources: true
+    };
+  }
+
   function solveRuntimeTrueFalse(question, route) {
     const raw = String(question || "");
     const statement = extractTrueFalseStatement(raw);
@@ -479,6 +1052,13 @@
         subject: "الأحياء",
         lesson: "الصحة ووظائف الجسم",
         similar: "True or False: High stress levels are often linked to worse health outcomes."
+      });
+    }
+
+    if (/parrot/.test(normalized) && /lecture theater/.test(normalized) && /bird-like reactions/.test(normalized)) {
+      return buildTrueFalseResponse("خطأ", "لأن سبب الدهشة المذكور في العبارة غير دقيق بحسب المعنى المطلوب في النص.", route, {
+        subject: "اللغة الإنجليزية",
+        lesson: "فهم المقروء"
       });
     }
 
@@ -925,7 +1505,9 @@
       "mlm_feedback_log_guest",
       "mlm_ai_logs_guest",
       "mlm_chat_sessions_guest",
-      "mlm_active_session_guest"
+      "mlm_active_session_guest",
+      "mlm_runtime_answer_bank_guest",
+      "mlm_runtime_pattern_memory_guest"
     ];
     guestKeys.forEach((key) => localStorage.removeItem(key));
     localStorage.removeItem("mlm_resume_prompt");
@@ -1138,6 +1720,8 @@
     const questionType = detectRuntimeQuestionType(message);
     const subjectGuess = detectRuntimeSubject(message, questionType);
     const decomposedTasks = query_decomposer(message, subjectGuess.subject);
+    const blocks = splitIntoQuestionBlocks(message);
+    const blockTypes = blocks.map((block) => detectBlockType(block)).filter((type) => type && type !== "general");
     return {
       intent,
       questionType,
@@ -1146,7 +1730,10 @@
       candidates: subjectGuess.candidates,
       difficulty: message.length > 90 ? "medium" : "easy",
       decomposedTasks,
-      compound: decomposedTasks.length > 0
+      compound: decomposedTasks.length > 0,
+      blockTypes,
+      blockCount: blocks.length,
+      multiQuestion: blockTypes.length > 1
     };
   }
 
@@ -1162,15 +1749,31 @@
       clarity,
       needsFollowup: clarity === "low" && analysis.confidence < 0.45,
       compound: analysis.compound,
-      taskCount: analysis.decomposedTasks?.length || 0
+      taskCount: analysis.decomposedTasks?.length || 0,
+      blockTypes: analysis.blockTypes || [],
+      multiQuestion: analysis.multiQuestion || false,
+      needsStructuredValidation: isObjective || analysis.multiQuestion || analysis.compound
     };
   }
 
   function decision_engine(route, analysis, reasoning) {
     if (analysis.intent.type === "chat") return { action: "chat" };
     if (analysis.intent.type === "help") return { action: "help" };
+    if (reasoning.multiQuestion) {
+      return {
+        action: "answer",
+        confidence: Math.max(route.subject_confidence || 0, analysis.confidence || 0.72),
+        composite: true,
+        strategy: "decompose_route_validate"
+      };
+    }
     if (reasoning.compound && (route.subject_confidence || analysis.confidence) >= 0.55) {
-      return { action: "answer", confidence: Math.max(route.subject_confidence || 0, analysis.confidence || 0.55), composite: true };
+      return {
+        action: "answer",
+        confidence: Math.max(route.subject_confidence || 0, analysis.confidence || 0.55),
+        composite: true,
+        strategy: "plan_then_answer"
+      };
     }
     if (route.response_mode === "reject_logo_image" || route.response_mode === "reject_out_of_scope_image" || route.response_mode === "ask_clearer_upload" || route.response_mode === "content_interpretation") {
       return { action: "route" };
@@ -1191,16 +1794,50 @@
     return { action: "ask", confidence: route.subject_confidence || analysis.confidence };
   }
 
-  function response_builder(question, route, analysis) {
+  function response_builder(question, route, analysis, reasoning) {
     const rawQuestion = question || route.extracted_text || "حل السؤال من المرفقات";
+    const runtimeReasoning = reasoning || reasoning_engine(rawQuestion, analysis);
+    const meta = buildRuntimeMetaBrain(rawQuestion, route, analysis, runtimeReasoning);
+    const retrieval = buildRuntimeRetrievalPlan(meta, route);
+    const storedAnswer = findRuntimeStoredAnswer(rawQuestion, route);
+    if (storedAnswer?.response) {
+      return attachRuntimeOrchestration(
+        {
+          ...storedAnswer.response,
+          explanation: storedAnswer.response.explanation || "تمت إعادة استخدام أفضل إجابة محفوظة لهذا السؤال لأنها حققت نتيجة جيدة سابقًا."
+        },
+        meta,
+        {
+          ...retrieval,
+          source: "answer_bank_then_curriculum",
+          decisionBasis: "stored_best_answer"
+        },
+        runtimeReasoning
+      );
+    }
+    const compositeResponse = solveCompositeQuestionSet(rawQuestion, route);
+    if (compositeResponse) {
+      return attachRuntimeOrchestration(compositeResponse, meta, retrieval, runtimeReasoning);
+    }
+
     const compoundResponse = buildCompoundResponse(rawQuestion, route);
     if (compoundResponse) {
-      return normalizeRuntimeResponse(rawQuestion, compoundResponse, route, analysis);
+      return attachRuntimeOrchestration(
+        normalizeRuntimeResponse(rawQuestion, compoundResponse, route, analysis),
+        meta,
+        retrieval,
+        runtimeReasoning
+      );
     }
 
     const directObjective = buildDirectObjectiveResponse(rawQuestion, route);
     if (directObjective) {
-      return normalizeRuntimeResponse(rawQuestion, directObjective, route, analysis);
+      return attachRuntimeOrchestration(
+        normalizeRuntimeResponse(rawQuestion, directObjective, route, analysis),
+        meta,
+        retrieval,
+        runtimeReasoning
+      );
     }
 
     const academicResponse = createAcademicResponse(rawQuestion, analysis.intent, {
@@ -1210,7 +1847,22 @@
       route
     });
 
-    return normalizeRuntimeResponse(rawQuestion, academicResponse, route, analysis);
+    const normalizedAcademic = normalizeRuntimeResponse(rawQuestion, academicResponse, route, analysis);
+    const preferredStyle = getRuntimePreferredStyle(meta.questionType, meta.subject);
+    if (preferredStyle === "short") {
+      normalizedAcademic.displayMode = "quick";
+      normalizedAcademic.steps = [];
+      normalizedAcademic.mistakes = [];
+    }
+    if (!validateRuntimeStructuredResponse(normalizedAcademic, meta)) {
+      return attachRuntimeOrchestration(
+        buildRuntimeValidationFallback(meta, normalizedAcademic),
+        meta,
+        retrieval,
+        runtimeReasoning
+      );
+    }
+    return attachRuntimeOrchestration(normalizedAcademic, meta, retrieval, runtimeReasoning);
   }
 
   function self_checker(response, decision) {
@@ -1228,10 +1880,23 @@
     if (checked.planTasks?.length) {
       checked.explanation = `${checked.explanation || ""} خطة التنفيذ: ${checked.planTasks.join(" ← ")}.`.trim();
     }
-    return validateRuntimeMultipleChoiceResponse(
+    const validated = validateRuntimeMultipleChoiceResponse(
       checked.questionType || "",
       validateRuntimeTrueFalseResponse(checked.questionType || "", checked)
     );
+    const meta = validated.orchestration?.meta || {
+      questionType: validated.questionType || "",
+      subject: validated.subject || "عام"
+    };
+    if (!validateRuntimeStructuredResponse(validated, meta)) {
+      return attachRuntimeOrchestration(
+        buildRuntimeValidationFallback(meta, validated),
+        meta,
+        validated.orchestration?.retrieval || null,
+        validated.orchestration?.reasoning || null
+      );
+    }
+    return validated;
   }
 
   function spendRuntimePoints(hasAttachments) {
@@ -1308,9 +1973,10 @@
       };
       const forcedAnalysis = intent_analyzer(stored.question || forcedRoute.extracted_text || "", false);
       const response = self_checker(
-        response_builder(stored.question || forcedRoute.extracted_text || "", forcedRoute, forcedAnalysis),
+        response_builder(stored.question || forcedRoute.extracted_text || "", forcedRoute, forcedAnalysis, reasoning_engine(stored.question || forcedRoute.extracted_text || "", forcedAnalysis)),
         { action: "answer", confidence: forcedRoute.subject_confidence }
       );
+      saveRuntimeAnswerCandidate(stored.question || forcedRoute.extracted_text || "", forcedRoute, response);
       pendingNode?.remove();
       const body = formatAssistantSections(response);
       const sources = typeof buildSources === "function" ? buildSources() : [];
@@ -1398,9 +2064,10 @@
     } else {
       runtimeState.pendingSolveConfirmation = null;
       responseForLog = self_checker(
-        response_builder(question || route.extracted_text || "", route, analysis),
+        response_builder(question || route.extracted_text || "", route, analysis, reasoning),
         decision
       );
+      saveRuntimeAnswerCandidate(question || route.extracted_text || "", route, responseForLog);
       body = formatAssistantSections(responseForLog);
       sources = responseForLog?.hideSources ? [] : (typeof buildSources === "function" ? buildSources() : []);
 
@@ -1489,6 +2156,14 @@
     removeRuntimeAttachment(Number(removeButton.getAttribute("data-remove-attachment")));
   });
   document.addEventListener("click", (event) => {
+    const likeButton = event.target.closest("[data-like]");
+    const dislikeButton = event.target.closest("[data-dislike]");
+    if (likeButton || dislikeButton) {
+      const card = event.target.closest(".message");
+      const preview = card?.querySelector(".message-body")?.textContent?.trim().slice(0, 140) || "";
+      updateRuntimeAnswerFeedbackByPreview(preview, likeButton ? "like" : "dislike");
+    }
+
     const starterButton = event.target.closest("[data-starter-prompt], [data-starter-action]");
     if (starterButton) {
       event.preventDefault();

@@ -1313,6 +1313,59 @@ function formatAssistantSections(response) {
     `;
   }
 
+  if (response.mode === "multi_objective" && Array.isArray(response.blocks)) {
+    let index = 1;
+    const items = response.blocks.flatMap((block) => {
+      if (block.type === "matching") {
+        return (block.answers || []).map((item) => {
+          const row = `
+            <li>
+              <strong>${index})</strong> ${item.prompt} &rarr; <strong>${item.answer}</strong>
+            </li>
+          `;
+          index += 1;
+          return row;
+        });
+      }
+
+      if (block.type === "multiple_choice") {
+        const row = `
+          <li>
+            <strong>${index})</strong> ${block.prompt} &rarr; <strong>${block.answer}</strong>
+          </li>
+        `;
+        index += 1;
+        return row;
+      }
+
+      if (block.type === "true_false") {
+        const reason = block.reason
+          ? `<div class="muted-copy">السبب: ${block.reason}</div>`
+          : "";
+        const row = `
+          <li>
+            <strong>${index})</strong> ${block.statement} &rarr; <strong>${block.answer}</strong>
+            ${reason}
+          </li>
+        `;
+        index += 1;
+        return row;
+      }
+
+      return [];
+    });
+
+    return `
+      <div class="answer-grid">
+        ${modeNote}
+        <section class="answer-section answer-section-wide">
+          <h4>✅ الإجابات</h4>
+          <ol class="answer-list">${items.join("")}</ol>
+        </section>
+      </div>
+    `;
+  }
+
   if (response.answerMode === "mcq" || response.answerMode === "truefalse") {
     if (response.answerMode === "truefalse" && !safeFinalAnswer) {
       return `

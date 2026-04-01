@@ -191,6 +191,7 @@ body.theme-dark .field,
 body.theme-dark .prompt-input,
 body.theme-dark .message-body,
 body.theme-dark .answer-section p,
+body.theme-dark .answer-section ol,
 body.theme-dark .answer-section ul,
 body.theme-dark .history-card p,
 body.theme-dark .history-card strong,
@@ -1567,13 +1568,30 @@ a.memory-item {
 }
 
 .answer-section p,
+.answer-section ol,
 .answer-section ul {
   margin: 0;
   color: var(--text);
 }
 
+.answer-section ol,
 .answer-section ul {
   padding-right: 18px;
+}
+
+.answer-list {
+  display: grid;
+  gap: 10px;
+}
+
+.answer-list li {
+  line-height: 1.9;
+}
+
+.muted-copy {
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: 0.94rem;
 }
 
 .pending-copy {
