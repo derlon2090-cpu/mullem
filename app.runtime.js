@@ -286,6 +286,7 @@
     if (!response || !question) return null;
     const key = normalizeRuntimeQuestionKey(question, route);
     const bank = getRuntimeAnswerBank();
+    response.answerBankKey = key;
     const preview = String(response.finalAnswer || response.explanation || "").trim().slice(0, 140);
     const nextEntry = {
       key,
@@ -316,6 +317,18 @@
     if (!preview) return;
     const bank = getRuntimeAnswerBank();
     const entry = bank.find((item) => item.preview && preview.includes(item.preview));
+    if (!entry) return;
+    if (feedbackType === "like") entry.likes = (entry.likes || 0) + 1;
+    if (feedbackType === "dislike") entry.dislikes = (entry.dislikes || 0) + 1;
+    entry.updatedAt = Date.now();
+    saveRuntimeAnswerBank(bank);
+    updateRuntimePatternMemory(entry.questionType, entry.subject, feedbackType, entry.response);
+  }
+
+  function updateRuntimeAnswerFeedbackByKey(answerBankKey, feedbackType) {
+    if (!answerBankKey) return;
+    const bank = getRuntimeAnswerBank();
+    const entry = bank.find((item) => item.key === answerBankKey);
     if (!entry) return;
     if (feedbackType === "like") entry.likes = (entry.likes || 0) + 1;
     if (feedbackType === "dislike") entry.dislikes = (entry.dislikes || 0) + 1;
@@ -622,6 +635,7 @@
 
     if (isRuntimeTrueFalseQuestion(source)) return "صح وخطأ";
     if (/match the word|match\b|طابق/i.test(normalized)) return "مطابقة";
+    if (hasRuntimeInlineOptions(source)) return "اختيار من متعدد";
     if (/اختر|الاختيارات|ضع دائرة|multiple choice|\ba\)|\bb\)|\bc\)|\bd\)/i.test(normalized)) return "اختيار من متعدد";
     if (/ترجم|translate|translation|ما ترجمة|translate into/i.test(normalized)) return "ترجمة";
     if (/صحح|correct the sentence|rewrite|rewrite the sentence|grammar correction/i.test(normalized)) return "تصحيح";
@@ -769,9 +783,21 @@
       .trim();
   }
 
+  function hasRuntimeInlineOptions(text) {
+    const parts = String(text || "")
+      .split(/\s+-\s+/)
+      .map((item) => item.trim())
+      .filter(Boolean);
+
+    return parts.length >= 3;
+  }
+
   function splitRuntimeOptionChunk(text) {
     const cleaned = cleanRuntimeChoiceToken(text);
     if (!cleaned) return [];
+
+    const inlineParts = cleaned.split(/\s+-\s+/).map((item) => item.trim()).filter(Boolean);
+    if (inlineParts.length >= 2) return inlineParts;
 
     const commaParts = cleaned.split(/\s*[,،]\s*/).map((item) => item.trim()).filter(Boolean);
     if (commaParts.length >= 2) return commaParts;
@@ -827,10 +853,11 @@
     const normalized = typeof normalizeText === "function" ? normalizeText(source) : source.toLowerCase();
     const lines = source.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
     const blankLines = lines.filter((line) => hasRuntimeBlankPrompt(line)).length;
-    const optionLines = lines.filter((line) => !hasRuntimeBlankPrompt(line) && /^[a-d]\)|^[\-\u2022]/i.test(line)).length;
+    const optionLines = lines.filter((line) => !hasRuntimeBlankPrompt(line) && (/^[a-d]\)|^[\-\u2022]/i.test(line) || hasRuntimeInlineOptions(line))).length;
 
     if (/true\s*\/?\s*false|true or false|حدد صحة|صواب|خطأ|صح خطأ|صح\/خطأ/i.test(normalized)) return "true_false";
     if (/match the word|match\b|طابق/i.test(normalized) || (blankLines >= 2 && optionLines >= 2)) return "matching";
+    if (hasRuntimeInlineOptions(source)) return "multiple_choice";
     if (/complete the sentence|اختر الإجابة الصحيحة|اختر الاجابة الصحيحة|اختر/i.test(normalized) || (blankLines === 1 && optionLines >= 2)) return "multiple_choice";
 
     return "general";
@@ -855,9 +882,19 @@
       .map((line) => line.trim())
       .filter(Boolean);
 
-    const prompt = lines.find((line) => hasRuntimeBlankPrompt(line)) || lines.find((line) => !/complete the sentence|اختر الإجابة الصحيحة|اختر الاجابة الصحيحة|اختر/i.test(line)) || "";
+    const prompt = lines.find((line) => hasRuntimeBlankPrompt(line))
+      || lines.find((line) => !/complete the sentence|اختر الإجابة الصحيحة|اختر الاجابة الصحيحة|اختر/i.test(line) && !hasRuntimeInlineOptions(line))
+      || lines[0]
+      || "";
     const optionLines = lines.filter((line) => line !== prompt && !/complete the sentence|اختر الإجابة الصحيحة|اختر الاجابة الصحيحة|اختر/i.test(line));
-    const options = optionLines.flatMap((line) => splitRuntimeOptionChunk(line));
+    let options = optionLines.flatMap((line) => splitRuntimeOptionChunk(line));
+
+    if (!options.length) {
+      const inlineLine = lines.find((line) => hasRuntimeInlineOptions(line));
+      if (inlineLine) {
+        options = splitRuntimeOptionChunk(inlineLine);
+      }
+    }
 
     return { prompt, options };
   }
@@ -870,6 +907,30 @@
       .join(" ");
 
     return { statement: statement || String(block || "").trim() };
+  }
+
+  function forceCorrectFormat(type, answer, explanation) {
+    if (type === "multiple_choice") {
+      return `✅ الإجابة: ${answer}`;
+    }
+
+    if (type === "true_false") {
+      return `✅ الإجابة: ${answer}\n📘 السبب: ${explanation}`;
+    }
+
+    return answer;
+  }
+
+  function preventWrongExplanation(text) {
+    const forbidden = [
+      "محيط الدائرة",
+      "نصف القطر",
+      "2 × ط × نق",
+      "المضارع البسيط",
+      "نضيف s أو es"
+    ];
+
+    return !forbidden.some((item) => String(text || "").includes(item));
   }
 
   function scoreRuntimeOption(prompt, option) {
@@ -896,6 +957,24 @@
     optionWords.forEach((word) => {
       if (word.length > 3 && normalizedPrompt.includes(word)) score += 2;
     });
+
+    const mathMatch = normalizedPrompt.match(/(\d+(?:\.\d+)?)\s*([×x*÷\/+\-])\s*(\d+(?:\.\d+)?)/);
+    const numericOption = Number(normalizedOption.replace(/[^\d.\-]/g, ""));
+    if (mathMatch && Number.isFinite(numericOption)) {
+      const left = Number(mathMatch[1]);
+      const operator = mathMatch[2];
+      const right = Number(mathMatch[3]);
+      let expected = null;
+
+      if (operator === "+" ) expected = left + right;
+      if (operator === "-" ) expected = left - right;
+      if (operator === "×" || operator === "x" || operator === "*") expected = left * right;
+      if ((operator === "÷" || operator === "/") && right !== 0) expected = left / right;
+
+      if (expected !== null && Math.abs(expected - numericOption) < 0.0001) {
+        score += 20;
+      }
+    }
 
     return score;
   }
@@ -1149,7 +1228,7 @@
       similar: response.similar || ""
     };
 
-    if (!hasInvalid && (baseResponse.finalAnswer === "صواب" || baseResponse.finalAnswer === "خطأ")) {
+    if (!hasInvalid && preventWrongExplanation(explanation) && (baseResponse.finalAnswer === "صواب" || baseResponse.finalAnswer === "خطأ")) {
       return baseResponse;
     }
 
@@ -1174,17 +1253,30 @@
       "الربط بالمنهج"
     ];
     const hasInvalid = invalidPatterns.some((pattern) => explanation.includes(pattern));
+    const normalizedAnswer = cleanRuntimeChoiceToken(response.finalAnswer || "");
 
-    if (!hasInvalid) return response;
+    if (!hasInvalid && preventWrongExplanation(explanation)) {
+      return {
+        ...response,
+        finalAnswer: normalizedAnswer || response.finalAnswer,
+        answerMode: "mcq",
+        displayMode: "quick",
+        steps: [],
+        mistakes: [],
+        similar: "",
+        explanation: ""
+      };
+    }
 
     return {
       ...response,
+      finalAnswer: normalizedAnswer || response.finalAnswer,
       answerMode: "mcq",
       displayMode: "quick",
       steps: [],
       mistakes: [],
       similar: "",
-      explanation: "اخترت هذا الخيار لأنه الأنسب لمعنى السؤال ومحتوى العبارة المطلوبة."
+      explanation: ""
     };
   }
 
@@ -1916,7 +2008,8 @@
           subject: response.subject,
           lesson: response.lesson,
           questionType: response.questionType,
-          mode: response.mode
+          mode: response.mode,
+          answerBankKey: response.answerBankKey || ""
         }
       : undefined;
   }
@@ -2160,8 +2253,13 @@
     const dislikeButton = event.target.closest("[data-dislike]");
     if (likeButton || dislikeButton) {
       const card = event.target.closest(".message");
+      const answerBankKey = card?.dataset.answerBankKey || "";
       const preview = card?.querySelector(".message-body")?.textContent?.trim().slice(0, 140) || "";
-      updateRuntimeAnswerFeedbackByPreview(preview, likeButton ? "like" : "dislike");
+      if (answerBankKey) {
+        updateRuntimeAnswerFeedbackByKey(answerBankKey, likeButton ? "like" : "dislike");
+      } else {
+        updateRuntimeAnswerFeedbackByPreview(preview, likeButton ? "like" : "dislike");
+      }
     }
 
     const starterButton = event.target.closest("[data-starter-prompt], [data-starter-action]");

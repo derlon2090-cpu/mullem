@@ -907,6 +907,7 @@ function addMessage(type, author, body, options = {}) {
     article.dataset.lesson = options.metadata.lesson || "";
     article.dataset.questionType = options.metadata.questionType || "";
     article.dataset.responseMode = options.metadata.mode || "";
+    article.dataset.answerBankKey = options.metadata.answerBankKey || "";
   }
   article.innerHTML = `
     <div class="message-title">${author}</div>
@@ -1314,6 +1315,50 @@ function formatAssistantSections(response) {
   }
 
   if (response.mode === "multi_objective" && Array.isArray(response.blocks)) {
+    const totalCount = response.blocks.reduce((count, block) => count + (block.type === "matching" ? (block.answers || []).length : 1), 0);
+    if (totalCount === 1) {
+      const singleBlock = response.blocks[0];
+      if (singleBlock?.type === "multiple_choice") {
+        return `
+          <div class="answer-grid">
+            ${modeNote}
+            <section class="answer-section answer-section-wide">
+              <h4>✅ الإجابة</h4>
+              <p>${singleBlock.answer}</p>
+            </section>
+          </div>
+        `;
+      }
+
+      if (singleBlock?.type === "true_false") {
+        return `
+          <div class="answer-grid">
+            ${modeNote}
+            <section class="answer-section answer-section-wide">
+              <h4>✅ الإجابة</h4>
+              <p>${singleBlock.answer}</p>
+            </section>
+            <section class="answer-section answer-section-wide">
+              <h4>📘 السبب</h4>
+              <p>${singleBlock.reason || "تم تحديد الحكم بناءً على معنى العبارة نفسها."}</p>
+            </section>
+          </div>
+        `;
+      }
+
+      if (singleBlock?.type === "matching" && Array.isArray(singleBlock.answers) && singleBlock.answers.length === 1) {
+        return `
+          <div class="answer-grid">
+            ${modeNote}
+            <section class="answer-section answer-section-wide">
+              <h4>✅ الإجابة</h4>
+              <p>${singleBlock.answers[0].prompt} &rarr; ${singleBlock.answers[0].answer}</p>
+            </section>
+          </div>
+        `;
+      }
+    }
+
     let index = 1;
     const items = response.blocks.flatMap((block) => {
       if (block.type === "matching") {
@@ -1406,10 +1451,6 @@ function formatAssistantSections(response) {
           <section class="answer-section answer-section-wide">
             <h4>✅ الإجابة</h4>
             <p>${response.finalAnswer}</p>
-          </section>
-          <section class="answer-section answer-section-wide">
-            <h4>📘 السبب</h4>
-            <p>${response.explanation}</p>
           </section>
         </div>
       `;
@@ -2890,6 +2931,7 @@ function addMessage(type, author, body, options = {}) {
     article.dataset.lesson = options.metadata.lesson || "";
     article.dataset.questionType = options.metadata.questionType || "";
     article.dataset.responseMode = options.metadata.mode || "";
+    article.dataset.answerBankKey = options.metadata.answerBankKey || "";
   }
 
   article.innerHTML = `
@@ -3348,6 +3390,7 @@ function addMessage(type, author, body, options = {}) {
     article.dataset.lesson = options.metadata.lesson || "";
     article.dataset.questionType = options.metadata.questionType || "";
     article.dataset.responseMode = options.metadata.mode || "";
+    article.dataset.answerBankKey = options.metadata.answerBankKey || "";
   }
   article.innerHTML = `
     <div class="message-title">${author}</div>
@@ -3623,6 +3666,7 @@ function addMessage(type, author, body, options = {}) {
     article.dataset.lesson = options.metadata.lesson || "";
     article.dataset.questionType = options.metadata.questionType || "";
     article.dataset.responseMode = options.metadata.mode || "";
+    article.dataset.answerBankKey = options.metadata.answerBankKey || "";
   }
   article.innerHTML = `
     <div class="message-title">${author}</div>
