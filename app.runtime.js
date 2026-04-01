@@ -322,10 +322,67 @@
 
     if (isRuntimeTrueFalseQuestion(source)) return "صح وخطأ";
     if (/اختر|الاختيارات|ضع دائرة|multiple choice|\ba\)|\bb\)|\bc\)|\bd\)/i.test(normalized)) return "اختيار من متعدد";
+    if (/ترجم|translate|translation|ما ترجمة|translate into/i.test(normalized)) return "ترجمة";
     if (/صحح|correct the sentence|rewrite|rewrite the sentence|grammar correction/i.test(normalized)) return "تصحيح";
+    if (/احسب|أوجد|ناتج|مساحة|محيط|حل المعادلة|\d/.test(normalized)) return "مسألة";
+    if (/عرف|ما هو|ما هي|ماذا يعني|what is|define/i.test(normalized)) return "تعريف";
     if (/اشرح|explain|وضح|فسر/i.test(normalized)) return "شرح";
 
     return typeof detectQuestionType === "function" ? detectQuestionType(source) : "سؤال أكاديمي";
+  }
+
+  function detectRuntimeSubject(text, questionType = "") {
+    const base = runtimeAutoSubjectDetector(text);
+    const normalized = typeof normalizeText === "function" ? normalizeText(text) : String(text || "").toLowerCase();
+    const boosted = {
+      subject: base.subject || "",
+      confidence: base.confidence || 0,
+      candidates: Array.isArray(base.candidates) ? [...base.candidates] : [],
+      passes: Array.isArray(base.passes) ? [...base.passes] : []
+    };
+
+    const promote = (subject, confidence, pass) => {
+      if (confidence > boosted.confidence || !boosted.subject) {
+        boosted.subject = subject;
+        boosted.confidence = confidence;
+      }
+      if (pass && !boosted.passes.includes(pass)) boosted.passes.push(pass);
+      const existing = boosted.candidates.find((item) => item.subject === subject);
+      if (existing) {
+        existing.score = Math.max(existing.score || 0, Math.round(confidence * 100));
+      } else {
+        boosted.candidates.unshift({ subject, score: Math.round(confidence * 100) });
+      }
+      boosted.candidates = boosted.candidates
+        .sort((a, b) => (b.score || 0) - (a.score || 0))
+        .slice(0, 3);
+    };
+
+    if (questionType === "مسألة") {
+      promote("الرياضيات", /محيط|مساحة|نصف القطر|قطر|معادلة|جمع|طرح|قسمة|ضرب/.test(normalized) ? 0.88 : 0.74, "question-type-math");
+    }
+
+    if (questionType === "تصحيح" || questionType === "ترجمة") {
+      promote("اللغة الإنجليزية", /translate|translation|correct|rewrite|grammar|sentence/.test(normalized) ? 0.9 : 0.76, "question-type-language");
+    }
+
+    if (questionType === "تعريف" && /خلية|خلوي|dna|انقسام|كائن حي|رحم|بلاستولية/.test(normalized)) {
+      promote("الأحياء", 0.86, "biology-definition");
+    }
+
+    if (questionType === "تعريف" && /رابطة|أيونية|تساهمية|ذرة|حمض|قاعدة|معادلة كيميائية/.test(normalized)) {
+      promote("الكيمياء", 0.86, "chemistry-definition");
+    }
+
+    if (questionType === "شرح" && /قانون|نيوتن|تسارع|سرعة|قوة/.test(normalized)) {
+      promote("الفيزياء", 0.85, "physics-explain");
+    }
+
+    if (questionType === "شرح" && /مبتدأ|خبر|إعراب|نحو|بلاغة/.test(normalized)) {
+      promote("اللغة العربية", 0.84, "arabic-explain");
+    }
+
+    return boosted;
   }
 
   function isExplicitEnglishLanguageTask(text) {
@@ -355,6 +412,22 @@
       finalAnswer: answer,
       explanation,
       trueFalseReason: explanation,
+      steps: [],
+      mistakes: [],
+      similar: extra.similar || ""
+    };
+  }
+
+  function buildMultipleChoiceResponse(answer, explanation, route, extra = {}) {
+    return {
+      mode: "solve",
+      answerMode: "mcq",
+      displayMode: "quick",
+      questionType: route.question_type || "اختيار من متعدد",
+      subject: extra.subject || route.detected_subject || "عام",
+      lesson: extra.lesson || route.detected_subject || "اختيار من متعدد",
+      finalAnswer: answer,
+      explanation,
       steps: [],
       mistakes: [],
       similar: extra.similar || ""
@@ -426,6 +499,101 @@
       mistakes: [],
       similar: response.similar || ""
     };
+  }
+
+  function validateRuntimeMultipleChoiceResponse(questionType, response) {
+    if (questionType !== "اختيار من متعدد" || !response) return response;
+    const explanation = String(response.explanation || "");
+    const invalidPatterns = [
+      "في المضارع البسيط",
+      "نضيف s أو es",
+      "الخطوات",
+      "الأخطاء الشائعة",
+      "سؤال مشابه",
+      "الربط بالمنهج"
+    ];
+    const hasInvalid = invalidPatterns.some((pattern) => explanation.includes(pattern));
+
+    if (!hasInvalid) return response;
+
+    return {
+      ...response,
+      answerMode: "mcq",
+      displayMode: "quick",
+      steps: [],
+      mistakes: [],
+      similar: "",
+      explanation: "اخترت هذا الخيار لأنه الأنسب لمعنى السؤال ومحتوى العبارة المطلوبة."
+    };
+  }
+
+  function normalizeRuntimeResponse(question, response, route, analysis) {
+    if (!response) return response;
+
+    const normalized = typeof normalizeText === "function"
+      ? normalizeText(question || route?.extracted_text || "")
+      : String(question || route?.extracted_text || "").toLowerCase();
+    const questionType = route?.question_type || analysis?.questionType || response.questionType || "سؤال أكاديمي";
+    const subject = route?.detected_subject || analysis?.subject || response.subject || "عام";
+    const next = {
+      ...response,
+      questionType,
+      subject,
+      lesson: response.lesson || route?.detected_subject || response.lesson || "غير محدد"
+    };
+
+    if (questionType === "صح وخطأ") {
+      next.answerMode = "truefalse";
+      next.displayMode = "quick";
+      next.steps = [];
+      next.mistakes = [];
+      next.curriculumLink = "";
+      next.similar = next.similar || "";
+      return validateRuntimeTrueFalseResponse(questionType, next);
+    }
+
+    if (questionType === "اختيار من متعدد") {
+      next.answerMode = "mcq";
+      next.displayMode = "quick";
+      next.steps = [];
+      next.mistakes = [];
+      next.curriculumLink = "";
+      next.similar = next.similar || "";
+      return validateRuntimeMultipleChoiceResponse(questionType, next);
+    }
+
+    if (questionType === "مسألة") {
+      next.displayMode = selectedResponseMode === "quick" ? "quick" : "educational";
+      return next;
+    }
+
+    if (questionType === "تصحيح") {
+      next.displayMode = "quick";
+      next.steps = [];
+      next.mistakes = [];
+      next.similar = "";
+      next.curriculumLink = next.curriculumLink || `تم التعامل مع السؤال على أنه تصحيح في ${subject}.`;
+      return next;
+    }
+
+    if (questionType === "ترجمة" || questionType === "تعريف" || questionType === "شرح") {
+      next.displayMode = "quick";
+      next.steps = [];
+      next.mistakes = [];
+      next.similar = "";
+      return next;
+    }
+
+    if (/خلية|خلوي|dna|كائن حي|تنفس خلوي|رحم|بلاستولية/.test(normalized)) {
+      next.displayMode = "quick";
+      next.steps = [];
+      next.mistakes = [];
+      next.similar = "";
+      next.subject = "الأحياء";
+      return next;
+    }
+
+    return next;
   }
 
   function runtimeAutoSubjectDetector(text) {
@@ -710,6 +878,7 @@
     const questionType = detectRuntimeQuestionType(questionText);
     const isObjective = questionType === "صح وخطأ" || questionType === "اختيار من متعدد";
     const quickMode = solveMode !== "structured";
+    const runtimeSubject = detectRuntimeSubject(questionText, questionType);
     const scope = curriculum_scope_checker({
       userText: question,
       selectedGrade: activeUser?.grade || gradeSelect?.value || "",
@@ -717,6 +886,10 @@
       imageMeta,
       solveMode: quickMode ? "quick" : "structured"
     });
+    const detectedSubject = runtimeSubject.subject || scope.detected_subject;
+    const subjectConfidence = Math.max(scope.subject_confidence || 0, runtimeSubject.confidence || 0);
+    const subjectCandidates = runtimeSubject.candidates?.length ? runtimeSubject.candidates : scope.subject_candidates;
+    const analysisPasses = [...new Set([...(scope.analysis_passes || []), ...(runtimeSubject.passes || [])])];
 
     let responseMode = "academic_solve";
     if (inputType === "file_only" && !question.trim()) responseMode = "content_interpretation";
@@ -725,18 +898,18 @@
     else if (imageMeta.image_type === "unclear_image") responseMode = "ask_clearer_upload";
     else if (imageMeta.image_type === "educational_page" && !question.trim()) responseMode = "content_interpretation";
     else if (!quickMode && (scope.scope_status === "subject_mismatch" || scope.scope_status === "grade_mismatch" || scope.scope_status === "subject_unknown")) responseMode = "ask_for_confirmation";
-    else if (quickMode && intent.type !== "chat" && intent.type !== "help" && scope.subject_confidence < 0.7 && !isObjective) responseMode = "ask_for_confirmation";
+    else if (quickMode && intent.type !== "chat" && intent.type !== "help" && subjectConfidence < 0.7 && !isObjective) responseMode = "ask_for_confirmation";
 
     return {
       input_type: inputType,
       image_type: imageMeta.image_type,
       extracted_text: imageMeta.extracted_text,
-      detected_subject: scope.detected_subject,
+      detected_subject: detectedSubject,
       detected_grade_level: scope.detected_grade_level,
-      subject_confidence: scope.subject_confidence,
+      subject_confidence: subjectConfidence,
       grade_confidence: scope.grade_confidence,
-      subject_candidates: scope.subject_candidates,
-      analysis_passes: scope.analysis_passes,
+      subject_candidates: subjectCandidates,
+      analysis_passes: analysisPasses,
       scope_status: scope.scope_status,
       response_mode: responseMode,
       quick_mode: quickMode,
@@ -818,6 +991,24 @@
       );
     }
 
+    if (objective.answerMode === "mcq") {
+      return validateRuntimeMultipleChoiceResponse(
+        route.question_type || "اختيار من متعدد",
+        {
+          ...objective,
+          mode: "solve",
+          answerMode: "mcq",
+          displayMode: "quick",
+          questionType: route.question_type || "اختيار من متعدد",
+          subject: objective.subject || route.detected_subject || "عام",
+          lesson: objective.lesson || route.detected_subject || "اختيار من متعدد",
+          steps: [],
+          mistakes: [],
+          similar: objective.similar || ""
+        }
+      );
+    }
+
     return {
       mode: "solve",
       displayMode: "quick",
@@ -841,11 +1032,12 @@
 
   function intent_analyzer(message, hasAttachments = false) {
     const intent = intent_router(message, hasAttachments);
-    const subjectGuess = runtimeAutoSubjectDetector(message);
+    const questionType = detectRuntimeQuestionType(message);
+    const subjectGuess = detectRuntimeSubject(message, questionType);
     const decomposedTasks = query_decomposer(message, subjectGuess.subject);
     return {
       intent,
-      questionType: detectRuntimeQuestionType(message),
+      questionType,
       subject: subjectGuess.subject,
       confidence: subjectGuess.confidence,
       candidates: subjectGuess.candidates,
@@ -897,14 +1089,25 @@
   }
 
   function response_builder(question, route, analysis) {
-    return buildCompoundResponse(question, route)
-      || buildDirectObjectiveResponse(question, route)
-      || createAcademicResponse(question || route.extracted_text || "حل السؤال من المرفقات", analysis.intent, {
-        preferredSubject: route.detected_subject || "",
-        detectedSubject: route.detected_subject || "",
-        subjectConfidence: route.subject_confidence,
-        route
-      });
+    const rawQuestion = question || route.extracted_text || "حل السؤال من المرفقات";
+    const compoundResponse = buildCompoundResponse(rawQuestion, route);
+    if (compoundResponse) {
+      return normalizeRuntimeResponse(rawQuestion, compoundResponse, route, analysis);
+    }
+
+    const directObjective = buildDirectObjectiveResponse(rawQuestion, route);
+    if (directObjective) {
+      return normalizeRuntimeResponse(rawQuestion, directObjective, route, analysis);
+    }
+
+    const academicResponse = createAcademicResponse(rawQuestion, analysis.intent, {
+      preferredSubject: route.detected_subject || "",
+      detectedSubject: route.detected_subject || "",
+      subjectConfidence: route.subject_confidence,
+      route
+    });
+
+    return normalizeRuntimeResponse(rawQuestion, academicResponse, route, analysis);
   }
 
   function self_checker(response, decision) {
@@ -922,7 +1125,10 @@
     if (checked.planTasks?.length) {
       checked.explanation = `${checked.explanation || ""} خطة التنفيذ: ${checked.planTasks.join(" ← ")}.`.trim();
     }
-    return validateRuntimeTrueFalseResponse(checked.questionType || "", checked);
+    return validateRuntimeMultipleChoiceResponse(
+      checked.questionType || "",
+      validateRuntimeTrueFalseResponse(checked.questionType || "", checked)
+    );
   }
 
   function spendRuntimePoints(hasAttachments) {
@@ -991,12 +1197,17 @@
       autoGrow(promptInput);
 
       const pendingNode = addMessage("assistant", "ملم يحل", createLoadingCopy(), { pending: true });
-      const response = createAcademicResponse(stored.question, stored.intent, {
-        preferredSubject: stored.route.detected_subject || stored.subject || "",
-        detectedSubject: stored.route.detected_subject || stored.subject || "",
-        subjectConfidence: Math.max(0.71, stored.route.subject_confidence || 0.71),
-        route: { ...stored.route, response_mode: "academic_solve" }
-      });
+      const forcedRoute = {
+        ...stored.route,
+        response_mode: "academic_solve",
+        detected_subject: stored.route.detected_subject || stored.subject || "",
+        subject_confidence: Math.max(0.71, stored.route.subject_confidence || 0.71)
+      };
+      const forcedAnalysis = intent_analyzer(stored.question || forcedRoute.extracted_text || "", false);
+      const response = self_checker(
+        response_builder(stored.question || forcedRoute.extracted_text || "", forcedRoute, forcedAnalysis),
+        { action: "answer", confidence: forcedRoute.subject_confidence }
+      );
       pendingNode?.remove();
       const body = formatAssistantSections(response);
       const sources = typeof buildSources === "function" ? buildSources() : [];
