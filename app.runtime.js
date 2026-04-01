@@ -944,6 +944,26 @@
   syncStudentDashboardHeader();
   bindPromptPlaceholderButtons();
   gradeSelect?.addEventListener("change", syncStudentDashboardHeader);
+  function submitHeroExample() {
+    if (!form || !promptInput) return;
+    clearRuntimeAttachments();
+    promptInput.value = "احسب محيط دائرة نصف قطرها 7";
+    autoGrow(promptInput);
+
+    if (subjectSelect) {
+      const mathOption = Array.from(subjectSelect.options || []).find((option) =>
+        (option.textContent || "").includes("رياض")
+      );
+      if (mathOption) {
+        subjectSelect.value = mathOption.value;
+        subjectSelect.dispatchEvent(new Event("change", { bubbles: true }));
+      }
+    }
+
+    form.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+  }
+
+  window.mullemTryExample = submitHeroExample;
   window.renderAttachments = renderRuntimeAttachments;
   try { renderAttachments = renderRuntimeAttachments; } catch (_) {}
   fileInput?.addEventListener("change", () => {
@@ -957,6 +977,13 @@
     if (!removeButton) return;
     removeRuntimeAttachment(Number(removeButton.getAttribute("data-remove-attachment")));
   });
+  document.addEventListener("click", (event) => {
+    const heroExampleButton = event.target.closest("[data-hero-example]");
+    if (!heroExampleButton) return;
+    event.preventDefault();
+    event.stopImmediatePropagation();
+    submitHeroExample();
+  }, true);
   window.addEventListener("scroll", syncRuntimeScrollButton, { passive: true });
   scrollTopButton?.addEventListener("click", (event) => {
     event.preventDefault();
