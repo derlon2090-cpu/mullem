@@ -425,6 +425,22 @@
     newSessionTrigger?.addEventListener("click", resetPlaceholder);
   }
 
+  function runtimeStartFreshSession() {
+    clearRuntimeAttachments();
+    runtimeState.pendingSolveConfirmation = null;
+    if (typeof startFreshSession === "function") {
+      startFreshSession();
+      return;
+    }
+    if (typeof resetConversationView === "function") {
+      resetConversationView();
+      return;
+    }
+    if (messageList) {
+      messageList.innerHTML = "";
+    }
+  }
+
   function applyUserStudyContext() {
     const activeUser = typeof getActiveUser === "function" ? getActiveUser() : null;
     const isLogged = Boolean(activeUser);
@@ -946,20 +962,28 @@
   gradeSelect?.addEventListener("change", syncStudentDashboardHeader);
   function submitHeroExample() {
     if (!form || !promptInput) return;
+    submitPresetPrompt("احسب محيط دائرة نصف قطرها 7", "الرياضيات");
+  }
+
+  function applyRuntimeSubject(subject) {
+    if (!subjectSelect || !subject) return;
+    const normalized = String(subject).trim();
+    const matchingOption = Array.from(subjectSelect.options || []).find((option) => {
+      const text = (option.textContent || "").trim();
+      const value = (option.value || "").trim();
+      return text === normalized || value === normalized || text.includes(normalized) || normalized.includes(text);
+    });
+    if (!matchingOption) return;
+    subjectSelect.value = matchingOption.value;
+    subjectSelect.dispatchEvent(new Event("change", { bubbles: true }));
+  }
+
+  function submitPresetPrompt(prompt, subject = "") {
+    if (!form || !promptInput) return;
     clearRuntimeAttachments();
-    promptInput.value = "احسب محيط دائرة نصف قطرها 7";
+    promptInput.value = prompt;
     autoGrow(promptInput);
-
-    if (subjectSelect) {
-      const mathOption = Array.from(subjectSelect.options || []).find((option) =>
-        (option.textContent || "").includes("رياض")
-      );
-      if (mathOption) {
-        subjectSelect.value = mathOption.value;
-        subjectSelect.dispatchEvent(new Event("change", { bubbles: true }));
-      }
-    }
-
+    applyRuntimeSubject(subject);
     form.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
   }
 
@@ -978,6 +1002,52 @@
     removeRuntimeAttachment(Number(removeButton.getAttribute("data-remove-attachment")));
   });
   document.addEventListener("click", (event) => {
+    const starterButton = event.target.closest("[data-starter-prompt], [data-starter-action]");
+    if (starterButton) {
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      const action = starterButton.getAttribute("data-starter-action");
+      const prompt = starterButton.getAttribute("data-starter-prompt") || "";
+      const subject = starterButton.getAttribute("data-starter-subject") || "";
+      if (action === "upload-image") {
+        if (typeof openImageUpload === "function") openImageUpload();
+      } else if (action === "upload-file") {
+        if (typeof openGenericUpload === "function") openGenericUpload();
+      } else if (prompt) {
+        submitPresetPrompt(prompt, subject);
+      }
+      return;
+    }
+
+    const newSessionButton = event.target.closest("[data-new-session], [data-clear-chat]");
+    if (newSessionButton) {
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      runtimeStartFreshSession();
+      return;
+    }
+
+    const quickSolveButton = event.target.closest("[data-quick-solve]");
+    if (quickSolveButton) {
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      submitPresetPrompt("ابدأ بحل سؤال من هذا الدرس مع شرح مبسط وخطوات وأخطاء شائعة.");
+      return;
+    }
+
+    const startChatButton = event.target.closest("[data-start-chat]");
+    if (startChatButton) {
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      const value = (promptInput?.value || "").trim();
+      if (value) {
+        form.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+      } else {
+        submitPresetPrompt("ابدأ بشرح أساسيات هذا الدرس ثم أعطني مثالًا محلولًا.");
+      }
+      return;
+    }
+
     const heroExampleButton = event.target.closest("[data-hero-example]");
     if (!heroExampleButton) return;
     event.preventDefault();
