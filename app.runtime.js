@@ -426,19 +426,32 @@
   }
 
   function runtimeStartFreshSession() {
-    clearRuntimeAttachments();
-    runtimeState.pendingSolveConfirmation = null;
-    if (typeof startFreshSession === "function") {
-      startFreshSession();
-      return;
-    }
-    if (typeof resetConversationView === "function") {
-      resetConversationView();
-      return;
-    }
-    if (messageList) {
-      messageList.innerHTML = "";
-    }
+    preservePageScroll(() => {
+      clearRuntimeAttachments();
+      runtimeState.pendingSolveConfirmation = null;
+      if (typeof startFreshSession === "function") {
+        startFreshSession();
+        return;
+      }
+      if (typeof resetConversationView === "function") {
+        resetConversationView();
+        return;
+      }
+      if (messageList) {
+        messageList.innerHTML = "";
+      }
+    });
+  }
+
+  function preservePageScroll(action) {
+    const top = window.scrollY || window.pageYOffset || 0;
+    action();
+    const restore = () => window.scrollTo(0, top);
+    restore();
+    requestAnimationFrame(restore);
+    window.setTimeout(restore, 0);
+    window.setTimeout(restore, 80);
+    window.setTimeout(restore, 220);
   }
 
   function applyUserStudyContext() {
@@ -980,11 +993,13 @@
 
   function submitPresetPrompt(prompt, subject = "") {
     if (!form || !promptInput) return;
-    clearRuntimeAttachments();
-    promptInput.value = prompt;
-    autoGrow(promptInput);
-    applyRuntimeSubject(subject);
-    form.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+    preservePageScroll(() => {
+      clearRuntimeAttachments();
+      promptInput.value = prompt;
+      autoGrow(promptInput);
+      applyRuntimeSubject(subject);
+      form.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+    });
   }
 
   window.mullemTryExample = submitHeroExample;
