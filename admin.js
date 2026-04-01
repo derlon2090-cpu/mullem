@@ -56,6 +56,10 @@ function loadJson(key, fallback) {
   }
 }
 
+function saveJson(key, value) {
+  localStorage.setItem(key, JSON.stringify(value));
+}
+
 function isAdminLoggedIn() {
   return localStorage.getItem(adminSessionKey) === "1";
 }
@@ -72,20 +76,159 @@ function getTopEntry(record, fallback) {
   return top ? `${top[0]} (${top[1]})` : fallback;
 }
 
+function normalizeUser(user, index) {
+  return {
+    id: user.id || `user-${index + 1}`,
+    name: user.name || "بدون اسم",
+    email: (user.email || "").toLowerCase(),
+    role: user.role || "Student",
+    package: user.package || "مجاني محدود",
+    xp: Number.isFinite(Number(user.xp)) ? Number(user.xp) : 0,
+    status: user.status || "نشط",
+    activity: user.activity || "لا يوجد نشاط مسجل",
+    grade: user.grade || "",
+    subject: user.subject || "",
+    password: user.password || "",
+    streakDays: Number.isFinite(Number(user.streakDays)) ? Number(user.streakDays) : 0,
+    achievements: Array.isArray(user.achievements) ? user.achievements : []
+  };
+}
+
 function getUsers() {
   const users = loadJson("mlm_users", []);
-  return users.length
+  const source = users.length
     ? users
     : [
         {
+          id: "student-demo-1",
           name: "طالب تجريبي",
+          email: "student@mullem.sa",
           role: "Student",
           package: "مجاني محدود",
           xp: 100,
           status: "نشط",
-          activity: "لا يوجد نشاط بعد"
+          activity: "لا يوجد نشاط بعد",
+          grade: "الثاني الثانوي",
+          subject: "الرياضيات"
         }
       ];
+
+  const normalized = source.map(normalizeUser);
+  saveJson("mlm_users", normalized);
+  return normalized;
+}
+
+function saveUsers(users) {
+  saveJson("mlm_users", users.map(normalizeUser));
+}
+
+function refreshAdminData() {
+  renderStats();
+  renderUsersTable();
+  renderFeedback();
+  renderRoleMatrix();
+  renderActivityLog();
+  renderReports();
+}
+
+function updateUserRecord(userId, updater) {
+  const users = getUsers();
+  const index = users.findIndex((user) => user.id === userId);
+  if (index === -1) return null;
+
+  const current = users[index];
+  const next = updater(current);
+  if (!next) return null;
+
+  users[index] = normalizeUser({ ...current, ...next }, index);
+  saveUsers(users);
+
+  if (users[index].status === "محظور" && localStorage.getItem("mlm_current_user") === userId) {
+    localStorage.removeItem("mlm_current_user");
+  }
+
+  refreshAdminData();
+  return users[index];
+}
+
+function isValidEmail(email) {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+}
+
+function editUserRecord(userId) {
+  const user = getUsers().find((entry) => entry.id === userId);
+  if (!user) return;
+
+  const name = window.prompt("اسم المستخدم", user.name || "");
+  if (name === null) return;
+
+  const email = window.prompt("البريد الإلكتروني", user.email || "");
+  if (email === null) return;
+
+  const grade = window.prompt("الصف الدراسي", user.grade || "");
+  if (grade === null) return;
+
+  const subject = window.prompt("المادة", user.subject || "");
+  if (subject === null) return;
+
+  const role = window.prompt("الدور", user.role || "Student");
+  if (role === null) return;
+
+  const packageName = window.prompt("الباقة", user.package || "مجاني محدود");
+  if (packageName === null) return;
+
+  const xpRaw = window.prompt("رصيد XP", String(user.xp ?? 0));
+  if (xpRaw === null) return;
+
+  const status = window.prompt("الحالة (نشط / محظور / موقوف)", user.status || "نشط");
+  if (status === null) return;
+
+  const normalizedEmail = email.trim().toLowerCase();
+  if (normalizedEmail && !isValidEmail(normalizedEmail)) {
+    window.alert("البريد الإلكتروني غير صحيح.");
+    return;
+  }
+
+  const xp = Number(xpRaw);
+  if (!Number.isFinite(xp)) {
+    window.alert("رصيد XP يجب أن يكون رقمًا صحيحًا.");
+    return;
+  }
+
+  updateUserRecord(userId, () => ({
+    name: name.trim() || user.name,
+    email: normalizedEmail || user.email,
+    grade: grade.trim(),
+    subject: subject.trim(),
+    role: role.trim() || user.role,
+    package: packageName.trim() || user.package,
+    xp,
+    status: status.trim() || "نشط",
+    activity: "تم تعديل الحساب من لوحة الأدمن"
+  }));
+
+  window.alert("تم تحديث بيانات المستخدم.");
+}
+
+function toggleBanUser(userId) {
+  const user = getUsers().find((entry) => entry.id === userId);
+  if (!user) return;
+
+  const willBan = user.status !== "محظور";
+  const confirmed = window.confirm(
+    willBan
+      ? `هل تريد حظر المستخدم ${user.name}؟`
+      : `هل تريد فك الحظر عن المستخدم ${user.name}؟`
+  );
+
+  if (!confirmed) return;
+
+  updateUserRecord(userId, () => ({
+    status: willBan ? "محظور" : "نشط",
+    activity: willBan ? "تم حظر الحساب من لوحة الأدمن" : "تم فك الحظر عن الحساب من لوحة الأدمن"
+  }));
+
+  window.alert(willBan ? "تم حظر الحساب." : "تم فك الحظر عن الحساب.");
 }
 
 function getAnalytics() {
@@ -147,11 +290,24 @@ function renderUsersTable() {
       (user) => `
         <tr>
           <td>${user.name || "بدون اسم"}</td>
+          <td>${user.email || "—"}</td>
           <td>${user.role || "Student"}</td>
           <td>${user.package || "مجاني محدود"}</td>
           <td>${user.xp ?? 0}</td>
           <td>${user.status || "نشط"}</td>
           <td>${user.activity || "لا يوجد نشاط مسجل"}</td>
+          <td>
+            <div class="admin-table-actions">
+              <button type="button" class="mini-btn" data-admin-edit="${user.id}">تعديل</button>
+              <button
+                type="button"
+                class="mini-btn ${user.status === "محظور" ? "admin-action-unban" : "admin-action-ban"}"
+                data-admin-ban="${user.id}"
+              >
+                ${user.status === "محظور" ? "فك الحظر" : "حظر"}
+              </button>
+            </div>
+          </td>
         </tr>
       `
     )
@@ -162,11 +318,13 @@ function renderUsersTable() {
       <thead>
         <tr>
           <th>الاسم</th>
+          <th>البريد</th>
           <th>الدور</th>
           <th>الباقة</th>
           <th>XP</th>
           <th>الحالة</th>
           <th>آخر نشاط</th>
+          <th>الإجراءات</th>
         </tr>
       </thead>
       <tbody>${rows}</tbody>
@@ -288,6 +446,19 @@ function bindPasswordToggles() {
   });
 }
 
+usersTableRoot?.addEventListener("click", (event) => {
+  const editButton = event.target.closest("[data-admin-edit]");
+  if (editButton) {
+    editUserRecord(editButton.getAttribute("data-admin-edit"));
+    return;
+  }
+
+  const banButton = event.target.closest("[data-admin-ban]");
+  if (banButton) {
+    toggleBanUser(banButton.getAttribute("data-admin-ban"));
+  }
+});
+
 adminLoginForm?.addEventListener("submit", (event) => {
   event.preventDefault();
   const email = (adminEmailInput?.value || "").trim().toLowerCase();
@@ -297,12 +468,7 @@ adminLoginForm?.addEventListener("submit", (event) => {
     localStorage.setItem(adminSessionKey, "1");
     if (adminLoginState) adminLoginState.textContent = "تم تسجيل دخول الأدمن بنجاح.";
     updateAdminView();
-    renderStats();
-    renderUsersTable();
-    renderFeedback();
-    renderRoleMatrix();
-    renderActivityLog();
-    renderReports();
+    refreshAdminData();
     return;
   }
 
@@ -324,10 +490,5 @@ updateAdminView();
 bindPasswordToggles();
 
 if (isAdminLoggedIn()) {
-  renderStats();
-  renderUsersTable();
-  renderFeedback();
-  renderRoleMatrix();
-  renderActivityLog();
-  renderReports();
+  refreshAdminData();
 }

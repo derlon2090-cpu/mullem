@@ -2162,6 +2162,38 @@ body.user-logged-in .selectors {
   font-weight: 600;
 }
 
+.admin-table-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.admin-action-ban {
+  color: #b91c1c;
+  border-color: rgba(220, 38, 38, 0.18);
+  background: rgba(254, 242, 242, 0.96);
+}
+
+.admin-action-unban {
+  color: var(--brand-strong);
+  border-color: rgba(34, 197, 94, 0.2);
+  background: rgba(240, 253, 244, 0.96);
+}
+
+body.theme-dark .admin-action-ban {
+  color: #fecaca;
+  border-color: rgba(248, 113, 113, 0.22);
+  background: rgba(127, 29, 29, 0.18);
+}
+
+body.theme-dark .admin-action-unban {
+  color: #bbf7d0;
+  border-color: rgba(74, 222, 128, 0.22);
+  background: rgba(20, 83, 45, 0.28);
+}
+
 .chip-row {
   display: flex;
   gap: 10px;

@@ -245,6 +245,11 @@ loginForm?.addEventListener("submit", (event) => {
     return;
   }
 
+  if (user.status === "محظور") {
+    setState("هذا الحساب محظور حاليًا. تواصل مع إدارة المنصة إذا كنت ترى أن هذا الإجراء غير صحيح.");
+    return;
+  }
+
   localStorage.removeItem(storageKeys.adminSession);
   localStorage.setItem(storageKeys.currentUser, user.id);
   ensureUserWorkspace(user.id);
