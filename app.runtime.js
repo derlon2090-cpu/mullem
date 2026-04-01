@@ -28,6 +28,7 @@
   const scrollTopButton = document.querySelector("[data-scroll-top]");
   const clearChatTrigger = document.querySelector("[data-clear-chat]");
   const newSessionTrigger = document.querySelector("[data-new-session]");
+  const logoutTriggers = document.querySelectorAll("[data-logout]");
   const studentNameNodes = document.querySelectorAll("[data-student-name]");
   const studentStreakNodes = document.querySelectorAll("[data-streak-days]");
   const dashboardCopyNode = document.querySelector("[data-dashboard-copy]");
@@ -453,6 +454,17 @@
     const chatSection = document.getElementById("chat") || document.querySelector(".chat-shell");
     if (!chatSection) return;
     chatSection.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
+
+  function logoutUser() {
+    try {
+      localStorage.removeItem("mlm_current_user");
+      localStorage.removeItem("mlm_admin_session");
+      localStorage.removeItem("mlm_resume_prompt");
+    } catch (_) {
+      // Ignore storage cleanup issues and continue redirect.
+    }
+    window.location.href = "index.html";
   }
 
   function applyUserStudyContext() {
@@ -1078,6 +1090,13 @@
     event.stopImmediatePropagation();
     submitHeroExample();
   }, true);
+  logoutTriggers.forEach((button) => {
+    button.addEventListener("click", (event) => {
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      logoutUser();
+    });
+  });
   window.addEventListener("scroll", syncRuntimeScrollButton, { passive: true });
   scrollTopButton?.addEventListener("click", (event) => {
     event.preventDefault();

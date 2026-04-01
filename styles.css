@@ -349,6 +349,30 @@ textarea {
   justify-content: center;
 }
 
+.top-logout-btn {
+  min-width: 132px;
+  border-color: rgba(220, 38, 38, 0.18);
+  color: #b91c1c;
+}
+
+.top-logout-btn:hover {
+  border-color: rgba(220, 38, 38, 0.3);
+  background: rgba(220, 38, 38, 0.08);
+  color: #991b1b;
+}
+
+body.theme-dark .top-logout-btn {
+  color: #fca5a5;
+  border-color: rgba(248, 113, 113, 0.22);
+  background: rgba(127, 29, 29, 0.14);
+}
+
+body.theme-dark .top-logout-btn:hover {
+  border-color: rgba(248, 113, 113, 0.32);
+  background: rgba(127, 29, 29, 0.22);
+  color: #fecaca;
+}
+
 .page-wrap {
   padding: 24px 0 64px;
 }
