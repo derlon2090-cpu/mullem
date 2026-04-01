@@ -310,6 +310,124 @@
     return /^(لا|مو|ليس|لا شكرا|لا شكرًا|غير المادة|غيّر المادة)$/i.test((text || "").trim());
   }
 
+  function isRuntimeTrueFalseQuestion(text) {
+    const source = String(text || "");
+    const normalized = typeof normalizeText === "function" ? normalizeText(source) : source.toLowerCase();
+    return /صواب|صح|خطأ|صح خطأ|صواب خطأ|true\s*\/?\s*false|true or false|صح او خطا|صح أو خطأ|هل العبارة صحيحة|هل الجملة صحيحة/.test(normalized);
+  }
+
+  function detectRuntimeQuestionType(text) {
+    const source = String(text || "");
+    const normalized = typeof normalizeText === "function" ? normalizeText(source) : source.toLowerCase();
+
+    if (isRuntimeTrueFalseQuestion(source)) return "صح وخطأ";
+    if (/اختر|الاختيارات|ضع دائرة|multiple choice|\ba\)|\bb\)|\bc\)|\bd\)/i.test(normalized)) return "اختيار من متعدد";
+    if (/صحح|correct the sentence|rewrite|rewrite the sentence|grammar correction/i.test(normalized)) return "تصحيح";
+    if (/اشرح|explain|وضح|فسر/i.test(normalized)) return "شرح";
+
+    return typeof detectQuestionType === "function" ? detectQuestionType(source) : "سؤال أكاديمي";
+  }
+
+  function isExplicitEnglishLanguageTask(text) {
+    const normalized = typeof normalizeText === "function" ? normalizeText(text) : String(text || "").toLowerCase();
+    return /translate|grammar|correct the sentence|rewrite|present simple|past simple|complete the sentence|صحح الجملة|ترجم|اشرح القاعدة|قاعدة/.test(normalized);
+  }
+
+  function extractTrueFalseStatement(text) {
+    return String(text || "")
+      .replace(/true\s*\/?\s*false/gi, "")
+      .replace(/true or false/gi, "")
+      .replace(/صواب\s*\/?\s*خطأ/g, "")
+      .replace(/صح\s*\/?\s*خطأ/g, "")
+      .replace(/صح أو خطأ/g, "")
+      .replace(/هل العبارة صحيحة[؟?]?/g, "")
+      .trim();
+  }
+
+  function buildTrueFalseResponse(answer, explanation, route, extra = {}) {
+    return {
+      mode: "solve",
+      answerMode: "truefalse",
+      displayMode: "quick",
+      questionType: route.question_type || "صح وخطأ",
+      subject: extra.subject || route.detected_subject || "عام",
+      lesson: extra.lesson || route.detected_subject || "حكم على العبارة",
+      finalAnswer: answer,
+      explanation,
+      trueFalseReason: explanation,
+      steps: [],
+      mistakes: [],
+      similar: extra.similar || ""
+    };
+  }
+
+  function solveRuntimeTrueFalse(question, route) {
+    const raw = String(question || "");
+    const statement = extractTrueFalseStatement(raw);
+    const normalized = typeof normalizeText === "function" ? normalizeText(statement) : statement.toLowerCase();
+
+    if (!isRuntimeTrueFalseQuestion(raw)) return null;
+
+    if (/التنفس الخلوي/.test(normalized) && /الفجوات/.test(normalized)) {
+      return buildTrueFalseResponse("خطأ", "لأن التنفس الخلوي يحدث في الميتوكوندريا وليس في الفجوات.", route, {
+        subject: "الأحياء",
+        lesson: "التنفس الخلوي",
+        similar: "صواب أم خطأ: يحدث التنفس الخلوي في الميتوكوندريا."
+      });
+    }
+
+    if (/الميتوكوندريا/.test(normalized) && /التنفس الخلوي/.test(normalized)) {
+      return buildTrueFalseResponse("صواب", "لأن الميتوكوندريا هي العضية المرتبطة بمعظم عمليات التنفس الخلوي وإنتاج الطاقة.", route, {
+        subject: "الأحياء",
+        lesson: "التنفس الخلوي"
+      });
+    }
+
+    if (/الرابطة/.test(normalized) && /nacl/.test(normalized) && /تساهمية/.test(normalized)) {
+      return buildTrueFalseResponse("خطأ", "لأن الرابطة في كلوريد الصوديوم NaCl أيونية وليست تساهمية.", route, {
+        subject: "الكيمياء",
+        lesson: "الروابط الكيميائية"
+      });
+    }
+
+    if (/lower stress levels/.test(normalized) && /sick more often/.test(normalized)) {
+      return buildTrueFalseResponse("خطأ", "لأن انخفاض التوتر لا يجعل الشخص يمرض أكثر عادةً، بل يرتبط غالبًا بصحة أفضل من التوتر المرتفع.", route, {
+        subject: "الأحياء",
+        lesson: "الصحة ووظائف الجسم",
+        similar: "True or False: High stress levels are often linked to worse health outcomes."
+      });
+    }
+
+    return null;
+  }
+
+  function validateRuntimeTrueFalseResponse(questionType, response) {
+    if (questionType !== "صح وخطأ" || !response) return response;
+    const invalidPatterns = [
+      "present simple",
+      "في المضارع البسيط",
+      "نضيف s",
+      "نضيف s أو es",
+      "الفاعل he أو she أو it",
+      "زمن الجملة",
+      "grammar"
+    ];
+    const explanation = String(response.explanation || "");
+    const hasInvalid = invalidPatterns.some((pattern) => explanation.toLowerCase().includes(pattern.toLowerCase()));
+
+    if (!hasInvalid) return response;
+
+    return {
+      ...response,
+      answerMode: "truefalse",
+      displayMode: "quick",
+      explanation: response.trueFalseReason || "أعدت صياغة الجواب لأن سؤال صح وخطأ يحتاج حكمًا مباشرًا على العبارة نفسها، لا شرح قاعدة عامة.",
+      steps: [],
+      mistakes: [],
+      similar: response.similar || ""
+    };
+  }
+
   function runtimeAutoSubjectDetector(text) {
     const normalized = typeof normalizeText === "function" ? normalizeText(text) : (text || "");
     const scores = {
@@ -326,12 +444,12 @@
       scores[subject] = (scores[subject] || 0) + amount;
     };
 
-    if (/التنفس الخلوي|الميتوكوندريا|الفجوات|البلاستيدات|الخلية النباتية|الخلية الحيوانية/.test(normalized)) add("الأحياء", 80);
+    if (/التنفس الخلوي|الميتوكوندريا|الفجوات|البلاستيدات|الخلية النباتية|الخلية الحيوانية|stress|sick|health|disease|cell|respiration|mitochondria|vacuole/.test(normalized)) add("الأحياء", 80);
     if (/رابطة|أيونية|تساهمية|معادلة كيميائية|حمض|قاعدة|na|cl|ذرة|مول/.test(normalized)) add("الكيمياء", 65);
     if (/تسارع|قوة|سرعة|نيوتن|زخم|احتكاك|طاقة حركية/.test(normalized)) add("الفيزياء", 65);
     if (/محيط|مساحة|دائرة|نصف القطر|معادلة|جذر|كسر|احسب|أوجد/.test(normalized)) add("الرياضيات", 65);
     if (/مبتدأ|خبر|إعراب|نحو|بلاغة|أعرب|استخرج/.test(normalized)) add("اللغة العربية", 60);
-    if (/[a-z]/.test(normalized) || /translate|grammar|correct|present|past|english/.test(normalized)) add("اللغة الإنجليزية", 60);
+    if (isExplicitEnglishLanguageTask(normalized)) add("اللغة الإنجليزية", 60);
     if (/تبخر|تكاثف|دورة الماء|نظام بيئي/.test(normalized)) add("العلوم", 52);
 
     const ranking = Object.entries(scores)
@@ -589,7 +707,7 @@
       : { image_type: "none", extracted_text: "", confidence: 0 };
     const questionText = `${question || ""} ${imageMeta.extracted_text || ""}`.trim();
     const intent = intent_router(questionText, attachments.length > 0);
-    const questionType = detectQuestionType(questionText);
+    const questionType = detectRuntimeQuestionType(questionText);
     const isObjective = questionType === "صح وخطأ" || questionType === "اختيار من متعدد";
     const quickMode = solveMode !== "structured";
     const scope = curriculum_scope_checker({
@@ -670,7 +788,11 @@
 
   function buildDirectObjectiveResponse(question, route) {
     const normalized = typeof normalizeText === "function" ? normalizeText(question) : (question || "");
-    let objective = typeof solveObjectiveQuestion === "function" ? solveObjectiveQuestion(question) : null;
+    let objective = solveRuntimeTrueFalse(question, route);
+
+    if (!objective) {
+      objective = typeof solveObjectiveQuestion === "function" ? solveObjectiveQuestion(question) : null;
+    }
 
     if (!objective && /التنفس الخلوي/.test(normalized) && /الفجوات/.test(normalized) && /صواب|صح|خطأ/.test(normalized)) {
       objective = {
@@ -680,6 +802,21 @@
     }
 
     if (!objective) return null;
+
+    if (objective.answerMode === "truefalse") {
+      return validateRuntimeTrueFalseResponse(
+        route.question_type || "صح وخطأ",
+        {
+          ...objective,
+          mode: "solve",
+          displayMode: "quick",
+          questionType: route.question_type || "صح وخطأ",
+          subject: objective.subject || route.detected_subject || "الأحياء",
+          lesson: objective.lesson || "حكم على العبارة",
+          trueFalseReason: objective.trueFalseReason || objective.explanation
+        }
+      );
+    }
 
     return {
       mode: "solve",
@@ -708,7 +845,7 @@
     const decomposedTasks = query_decomposer(message, subjectGuess.subject);
     return {
       intent,
-      questionType: detectQuestionType(message),
+      questionType: detectRuntimeQuestionType(message),
       subject: subjectGuess.subject,
       confidence: subjectGuess.confidence,
       candidates: subjectGuess.candidates,
@@ -785,7 +922,7 @@
     if (checked.planTasks?.length) {
       checked.explanation = `${checked.explanation || ""} خطة التنفيذ: ${checked.planTasks.join(" ← ")}.`.trim();
     }
-    return checked;
+    return validateRuntimeTrueFalseResponse(checked.questionType || "", checked);
   }
 
   function spendRuntimePoints(hasAttachments) {
