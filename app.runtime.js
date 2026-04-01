@@ -426,21 +426,15 @@
   }
 
   function runtimeStartFreshSession() {
-    preservePageScroll(() => {
-      clearRuntimeAttachments();
-      runtimeState.pendingSolveConfirmation = null;
-      if (typeof startFreshSession === "function") {
-        startFreshSession();
-        return;
-      }
-      if (typeof resetConversationView === "function") {
-        resetConversationView();
-        return;
-      }
-      if (messageList) {
-        messageList.innerHTML = "";
-      }
-    });
+    clearRuntimeAttachments();
+    runtimeState.pendingSolveConfirmation = null;
+    if (typeof startFreshSession === "function") {
+      startFreshSession();
+    } else if (typeof resetConversationView === "function") {
+      resetConversationView();
+    } else if (messageList) {
+      messageList.innerHTML = "";
+    }
     scrollToChatSection();
   }
 
@@ -1000,13 +994,18 @@
 
   function submitPresetPrompt(prompt, subject = "", options = {}) {
     if (!form || !promptInput) return;
-    preservePageScroll(() => {
+    const runSubmit = () => {
       clearRuntimeAttachments();
       promptInput.value = prompt;
       autoGrow(promptInput);
       applyRuntimeSubject(subject);
       form.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
-    });
+    };
+    if (options.scrollToChat) {
+      runSubmit();
+    } else {
+      preservePageScroll(runSubmit);
+    }
     if (options.scrollToChat) {
       scrollToChatSection();
     }
