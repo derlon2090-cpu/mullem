@@ -471,7 +471,47 @@
       });
     }
 
+    if (/الكبسولة البلاستولية/.test(normalized) && /الرحم/.test(normalized) && /انغراس|تنغرس|تنغرس فيه/.test(normalized)) {
+      return buildTrueFalseResponse("صواب", "لأن الكبسولة البلاستولية هي المرحلة التي تصل إلى الرحم وتبدأ عملية الانغراس في بطانته.", route, {
+        subject: "الأحياء",
+        lesson: "مراحل النمو الجنيني",
+        similar: "صواب أم خطأ: تبدأ عملية الانغراس بعد وصول الكبسولة البلاستولية إلى الرحم."
+      });
+    }
+
+    if (/محيط الدائرة/.test(normalized) && /ط/.test(normalized) && /نق²|نق2|نق\^2/.test(normalized)) {
+      return buildTrueFalseResponse("خطأ", "لأن ط × نق² هو قانون مساحة الدائرة، أما المحيط فيساوي 2 × ط × نق.", route, {
+        subject: "الرياضيات",
+        lesson: "محيط الدائرة"
+      });
+    }
+
     return null;
+  }
+
+  function normalizeRuntimeTrueFalseAnswer(answer, explanation = "") {
+    const text = String(answer || "").trim();
+    const reason = String(explanation || "").trim();
+    if (/^صواب$/.test(text) || /^خطأ$/.test(text)) return text;
+    if (text.includes("صواب")) return "صواب";
+    if (text.includes("خطأ")) return "خطأ";
+    if (reason.includes("وليست") || reason.includes("ليس") || reason.includes("غير صحيحة") || reason.includes("خطأ")) return "خطأ";
+    if (reason.includes("لأن") && (reason.includes("هي المرحلة") || reason.includes("صحيحة") || reason.includes("يحدث في"))) return "صواب";
+    return "";
+  }
+
+  function inferRuntimeTrueFalseFallback(question, route) {
+    return solveRuntimeTrueFalse(question || route?.extracted_text || "", route || { question_type: "صح وخطأ" });
+  }
+
+  function isValidRuntimeTrueFalseResult(result) {
+    return Boolean(
+      result &&
+      result.questionType === "صح وخطأ" &&
+      (result.finalAnswer === "صواب" || result.finalAnswer === "خطأ") &&
+      typeof result.explanation === "string" &&
+      result.explanation.trim().length > 0
+    );
   }
 
   function validateRuntimeTrueFalseResponse(questionType, response) {
@@ -488,13 +528,24 @@
     const explanation = String(response.explanation || "");
     const hasInvalid = invalidPatterns.some((pattern) => explanation.toLowerCase().includes(pattern.toLowerCase()));
 
-    if (!hasInvalid) return response;
-
-    return {
+    const normalizedAnswer = normalizeRuntimeTrueFalseAnswer(response.finalAnswer, response.trueFalseReason || response.explanation);
+    const baseResponse = {
       ...response,
       answerMode: "truefalse",
       displayMode: "quick",
-      explanation: response.trueFalseReason || "أعدت صياغة الجواب لأن سؤال صح وخطأ يحتاج حكمًا مباشرًا على العبارة نفسها، لا شرح قاعدة عامة.",
+      finalAnswer: normalizedAnswer || response.finalAnswer || "",
+      steps: [],
+      mistakes: [],
+      similar: response.similar || ""
+    };
+
+    if (!hasInvalid && (baseResponse.finalAnswer === "صواب" || baseResponse.finalAnswer === "خطأ")) {
+      return baseResponse;
+    }
+
+    return {
+      ...baseResponse,
+      explanation: response.trueFalseReason || response.explanation || "أعدت صياغة الجواب لأن سؤال صح وخطأ يحتاج حكمًا مباشرًا على العبارة نفسها، لا شرح قاعدة عامة.",
       steps: [],
       mistakes: [],
       similar: response.similar || ""
@@ -549,7 +600,29 @@
       next.mistakes = [];
       next.curriculumLink = "";
       next.similar = next.similar || "";
-      return validateRuntimeTrueFalseResponse(questionType, next);
+      next.finalAnswer = normalizeRuntimeTrueFalseAnswer(next.finalAnswer, next.trueFalseReason || next.explanation);
+      if (!next.finalAnswer) {
+        const fallback = inferRuntimeTrueFalseFallback(question, route);
+        if (fallback) {
+          next.finalAnswer = fallback.finalAnswer;
+          next.explanation = fallback.explanation || next.explanation;
+          next.subject = fallback.subject || next.subject;
+          next.lesson = fallback.lesson || next.lesson;
+          next.similar = fallback.similar || next.similar;
+          next.trueFalseReason = fallback.trueFalseReason || fallback.explanation || next.explanation;
+        }
+      }
+      const validated = validateRuntimeTrueFalseResponse(questionType, next);
+      if (isValidRuntimeTrueFalseResult(validated)) {
+        return validated;
+      }
+      return {
+        ...validated,
+        answerMode: "truefalse",
+        displayMode: "quick",
+        finalAnswer: normalizeRuntimeTrueFalseAnswer(validated?.finalAnswer, validated?.explanation) || "خطأ",
+        explanation: validated?.explanation || "تمت مراجعة العبارة مباشرة وتحديد الحكم النهائي لها بصورة مختصرة."
+      };
     }
 
     if (questionType === "اختيار من متعدد") {

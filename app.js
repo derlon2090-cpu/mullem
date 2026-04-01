@@ -1235,6 +1235,15 @@ function createAcademicResponse(question, intent) {
 }
 
 function formatAssistantSections(response) {
+  const safeFinalAnswer = (() => {
+    const value = String(response.finalAnswer || "").trim();
+    if (response.answerMode === "truefalse") {
+      if (value.includes("صواب")) return "صواب";
+      if (value.includes("خطأ")) return "خطأ";
+      return "";
+    }
+    return value;
+  })();
   const modeNote =
     response.displayMode === "quick"
       ? `<section class="answer-section answer-section-wide"><h4>⚡ وضع سريع</h4><p>هذا الرد مختصر. إذا أردت التفاصيل اضغط "اشرحها خطوة خطوة".</p></section>`
@@ -1305,12 +1314,28 @@ function formatAssistantSections(response) {
   }
 
   if (response.answerMode === "mcq" || response.answerMode === "truefalse") {
+    if (response.answerMode === "truefalse" && !safeFinalAnswer) {
+      return `
+        <div class="answer-grid">
+          ${modeNote}
+          <section class="answer-section answer-section-wide">
+            <h4>⚠️ تعذر تحديد الحكم النهائي</h4>
+            <p>لم يتم توليد الحكم النهائي بشكل صحيح هذه المرة. حاول إعادة إرسال السؤال أو طلب إعادة المحاولة.</p>
+          </section>
+          <section class="answer-section answer-section-wide">
+            <h4>📘 السبب</h4>
+            <p>${response.explanation || "تم تحليل العبارة، لكن لم تكتمل صياغة الحكم النهائي."}</p>
+          </section>
+        </div>
+      `;
+    }
+
     return `
       <div class="answer-grid">
         ${modeNote}
         <section class="answer-section answer-section-wide">
           <h4>${response.answerMode === "truefalse" ? "✅ الحكم النهائي" : "✅ الخيار الصحيح"}</h4>
-          <p>${response.finalAnswer}</p>
+          <p>${response.answerMode === "truefalse" ? safeFinalAnswer : response.finalAnswer}</p>
         </section>
         <section class="answer-section answer-section-wide">
           <h4>📘 التحليل المختصر</h4>
