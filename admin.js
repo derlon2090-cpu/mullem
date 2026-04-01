@@ -210,6 +210,7 @@ function renderRoleMatrix() {
         <div class="admin-item">
           <strong>${role.name}</strong>
           <span>${role.description}</span>
+          ${role.name === "Super Admin" ? `<span>تنطبق هذه الصلاحيات على جميع المستخدمين المسجلين في المنصة.</span>` : ""}
           <div class="permission-grid">
             ${role.permissions.map((permission) => `<span class="permission-chip">${permission}</span>`).join("")}
           </div>
