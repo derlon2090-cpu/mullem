@@ -3445,6 +3445,7 @@
     const text = (question || route?.extracted_text || "").trim();
     if (!text) return false;
     if (searchApprovedQuestionBank(text, route, analysis)) return false;
+    if (buildDirectObjectiveResponse(text, route)) return false;
     if ((route?.question_type || "") === "ط·آµط·آ­ ط¸ث†ط·آ®ط·آ·ط·آ£") return false;
     if ((route?.question_type || "") === "ط·آ§ط·آ®ط·ع¾ط¸ظ¹ط·آ§ط·آ± ط¸â€¦ط¸â€  ط¸â€¦ط·ع¾ط·آ¹ط·آ¯ط·آ¯") return false;
 
@@ -3516,7 +3517,10 @@
     if (!String(question || "").trim()) return false;
     if (hasAttachments) return false;
     if (route?.response_mode !== "academic_solve") return false;
-    return isRuntimeAcademicIntent(analysis?.intent?.type);
+    if (!isRuntimeAcademicIntent(analysis?.intent?.type)) return false;
+    if (searchApprovedQuestionBank(question, route, analysis)) return false;
+    if (buildDirectObjectiveResponse(question, route)) return false;
+    return true;
   }
 
   function buildBackendPayload(question, route, analysis) {
@@ -3635,19 +3639,128 @@
     }
   }
 
-  async function buildAcademicResponseWithBackend(question, route, analysis, reasoning, decision) {
-    const backendResponse = shouldUseBackendSolver(question, route, analysis, false)
-      ? await fetchRuntimeBackendSolve(question, route, analysis)
-      : null;
+  function createRuntimeGuardBlockedResponse(route, analysis) {
+    const questionType = route?.question_type || analysis?.questionType || "سؤال أكاديمي";
+    const subject = route?.detected_subject || analysis?.subject || "عام";
+    return {
+      mode: "solve",
+      displayMode: "quick",
+      answerMode: "",
+      questionType,
+      subject,
+      lesson: route?.detected_subject || subject,
+      finalAnswer: "",
+      explanation: "",
+      confidence: 0.35,
+      decisionBasis: "final_answer_guard_blocked",
+      agreementLevel: "low",
+      steps: [],
+      mistakes: [],
+      similar: "",
+      preRenderedBody: formatSimpleReply("تعذر تحديد الإجابة النهائية بثقة كافية لهذه الصياغة. جرّب إرسال السؤال بصياغة أكمل أو بصورة أوضح.")
+    };
+  }
 
-    if (backendResponse) {
-      return backendResponse;
+  function finalizeRuntimeAcademicResponse(question, route, analysis, response, fallbackDecisionBasis = "") {
+    if (!response) return null;
+
+    const normalized = normalizeRuntimeResponse(question, response, route, analysis);
+    if (!normalized) return null;
+
+    if (fallbackDecisionBasis && !normalized.decisionBasis) {
+      normalized.decisionBasis = fallbackDecisionBasis;
     }
 
-    return self_checker(
-      response_builder(question || route.extracted_text || "", route, analysis, reasoning),
+    const meta = {
+      questionType: normalized.questionType || analysis?.questionType || route?.question_type || "",
+      subject: normalized.subject || analysis?.subject || route?.detected_subject || "عام"
+    };
+
+    if (meta.questionType === "اختيار من متعدد") {
+      normalized.answerMode = "mcq";
+      normalized.displayMode = "quick";
+      normalized.explanation = "";
+      normalized.steps = [];
+      normalized.mistakes = [];
+    }
+
+    if (meta.questionType === "إكمال فراغ" || meta.questionType === "مسألة") {
+      normalized.answerMode = normalized.answerMode || "completion";
+      normalized.displayMode = "quick";
+      normalized.steps = [];
+      normalized.mistakes = [];
+    }
+
+    if (!ValidationEngine(normalized, meta)) {
+      return null;
+    }
+
+    return normalized;
+  }
+
+  async function buildAcademicResponseWithBackend(question, route, analysis, reasoning, decision) {
+    const resolvedQuestion = question || route.extracted_text || "";
+    const bankEntry = searchApprovedQuestionBank(resolvedQuestion, route, analysis);
+    if (bankEntry?.response) {
+      markRuntimeStoredAnswerUsed(bankEntry.key);
+      const bankResponse = finalizeRuntimeAcademicResponse(
+        resolvedQuestion,
+        route,
+        analysis,
+        {
+          ...bankEntry.response,
+          confidence: Math.max(
+            typeof bankEntry.confidence === "number" ? bankEntry.confidence : 0,
+            typeof bankEntry.response?.confidence === "number" ? bankEntry.response.confidence : 0,
+            0.86
+          ),
+          decisionBasis: "approved_question_bank_fast_path",
+          agreementLevel: "high"
+        },
+        "approved_question_bank_fast_path"
+      );
+      if (bankResponse) return bankResponse;
+    }
+
+    const directResponse = buildDirectObjectiveResponse(resolvedQuestion, route);
+    if (directResponse) {
+      const guardedDirectResponse = finalizeRuntimeAcademicResponse(
+        resolvedQuestion,
+        route,
+        analysis,
+        directResponse,
+        directResponse.decisionBasis || "direct_rule_solver"
+      );
+      if (guardedDirectResponse) return guardedDirectResponse;
+    }
+
+    if (shouldUseBackendSolver(resolvedQuestion, route, analysis, false)) {
+      const backendResponse = await fetchRuntimeBackendSolve(resolvedQuestion, route, analysis);
+      const guardedBackendResponse = finalizeRuntimeAcademicResponse(
+        resolvedQuestion,
+        route,
+        analysis,
+        backendResponse,
+        "approved_bank_then_curriculum_then_web"
+      );
+      if (guardedBackendResponse) {
+        return guardedBackendResponse;
+      }
+    }
+
+    const localFallback = self_checker(
+      response_builder(resolvedQuestion, route, analysis, reasoning),
       decision
     );
+    const guardedFallback = finalizeRuntimeAcademicResponse(
+      resolvedQuestion,
+      route,
+      analysis,
+      localFallback,
+      localFallback?.decisionBasis || "local_runtime_fallback"
+    );
+
+    return guardedFallback || createRuntimeGuardBlockedResponse(route, analysis);
   }
 
   async function runtimeHandleSubmit(event) {

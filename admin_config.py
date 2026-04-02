@@ -2,8 +2,12 @@ from __future__ import annotations
 
 import json
 
-from .config import Settings
-from .models import SearchConfigResponse, UpdateSearchConfigRequest
+try:
+    from .config import Settings
+    from .models import SearchConfigResponse, UpdateSearchConfigRequest
+except ImportError:  # pragma: no cover - runtime fallback when running as a flat module
+    from config import Settings
+    from models import SearchConfigResponse, UpdateSearchConfigRequest
 
 
 def _default_payload(settings: Settings) -> dict:
@@ -60,4 +64,3 @@ def resolve_trusted_domains(settings: Settings, request_domains: list[str] | Non
             allowed = [domain for domain in requested if domain in current.trusted_domains]
             return allowed or current.trusted_domains
     return current.trusted_domains
-

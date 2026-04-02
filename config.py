@@ -7,8 +7,8 @@ from pathlib import Path
 from pydantic import BaseModel, Field
 
 
-BASE_DIR = Path(__file__).resolve().parent.parent
-DATA_DIR = BASE_DIR / "data"
+BASE_DIR = Path(__file__).resolve().parent
+DATA_DIR = BASE_DIR
 
 
 def _split_csv(value: str | None, default: list[str]) -> list[str]:
@@ -52,4 +52,3 @@ def get_settings() -> Settings:
         ),
         analysis_budget_ms=int(os.getenv("ANALYSIS_BUDGET_MS", "5000")),
     )
-

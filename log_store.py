@@ -3,8 +3,12 @@ from __future__ import annotations
 import json
 from datetime import datetime, timezone
 
-from .config import Settings
-from .models import SearchLogEntry
+try:
+    from .config import Settings
+    from .models import SearchLogEntry
+except ImportError:  # pragma: no cover - runtime fallback when running as a flat module
+    from config import Settings
+    from models import SearchLogEntry
 
 
 def append_search_log(settings: Settings, entry: SearchLogEntry) -> None:

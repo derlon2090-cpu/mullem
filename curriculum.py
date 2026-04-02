@@ -1,6 +1,9 @@
 from __future__ import annotations
 
-from .question_bank import keyword_signature, normalize_text, similarity
+try:
+    from .question_bank import keyword_signature, normalize_text, similarity
+except ImportError:  # pragma: no cover - runtime fallback when running as a flat module
+    from question_bank import keyword_signature, normalize_text, similarity
 
 
 CURRICULUM_FACTS: list[dict] = [
@@ -115,4 +118,3 @@ def retrieve_curriculum_evidence(
     if not best or best["score"] < 0.5:
         return None
     return best
-

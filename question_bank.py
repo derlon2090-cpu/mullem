@@ -6,7 +6,10 @@ from difflib import SequenceMatcher
 from pathlib import Path
 from typing import Any
 
-from .config import Settings, get_settings
+try:
+    from .config import Settings, get_settings
+except ImportError:  # pragma: no cover - runtime fallback when running as a flat module
+    from config import Settings, get_settings
 
 
 ARABIC_DIGITS = str.maketrans("٠١٢٣٤٥٦٧٨٩", "0123456789")
@@ -227,4 +230,3 @@ def save_learned_answer(
         encoding="utf-8",
     )
     return base_entry
-

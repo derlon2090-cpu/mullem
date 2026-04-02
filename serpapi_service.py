@@ -6,7 +6,10 @@ from urllib.parse import urlparse
 import requests
 from bs4 import BeautifulSoup
 
-from .config import Settings
+try:
+    from .config import Settings
+except ImportError:  # pragma: no cover - runtime fallback when running as a flat module
+    from config import Settings
 
 
 TRUSTED_DOMAIN_WEIGHTS = {
@@ -123,4 +126,3 @@ class SerpApiClient:
         for item in limited:
             item["page_text"] = fetch_page_text(item["link"], self.settings.serpapi_timeout_seconds)
         return limited
-

@@ -2,16 +2,28 @@ from __future__ import annotations
 
 from fastapi import FastAPI
 
-from app.admin_config import load_search_config, save_search_config
-from app.config import get_settings
-from app.engines import solve_question
-from app.log_store import list_search_logs
-from app.models import (
-    SearchConfigResponse,
-    SolveQuestionRequest,
-    SolveQuestionResponse,
-    UpdateSearchConfigRequest,
-)
+try:
+    from .admin_config import load_search_config, save_search_config
+    from .config import get_settings
+    from .engines import solve_question
+    from .log_store import list_search_logs
+    from .models import (
+        SearchConfigResponse,
+        SolveQuestionRequest,
+        SolveQuestionResponse,
+        UpdateSearchConfigRequest,
+    )
+except ImportError:  # pragma: no cover - runtime fallback when running as a flat module
+    from admin_config import load_search_config, save_search_config
+    from config import get_settings
+    from engines import solve_question
+    from log_store import list_search_logs
+    from models import (
+        SearchConfigResponse,
+        SolveQuestionRequest,
+        SolveQuestionResponse,
+        UpdateSearchConfigRequest,
+    )
 
 
 settings = get_settings()
@@ -42,4 +54,3 @@ def get_search_logs(limit: int = 20) -> dict[str, list[dict]]:
 @app.post("/api/solve-question", response_model=SolveQuestionResponse)
 def solve_question_endpoint(payload: SolveQuestionRequest) -> SolveQuestionResponse:
     return solve_question(payload, settings)
-
