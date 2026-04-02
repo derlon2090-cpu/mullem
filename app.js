@@ -2559,7 +2559,7 @@ function createAcademicResponse(question, intent, options = {}) {
 function updateSelectionSummary() {
   const summary = selectedSolveMode === "structured"
     ? `${gradeSelect?.value || ""} · ${subjectSelect?.value || ""} · ${termSelect?.value || ""} · ${lessonInput?.value.trim() || "الدرس غير محدد"}`
-    : "الحل السريع مفعل — سأحاول استنتاج المادة والصف ونوع السؤال تلقائيًا.";
+    : "الحل السريع مفعل — لا حاجة لتحديد الصف أو المادة أو الترم أو اسم الدرس، وسأستنتجها تلقائيًا من السؤال.";
   if (selectionSummary) selectionSummary.textContent = summary;
   if (runtimeSummary) runtimeSummary.textContent = selectedSolveMode === "structured" ? `وضع الحل الدقيق: ${summary}` : summary;
   if (statusChip) {

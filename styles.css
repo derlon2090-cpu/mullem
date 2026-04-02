@@ -563,8 +563,27 @@ body.theme-dark .top-logout-btn:hover {
   background: var(--brand-soft);
 }
 
-body.solve-mode-quick .selectors-hero {
-  opacity: 0.8;
+body.solve-mode-quick .stage-cards,
+body.solve-mode-quick .selectors-hero,
+body.solve-mode-quick .student-settings-card {
+  display: none;
+}
+
+body.solve-mode-quick .subject-pills,
+body.solve-mode-quick .onboarding-copy {
+  margin-top: 0;
+}
+
+body.solve-mode-structured .stage-cards {
+  display: grid;
+}
+
+body.solve-mode-structured .selectors-hero {
+  display: grid;
+}
+
+body.solve-mode-structured .student-settings-card {
+  display: block;
 }
 
 .subject-pill {
@@ -2445,10 +2464,80 @@ body.theme-dark .admin-action-unban {
   margin-top: 14px;
 }
 
+.admin-search-row {
+  margin: 14px 0 0;
+}
+
 .admin-form-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 10px;
+}
+
+.admin-multiselect-block {
+  display: grid;
+  gap: 10px;
+  padding: 14px;
+  border-radius: 20px;
+  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.88);
+}
+
+.admin-multiselect-head {
+  display: grid;
+  gap: 4px;
+}
+
+.admin-multiselect-head strong {
+  color: var(--text);
+}
+
+.admin-multiselect-head span {
+  color: var(--muted);
+  font-size: 0.9rem;
+  line-height: 1.7;
+}
+
+.admin-choice-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.admin-choice-chip {
+  position: relative;
+}
+
+.admin-choice-chip input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.admin-choice-chip span {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 10px 14px;
+  border-radius: 999px;
+  border: 1px solid rgba(34, 197, 94, 0.14);
+  background: rgba(255, 255, 255, 0.96);
+  color: var(--muted);
+  font-size: 0.9rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: 180ms ease;
+}
+
+.admin-choice-chip input:checked + span {
+  background: rgba(34, 197, 94, 0.12);
+  border-color: rgba(34, 197, 94, 0.28);
+  color: var(--brand-strong);
+  box-shadow: 0 12px 24px rgba(34, 197, 94, 0.12);
+}
+
+.admin-hidden-field {
+  display: none !important;
 }
 
 .admin-check {
@@ -2582,6 +2671,12 @@ body.theme-dark .admin-action-unban {
 .admin-users-table th,
 .admin-users-table td {
   vertical-align: top;
+  white-space: normal;
+  word-break: break-word;
+}
+
+.admin-users-table {
+  table-layout: fixed;
 }
 
 .admin-user-cell,
@@ -2617,12 +2712,20 @@ body.theme-dark .admin-hero-panel,
 body.theme-dark .admin-nav-link,
 body.theme-dark .admin-status-banner,
 body.theme-dark .admin-log-item,
-body.theme-dark .admin-source-chip {
+body.theme-dark .admin-source-chip,
+body.theme-dark .admin-multiselect-block,
+body.theme-dark .admin-choice-chip span {
   background:
     radial-gradient(circle at top left, rgba(34, 197, 94, 0.08), transparent 26%),
     linear-gradient(180deg, rgba(20, 31, 24, 0.98), rgba(14, 22, 17, 0.96));
   border-color: rgba(255, 255, 255, 0.1);
   color: var(--text);
+}
+
+body.theme-dark .admin-choice-chip input:checked + span {
+  background: rgba(34, 197, 94, 0.18);
+  border-color: rgba(94, 227, 139, 0.28);
+  color: #d9fbe4;
 }
 
 body.theme-dark .admin-status-banner[data-state="running"] {

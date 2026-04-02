@@ -2014,6 +2014,556 @@ function createGeneratedEntry(payload, settings, index, bank, history) {
   return normalizeQuestionBankEntry(candidate);
 }
 
+const bankSearchInputEnhanced = document.querySelector("[data-bank-search]");
+const generatorGradeChoicesRootEnhanced = document.querySelector("[data-generator-grade-choices]");
+const generatorSubjectChoicesRootEnhanced = document.querySelector("[data-generator-subject-choices]");
+
+const generatorDefaultDailyTarget = 10000;
+const generatorDefaultGradesEnhanced = allSaudiGrades.slice();
+const generatorDefaultSubjectsEnhanced = Object.keys(generatorSeedLibrary);
+const generatorContextPoolEnhanced = [
+  "في مراجعة يومية سريعة",
+  "في بطاقة تدريب قصيرة",
+  "في سؤال مشابه لواجب المدرسة",
+  "في تدريب نهاية الدرس",
+  "في نموذج متابعة يومي",
+  "في واجب منزلي مبسط",
+  "في مراجعة قبل الاختبار",
+  "في نشاط صفي قصير",
+  "في تدريب على المفهوم الأساسي",
+  "في سؤال تقويمي سريع",
+  "في تطبيق على الفكرة الرئيسة",
+  "في مراجعة الطالب لهذا الدرس"
+];
+const generatorFocusPoolEnhanced = [
+  "اختر الأدق",
+  "حدد الصحيح",
+  "أكمل بشكل صحيح",
+  "طابق المفهوم المناسب",
+  "احكم على العبارة",
+  "استخرج الإجابة الصحيحة",
+  "ركز على المعنى المنهجي",
+  "اعتمد على مفهوم الدرس",
+  "اختر الإجابة المرتبطة بالمفهوم",
+  "احسم الإجابة المباشرة"
+];
+const generatorMcqLeadsEnhanced = [
+  "اختر الإجابة الصحيحة",
+  "حدد الإجابة الأدق",
+  "أي الخيارات التالية صحيح",
+  "من بين الخيارات التالية"
+];
+const generatorTrueFalseLeadsEnhanced = [
+  "صواب أم خطأ",
+  "حدد صحة العبارة",
+  "احكم على العبارة التالية"
+];
+const generatorCompletionLeadsEnhanced = [
+  "أكمل الفراغ",
+  "أكمل العبارة",
+  "ضع الإجابة المناسبة"
+];
+const generatorExplanationLeadsEnhanced = [
+  "علل",
+  "فسر",
+  "اذكر السبب"
+];
+
+function escapeAdminHtmlEnhanced(value) {
+  return String(value || "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
+function normalizeGeneratorDailyTargetEnhanced(value) {
+  const parsed = Math.round(Number(value));
+  if (!Number.isFinite(parsed) || parsed < 1) return generatorDefaultDailyTarget;
+  return Math.min(10000, Math.max(1, parsed));
+}
+
+function enforceGeneratorDailyTargetEnhanced(value) {
+  return Math.max(generatorDefaultDailyTarget, normalizeGeneratorDailyTargetEnhanced(value));
+}
+
+function normalizeGeneratorSelectionEnhanced(values, fallback) {
+  const cleaned = Array.isArray(values)
+    ? values.map((item) => String(item || "").trim()).filter(Boolean)
+    : [];
+  return cleaned.length ? cleaned : fallback.slice();
+}
+
+function getQuestionGeneratorSettings() {
+  const stored = loadJson(questionGeneratorSettingsKey, {}) || {};
+  const defaults = {
+    enabled: false,
+    dailyTarget: generatorDefaultDailyTarget,
+    term: "all",
+    grades: generatorDefaultGradesEnhanced,
+    subjects: generatorDefaultSubjectsEnhanced,
+    generatedToday: 0,
+    approvedToday: 0,
+    rejectedToday: 0,
+    totalGenerated: 0,
+    totalApproved: 0,
+    totalRejected: 0,
+    lastRunDate: "",
+    lastRunAt: "",
+    lastResultMessage: "",
+    lastResultStatus: "idle",
+    recentRuns: [],
+    sourcePriority: {
+      curriculum: 0.5,
+      internalBank: 0.25,
+      trustedEducationalPatterns: 0.2,
+      webVerification: 0.05
+    },
+    trustedPatternReference: "صياغة مشابهة للمصادر التعليمية الموثوقة مثل بيت العلم مع إعادة صياغة كاملة وبدون نسخ حرفي."
+  };
+  const merged = {
+    ...defaults,
+    ...stored
+  };
+
+  return {
+    ...merged,
+    dailyTarget: enforceGeneratorDailyTargetEnhanced(merged.dailyTarget),
+    grades: normalizeGeneratorSelectionEnhanced(merged.grades, defaults.grades),
+    subjects: normalizeGeneratorSelectionEnhanced(merged.subjects, defaults.subjects)
+  };
+}
+
+function writeGeneratorSelectionFieldsEnhanced(settings) {
+  if (generatorGradesInput) {
+    generatorGradesInput.value = (settings.grades || []).join(", ");
+  }
+  if (generatorSubjectsInput) {
+    generatorSubjectsInput.value = (settings.subjects || []).join(", ");
+  }
+}
+
+function renderGeneratorChoiceChipsEnhanced(root, options, selectedValues, groupName) {
+  if (!root) return;
+  const selected = new Set(selectedValues || []);
+  root.innerHTML = options.map((option, index) => `
+    <label class="admin-choice-chip">
+      <input
+        type="checkbox"
+        data-generator-choice-group="${groupName}"
+        value="${escapeAdminHtmlEnhanced(option)}"
+        ${selected.has(option) ? "checked" : ""}
+        id="${groupName}-${index}"
+      >
+      <span>${escapeAdminHtmlEnhanced(option)}</span>
+    </label>
+  `).join("");
+}
+
+function getGeneratorChoiceSelectionEnhanced(root, fallback) {
+  if (!root) return fallback.slice();
+  const checked = Array.from(root.querySelectorAll('input[type="checkbox"]:checked'))
+    .map((input) => String(input.value || "").trim())
+    .filter(Boolean);
+  return checked.length ? checked : fallback.slice();
+}
+
+function getGeneratorDraftSettings(baseSettings = getQuestionGeneratorSettings()) {
+  const nextSettings = {
+    ...baseSettings,
+    dailyTarget: enforceGeneratorDailyTargetEnhanced(generatorCountInput?.value || baseSettings.dailyTarget || generatorDefaultDailyTarget),
+    term: generatorTermInput?.value || baseSettings.term || "all",
+    grades: getGeneratorChoiceSelectionEnhanced(generatorGradeChoicesRootEnhanced, normalizeGeneratorSelectionEnhanced(baseSettings.grades, generatorDefaultGradesEnhanced)),
+    subjects: getGeneratorChoiceSelectionEnhanced(generatorSubjectChoicesRootEnhanced, normalizeGeneratorSelectionEnhanced(baseSettings.subjects, generatorDefaultSubjectsEnhanced))
+  };
+
+  writeGeneratorSelectionFieldsEnhanced(nextSettings);
+  return nextSettings;
+}
+
+function syncGeneratorForm() {
+  const settings = getQuestionGeneratorSettings();
+  if (generatorCountInput) generatorCountInput.value = enforceGeneratorDailyTargetEnhanced(settings.dailyTarget);
+  if (generatorTermInput) generatorTermInput.value = settings.term || "all";
+
+  renderGeneratorChoiceChipsEnhanced(
+    generatorGradeChoicesRootEnhanced,
+    generatorDefaultGradesEnhanced,
+    normalizeGeneratorSelectionEnhanced(settings.grades, generatorDefaultGradesEnhanced),
+    "grades"
+  );
+  renderGeneratorChoiceChipsEnhanced(
+    generatorSubjectChoicesRootEnhanced,
+    generatorDefaultSubjectsEnhanced,
+    normalizeGeneratorSelectionEnhanced(settings.subjects, generatorDefaultSubjectsEnhanced),
+    "subjects"
+  );
+  writeGeneratorSelectionFieldsEnhanced(settings);
+}
+
+function buildGeneratorDistractorsEnhanced(subject, seed, variationIndex) {
+  const sameSubjectSeeds = (generatorSeedLibrary[subject] || []).filter((item) => item.concept !== seed.concept);
+  const alternateSeed = sameSubjectSeeds[variationIndex % Math.max(1, sameSubjectSeeds.length)] || null;
+  const alternates = [
+    alternateSeed ? `يرتبط أكثر بمفهوم "${alternateSeed.concept}" بدل ${seed.concept}` : "",
+    `لا يمثل تطبيقًا صحيحًا لدرس ${seed.lesson}`,
+    `يصف حالة لا تعكس مفهوم ${seed.concept} في ${subject}`,
+    `يربط ${seed.concept} بدرس مختلف عن ${seed.lesson}`
+  ].filter(Boolean);
+
+  const rotated = alternates
+    .slice(variationIndex % alternates.length)
+    .concat(alternates.slice(0, variationIndex % alternates.length));
+
+  return rotated.slice(0, 3);
+}
+
+function orderGeneratorOptionsEnhanced(answer, distractors, variationIndex) {
+  const options = [answer, ...distractors];
+  const rotation = variationIndex % options.length;
+  return options.slice(rotation).concat(options.slice(0, rotation));
+}
+
+function buildGeneratedQuestion({ grade, subject, term }, index, history = [], bank = []) {
+  const dateSeed = Number(new Date().toISOString().slice(8, 10));
+  const variationIndex = history.length + bank.length + index + dateSeed;
+  const seed = getGeneratorSeed(subject);
+  const context = generatorContextPoolEnhanced[variationIndex % generatorContextPoolEnhanced.length];
+  const focus = generatorFocusPoolEnhanced[Math.floor(variationIndex / generatorContextPoolEnhanced.length) % generatorFocusPoolEnhanced.length];
+  const weightedTypes = [
+    "اختيار من متعدد",
+    "صح أو خطأ",
+    "اختيار من متعدد",
+    "صح أو خطأ",
+    "اختيار من متعدد",
+    "صح أو خطأ",
+    "اختيار من متعدد",
+    "صح أو خطأ",
+    "اختيار من متعدد",
+    "إكمال فراغ",
+    "تعليل / تفسير"
+  ];
+  const questionType = weightedTypes[variationIndex % weightedTypes.length];
+  const stylePrefix = getGeneratorStylePrefix(subject, grade, questionType, variationIndex, bank);
+
+  if (questionType === "اختيار من متعدد") {
+    const lead = stylePrefix || generatorMcqLeadsEnhanced[variationIndex % generatorMcqLeadsEnhanced.length];
+    const answer = `${seed.concept} هو الأنسب لفهم ${seed.lesson}`;
+    const distractors = buildGeneratorDistractorsEnhanced(subject, seed, variationIndex);
+    return {
+      questionType,
+      question: `${lead}:\n${context}، ${focus}: ما العبارة الأدق التي تعبّر عن مفهوم "${seed.concept}" في درس ${seed.lesson} لمادة ${subject} للصف ${grade} في ${term}؟`,
+      options: orderGeneratorOptionsEnhanced(answer, distractors, variationIndex),
+      answer,
+      explanation: seed.explanation,
+      lesson: seed.lesson,
+      concept: seed.concept,
+      confidence: 0.96,
+      generationMode: "curriculum_first_rewritten_weighted_mcq_tf"
+    };
+  }
+
+  if (questionType === "صح أو خطأ") {
+    const lead = stylePrefix || generatorTrueFalseLeadsEnhanced[variationIndex % generatorTrueFalseLeadsEnhanced.length];
+    const isTrue = variationIndex % 2 === 0;
+    const statement = isTrue
+      ? `${seed.concept} من المفاهيم الأساسية المرتبطة مباشرة بدرس ${seed.lesson} في مادة ${subject}.`
+      : `${seed.concept} لا يرتبط إطلاقًا بدرس ${seed.lesson} في مادة ${subject}.`;
+    return {
+      questionType,
+      question: `${lead}:\n${context}، ${focus}: ${statement}`,
+      options: ["صواب", "خطأ"],
+      answer: isTrue ? "صواب" : "خطأ",
+      explanation: isTrue
+        ? seed.explanation
+        : `لأن ${seed.concept} مرتبط فعلًا بدرس ${seed.lesson} ضمن ${subject} وليس بعيدًا عنه.`,
+      lesson: seed.lesson,
+      concept: seed.concept,
+      confidence: 0.95,
+      generationMode: "curriculum_first_rewritten_weighted_mcq_tf"
+    };
+  }
+
+  if (questionType === "إكمال فراغ") {
+    const lead = stylePrefix || generatorCompletionLeadsEnhanced[variationIndex % generatorCompletionLeadsEnhanced.length];
+    return {
+      questionType,
+      question: `${lead}:\n${context}: المفهوم الأوضح في درس ${seed.lesson} هو ______.`,
+      options: [],
+      answer: seed.concept,
+      explanation: seed.explanation,
+      lesson: seed.lesson,
+      concept: seed.concept,
+      confidence: 0.9,
+      generationMode: "curriculum_first_rewritten_weighted_mcq_tf"
+    };
+  }
+
+  const lead = stylePrefix || generatorExplanationLeadsEnhanced[variationIndex % generatorExplanationLeadsEnhanced.length];
+  return {
+    questionType,
+    question: `${lead}:\n${context}: لماذا يعد مفهوم "${seed.concept}" مهمًا داخل درس ${seed.lesson} في ${subject}؟`,
+    options: [],
+    answer: `لأنه يوضح الفكرة الأساسية لدرس ${seed.lesson} ويرتبط مباشرة بهدفه التعليمي.`,
+    explanation: seed.explanation,
+    lesson: seed.lesson,
+    concept: seed.concept,
+    confidence: 0.88,
+    generationMode: "curriculum_first_rewritten_weighted_mcq_tf"
+  };
+}
+
+function validateGeneratedQuestion(candidate, bank, history = []) {
+  const normalizedQuestion = normalizeAdminText(candidate.question);
+  const strictSignature = buildGeneratorQuestionSignature(candidate.question, candidate.lesson, candidate.answer, candidate.questionType);
+  const duplicateInBank = bank.some((entry) => (
+    entry.grade === candidate.grade
+    && entry.subject === candidate.subject
+    && entry.term === candidate.term
+    && buildGeneratorQuestionSignature(entry.question, entry.lesson, entry.answer, entry.questionType) === strictSignature
+  ));
+  const duplicateInHistory = history.some((entry) => entry.signature === `${candidate.grade}|${candidate.subject}|${candidate.term}|${candidate.questionType}|${strictSignature}`);
+  const hasQuestion = Boolean(normalizedQuestion);
+  const hasAnswer = Boolean(String(candidate.answer || "").trim());
+  const validOptions = candidate.questionType !== "اختيار من متعدد"
+    || (Array.isArray(candidate.options) && candidate.options.length >= 4 && candidate.options.includes(candidate.answer));
+  const approved = hasQuestion && hasAnswer && validOptions && !duplicateInBank && !duplicateInHistory && Number(candidate.confidence || 0) >= 0.72;
+
+  return {
+    approved,
+    rejected: !approved,
+    reason: duplicateInBank || duplicateInHistory
+      ? "مكرر"
+      : (!validOptions ? "خيارات غير مكتملة" : (!hasQuestion || !hasAnswer ? "سؤال غير مكتمل" : "اجتاز الفلترة"))
+  };
+}
+
+function renderQuestionBankSummary() {
+  if (!questionBankSummaryRoot) return;
+  const bank = getQuestionBank();
+  const approved = bank.filter((entry) => entry.isApproved).length;
+  const trusted = bank.filter((entry) => entry.isTrusted).length;
+  const manual = bank.filter((entry) => String(entry.source || "").includes("يدوي") || String(entry.source || "").includes("admin")).length;
+  const systemAdded = bank.length - manual;
+  const mcqCount = bank.filter((entry) => entry.questionType === "اختيار من متعدد").length;
+  const trueFalseCount = bank.filter((entry) => entry.questionType === "صح أو خطأ").length;
+
+  questionBankSummaryRoot.innerHTML = `
+    <div class="admin-bank-grid">
+      <div class="admin-bank-card">
+        <strong>إجمالي العناصر</strong>
+        <span>${bank.length} سؤال/إجابة محفوظة</span>
+      </div>
+      <div class="admin-bank-card">
+        <strong>المعتمدة</strong>
+        <span>${approved} عنصرًا جاهزًا للمسار السريع</span>
+      </div>
+      <div class="admin-bank-card">
+        <strong>الموثوقة</strong>
+        <span>${trusted} عنصرًا بعلامة ثقة مرتفعة</span>
+      </div>
+      <div class="admin-bank-card">
+        <strong>إضافة النظام / الأدمن</strong>
+        <span>${systemAdded} تلقائيًا • ${manual} يدويًا</span>
+      </div>
+      <div class="admin-bank-card">
+        <strong>اختيار من متعدد</strong>
+        <span>${mcqCount} سؤالًا محفوظًا</span>
+      </div>
+      <div class="admin-bank-card">
+        <strong>صح/خطأ</strong>
+        <span>${trueFalseCount} سؤالًا محفوظًا</span>
+      </div>
+    </div>
+  `;
+}
+
+function renderQuestionBankTable() {
+  if (!questionBankTableRoot) return;
+  const query = normalizeAdminText(bankSearchInputEnhanced?.value || "");
+  const bank = getQuestionBank()
+    .sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0))
+    .filter((entry) => {
+      if (!query) return true;
+      const haystack = normalizeAdminText([
+        entry.question,
+        entry.answer,
+        entry.subject,
+        entry.grade,
+        entry.term,
+        entry.lesson
+      ].join(" "));
+      return haystack.includes(query);
+    });
+
+  const rows = bank
+    .slice(0, query ? 120 : 60)
+    .map((entry) => `
+      <tr>
+        <td>${escapeAdminHtmlEnhanced(entry.question || "—")}</td>
+        <td>${escapeAdminHtmlEnhanced(entry.questionType || "—")}</td>
+        <td>${escapeAdminHtmlEnhanced(entry.subject || "—")}</td>
+        <td>${escapeAdminHtmlEnhanced(entry.grade || "—")}</td>
+        <td>${escapeAdminHtmlEnhanced(entry.term || "—")}</td>
+        <td>${escapeAdminHtmlEnhanced(entry.answer || entry.response?.finalAnswer || "—")}</td>
+        <td>${Number(entry.confidence || 0).toFixed(2)}</td>
+        <td>${entry.likes || 0} / ${entry.dislikes || 0}</td>
+        <td>${entry.isApproved ? "معتمد" : (entry.isRejected ? "مرفوض" : "قيد المراجعة")}</td>
+        <td>
+          <div class="admin-table-actions">
+            <button type="button" class="mini-btn" data-bank-edit="${escapeAdminHtmlEnhanced(entry.key)}">تعديل</button>
+            <button type="button" class="mini-btn admin-action-unban" data-bank-approve="${escapeAdminHtmlEnhanced(entry.key)}">
+              ${entry.isApproved ? "إلغاء الاعتماد" : "اعتماد"}
+            </button>
+            <button type="button" class="mini-btn admin-action-ban" data-bank-delete="${escapeAdminHtmlEnhanced(entry.key)}">حذف</button>
+          </div>
+        </td>
+      </tr>
+    `)
+    .join("");
+
+  questionBankTableRoot.innerHTML = `
+    <div class="admin-inline-note">${query ? `نتائج البحث: ${bank.length}` : "يعرض أحدث الأسئلة المحفوظة مع إمكانية التعديل والاعتماد."}</div>
+    <div class="admin-table-wrap">
+      <table class="table admin-users-table">
+        <thead>
+          <tr>
+            <th>السؤال</th>
+            <th>النوع</th>
+            <th>المادة</th>
+            <th>الصف</th>
+            <th>الترم</th>
+            <th>الإجابة</th>
+            <th>الثقة</th>
+            <th>التفاعل</th>
+            <th>الحالة</th>
+            <th>الإجراءات</th>
+          </tr>
+        </thead>
+        <tbody>${rows || `<tr><td colspan="10">لا توجد أسئلة مطابقة لبحثك الحالي.</td></tr>`}</tbody>
+      </table>
+    </div>
+  `;
+}
+
+function runQuestionGenerator(manual = false) {
+  if (generatorRunInProgress) {
+    setGeneratorFeedback("المولد يعمل الآن بالفعل. انتظر حتى ينتهي التشغيل الحالي.", "running");
+    return { generated: 0, approved: 0, rejected: 0, skipped: true };
+  }
+
+  generatorRunInProgress = true;
+  setGeneratorButtonsBusy(true);
+  setGeneratorFeedback("جاري تشغيل مولد الأسئلة الآن ومراجعة النتائج...", "running");
+
+  try {
+    const settings = getQuestionGeneratorSettings();
+    const todayKey = new Date().toISOString().slice(0, 10);
+    const nowIso = new Date().toISOString();
+    const history = getQuestionGeneratorHistory();
+    const grades = normalizeGeneratorSelectionEnhanced(settings.grades, generatorDefaultGradesEnhanced);
+    const subjects = normalizeGeneratorSelectionEnhanced(settings.subjects, generatorDefaultSubjectsEnhanced);
+    const target = normalizeGeneratorDailyTargetEnhanced(settings.dailyTarget || generatorDefaultDailyTarget);
+    const maxAttempts = Math.max(target * 3, 600);
+    const bank = getQuestionBank();
+    let generated = 0;
+    let approved = 0;
+    let rejected = 0;
+    let attempts = 0;
+
+    while (generated < target && attempts < maxAttempts) {
+      const grade = grades[attempts % grades.length];
+      const subject = subjects[Math.floor(attempts / Math.max(1, grades.length)) % subjects.length];
+      const term = settings.term === "all"
+        ? ((attempts + Number(new Date().toISOString().slice(8, 10))) % 2 === 0 ? "الفصل الأول" : "الفصل الثاني")
+        : settings.term;
+      const entry = createGeneratedEntry({ grade, subject, term }, settings, attempts, bank, history);
+      attempts += 1;
+
+      if (entry.isRejected) {
+        rejected += 1;
+        continue;
+      }
+
+      bank.unshift(entry);
+      history.push({
+        date: todayKey,
+        signature: `${entry.grade}|${entry.subject}|${entry.term}|${entry.questionType}|${buildGeneratorQuestionSignature(entry.question, entry.lesson, entry.answer, entry.questionType)}`,
+        key: entry.key
+      });
+      generated += 1;
+      approved += 1;
+    }
+
+    saveQuestionBank(bank);
+    saveQuestionGeneratorHistory(history);
+
+    const summaryMessage = manual
+      ? `تم تشغيل المولد الآن وإضافة ${generated} سؤال، منها ${approved} معتمدة و${rejected} مرفوضة.`
+      : `تم تنفيذ التوليد اليومي وإضافة ${generated} سؤال جديد.`;
+
+    const nextSettings = {
+      ...settings,
+      lastRunDate: todayKey,
+      lastRunAt: nowIso,
+      generatedToday: settings.lastRunDate !== todayKey ? generated : (settings.generatedToday || 0) + generated,
+      approvedToday: settings.lastRunDate !== todayKey ? approved : (settings.approvedToday || 0) + approved,
+      rejectedToday: settings.lastRunDate !== todayKey ? rejected : (settings.rejectedToday || 0) + rejected,
+      totalGenerated: (settings.totalGenerated || 0) + generated,
+      totalApproved: (settings.totalApproved || 0) + approved,
+      totalRejected: (settings.totalRejected || 0) + rejected,
+      lastResultMessage: summaryMessage,
+      lastResultStatus: generated > 0 ? "success" : "warning",
+      recentRuns: appendGeneratorRunEntry(settings, {
+        at: nowIso,
+        mode: manual ? "manual" : "daily",
+        generated,
+        approved,
+        rejected,
+        status: generated > 0 ? "success" : "warning"
+      })
+    };
+
+    saveQuestionGeneratorSettings(nextSettings);
+    setGeneratorFeedback(summaryMessage, generated > 0 ? "success" : "warning");
+    return { generated, approved, rejected, skipped: false };
+  } catch (error) {
+    const settings = getQuestionGeneratorSettings();
+    const message = "فشل تشغيل المولد في هذه المحاولة. حاول مرة أخرى بعد مراجعة الإعدادات.";
+    saveQuestionGeneratorSettings({
+      ...settings,
+      lastResultMessage: message,
+      lastResultStatus: "error",
+      recentRuns: appendGeneratorRunEntry(settings, {
+        at: new Date().toISOString(),
+        mode: manual ? "manual" : "daily",
+        generated: 0,
+        approved: 0,
+        rejected: 0,
+        status: "error"
+      })
+    });
+    setGeneratorFeedback(message, "error");
+    console.error(error);
+    return { generated: 0, approved: 0, rejected: 0, skipped: false, failed: true };
+  } finally {
+    generatorRunInProgress = false;
+    setGeneratorButtonsBusy(false);
+  }
+}
+
+bankSearchInputEnhanced?.addEventListener("input", () => {
+  renderQuestionBankTable();
+});
+
+document.addEventListener("change", (event) => {
+  const choiceInput = event.target;
+  if (!(choiceInput instanceof HTMLInputElement)) return;
+  if (!choiceInput.matches("[data-generator-choice-group]")) return;
+  writeGeneratorSelectionFieldsEnhanced(getGeneratorDraftSettings(getQuestionGeneratorSettings()));
+});
+
 updateAdminView();
 bindPasswordToggles();
 

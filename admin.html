@@ -103,6 +103,9 @@
               <article class="admin-panel">
                 <h3 class="admin-section-title">قاعدة الأسئلة والإجابات المحفوظة</h3>
                 <p class="admin-subtitle">يعرض هذا القسم ما أضافه النظام تلقائيًا وما أضافه الأدمن يدويًا، مع الاعتماد والثقة والتفاعل.</p>
+                <div class="admin-search-row">
+                  <input class="field" type="search" data-bank-search placeholder="ابحث باسم السؤال أو جزء منه للتأكد من وجوده بسرعة">
+                </div>
                 <div class="admin-list" data-question-bank-summary></div>
                 <div data-question-bank-table></div>
               </article>
@@ -167,15 +170,29 @@
                 </div>
                 <form class="admin-question-form" data-generator-form>
                   <div class="admin-form-grid">
-                    <input class="field" type="number" min="1" max="100" data-generator-count placeholder="عدد الأسئلة اليومية">
+                    <input class="field" type="number" min="1" max="10000" data-generator-count placeholder="عدد الأسئلة اليومية حتى 10000">
                     <select class="field" data-generator-term>
                       <option value="all">الترمين</option>
                       <option value="الفصل الأول">الفصل الأول</option>
                       <option value="الفصل الثاني">الفصل الثاني</option>
                     </select>
                   </div>
-                  <textarea class="field" rows="2" data-generator-grades placeholder="الصفوف المستهدفة، مثال: الأول الابتدائي, الثاني المتوسط"></textarea>
-                  <textarea class="field" rows="2" data-generator-subjects placeholder="المواد المستهدفة، مثال: الرياضيات, العلوم, اللغة الإنجليزية"></textarea>
+                  <div class="admin-multiselect-block">
+                    <div class="admin-multiselect-head">
+                      <strong>الصفوف المستهدفة</strong>
+                      <span>اختر أكثر من صف بسهولة بدل الكتابة اليدوية</span>
+                    </div>
+                    <div class="admin-choice-grid" data-generator-grade-choices></div>
+                    <textarea class="field admin-hidden-field" rows="2" hidden data-generator-grades placeholder="الصفوف المستهدفة"></textarea>
+                  </div>
+                  <div class="admin-multiselect-block">
+                    <div class="admin-multiselect-head">
+                      <strong>المواد المستهدفة</strong>
+                      <span>يركّز المولد أكثر على أسئلة الاختيار من متعدد وصواب/خطأ</span>
+                    </div>
+                    <div class="admin-choice-grid" data-generator-subject-choices></div>
+                    <textarea class="field admin-hidden-field" rows="2" hidden data-generator-subjects placeholder="المواد المستهدفة"></textarea>
+                  </div>
                   <div class="admin-table-actions admin-generator-actions">
                     <button class="primary-btn" type="button" data-generator-toggle onclick="window.adminHandleGeneratorToggle && window.adminHandleGeneratorToggle(event)">تشغيل المولد</button>
                     <button class="mini-btn" type="submit">حفظ الإعدادات</button>
