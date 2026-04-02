@@ -2551,6 +2551,34 @@ body.theme-dark .admin-action-unban {
   overflow-x: auto;
 }
 
+.admin-users-table th,
+.admin-users-table td {
+  vertical-align: top;
+}
+
+.admin-user-cell,
+.admin-user-stack {
+  display: grid;
+  gap: 4px;
+}
+
+.admin-user-cell strong,
+.admin-user-stack strong {
+  display: block;
+  color: var(--text);
+}
+
+.admin-user-cell span,
+.admin-user-cell small,
+.admin-user-stack span {
+  color: var(--muted);
+  line-height: 1.7;
+}
+
+.admin-user-cell small {
+  font-size: 0.84rem;
+}
+
 .admin-inline-note {
   font-size: 0.84rem;
   color: var(--muted);

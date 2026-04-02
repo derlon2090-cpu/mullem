@@ -597,7 +597,7 @@ function runQuestionGenerator(manual = false) {
       const term = settings.term === "all"
         ? ((attempts + Number(new Date().toISOString().slice(8, 10))) % 2 === 0 ? "الفصل الأول" : "الفصل الثاني")
         : settings.term;
-      const entry = createGeneratedEntry({ grade, subject, term }, attempts, bank, history);
+      const entry = createGeneratedEntry({ grade, subject, term }, settings, attempts, bank, history);
       attempts += 1;
       if (entry.isRejected) {
         rejected += 1;
@@ -1591,7 +1591,7 @@ function runQuestionGenerator(manual = false) {
       const term = settings.term === "all"
         ? ((attempts + Number(new Date().toISOString().slice(8, 10))) % 2 === 0 ? "الفصل الأول" : "الفصل الثاني")
         : settings.term;
-      const entry = createGeneratedEntry({ grade, subject, term }, attempts, bank, history);
+      const entry = createGeneratedEntry({ grade, subject, term }, settings, attempts, bank, history);
       attempts += 1;
 
       if (entry.isRejected) {
@@ -1720,6 +1720,109 @@ function refreshAdminData() {
   renderGeneratorStatus();
   renderGeneratorLog();
   syncGeneratorForm();
+}
+
+function renderUsersTable() {
+  if (!usersTableRoot) return;
+
+  const rows = getUsers()
+    .map((user) => `
+      <tr>
+        <td>
+          <div class="admin-user-cell">
+            <strong>${user.name || "بدون اسم"}</strong>
+            <span>${user.email || "—"}</span>
+            <small>${user.grade || "بدون صف"}${user.subject ? ` • ${user.subject}` : ""}</small>
+          </div>
+        </td>
+        <td>
+          <div class="admin-user-stack">
+            <strong>${user.role || "Student"}</strong>
+            <span>${user.package || "مجاني محدود"}</span>
+          </div>
+        </td>
+        <td>${user.xp ?? 0}</td>
+        <td>
+          <div class="admin-user-stack">
+            <strong>${user.status || "نشط"}</strong>
+            <span>${user.activity || "لا يوجد نشاط مسجل"}</span>
+          </div>
+        </td>
+        <td>
+          <div class="admin-table-actions">
+            <button type="button" class="mini-btn" data-admin-edit="${user.id}">تعديل</button>
+            <button type="button" class="mini-btn admin-action-points" data-admin-points="${user.id}">تعديل النقاط</button>
+            <button
+              type="button"
+              class="mini-btn ${user.status === "محظور" ? "admin-action-unban" : "admin-action-ban"}"
+              data-admin-ban="${user.id}"
+            >
+              ${user.status === "محظور" ? "فك الحظر" : "حظر"}
+            </button>
+          </div>
+        </td>
+      </tr>
+    `)
+    .join("");
+
+  usersTableRoot.innerHTML = `
+    <div class="admin-table-wrap">
+      <table class="table admin-users-table">
+        <thead>
+          <tr>
+            <th>المستخدم</th>
+            <th>الدور والباقة</th>
+            <th>XP</th>
+            <th>الحالة وآخر نشاط</th>
+            <th>الإجراءات</th>
+          </tr>
+        </thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>
+  `;
+}
+
+function renderGeneratorStatus() {
+  if (!generatorStatusRoot) return;
+
+  const settings = getQuestionGeneratorSettings();
+  const stateLabel = settings.enabled ? "يعمل" : "متوقف";
+  const resultMessage = settings.lastResultMessage || (settings.enabled
+    ? "المولد جاهز ويعمل وفق الإعدادات الحالية."
+    : "المولد متوقف حاليًا. يمكنك تشغيله أو حفظ الإعدادات أولًا.");
+
+  generatorStatusRoot.innerHTML = `
+    <div class="admin-bank-grid">
+      <div class="admin-bank-card">
+        <strong>الحالة الحالية</strong>
+        <span>${stateLabel}</span>
+      </div>
+      <div class="admin-bank-card">
+        <strong>إحصائيات اليوم</strong>
+        <span>توليد: ${settings.generatedToday || 0} • اعتماد: ${settings.approvedToday || 0} • رفض: ${settings.rejectedToday || 0}</span>
+      </div>
+      <div class="admin-bank-card">
+        <strong>آخر تشغيل</strong>
+        <span>${settings.lastRunAt ? new Date(settings.lastRunAt).toLocaleString("ar-SA") : "لم يتم التشغيل بعد"}</span>
+      </div>
+      <div class="admin-bank-card">
+        <strong>المصادر الفعالة</strong>
+        <span>المنهج السعودي أولًا، ثم بنك الأسئلة الداخلي، ثم نمط مصادر تعليمية موثوقة مثل بيت العلم، والويب للتحقق والمقارنة فقط.</span>
+      </div>
+    </div>
+  `;
+
+  setGeneratorFeedback(resultMessage, settings.lastResultStatus || "idle");
+
+  if (generatorToggleButton) {
+    generatorToggleButton.textContent = settings.enabled ? "إيقاف المولد" : "تشغيل المولد";
+    generatorToggleButton.setAttribute("aria-pressed", settings.enabled ? "true" : "false");
+  }
+
+  if (generatorRunButton) {
+    generatorRunButton.textContent = generatorRunInProgress ? "جاري التنفيذ..." : "تشغيل يدوي الآن";
+  }
 }
 
 updateAdminView();
