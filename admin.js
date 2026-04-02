@@ -29,6 +29,8 @@ const generatorSubjectsInput = document.querySelector("[data-generator-subjects]
 const generatorToggleButton = document.querySelector("[data-generator-toggle]");
 const generatorRunButton = document.querySelector("[data-generator-run]");
 const generatorStateCopy = document.querySelector("[data-generator-state-copy]");
+const generatorFeedbackRoot = document.querySelector("[data-generator-feedback]");
+const generatorLogRoot = document.querySelector("[data-generator-log]");
 const gradeBankPanelsRoot = document.querySelector("[data-grade-bank-panels]");
 const adminAuthRoot = document.querySelector("[data-admin-auth]");
 const adminAppRoot = document.querySelector("[data-admin-app]");
@@ -324,6 +326,9 @@ function getQuestionGeneratorSettings() {
     totalRejected: 0,
     lastRunDate: "",
     lastRunAt: "",
+    lastResultMessage: "",
+    lastResultStatus: "idle",
+    recentRuns: [],
     sourcePriority: {
       curriculum: 0.5,
       internalBank: 0.3,
@@ -345,6 +350,54 @@ function getQuestionGeneratorHistory() {
 
 function saveQuestionGeneratorHistory(entries) {
   saveJson(questionGeneratorHistoryKey, entries.slice(-2500));
+}
+
+function getGeneratorRunEntries(settings) {
+  return Array.isArray(settings?.recentRuns) ? settings.recentRuns : [];
+}
+
+function appendGeneratorRunEntry(settings, entry) {
+  return [
+    entry,
+    ...getGeneratorRunEntries(settings)
+  ].slice(0, 10);
+}
+
+function setGeneratorFeedback(message, state = "idle") {
+  if (generatorFeedbackRoot) {
+    generatorFeedbackRoot.textContent = message;
+    generatorFeedbackRoot.dataset.state = state;
+  }
+
+  if (generatorStateCopy) {
+    generatorStateCopy.textContent = message;
+  }
+}
+
+function setGeneratorButtonsBusy(isBusy) {
+  if (generatorToggleButton) {
+    generatorToggleButton.disabled = isBusy;
+    generatorToggleButton.dataset.busy = isBusy ? "true" : "false";
+  }
+
+  if (generatorRunButton) {
+    generatorRunButton.disabled = isBusy;
+    generatorRunButton.dataset.busy = isBusy ? "true" : "false";
+  }
+}
+
+function getGeneratorDraftSettings(baseSettings = getQuestionGeneratorSettings()) {
+  return {
+    ...baseSettings,
+    dailyTarget: Math.max(1, Number(generatorCountInput?.value || baseSettings.dailyTarget || 12)),
+    term: generatorTermInput?.value || baseSettings.term || "all",
+    grades: splitAdminLines(generatorGradesInput?.value || "").length
+      ? splitAdminLines(generatorGradesInput?.value || "")
+      : baseSettings.grades,
+    subjects: splitAdminLines(generatorSubjectsInput?.value || "").length
+      ? splitAdminLines(generatorSubjectsInput?.value || "")
+      : baseSettings.subjects
+  };
 }
 
 function getGeneratorSeed(subject) {
@@ -1381,6 +1434,293 @@ adminLogoutButton?.addEventListener("click", () => {
   updateAdminView();
   window.location.href = "login.html";
 });
+
+function renderStats() {
+  if (!adminStatsRoot) return;
+
+  const analytics = getAnalytics();
+  const users = getUsers();
+  const bank = getQuestionBank();
+  const generator = getQuestionGeneratorSettings();
+  const feedback = getFeedback();
+
+  const stats = [
+    {
+      label: "إجمالي المستخدمين",
+      value: users.length,
+      note: "كل الحسابات المسجلة داخل المنصة"
+    },
+    {
+      label: "الأسئلة المعتمدة",
+      value: bank.filter((entry) => entry.isApproved).length,
+      note: "جاهزة للمسار السريع والإجابة المباشرة"
+    },
+    {
+      label: "مولد اليوم",
+      value: generator.generatedToday || 0,
+      note: `المعتمد اليوم: ${generator.approvedToday || 0}`
+    },
+    {
+      label: "حالة المولد",
+      value: generator.enabled ? "يعمل" : "متوقف",
+      note: generator.lastRunAt ? `آخر تشغيل: ${new Date(generator.lastRunAt).toLocaleString("ar-SA")}` : "لم يبدأ التشغيل بعد"
+    },
+    {
+      label: "التقارير والتفاعل",
+      value: (feedback.disliked?.length || 0) + (analytics.totalDislikes || 0),
+      note: "إشارات تحتاج مراجعة أو تحسين"
+    }
+  ];
+
+  adminStatsRoot.innerHTML = stats.map((stat) => `
+    <article class="stat-card">
+      <span>${stat.label}</span>
+      <strong>${stat.value}</strong>
+      <span>${stat.note}</span>
+    </article>
+  `).join("");
+}
+
+function renderGeneratorLog() {
+  if (!generatorLogRoot) return;
+
+  const settings = getQuestionGeneratorSettings();
+  const runs = getGeneratorRunEntries(settings);
+
+  if (!runs.length) {
+    generatorLogRoot.innerHTML = `
+      <div class="admin-log-item">
+        <strong>لا توجد تشغيلات بعد</strong>
+        <p>عند تشغيل المولد أو تشغيله يدويًا ستظهر هنا آخر النتائج بشكل واضح.</p>
+      </div>
+    `;
+    return;
+  }
+
+  generatorLogRoot.innerHTML = runs.map((run) => {
+    const modeLabel = run.mode === "manual"
+      ? "تشغيل يدوي"
+      : (run.mode === "daily" ? "تشغيل يومي" : "تغيير حالة");
+    const statusLabel = run.status === "success"
+      ? "نجح"
+      : (run.status === "error" ? "فشل" : "تنبيه");
+    const timestamp = run.at ? new Date(run.at).toLocaleString("ar-SA") : "الآن";
+
+    return `
+      <div class="admin-log-item">
+        <strong>${modeLabel}</strong>
+        <p>أضيف ${run.generated || 0} سؤال، واعتمد ${run.approved || 0}، ورُفض ${run.rejected || 0}.</p>
+        <div class="admin-log-meta">
+          <span class="admin-meta-chip">${statusLabel}</span>
+          <span class="admin-meta-chip">${timestamp}</span>
+        </div>
+      </div>
+    `;
+  }).join("");
+}
+
+function renderGeneratorStatus() {
+  if (!generatorStatusRoot) return;
+
+  const settings = getQuestionGeneratorSettings();
+  const stateLabel = settings.enabled ? "يعمل" : "متوقف";
+  const resultMessage = settings.lastResultMessage || (settings.enabled
+    ? "المولد جاهز ويعمل وفق الإعدادات الحالية."
+    : "المولد متوقف حاليًا. يمكنك تشغيله أو حفظ الإعدادات أولًا.");
+
+  generatorStatusRoot.innerHTML = `
+    <div class="admin-bank-grid">
+      <div class="admin-bank-card">
+        <strong>الحالة الحالية</strong>
+        <span>${stateLabel}</span>
+      </div>
+      <div class="admin-bank-card">
+        <strong>إحصائيات اليوم</strong>
+        <span>توليد: ${settings.generatedToday || 0} • اعتماد: ${settings.approvedToday || 0} • رفض: ${settings.rejectedToday || 0}</span>
+      </div>
+      <div class="admin-bank-card">
+        <strong>آخر تشغيل</strong>
+        <span>${settings.lastRunAt ? new Date(settings.lastRunAt).toLocaleString("ar-SA") : "لم يتم التشغيل بعد"}</span>
+      </div>
+      <div class="admin-bank-card">
+        <strong>المصادر الفعالة</strong>
+        <span>المنهج أولًا ثم البنك الداخلي ثم التحقق والمقارنة.</span>
+      </div>
+    </div>
+  `;
+
+  setGeneratorFeedback(resultMessage, settings.lastResultStatus || "idle");
+
+  if (generatorToggleButton) {
+    generatorToggleButton.textContent = settings.enabled ? "إيقاف المولد" : "تشغيل المولد";
+    generatorToggleButton.setAttribute("aria-pressed", settings.enabled ? "true" : "false");
+  }
+
+  if (generatorRunButton) {
+    generatorRunButton.textContent = generatorRunInProgress ? "جاري التنفيذ..." : "تشغيل يدوي الآن";
+  }
+}
+
+function runQuestionGenerator(manual = false) {
+  if (generatorRunInProgress) {
+    setGeneratorFeedback("المولد يعمل الآن بالفعل. انتظر حتى ينتهي التشغيل الحالي.", "running");
+    return { generated: 0, approved: 0, rejected: 0, skipped: true };
+  }
+
+  generatorRunInProgress = true;
+  setGeneratorButtonsBusy(true);
+  setGeneratorFeedback("جاري تشغيل مولد الأسئلة الآن ومراجعة النتائج...", "running");
+
+  try {
+    const settings = getQuestionGeneratorSettings();
+    const todayKey = new Date().toISOString().slice(0, 10);
+    const nowIso = new Date().toISOString();
+    const history = getQuestionGeneratorHistory();
+    const grades = (Array.isArray(settings.grades) && settings.grades.length ? settings.grades : allSaudiGrades.slice(0, 3));
+    const subjects = (Array.isArray(settings.subjects) && settings.subjects.length ? settings.subjects : Object.keys(generatorSeedLibrary).slice(0, 3));
+    const target = Math.max(1, Number(settings.dailyTarget || 12));
+    const bank = getQuestionBank();
+    let generated = 0;
+    let approved = 0;
+    let rejected = 0;
+    let attempts = 0;
+
+    while (generated < target && attempts < target * 8) {
+      const grade = grades[attempts % grades.length];
+      const subject = subjects[attempts % subjects.length];
+      const term = settings.term === "all"
+        ? ((attempts + Number(new Date().toISOString().slice(8, 10))) % 2 === 0 ? "الفصل الأول" : "الفصل الثاني")
+        : settings.term;
+      const entry = createGeneratedEntry({ grade, subject, term }, attempts, bank, history);
+      attempts += 1;
+
+      if (entry.isRejected) {
+        rejected += 1;
+        continue;
+      }
+
+      bank.unshift(entry);
+      history.push({
+        date: todayKey,
+        signature: `${entry.grade}|${entry.subject}|${entry.term}|${entry.keywordSignature}`,
+        key: entry.key
+      });
+      generated += 1;
+      approved += 1;
+    }
+
+    saveQuestionBank(bank);
+    saveQuestionGeneratorHistory(history);
+
+    const summaryMessage = manual
+      ? `تم تشغيل المولد الآن وإضافة ${generated} سؤال، منها ${approved} معتمدة و${rejected} مرفوضة.`
+      : `تم تنفيذ التوليد اليومي وإضافة ${generated} سؤال جديد.`;
+
+    const nextSettings = {
+      ...settings,
+      lastRunDate: todayKey,
+      lastRunAt: nowIso,
+      generatedToday: settings.lastRunDate !== todayKey ? generated : (settings.generatedToday || 0) + generated,
+      approvedToday: settings.lastRunDate !== todayKey ? approved : (settings.approvedToday || 0) + approved,
+      rejectedToday: settings.lastRunDate !== todayKey ? rejected : (settings.rejectedToday || 0) + rejected,
+      totalGenerated: (settings.totalGenerated || 0) + generated,
+      totalApproved: (settings.totalApproved || 0) + approved,
+      totalRejected: (settings.totalRejected || 0) + rejected,
+      lastResultMessage: summaryMessage,
+      lastResultStatus: generated > 0 ? "success" : "warning",
+      recentRuns: appendGeneratorRunEntry(settings, {
+        at: nowIso,
+        mode: manual ? "manual" : "daily",
+        generated,
+        approved,
+        rejected,
+        status: generated > 0 ? "success" : "warning"
+      })
+    };
+
+    saveQuestionGeneratorSettings(nextSettings);
+    setGeneratorFeedback(summaryMessage, generated > 0 ? "success" : "warning");
+    return { generated, approved, rejected, skipped: false };
+  } catch (error) {
+    const settings = getQuestionGeneratorSettings();
+    const message = "فشل تشغيل المولد في هذه المحاولة. حاول مرة أخرى بعد مراجعة الإعدادات.";
+    saveQuestionGeneratorSettings({
+      ...settings,
+      lastResultMessage: message,
+      lastResultStatus: "error",
+      recentRuns: appendGeneratorRunEntry(settings, {
+        at: new Date().toISOString(),
+        mode: manual ? "manual" : "daily",
+        generated: 0,
+        approved: 0,
+        rejected: 0,
+        status: "error"
+      })
+    });
+    setGeneratorFeedback(message, "error");
+    console.error(error);
+    return { generated: 0, approved: 0, rejected: 0, skipped: false, failed: true };
+  } finally {
+    generatorRunInProgress = false;
+    setGeneratorButtonsBusy(false);
+  }
+}
+
+function handleGeneratorToggle() {
+  const settings = getQuestionGeneratorSettings();
+  const enabling = !settings.enabled;
+  const nextSettings = getGeneratorDraftSettings({
+    ...settings,
+    enabled: enabling
+  });
+
+  if (!enabling) {
+    const nowIso = new Date().toISOString();
+    saveQuestionGeneratorSettings({
+      ...nextSettings,
+      lastResultMessage: "تم إيقاف مولد الأسئلة التلقائي.",
+      lastResultStatus: "warning",
+      recentRuns: appendGeneratorRunEntry(settings, {
+        at: nowIso,
+        mode: "toggle",
+        generated: 0,
+        approved: 0,
+        rejected: 0,
+        status: "warning"
+      })
+    });
+    setGeneratorFeedback("تم إيقاف مولد الأسئلة التلقائي.", "warning");
+    refreshAdminData();
+    return;
+  }
+
+  saveQuestionGeneratorSettings(nextSettings);
+  runQuestionGenerator(true);
+  refreshAdminData();
+}
+
+function handleGeneratorRunNow() {
+  const settings = getGeneratorDraftSettings(getQuestionGeneratorSettings());
+  saveQuestionGeneratorSettings(settings);
+  runQuestionGenerator(true);
+  refreshAdminData();
+}
+
+function refreshAdminData() {
+  ensureDailyGeneratorRun();
+  renderStats();
+  renderUsersTable();
+  renderFeedback();
+  renderSubscribersOverview();
+  renderActivityLog();
+  renderReports();
+  renderQuestionBankSummary();
+  renderQuestionBankTable();
+  renderGradeBankPanels();
+  renderGeneratorStatus();
+  renderGeneratorLog();
+  syncGeneratorForm();
+}
 
 updateAdminView();
 bindPasswordToggles();

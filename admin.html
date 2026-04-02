@@ -24,7 +24,7 @@
         </div>
         <div class="brand-text">
           <div class="brand-name">لوحة أدمن ملم</div>
-          <div class="brand-copy">إدارة المستخدمين والتفاعل والاشتراكات والتقارير</div>
+          <div class="brand-copy">إدارة الأسئلة والمولد والمستخدمين والاشتراكات من مكان واحد.</div>
         </div>
       </div>
       <div class="topbar-actions">
@@ -52,134 +52,223 @@
     </div>
 
     <div class="shell admin-wrap" data-admin-app hidden>
-      <section class="stats-grid" data-admin-stats></section>
+      <div class="admin-layout">
+        <aside class="admin-sidebar">
+          <section class="admin-sidebar-card">
+            <span class="eyebrow">لوحة التشغيل</span>
+            <h2>إدارة منصة ملم</h2>
+            <p>لوحة مرتبة لمتابعة الأسئلة المعتمدة، تشغيل مولد الأسئلة، ومراقبة المستخدمين والاشتراكات.</p>
+          </section>
 
-      <section class="admin-grid">
-        <article class="admin-panel">
-          <h3 class="admin-section-title">إدارة المستخدمين</h3>
-          <p class="admin-subtitle">عرض الحسابات، الباقات، الرصيد، والحالة الحالية.</p>
-          <div data-users-table></div>
-        </article>
+          <nav class="admin-sidebar-nav" aria-label="أقسام لوحة الأدمن">
+            <a class="admin-nav-link" href="#admin-overview">نظرة عامة</a>
+            <a class="admin-nav-link" href="#admin-questions">إدارة الأسئلة</a>
+            <a class="admin-nav-link" href="#admin-generator">مولد الأسئلة</a>
+            <a class="admin-nav-link" href="#admin-coverage">التغطية التعليمية</a>
+            <a class="admin-nav-link" href="#admin-users">المستخدمون والاشتراكات</a>
+            <a class="admin-nav-link" href="#admin-reports">التقارير والسجل</a>
+          </nav>
 
-        <article class="admin-panel">
-          <h3 class="admin-section-title">الإعجابات وعدم الإعجاب</h3>
-          <div class="admin-list" data-feedback-list></div>
-        </article>
-      </section>
+          <section class="admin-sidebar-card admin-sidebar-note">
+            <strong>طريقة العمل</strong>
+            <span>ابدأ من نظرة عامة، ثم إدارة بنك الأسئلة، وبعدها المولد والتغطية التعليمية، ثم راجع المستخدمين والتقارير.</span>
+          </section>
+        </aside>
 
-      <section class="admin-grid">
-        <article class="admin-panel">
-          <h3 class="admin-section-title">المشتركين في الباقات</h3>
-          <p class="admin-subtitle">عرض المشتركين الحاليين داخل كل باقة مع ملخص واضح لعدد الحسابات والرصيد والحالة.</p>
-          <div class="admin-list" data-subscribers-list></div>
-        </article>
-
-        <article class="admin-panel">
-          <h3 class="admin-section-title">سجل النشاطات</h3>
-          <p class="admin-subtitle">آخر الأنشطة الإدارية والتعليمية الظاهرة في هذه النسخة.</p>
-          <div class="admin-list" data-activity-list></div>
-        </article>
-      </section>
-
-      <section class="admin-grid">
-        <article class="admin-panel">
-          <h3 class="admin-section-title">قاعدة الأسئلة والإجابات المحفوظة</h3>
-          <p class="admin-subtitle">يعرض هذا القسم ما أضافه النظام تلقائيًا وما أضافه الأدمن يدويًا، مع الاعتماد والتفاعل والثقة.</p>
-          <div class="admin-list" data-question-bank-summary></div>
-          <div data-question-bank-table></div>
-        </article>
-
-        <article class="admin-panel">
-          <h3 class="admin-section-title">إضافة سؤال محفوظ يدويًا</h3>
-          <p class="admin-subtitle">أضف سؤالًا وإجابته وبيانات الصف والمادة والترم ليصبح متاحًا مباشرة في قاعدة النظام.</p>
-          <form class="admin-question-form" data-question-bank-form>
-            <textarea class="field" rows="4" data-bank-question placeholder="نص السؤال"></textarea>
-            <select class="field" data-bank-type>
-              <option value="اختيار من متعدد">اختيار من متعدد</option>
-              <option value="صح أو خطأ">صح أو خطأ</option>
-              <option value="إكمال فراغ">إكمال فراغ</option>
-              <option value="مطابقة">مطابقة</option>
-              <option value="تعليل / تفسير">تعليل / تفسير</option>
-              <option value="مسألة">مسألة</option>
-            </select>
-            <textarea class="field" rows="3" data-bank-options placeholder="الخيارات إن وجدت - كل خيار في سطر"></textarea>
-            <input class="field" type="text" data-bank-answer placeholder="الإجابة الصحيحة">
-            <textarea class="field" rows="3" data-bank-explanation placeholder="شرح مختصر"></textarea>
-            <div class="admin-form-grid">
-              <input class="field" type="text" data-bank-grade placeholder="الصف">
-              <input class="field" type="text" data-bank-subject placeholder="المادة">
+        <div class="admin-main">
+          <section id="admin-overview" class="admin-hero-panel">
+            <div class="admin-hero-copy">
+              <span class="eyebrow">لوحة الأدمن</span>
+              <h2>تشغيل المنصة بشكل أوضح وأسرع</h2>
+              <p>تابع مؤشرات الأداء، راقب بنك الأسئلة، وشغّل مولد الأسئلة من بطاقة واضحة تعرض الحالة الحالية وآخر نتيجة تنفيذ.</p>
             </div>
-            <div class="admin-form-grid">
-              <select class="field" data-bank-term>
-                <option value="الفصل الأول">الفصل الأول</option>
-                <option value="الفصل الثاني">الفصل الثاني</option>
-              </select>
-              <input class="field" type="text" data-bank-lesson placeholder="الدرس / المفهوم">
+            <div class="admin-hero-actions">
+              <a class="primary-btn top-cta-link" href="#admin-generator">إدارة المولد</a>
+              <a class="helper-btn" href="#admin-questions">إدارة الأسئلة</a>
+              <a class="helper-btn" href="#admin-users">إدارة المستخدمين</a>
             </div>
-            <div class="admin-form-grid">
-              <input class="field" type="text" data-bank-source placeholder="المصدر">
-              <input class="field" type="number" min="0" max="1" step="0.01" data-bank-confidence placeholder="الثقة 0 - 1">
+          </section>
+
+          <section class="stats-grid" data-admin-stats></section>
+
+          <section id="admin-questions" class="admin-section-stack">
+            <div class="admin-section-head">
+              <div>
+                <h3>إدارة الأسئلة</h3>
+                <p>قاعدة الأسئلة المحفوظة، الاعتماد، التفاعل، وإضافة سؤال يدوي داخل نفس المكان.</p>
+              </div>
             </div>
-            <label class="admin-check">
-              <input type="checkbox" data-bank-approved checked>
-              <span>اعتماد السؤال مباشرة</span>
-            </label>
-            <button class="primary-btn" type="submit">حفظ السؤال في القاعدة</button>
-            <div class="small-copy" data-bank-form-state>سيُحفظ السؤال داخل قاعدة المنصة مع بياناته الكاملة.</div>
-          </form>
-        </article>
-      </section>
 
-      <section class="admin-grid">
-        <article class="admin-panel">
-          <h3 class="admin-section-title">مولد الأسئلة التلقائي</h3>
-          <p class="admin-subtitle">توليد يومي من المنهج أولًا وبنك النظام ثم نمط المصادر التعليمية الموثوقة، مع إعادة صياغة وعدم نسخ حرفي.</p>
-          <div class="admin-list" data-generator-status></div>
-          <form class="admin-question-form" data-generator-form>
-            <div class="admin-form-grid">
-              <input class="field" type="number" min="1" max="100" data-generator-count placeholder="عدد الأسئلة اليومية">
-              <select class="field" data-generator-term>
-                <option value="all">الترمين</option>
-                <option value="الفصل الأول">الفصل الأول</option>
-                <option value="الفصل الثاني">الفصل الثاني</option>
-              </select>
+            <div class="admin-grid">
+              <article class="admin-panel">
+                <h3 class="admin-section-title">قاعدة الأسئلة والإجابات المحفوظة</h3>
+                <p class="admin-subtitle">يعرض هذا القسم ما أضافه النظام تلقائيًا وما أضافه الأدمن يدويًا، مع الاعتماد والثقة والتفاعل.</p>
+                <div class="admin-list" data-question-bank-summary></div>
+                <div data-question-bank-table></div>
+              </article>
+
+              <article class="admin-panel">
+                <h3 class="admin-section-title">إضافة سؤال محفوظ يدويًا</h3>
+                <p class="admin-subtitle">أضف سؤالًا وإجابته وبيانات الصف والمادة والترم ليصبح متاحًا مباشرة داخل قاعدة النظام.</p>
+                <form class="admin-question-form" data-question-bank-form>
+                  <textarea class="field" rows="4" data-bank-question placeholder="نص السؤال"></textarea>
+                  <select class="field" data-bank-type>
+                    <option value="اختيار من متعدد">اختيار من متعدد</option>
+                    <option value="صح أو خطأ">صح أو خطأ</option>
+                    <option value="إكمال فراغ">إكمال فراغ</option>
+                    <option value="مطابقة">مطابقة</option>
+                    <option value="تعليل / تفسير">تعليل / تفسير</option>
+                    <option value="مسألة">مسألة</option>
+                  </select>
+                  <textarea class="field" rows="3" data-bank-options placeholder="الخيارات إن وجدت - كل خيار في سطر"></textarea>
+                  <input class="field" type="text" data-bank-answer placeholder="الإجابة الصحيحة">
+                  <textarea class="field" rows="3" data-bank-explanation placeholder="شرح مختصر"></textarea>
+                  <div class="admin-form-grid">
+                    <input class="field" type="text" data-bank-grade placeholder="الصف">
+                    <input class="field" type="text" data-bank-subject placeholder="المادة">
+                  </div>
+                  <div class="admin-form-grid">
+                    <select class="field" data-bank-term>
+                      <option value="الفصل الأول">الفصل الأول</option>
+                      <option value="الفصل الثاني">الفصل الثاني</option>
+                    </select>
+                    <input class="field" type="text" data-bank-lesson placeholder="الدرس / المفهوم">
+                  </div>
+                  <div class="admin-form-grid">
+                    <input class="field" type="text" data-bank-source placeholder="المصدر">
+                    <input class="field" type="number" min="0" max="1" step="0.01" data-bank-confidence placeholder="الثقة 0 - 1">
+                  </div>
+                  <label class="admin-check">
+                    <input type="checkbox" data-bank-approved checked>
+                    <span>اعتماد السؤال مباشرة</span>
+                  </label>
+                  <button class="primary-btn" type="submit">حفظ السؤال في القاعدة</button>
+                  <div class="small-copy" data-bank-form-state>سيُحفظ السؤال داخل قاعدة المنصة مع بياناته الكاملة.</div>
+                </form>
+              </article>
             </div>
-            <textarea class="field" rows="2" data-generator-grades placeholder="الصفوف المستهدفة، مثال: الأول الابتدائي, الثاني المتوسط"></textarea>
-            <textarea class="field" rows="2" data-generator-subjects placeholder="المواد المستهدفة، مثال: الرياضيات, العلوم, اللغة الإنجليزية"></textarea>
-            <div class="admin-table-actions">
-              <button class="primary-btn" type="button" data-generator-toggle onclick="window.adminHandleGeneratorToggle && window.adminHandleGeneratorToggle(event)">تشغيل المولد</button>
-              <button class="mini-btn" type="submit">حفظ الإعدادات</button>
-              <button class="mini-btn admin-action-points" type="button" data-generator-run onclick="window.adminHandleGeneratorRunNow && window.adminHandleGeneratorRunNow(event)">تشغيل يدوي الآن</button>
+          </section>
+
+          <section id="admin-generator" class="admin-section-stack">
+            <div class="admin-section-head">
+              <div>
+                <h3>مولد الأسئلة التلقائي</h3>
+                <p>يشغّل توليدًا يوميًا مبنيًا على المنهج أولًا، ثم بنك النظام، ثم نمط المصادر التعليمية الموثوقة مع إعادة صياغة كاملة.</p>
+              </div>
             </div>
-            <div class="small-copy" data-generator-state-copy>يمكن تشغيله يوميًا محليًا مع كل زيارة للأدمن أو تشغيله يدويًا الآن.</div>
-          </form>
-        </article>
 
-        <article class="admin-panel">
-          <h3 class="admin-section-title">لوحات الصفوف</h3>
-          <p class="admin-subtitle">لكل صف بطاقة تعرض عدد الأسئلة ونوع المادة والترم بشكل مرتب، لتعرف أين توجد التغطية وأين نحتاج توليدًا أكثر.</p>
-          <div class="admin-list" data-grade-bank-panels></div>
-        </article>
-      </section>
+            <div class="admin-generator-layout">
+              <article class="admin-panel">
+                <h3 class="admin-section-title">التشغيل والإعدادات</h3>
+                <p class="admin-subtitle">شغّل المولد، احفظ الإعدادات، أو ابدأ توليدًا يدويًا الآن مع حالة واضحة ونتيجة مباشرة.</p>
+                <div class="admin-list" data-generator-status></div>
+                <div class="admin-status-banner" data-generator-feedback data-state="idle">
+                  المولد متوقف حاليًا. يمكنك تشغيله أو حفظ إعداداته أولًا.
+                </div>
+                <form class="admin-question-form" data-generator-form>
+                  <div class="admin-form-grid">
+                    <input class="field" type="number" min="1" max="100" data-generator-count placeholder="عدد الأسئلة اليومية">
+                    <select class="field" data-generator-term>
+                      <option value="all">الترمين</option>
+                      <option value="الفصل الأول">الفصل الأول</option>
+                      <option value="الفصل الثاني">الفصل الثاني</option>
+                    </select>
+                  </div>
+                  <textarea class="field" rows="2" data-generator-grades placeholder="الصفوف المستهدفة، مثال: الأول الابتدائي, الثاني المتوسط"></textarea>
+                  <textarea class="field" rows="2" data-generator-subjects placeholder="المواد المستهدفة، مثال: الرياضيات, العلوم, اللغة الإنجليزية"></textarea>
+                  <div class="admin-table-actions admin-generator-actions">
+                    <button class="primary-btn" type="button" data-generator-toggle onclick="window.adminHandleGeneratorToggle && window.adminHandleGeneratorToggle(event)">تشغيل المولد</button>
+                    <button class="mini-btn" type="submit">حفظ الإعدادات</button>
+                    <button class="mini-btn admin-action-points" type="button" data-generator-run onclick="window.adminHandleGeneratorRunNow && window.adminHandleGeneratorRunNow(event)">تشغيل يدوي الآن</button>
+                  </div>
+                  <div class="small-copy" data-generator-state-copy>يمكن تشغيله يوميًا محليًا مع كل زيارة للأدمن أو تشغيله يدويًا الآن.</div>
+                </form>
+              </article>
 
-      <section class="admin-grid">
-        <article class="admin-panel">
-          <h3 class="admin-section-title">المحتوى والباقات</h3>
-          <div class="chip-row">
-            <div class="top-chip">الصفوف</div>
-            <div class="top-chip">المواد</div>
-            <div class="top-chip">الفصول</div>
-            <div class="top-chip">الدروس</div>
-            <div class="top-chip">بنك الأسئلة</div>
-            <div class="top-chip">الاشتراكات</div>
-          </div>
-        </article>
+              <div class="admin-generator-side">
+                <article class="admin-panel">
+                  <h3 class="admin-section-title">سجل آخر التشغيلات</h3>
+                  <p class="admin-subtitle">يعرض آخر نتائج تشغيل المولد، وعدد الأسئلة التي أضيفت، وهل نجحت العملية أو توقفت.</p>
+                  <div class="admin-list" data-generator-log></div>
+                </article>
 
-        <article class="admin-panel">
-          <h3 class="admin-section-title">التقارير</h3>
-          <div class="admin-list" data-report-list></div>
-        </article>
-      </section>
+                <article class="admin-panel">
+                  <h3 class="admin-section-title">أولوية المصادر</h3>
+                  <p class="admin-subtitle">المنهج هو المصدر الأول، ثم بنك الأسئلة الداخلي، ثم نمط المصادر الموثوقة، والويب للتحقق فقط.</p>
+                  <div class="admin-source-list">
+                    <span class="admin-source-chip">المنهج السعودي أولًا</span>
+                    <span class="admin-source-chip">بنك الأسئلة الداخلي</span>
+                    <span class="admin-source-chip">صياغة موثوقة معاد تشكيلها</span>
+                    <span class="admin-source-chip">الويب للتحقق والمقارنة</span>
+                  </div>
+                </article>
+              </div>
+            </div>
+          </section>
+
+          <section id="admin-coverage" class="admin-section-stack">
+            <div class="admin-section-head">
+              <div>
+                <h3>التغطية التعليمية</h3>
+                <p>بطاقات الصفوف والمواد والفصول والدروس لمعرفة نسبة التغطية الحالية وأين نحتاج توليدًا أكثر.</p>
+              </div>
+            </div>
+            <article class="admin-panel">
+              <div class="admin-list" data-grade-bank-panels></div>
+            </article>
+          </section>
+
+          <section id="admin-users" class="admin-section-stack">
+            <div class="admin-section-head">
+              <div>
+                <h3>المستخدمون والاشتراكات</h3>
+                <p>إدارة الحسابات، الرصيد، الحالة، الباقات، والمشتركين الحاليين داخل كل باقة.</p>
+              </div>
+            </div>
+
+            <div class="admin-grid admin-grid-balanced">
+              <article class="admin-panel">
+                <h3 class="admin-section-title">إدارة المستخدمين</h3>
+                <p class="admin-subtitle">عرض الحسابات، الباقات، الرصيد، والحالة الحالية مع إجراءات التعديل والحظر.</p>
+                <div data-users-table></div>
+              </article>
+
+              <article class="admin-panel">
+                <h3 class="admin-section-title">المشتركين في الباقات</h3>
+                <p class="admin-subtitle">ملخص سريع للمشتركين الحاليين داخل كل باقة مع الحالة والرصيد.</p>
+                <div class="admin-list" data-subscribers-list></div>
+              </article>
+            </div>
+          </section>
+
+          <section id="admin-reports" class="admin-section-stack">
+            <div class="admin-section-head">
+              <div>
+                <h3>التقارير والسجل</h3>
+                <p>التفاعل، سجل النشاطات، والتقارير النهائية في آخر اللوحة بدل توزيعها على الصفحة كلها.</p>
+              </div>
+            </div>
+
+            <div class="admin-grid admin-grid-balanced">
+              <article class="admin-panel">
+                <h3 class="admin-section-title">الإعجابات وعدم الإعجاب</h3>
+                <div class="admin-list" data-feedback-list></div>
+              </article>
+
+              <article class="admin-panel">
+                <h3 class="admin-section-title">سجل النشاطات</h3>
+                <p class="admin-subtitle">آخر الأنشطة الإدارية والتعليمية الظاهرة في هذه النسخة.</p>
+                <div class="admin-list" data-activity-list></div>
+              </article>
+            </div>
+
+            <article class="admin-panel">
+              <h3 class="admin-section-title">التقارير</h3>
+              <div class="admin-list" data-report-list></div>
+            </article>
+          </section>
+        </div>
+      </div>
     </div>
   </main>
 
