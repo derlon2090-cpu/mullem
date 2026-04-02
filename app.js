@@ -1456,6 +1456,18 @@ function formatAssistantSections(response) {
       `;
     }
 
+    if (response.answerMode === "completion") {
+      return `
+        <div class="answer-grid">
+          ${modeNote}
+          <section class="answer-section answer-section-wide">
+            <h4>✅ الإجابة</h4>
+            <p>${response.finalAnswer}</p>
+          </section>
+        </div>
+      `;
+    }
+
   }
 
   if (response.answerMode === "completion") {
@@ -1471,6 +1483,35 @@ function formatAssistantSections(response) {
   }
 
   if (response.displayMode === "quick") {
+    return `
+      <div class="answer-grid">
+        ${modeNote}
+        <section class="answer-section answer-section-wide">
+          <h4>✅ الإجابة</h4>
+          <p>${response.finalAnswer}</p>
+        </section>
+        <section class="answer-section answer-section-wide">
+          <h4>📘 الشرح المختصر</h4>
+          <p>${response.explanation}</p>
+        </section>
+        <section class="answer-section answer-section-wide">
+          <h4>نوع السؤال</h4>
+          <p>${response.questionType || "سؤال أكاديمي"}</p>
+        </section>
+        <section class="answer-section answer-section-wide">
+          <div class="practice-cta">
+            <p>هل تريد التحويل إلى شرح تعليمي أو اختبار سريع على نفس الدرس؟</p>
+            <div class="inline-actions">
+              <button class="inline-action-btn" type="button" data-fill-prompt="اشرح ${response.lesson || "هذا الدرس"} شرحًا تعليميًا كاملًا في ${response.subject || (subjectSelect?.value || "المادة الحالية")}">اشرحه تعليميًا</button>
+              <button class="inline-action-btn" type="button" data-fill-prompt="اختبرني في ${response.lesson || "هذا الدرس"} بسؤال واحد">${selectedResponseMode === "quick" ? "اختبار سريع" : "ابدأ اختبارًا قصيرًا"}</button>
+            </div>
+          </div>
+        </section>
+      </div>
+    `;
+  }
+
+  if (response.displayMode === "__legacy_quick_disabled__") {
     return `
       <div class="answer-grid">
         ${modeNote}
