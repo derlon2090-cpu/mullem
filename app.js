@@ -1411,7 +1411,7 @@ function formatAssistantSections(response) {
     `;
   }
 
-  if (response.answerMode === "mcq" || response.answerMode === "truefalse") {
+  if (response.answerMode === "mcq" || response.answerMode === "truefalse" || response.answerMode === "completion") {
     if (response.answerMode === "truefalse" && !safeFinalAnswer) {
       return `
         <div class="answer-grid">
@@ -1456,6 +1456,18 @@ function formatAssistantSections(response) {
       `;
     }
 
+  }
+
+  if (response.answerMode === "completion") {
+    return `
+      <div class="answer-grid">
+        ${modeNote}
+        <section class="answer-section answer-section-wide">
+          <h4>âœ… ط§ظ„ط¥ط¬ط§ط¨ط©</h4>
+          <p>${response.finalAnswer}</p>
+        </section>
+      </div>
+    `;
   }
 
   if (response.displayMode === "quick") {

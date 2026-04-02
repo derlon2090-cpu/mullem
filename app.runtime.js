@@ -520,10 +520,21 @@
     return value;
   }
 
+  function mapRuntimeOutputStyleSmart(questionType) {
+    if (questionType === "صح أو خطأ") return "short_answer";
+    if (questionType === "اختيار من متعدد") return "direct_answer";
+    if (questionType === "إكمال فراغ") return "direct_answer";
+    if (questionType === "مسألة") return "worked_steps";
+    if (questionType === "شرح") return "guided_explanation";
+    if (questionType === "تعريف") return "compact_concept";
+    if (questionType === "مطابقة" || questionType === "سؤال مركب") return "mapping";
+    return mapRuntimeOutputStyle(questionType);
+  }
+
   function buildRuntimeMetaBrain(question, route, analysis, reasoning) {
     const context = resolveStudyContext(route);
-    const blocks = splitIntoQuestionBlocks(question);
-    const blockTypes = blocks.map((block) => detectBlockType(block)).filter((type) => type && type !== "general");
+    const blocks = splitIntoQuestionBlocksSmart(question);
+    const blockTypes = blocks.map((block) => classifyRuntimeBlockType(block)).filter((type) => type && type !== "general");
     const primaryType = analysis?.questionType || route?.question_type || "سؤال أكاديمي";
     const effectiveType = blockTypes.length > 1 ? "رسالة متعددة الأسئلة" : (blockTypes[0] === "matching" ? "مطابقة" : primaryType);
 
@@ -532,7 +543,7 @@
       questionType: effectiveType,
       subject: normalizeRuntimeSubjectLabel(route?.detected_subject || analysis?.subject || context.subject),
       difficulty: analysis?.difficulty || "medium",
-      expectedOutputStyle: mapRuntimeOutputStyle(effectiveType),
+      expectedOutputStyle: mapRuntimeOutputStyleSmart(effectiveType),
       grade: context.grade || route?.detected_grade_level || "غير محدد",
       term: context.term || "غير محدد",
       blockTypes,
@@ -638,7 +649,7 @@
 
   function QuestionDecomposer(message, subject = "") {
     return {
-      blocks: splitIntoQuestionBlocks(message),
+      blocks: splitIntoQuestionBlocksSmart(message),
       tasks: query_decomposer(message, subject)
     };
   }
@@ -751,6 +762,56 @@
 
     if ((reasoning?.compound || reasoning?.multiQuestion) && !next.mode) {
       next.displayMode = "quick";
+    }
+
+    return next;
+  }
+
+  function AdaptiveResponseStyleSmart(response, analysis, reasoning) {
+    const next = AdaptiveResponseStyle(response, analysis, reasoning);
+    if (!next) return next;
+
+    const type = next.questionType || analysis?.questionType || "";
+
+    if (type === "صح أو خطأ") {
+      next.displayMode = "quick";
+      next.answerMode = "truefalse";
+      next.steps = [];
+      next.mistakes = [];
+      next.similar = next.similar || "";
+      return next;
+    }
+
+    if (type === "اختيار من متعدد") {
+      next.displayMode = "quick";
+      next.answerMode = "mcq";
+      next.steps = [];
+      next.mistakes = [];
+      next.explanation = "";
+      next.similar = "";
+      return next;
+    }
+
+    if (type === "إكمال فراغ") {
+      next.displayMode = "quick";
+      next.answerMode = "completion";
+      next.steps = [];
+      next.mistakes = [];
+      next.explanation = "";
+      next.similar = "";
+      return next;
+    }
+
+    if (type === "مطابقة" || type === "سؤال مركب") {
+      next.displayMode = "quick";
+      return next;
+    }
+
+    if (type === "تعريف" || type === "شرح") {
+      next.displayMode = "quick";
+      next.steps = [];
+      next.mistakes = [];
+      return next;
     }
 
     return next;
@@ -1043,6 +1104,33 @@
     return blocks.filter((block) => block.trim().length > 0);
   }
 
+  function splitIntoQuestionBlocksSmart(text) {
+    const blocks = splitIntoQuestionBlocks(text);
+    if (blocks.length > 1) return blocks;
+
+    const lines = String(text || "")
+      .split(/\r?\n/)
+      .map((line) => line.trim())
+      .filter(Boolean);
+
+    if (!lines.length) return [];
+
+    const smartBlocks = [];
+    let current = [];
+
+    lines.forEach((line) => {
+      if ((/^\d+[\).\-\:]/.test(line) || /^س\d+/i.test(line)) && current.length) {
+        smartBlocks.push(current.join("\n"));
+        current = [line];
+        return;
+      }
+      current.push(line);
+    });
+
+    if (current.length) smartBlocks.push(current.join("\n"));
+    return smartBlocks.filter((block) => block.trim().length > 0);
+  }
+
   function detectBlockType(block) {
     const source = String(block || "");
     const normalized = typeof normalizeText === "function" ? normalizeText(source) : source.toLowerCase();
@@ -1056,6 +1144,43 @@
     if (/complete the sentence|اختر الإجابة الصحيحة|اختر الاجابة الصحيحة|اختر/i.test(normalized) || (blankLines === 1 && optionLines >= 2)) return "multiple_choice";
 
     return "general";
+  }
+
+  function classifyRuntimeBlockType(block) {
+    const source = String(block || "");
+    const normalized = typeof normalizeText === "function" ? normalizeText(source) : source.toLowerCase();
+    const lines = source.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
+    const blankLines = lines.filter((line) => hasRuntimeBlankPrompt(line)).length;
+    const hasInlineOptions = hasRuntimeInlineOptions(source);
+
+    if (isRuntimeTrueFalseQuestion(source)) return "true_false";
+    if (/match the word|match\b|طابق/.test(normalized) || blankLines >= 2) return "matching";
+    if (hasInlineOptions || /اختر الإجابة الصحيحة|اختر/.test(normalized)) return "multiple_choice";
+    if (/_{2,}|\.{3,}/.test(source)) return "completion";
+    if (/احسب|أوجد|ناتج|مساحة|محيط|حل المعادلة|\d+\s*[+\-*x×\/÷]\s*\d+/.test(normalized)) return "math_problem";
+    if (/عرف|ما هو|ما هي|ماذا يعني|what is|define/.test(normalized)) return "definition";
+    if (/اشرح|فسر|وضح|علل|explain/.test(normalized)) return "explanation";
+
+    return detectBlockType(block);
+  }
+
+  function classifyRuntimeQuestionType(text) {
+    const source = String(text || "");
+    const normalized = typeof normalizeText === "function" ? normalizeText(source) : source.toLowerCase();
+    const blocks = splitIntoQuestionBlocksSmart(source);
+
+    if (blocks.length > 1) return "سؤال مركب";
+    if (isRuntimeTrueFalseQuestion(source)) return "صح أو خطأ";
+    if (/match the word|match\b|طابق/.test(normalized)) return "مطابقة";
+    if (hasRuntimeInlineOptions(source) || /اختر الإجابة الصحيحة|اختر/.test(normalized)) return "اختيار من متعدد";
+    if (/_{2,}|\.{3,}/.test(source)) return "إكمال فراغ";
+    if (/ترجم|translate|translation|ما ترجمة|translate into/.test(normalized)) return "ترجمة";
+    if (/صحح|correct the sentence|rewrite|rewrite the sentence|grammar correction/.test(normalized)) return "تصحيح";
+    if (/احسب|أوجد|ناتج|مساحة|محيط|حل المعادلة|\d+\s*[+\-*x×\/÷]\s*\d+/.test(normalized)) return "مسألة";
+    if (/عرف|ما هو|ما هي|ماذا يعني|what is|define/.test(normalized)) return "تعريف";
+    if (/اشرح|فسر|وضح|علل|explain/.test(normalized)) return "شرح";
+
+    return detectRuntimeQuestionType(text);
   }
 
   function extractRuntimeMatchingData(block) {
@@ -1254,13 +1379,13 @@
   }
 
   function solveCompositeQuestionSet(question, route) {
-    const rawBlocks = splitIntoQuestionBlocks(question);
+    const rawBlocks = splitIntoQuestionBlocksSmart(question);
     if (!rawBlocks.length) return null;
 
     const solvedBlocks = [];
 
     rawBlocks.forEach((block) => {
-      const type = detectBlockType(block);
+      const type = classifyRuntimeBlockType(block);
       let solved = null;
 
       if (type === "matching") solved = solveRuntimeMatchingBlock(block, route);
@@ -1975,7 +2100,7 @@
     const questionText = `${question || ""} ${imageMeta.extracted_text || ""}`.trim();
     const intent = runtimeIntentRouter(questionText, attachments.length > 0);
     const isAcademic = isRuntimeAcademicIntent(intent.type);
-    const questionType = isAcademic ? detectRuntimeQuestionType(questionText) : "محادثة";
+    const questionType = isAcademic ? classifyRuntimeQuestionType(questionText) : "محادثة";
     const isObjective = questionType === "صح وخطأ" || questionType === "اختيار من متعدد";
     const quickMode = solveMode !== "structured";
     const runtimeSubject = isAcademic
@@ -2145,13 +2270,13 @@
   function intent_analyzer(message, hasAttachments = false) {
     const intent = IntentEngine(message, hasAttachments);
     const isAcademic = isRuntimeAcademicIntent(intent.type);
-    const questionType = isAcademic ? detectRuntimeQuestionType(message) : "محادثة";
+    const questionType = isAcademic ? classifyRuntimeQuestionType(message) : "محادثة";
     const subjectGuess = isAcademic
       ? detectRuntimeSubject(message, questionType)
       : { subject: "", confidence: 0, candidates: [], passes: [] };
     const decomposedTasks = isAcademic ? query_decomposer(message, subjectGuess.subject) : [];
-    const blocks = isAcademic ? splitIntoQuestionBlocks(message) : [];
-    const blockTypes = blocks.map((block) => detectBlockType(block)).filter((type) => type && type !== "general");
+    const blocks = isAcademic ? splitIntoQuestionBlocksSmart(message) : [];
+    const blockTypes = blocks.map((block) => classifyRuntimeBlockType(block)).filter((type) => type && type !== "general");
     return {
       intent,
       questionType,
@@ -2243,7 +2368,7 @@
     });
     const learningMemory = SelfLearningMemory();
     const finalizeRuntimeResponse = (candidate, overrides = {}) => {
-      const adapted = AdaptiveResponseStyle(candidate, analysis, runtimeReasoning);
+      const adapted = AdaptiveResponseStyleSmart(candidate, analysis, runtimeReasoning);
       return StructuredOutputEngine(
         adapted,
         {
@@ -2310,7 +2435,7 @@
       normalizedAcademic.steps = [];
       normalizedAcademic.mistakes = [];
     }
-    const styledAcademic = AdaptiveResponseStyle(normalizedAcademic, analysis, runtimeReasoning);
+    const styledAcademic = AdaptiveResponseStyleSmart(normalizedAcademic, analysis, runtimeReasoning);
     if (!ValidationEngine(styledAcademic, meta)) {
       return finalizeRuntimeResponse(
         buildRuntimeValidationFallback(meta, styledAcademic),
@@ -2335,7 +2460,7 @@
     if (checked.planTasks?.length) {
       checked.explanation = `${checked.explanation || ""} خطة التنفيذ: ${checked.planTasks.join(" ← ")}.`.trim();
     }
-    const validated = AdaptiveResponseStyle(
+    const validated = AdaptiveResponseStyleSmart(
       validateRuntimeMultipleChoiceResponse(
         checked.questionType || "",
         validateRuntimeTrueFalseResponse(checked.questionType || "", checked)
