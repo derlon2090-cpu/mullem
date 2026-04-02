@@ -1664,6 +1664,77 @@
     return parts.length >= 3;
   }
 
+  function normalizeRuntimeMathDigits(text) {
+    return String(text || "")
+      .replace(/[٠-٩]/g, (digit) => String("٠١٢٣٤٥٦٧٨٩".indexOf(digit)))
+      .replace(/[۰-۹]/g, (digit) => String("۰۱۲۳۴۵۶۷۸۹".indexOf(digit)));
+  }
+
+  function isDirectMathExpression(text) {
+    const compact = normalizeRuntimeMathDigits(text)
+      .replace(/\s+/g, "")
+      .replace(/[=＝]/g, "=");
+    return /^[0-9]+(?:\.[0-9]+)?([x×*\/÷+\-])[0-9]+(?:\.[0-9]+)?=?[؟?]?$/.test(compact);
+  }
+
+  function solveDirectMath(text) {
+    const compact = normalizeRuntimeMathDigits(text)
+      .replace(/\s+/g, "")
+      .replace(/×/g, "*")
+      .replace(/x/gi, "*")
+      .replace(/÷/g, "/")
+      .replace(/[=＝؟?]/g, "");
+    const match = compact.match(/^([0-9]+(?:\.[0-9]+)?)([+\-*\/])([0-9]+(?:\.[0-9]+)?)$/);
+    if (!match) return null;
+
+    const left = Number(match[1]);
+    const operator = match[2];
+    const right = Number(match[3]);
+    if (!Number.isFinite(left) || !Number.isFinite(right)) return null;
+
+    let result = null;
+    if (operator === "+") result = left + right;
+    if (operator === "-") result = left - right;
+    if (operator === "*") result = left * right;
+    if (operator === "/") {
+      if (right === 0) return null;
+      result = left / right;
+    }
+
+    if (!Number.isFinite(result)) return null;
+    return Number.isInteger(result) ? String(result) : String(Number(result.toFixed(4)));
+  }
+
+  function buildDirectMathResponse(question, route) {
+    const finalAnswer = solveDirectMath(question);
+    if (!finalAnswer) return null;
+
+    return {
+      mode: "solve",
+      answerMode: "completion",
+      displayMode: "quick",
+      questionType: route.question_type || "ظ…ط³ط£ظ„ط©",
+      subject: route.detected_subject || "ط§ظ„ط±ظٹط§ط¶ظٹط§طھ",
+      lesson: "ط¹ظ…ظ„ظٹط© ط­ط³ط§ط¨ظٹط© ظ…ط¨ط§ط´ط±ط©",
+      finalAnswer,
+      explanation: "",
+      confidence: 0.99,
+      decisionBasis: "direct_math_expression_solver",
+      agreementLevel: "high",
+      steps: [],
+      mistakes: [],
+      similar: "",
+      structuredResult: {
+        question_type: "math_problem",
+        subject: "math",
+        final_answer: finalAnswer,
+        reason: "",
+        confidence: 0.99,
+        decision_basis: "direct_math_expression_solver"
+      }
+    };
+  }
+
   function splitRuntimeOptionChunk(text) {
     const cleaned = cleanRuntimeChoiceToken(text);
     if (!cleaned) return [];
@@ -2507,7 +2578,14 @@
   function runtimeStartFreshSession() {
     clearRuntimeAttachments();
     runtimeState.pendingSolveConfirmation = null;
-    if (typeof startFreshSession === "function") {
+    if (promptInput) {
+      promptInput.value = "";
+      autoGrow(promptInput);
+    }
+    const hasActiveUser = typeof getActiveUser === "function" && Boolean(getActiveUser());
+    if (!hasActiveUser) {
+      clearGuestWorkspace();
+    } else if (typeof startFreshSession === "function") {
       startFreshSession();
     } else if (typeof resetConversationView === "function") {
       resetConversationView();
@@ -2688,6 +2766,7 @@
     }
 
     if (!normalized && !hasAttachments) return { type: "help", confidence: 0.4, source: "empty" };
+    if (isDirectMathExpression(raw)) return { type: "solve", confidence: 0.99, source: "direct_math_expression" };
     if (hasRuntimeInlineOptions(raw)) return { type: "solve", confidence: 0.99, source: "inline_choices_detected" };
     if (/^(من انت|من أنت|وش اسمك|ما اسمك|السلام عليكم|مرحبا|هلا|كيفك|كيف حالك|من تكون)$/i.test(compactRaw)) {
       return { type: "chat", confidence: 0.99, source: "general_chat_exact" };
@@ -3549,9 +3628,597 @@
     syncStudentDashboardHeader();
   }
 
+  const originalDetectRuntimeQuestionType = detectRuntimeQuestionType;
+  const originalClassifyRuntimeQuestionType = classifyRuntimeQuestionType;
+  const originalBuildDirectObjectiveResponse = buildDirectObjectiveResponse;
+  const originalNeedsClarification = typeof needsClarification === "function" ? needsClarification : null;
+
+  detectRuntimeQuestionType = function patchedDetectRuntimeQuestionType(text) {
+    if (isDirectMathExpression(text)) return "ظ…ط³ط£ظ„ط©";
+    return originalDetectRuntimeQuestionType(text);
+  };
+
+  classifyRuntimeQuestionType = function patchedClassifyRuntimeQuestionType(text) {
+    if (isDirectMathExpression(text)) return "ظ…ط³ط£ظ„ط©";
+    return originalClassifyRuntimeQuestionType(text);
+  };
+
+  buildDirectObjectiveResponse = function patchedBuildDirectObjectiveResponse(question, route) {
+    if (isDirectMathExpression(question)) {
+      return buildDirectMathResponse(question, {
+        ...route,
+        detected_subject: route?.detected_subject || "ط§ظ„ط±ظٹط§ط¶ظٹط§طھ",
+        question_type: route?.question_type || "ظ…ط³ط£ظ„ط©"
+      });
+    }
+    return originalBuildDirectObjectiveResponse(question, route);
+  };
+
+  if (originalNeedsClarification) {
+    window.needsClarification = function patchedNeedsClarification(message, intent, hasAttachments = false) {
+      if (isDirectMathExpression(message)) return false;
+      return originalNeedsClarification(message, intent, hasAttachments);
+    };
+  }
+
+  function enhanceRuntimeChatUi() {
+    const hasActiveUser = typeof getActiveUser === "function" && Boolean(getActiveUser());
+    const helperToolbar = document.querySelector(".helper-toolbar");
+    const loginLink = helperToolbar?.querySelector('a[href="login.html"]');
+    let clearButton = document.querySelector("[data-clear-chat]");
+
+    if (!clearButton && helperToolbar) {
+      clearButton = document.createElement("button");
+      clearButton.type = "button";
+      clearButton.className = "helper-btn helper-btn-ghost";
+      clearButton.setAttribute("data-clear-chat", "");
+      clearButton.textContent = hasActiveUser ? "ط´ط§طھ ط¬ط¯ظٹط¯" : "طھط­ط¯ظٹط« ط§ظ„ط´ط§طھ";
+      if (loginLink) {
+        helperToolbar.insertBefore(clearButton, loginLink);
+      } else {
+        helperToolbar.appendChild(clearButton);
+      }
+      clearButton.addEventListener("click", () => {
+        if (promptInput) {
+          promptInput.placeholder = "ط§ظƒطھط¨ ط³ط¤ط§ظ„ظƒ ظ…ظ† ط§ظ„ظ…ظ†ظ‡ط¬ ط§ظ„ط³ط¹ظˆط¯ظٹ...";
+        }
+      });
+    } else if (clearButton) {
+      clearButton.textContent = hasActiveUser ? "ط´ط§طھ ط¬ط¯ظٹط¯" : "طھط­ط¯ظٹط« ط§ظ„ط´ط§طھ";
+    }
+
+    document.querySelectorAll("[data-new-session]").forEach((button) => {
+      button.textContent = "ط´ط§طھ ط¬ط¯ظٹط¯";
+    });
+
+    const sessionHeading = document.querySelector("[data-session-list]")?.closest(".student-section-card")?.querySelector("h3");
+    if (sessionHeading) {
+      sessionHeading.textContent = "ط§ظ„ط´ط§طھط§طھ ط§ظ„ظ…ط­ظپظˆط¸ط©";
+    }
+  }
+
+  const originalNormalizeRuntimeQuestionKeyFinal = normalizeRuntimeQuestionKey;
+  const originalNormalizeRuntimeBankQuestionFinal = normalizeRuntimeBankQuestion;
+  const originalSearchApprovedQuestionBankFinal = searchApprovedQuestionBank;
+  const originalFindRuntimeStoredAnswerFinal = findRuntimeStoredAnswer;
+  const originalSaveRuntimeAnswerCandidateFinal = saveRuntimeAnswerCandidate;
+  const originalBookRetrievalFinal = BookRetrieval;
+  const originalWebVerificationLayerFinal = WebVerificationLayer;
+  const originalConsensusEngineFinal = ConsensusEngine;
+  const originalStructuredOutputEngineFinal = StructuredOutputEngine;
+  const originalIntentAnalyzerFinal = intent_analyzer;
+  const originalResponseBuilderFinal = response_builder;
+
+  const runtimeNormalizationStopWords = new Set([
+    "ما",
+    "ماذا",
+    "كم",
+    "هو",
+    "هي",
+    "في",
+    "من",
+    "على",
+    "الى",
+    "إلى",
+    "او",
+    "أو",
+    "the",
+    "a",
+    "an",
+    "is",
+    "are",
+    "of",
+    "to",
+    "for",
+    "with"
+  ]);
+
+  function normalizeRuntimeDigitsAndOperators(text) {
+    return String(text || "")
+      .replace(/[٠-٩]/g, (digit) => String("٠١٢٣٤٥٦٧٨٩".indexOf(digit)))
+      .replace(/×/g, "*")
+      .replace(/[xX]/g, "*")
+      .replace(/÷/g, "/")
+      .replace(/−/g, "-");
+  }
+
+  function normalizeRuntimeQuestionForSearch(text) {
+    return normalizeRuntimeDigitsAndOperators(text)
+      .toLowerCase()
+      .replace(/\r?\n/g, " \n ")
+      .replace(/[؟?!.,،؛:"'`()[\]{}]/g, " ")
+      .replace(/\s+/g, " ")
+      .trim();
+  }
+
+  function getRuntimeNormalizedKeywords(text, limit = 8) {
+    return normalizeRuntimeQuestionForSearch(text)
+      .split(/\s+/)
+      .map((token) => token.trim())
+      .filter((token) => token.length > 1 && !runtimeNormalizationStopWords.has(token))
+      .slice(0, limit);
+  }
+
+  function buildRuntimeCanonicalQuestion(text, route = {}, analysis = {}) {
+    const question = String(text || "").trim();
+    const normalized = normalizeRuntimeQuestionForSearch(question);
+    const questionType = route?.question_type || analysis?.questionType || "";
+    const subject = normalizeRuntimeSubjectLabel(route?.detected_subject || analysis?.subject || "");
+
+    if (!normalized) {
+      return {
+        originalQuestion: question,
+        normalizedQuestion: normalized,
+        canonicalQuestion: "",
+        conceptKey: "",
+        keywordSignature: []
+      };
+    }
+
+    if (isDirectMathExpression(question)) {
+      const expr = normalizeRuntimeDigitsAndOperators(question).replace(/\s+/g, "").replace(/[=؟?]/g, "");
+      const pieces = (expr.match(/\d+|[+\-*/]/g) || []).join(":");
+      return {
+        originalQuestion: question,
+        normalizedQuestion: normalized,
+        canonicalQuestion: `math:${pieces}`,
+        conceptKey: `math:${pieces}`,
+        keywordSignature: pieces.split(":").filter(Boolean).slice(0, 6)
+      };
+    }
+
+    let canonicalBase = normalized;
+
+    if (questionType === "صح أو خطأ" || questionType === "صح وخطأ") {
+      canonicalBase = canonicalBase
+        .replace(/\b(true|false)\b/g, " ")
+        .replace(/صواب|خطأ|صح|غلط/g, " ")
+        .replace(/\s+/g, " ")
+        .trim();
+    }
+
+    if (questionType === "اختيار من متعدد" || questionType === "إكمال فراغ") {
+      const mcqData = typeof extractRuntimeMultipleChoiceData === "function"
+        ? extractRuntimeMultipleChoiceData(question)
+        : null;
+      if (mcqData?.prompt) {
+        canonicalBase = normalizeRuntimeQuestionForSearch(mcqData.prompt);
+      }
+    }
+
+    canonicalBase = canonicalBase
+      .replace(/\b(match|complete|choose|select)\b/g, " ")
+      .replace(/____+/g, " ")
+      .replace(/\s+/g, " ")
+      .trim();
+
+    const keywordSignature = getRuntimeNormalizedKeywords(canonicalBase, 10);
+    const conceptKey = `${subject || "general"}::${questionType || "general"}::${keywordSignature.slice(0, 5).join("|")}`;
+
+    return {
+      originalQuestion: question,
+      normalizedQuestion: normalized,
+      canonicalQuestion: `${subject || "general"}::${canonicalBase}`.slice(0, 500),
+      conceptKey,
+      keywordSignature
+    };
+  }
+
+  function buildRuntimeHiddenAnalysis(question, route = {}, analysis = {}, decisionBasis = "") {
+    const canonical = buildRuntimeCanonicalQuestion(question, route, analysis);
+    const intentType = analysis?.intent?.type || route?.intent?.type || "";
+    const questionType = analysis?.questionType || route?.question_type || "";
+    const subject = route?.detected_subject || analysis?.subject || "";
+    const grade = route?.detected_grade_level
+      || gradeSelect?.value
+      || (typeof getActiveUser === "function" ? getActiveUser()?.grade : "")
+      || "unknown";
+    const term = termSelect?.value || "unknown";
+
+    return {
+      originalQuestion: canonical.originalQuestion,
+      normalizedQuestion: canonical.normalizedQuestion,
+      canonicalQuestion: canonical.canonicalQuestion,
+      conceptKey: canonical.conceptKey,
+      keywordSignature: canonical.keywordSignature,
+      intentType,
+      questionType,
+      subject,
+      grade,
+      term,
+      sourcePriority: [
+        "approved_question_bank",
+        "curriculum_engine",
+        "web_verification_engine"
+      ],
+      analysisBudgetMs: 5000,
+      decisionBasis: decisionBasis || "approved_bank_then_curriculum_then_web"
+    };
+  }
+
+  normalizeRuntimeBankQuestion = function patchedNormalizeRuntimeBankQuestion(text) {
+    return normalizeRuntimeQuestionForSearch(text);
+  };
+
+  normalizeRuntimeQuestionKey = function patchedNormalizeRuntimeQuestionKey(question, route) {
+    const analysis = {
+      subject: route?.detected_subject || "",
+      questionType: route?.question_type || ""
+    };
+    const canonical = buildRuntimeCanonicalQuestion(question, route, analysis);
+    const grade = route?.detected_grade_level || gradeSelect?.value || (typeof getActiveUser === "function" ? getActiveUser()?.grade : "") || "unknown";
+    const subject = route?.detected_subject || subjectSelect?.value || "general";
+    const stablePart = canonical.canonicalQuestion || canonical.normalizedQuestion || originalNormalizeRuntimeQuestionKeyFinal(question, route);
+    return `${grade}::${subject}::${stablePart}`.slice(0, 500);
+  };
+
+  searchApprovedQuestionBank = function patchedSearchApprovedQuestionBank(question, route, analysis = {}) {
+    const query = buildRuntimeCanonicalQuestion(question, route, analysis);
+    if (!query.originalQuestion) return null;
+
+    const requestedGrade = route?.detected_grade_level || gradeSelect?.value || (typeof getActiveUser === "function" ? getActiveUser()?.grade : "") || "unknown";
+    const requestedSubject = normalizeRuntimeSubjectLabel(route?.detected_subject || analysis?.subject || subjectSelect?.value || "");
+    const requestedTerm = termSelect?.value || "unknown";
+    const requestedType = route?.question_type || analysis?.questionType || "";
+    const requestedOptions = extractRuntimeStoredOptions(query.originalQuestion, requestedType);
+
+    const ranked = getRuntimeAnswerBank()
+      .map((item) => refreshRuntimeAnswerEntryStatus(item))
+      .filter((entry) => entry?.response)
+      .map((entry) => {
+        const entryAnalysis = {
+          subject: entry.subject || "",
+          questionType: entry.questionType || ""
+        };
+        const entryRoute = {
+          detected_subject: entry.subject || "",
+          detected_grade_level: entry.grade || "",
+          question_type: entry.questionType || ""
+        };
+        const entryCanonical = buildRuntimeCanonicalQuestion(entry.question || entry.originalQuestion || "", entryRoute, entryAnalysis);
+        const exactMatch = entry.question?.trim() === query.originalQuestion ? 1 : 0;
+        const normalizedMatch = entry.normalizedQuestion === query.normalizedQuestion ? 1 : 0;
+        const canonicalMatch = (entry.canonicalQuestion || entryCanonical.canonicalQuestion) === query.canonicalQuestion ? 1 : 0;
+        const fuzzyMatch = scoreRuntimeQuestionSimilarity(query.normalizedQuestion, entry.normalizedQuestion || entryCanonical.normalizedQuestion || entry.question || "");
+        const semanticMatch = scoreRuntimeQuestionSimilarity(query.canonicalQuestion, entry.canonicalQuestion || entryCanonical.canonicalQuestion || entry.question || "");
+        const conceptOverlap = countRuntimeKeywordOverlap(query.keywordSignature, entry.keywordSignature ? String(entry.keywordSignature).split("|") : entryCanonical.keywordSignature);
+        const conceptMatch = conceptOverlap >= 3
+          ? Math.min(1, conceptOverlap / Math.max(3, query.keywordSignature.length || 1))
+          : 0;
+        const sameSubject = !requestedSubject || !entry.subject
+          ? 0.7
+          : (normalizeRuntimeSubjectLabel(entry.subject) === requestedSubject ? 1 : 0.3);
+        const sameGrade = !requestedGrade || requestedGrade === "unknown" || !entry.grade || entry.grade === "unknown"
+          ? 0.75
+          : (entry.grade === requestedGrade ? 1 : 0.4);
+        const sameTerm = !requestedTerm || requestedTerm === "unknown" || !entry.term || entry.term === "unknown"
+          ? 0.75
+          : (entry.term === requestedTerm ? 1 : 0.45);
+        const sameType = !requestedType || !entry.questionType ? 0.7 : (entry.questionType === requestedType ? 1 : 0.45);
+        const entryOptions = Array.isArray(entry.options) ? entry.options : [];
+        const optionSimilarity = !requestedOptions.length || !entryOptions.length
+          ? 0.75
+          : scoreRuntimeQuestionSimilarity(requestedOptions.join(" "), entryOptions.join(" "));
+        const approval = isRuntimeApprovedAnswerEntry(entry) ? 1 : 0;
+        const likes = entry.likes || 0;
+        const dislikes = entry.dislikes || 0;
+        const feedbackScore = likes + dislikes > 0 ? likes / Math.max(1, likes + dislikes) : 0.75;
+        const confidence = typeof entry.confidence === "number"
+          ? entry.confidence
+          : (typeof entry.response?.confidence === "number" ? entry.response.confidence : 0.7);
+
+        const finalScore =
+          (exactMatch * 0.22) +
+          (normalizedMatch * 0.16) +
+          (canonicalMatch * 0.14) +
+          (fuzzyMatch * 0.12) +
+          (semanticMatch * 0.1) +
+          (conceptMatch * 0.08) +
+          (approval * 0.07) +
+          (sameSubject * 0.03) +
+          (sameGrade * 0.02) +
+          (sameTerm * 0.01) +
+          (sameType * 0.02) +
+          (optionSimilarity * 0.01) +
+          (feedbackScore * 0.01) +
+          (confidence * 0.01);
+
+        return {
+          ...entry,
+          normalizedQuestion: entry.normalizedQuestion || entryCanonical.normalizedQuestion,
+          canonicalQuestion: entry.canonicalQuestion || entryCanonical.canonicalQuestion,
+          conceptKey: entry.conceptKey || entryCanonical.conceptKey,
+          keywordSignature: entry.keywordSignature || entryCanonical.keywordSignature.join("|"),
+          exactMatch,
+          normalizedMatch,
+          canonicalMatch,
+          fuzzyMatch,
+          semanticMatch,
+          conceptMatch,
+          conceptOverlap,
+          finalScore: Number(finalScore.toFixed(4)),
+          matchMode: exactMatch
+            ? "exact"
+            : normalizedMatch
+              ? "normalized"
+              : canonicalMatch
+                ? "canonical"
+                : conceptMatch >= 0.8
+                  ? "concept"
+                  : "fuzzy"
+        };
+      })
+      .sort((left, right) => right.finalScore - left.finalScore);
+
+    const best = ranked[0];
+    if (!best) return null;
+    if (!isRuntimeApprovedAnswerEntry(best)) return null;
+    const strongDirectMatch = best.exactMatch || best.normalizedMatch || best.canonicalMatch;
+    const strongConceptMatch = best.conceptMatch >= 0.8 || best.conceptOverlap >= 5;
+    if (!strongDirectMatch && !strongConceptMatch && best.finalScore < 0.74) return null;
+    return best;
+  };
+
+  findRuntimeStoredAnswer = function patchedFindRuntimeStoredAnswer(question, route) {
+    return searchApprovedQuestionBank(question, route, {
+      subject: route?.detected_subject || "",
+      questionType: route?.question_type || ""
+    });
+  };
+
+  saveRuntimeAnswerCandidate = function patchedSaveRuntimeAnswerCandidate(question, route, response) {
+    if (!response || !question) return null;
+    const bank = getRuntimeAnswerBank();
+    const analysis = {
+      subject: response.subject || route?.detected_subject || "",
+      questionType: response.questionType || route?.question_type || ""
+    };
+    const hidden = buildRuntimeHiddenAnalysis(question, route, analysis, response.decisionBasis || "");
+    const key = normalizeRuntimeQuestionKey(question, route);
+    const existingIndex = bank.findIndex((item) => item.key === key);
+    const existing = existingIndex >= 0 ? bank[existingIndex] : null;
+    const preview = String(response.finalAnswer || response.explanation || "").trim().slice(0, 140);
+    response.answerBankKey = key;
+    response.hiddenAnalysis = hidden;
+    response.structuredResult = {
+      ...(response.structuredResult || {}),
+      original_question: hidden.originalQuestion,
+      normalized_question: hidden.normalizedQuestion,
+      canonical_question: hidden.canonicalQuestion,
+      concept_key: hidden.conceptKey,
+      confidence: typeof response.confidence === "number" ? response.confidence : (response.structuredResult?.confidence || 0.72)
+    };
+
+    const nextEntry = refreshRuntimeAnswerEntryStatus({
+      ...existing,
+      key,
+      originalQuestion: hidden.originalQuestion,
+      question: hidden.originalQuestion,
+      normalizedQuestion: hidden.normalizedQuestion,
+      canonicalQuestion: hidden.canonicalQuestion,
+      conceptKey: hidden.conceptKey,
+      keywordSignature: hidden.keywordSignature.join("|"),
+      subject: response.subject || route?.detected_subject || existing?.subject || "ط¹ط§ظ…",
+      grade: hidden.grade,
+      term: hidden.term,
+      questionType: response.questionType || route?.question_type || analysis.questionType || "ط³ط¤ط§ظ„ ط£ظƒط§ط¯ظٹظ…ظٹ",
+      options: extractRuntimeStoredOptions(question, response.questionType || route?.question_type || analysis.questionType || ""),
+      response,
+      preview,
+      source: response.decisionBasis || response?.structuredResult?.decision_basis || existing?.source || "approved_bank_then_curriculum_then_web",
+      sourceType: response.decisionBasis === "approved_question_bank_fast_path"
+        ? "approved_question_bank"
+        : (String(response.decisionBasis || "").includes("web") ? "curriculum_with_web_verification" : "curriculum"),
+      confidence: typeof response.confidence === "number"
+        ? Number(response.confidence.toFixed(4))
+        : (typeof existing?.confidence === "number" ? existing.confidence : 0.72),
+      likes: existing?.likes || 0,
+      dislikes: existing?.dislikes || 0,
+      usageCount: existing?.usageCount || 0,
+      isTrusted: Boolean(
+        existing?.isTrusted
+        || response?.isTrusted
+        || response?.decisionBasis === "approved_question_bank_fast_path"
+        || response?.decisionBasis === "stored_best_answer"
+        || (typeof response.confidence === "number" && response.confidence >= 0.95)
+      ),
+      hiddenAnalysis: hidden,
+      createdAt: existing?.createdAt || Date.now(),
+      updatedAt: Date.now()
+    });
+
+    if (existingIndex >= 0) {
+      bank[existingIndex] = nextEntry;
+    } else {
+      bank.unshift(nextEntry);
+    }
+
+    saveRuntimeAnswerBank(bank);
+    return nextEntry;
+  };
+
+  BookRetrieval = function patchedBookRetrieval(message, route, analysis, reasoning) {
+    const base = originalBookRetrievalFinal(message, route, analysis, reasoning);
+    const hidden = buildRuntimeHiddenAnalysis(message, route, analysis, "");
+    return {
+      ...base,
+      meta: {
+        ...(base?.meta || {}),
+        grade: hidden.grade,
+        term: hidden.term,
+        subject: hidden.subject || base?.meta?.subject || "",
+        originalQuestion: hidden.originalQuestion,
+        normalizedQuestion: hidden.normalizedQuestion,
+        canonicalQuestion: hidden.canonicalQuestion,
+        conceptKey: hidden.conceptKey
+      },
+      retrieval: {
+        ...(base?.retrieval || {}),
+        source: "approved_bank_then_curriculum",
+        webFallbackAvailable: true,
+        confidenceThreshold: 0.85,
+        decisionBasis: "approved_bank_then_curriculum_then_web",
+        retrievalPriority: [
+          "approved_question_bank",
+          "curriculum_engine",
+          "web_verification_engine"
+        ],
+        analysisBudgetMs: 5000,
+        evidence: [
+          ...((base?.retrieval?.evidence) || []),
+          { type: "normalized_question", value: hidden.normalizedQuestion },
+          { type: "canonical_question", value: hidden.canonicalQuestion },
+          { type: "concept_signature", items: hidden.keywordSignature }
+        ]
+      }
+    };
+  };
+
+  WebVerificationLayer = function patchedWebVerificationLayer(message, route, analysis) {
+    const base = originalWebVerificationLayerFinal(message, route, analysis);
+    const questionType = analysis?.questionType || route?.question_type || "";
+    const subject = analysis?.subject || route?.detected_subject || "";
+    const profile = buildRuntimeEvidenceProfile(message, subject, questionType);
+    const profileEvidence = Array.isArray(profile?.webClaims)
+      ? profile.webClaims.map((claim) => ({
+          claim,
+          reliability: profile.sourceReliability || 0.8,
+          source: "trusted_web_profile"
+        }))
+      : [];
+
+    return {
+      ...base,
+      enabled: Boolean(profileEvidence.length || base?.enabled),
+      reason: profileEvidence.length ? "trusted_web_verification_after_curriculum" : (base?.reason || "static_frontend_mode"),
+      confidence: Math.max(base?.confidence || 0, profile?.sourceReliability || 0),
+      evidence: [...profileEvidence, ...((base?.evidence) || [])],
+      sourcePolicy: "verification_only_after_curriculum"
+    };
+  };
+
+  ConsensusEngine = function patchedConsensusEngine(payload) {
+    const base = originalConsensusEngineFinal(payload);
+    return {
+      ...base,
+      decisionBasis: base?.decisionBasis || "approved_bank_then_curriculum_then_web",
+      sourcePriority: [
+        "approved_question_bank",
+        "curriculum_engine",
+        "web_verification_engine"
+      ],
+      analysisBudgetMs: 5000
+    };
+  };
+
+  StructuredOutputEngine = function patchedStructuredOutputEngine(response, consensus, meta, reasoning, extras = {}) {
+    const built = originalStructuredOutputEngineFinal(response, consensus, meta, reasoning, extras);
+    const hidden = buildRuntimeHiddenAnalysis(
+      response?.question || built?.question || meta?.originalQuestion || "",
+      {
+        detected_subject: meta?.subject || response?.subject || "",
+        detected_grade_level: meta?.grade || "",
+        question_type: meta?.questionType || response?.questionType || ""
+      },
+      {
+        subject: meta?.subject || response?.subject || "",
+        questionType: meta?.questionType || response?.questionType || "",
+        intent: { type: meta?.intent || response?.intentType || "" }
+      },
+      consensus?.decisionBasis || response?.decisionBasis || ""
+    );
+
+    return {
+      ...built,
+      hiddenAnalysis: {
+        ...hidden,
+        elapsedMs: 0,
+        agreementLevel: consensus?.agreementMode || "",
+        confidence: typeof built?.confidence === "number" ? built.confidence : (consensus?.confidence || 0.7)
+      },
+      structuredResult: {
+        ...(built?.structuredResult || {}),
+        original_question: hidden.originalQuestion,
+        normalized_question: hidden.normalizedQuestion,
+        canonical_question: hidden.canonicalQuestion,
+        concept_key: hidden.conceptKey,
+        decision_basis: built?.decisionBasis || consensus?.decisionBasis || "approved_bank_then_curriculum_then_web",
+        confidence: typeof built?.confidence === "number" ? built.confidence : (consensus?.confidence || 0.7)
+      }
+    };
+  };
+
+  intent_analyzer = function patchedIntentAnalyzer(message, hasAttachments = false) {
+    const base = originalIntentAnalyzerFinal(message, hasAttachments);
+    const hidden = buildRuntimeHiddenAnalysis(message, {
+      detected_subject: base?.subject || "",
+      question_type: base?.questionType || ""
+    }, base, "");
+    return {
+      ...base,
+      originalQuestion: hidden.originalQuestion,
+      normalizedQuestion: hidden.normalizedQuestion,
+      canonicalQuestion: hidden.canonicalQuestion,
+      conceptKey: hidden.conceptKey,
+      keywordSignature: hidden.keywordSignature
+    };
+  };
+
+  response_builder = function patchedResponseBuilder(question, route, analysis, reasoning) {
+    const startedAt = Date.now();
+    const resolvedAnalysis = analysis || intent_analyzer(question || route?.extracted_text || "", false);
+    const response = originalResponseBuilderFinal(question, route, resolvedAnalysis, reasoning);
+    const hidden = buildRuntimeHiddenAnalysis(question || route?.extracted_text || "", route, resolvedAnalysis, response?.decisionBasis || "");
+    const elapsedMs = Date.now() - startedAt;
+    return {
+      ...response,
+      hiddenAnalysis: {
+        ...(response?.hiddenAnalysis || {}),
+        ...hidden,
+        elapsedMs,
+        analysisBudgetMs: 5000,
+        sourcePriority: [
+          "approved_question_bank",
+          "curriculum_engine",
+          "web_verification_engine"
+        ]
+      },
+      structuredResult: {
+        ...(response?.structuredResult || {}),
+        original_question: hidden.originalQuestion,
+        normalized_question: hidden.normalizedQuestion,
+        canonical_question: hidden.canonicalQuestion,
+        concept_key: hidden.conceptKey,
+        confidence: typeof response?.confidence === "number" ? response.confidence : (response?.structuredResult?.confidence || 0.7),
+        decision_basis: response?.decisionBasis || response?.structuredResult?.decision_basis || "approved_bank_then_curriculum_then_web"
+      }
+    };
+  };
+
   clearGuestWorkspace();
   applyUserStudyContext();
   syncStudentDashboardHeader();
+  enhanceRuntimeChatUi();
   bindPromptPlaceholderButtons();
   gradeSelect?.addEventListener("change", syncStudentDashboardHeader);
   function submitHeroExample() {

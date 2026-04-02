@@ -3279,7 +3279,8 @@ body.theme-dark .admin-status-banner[data-state="error"] {
 }
 
 .recent-session-list .session-card-actions {
-  display: none;
+  display: flex;
+  justify-content: flex-start;
 }
 
 .recent-session-list .session-card-preview {
@@ -3287,6 +3288,11 @@ body.theme-dark .admin-status-banner[data-state="error"] {
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
+}
+
+.recent-session-list .session-action-btn {
+  padding: 7px 11px;
+  font-size: 0.82rem;
 }
 
 .compact-list {
