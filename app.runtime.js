@@ -4215,10 +4215,34 @@
     };
   };
 
+  function applyReadableRuntimeLabels() {
+    const hasActiveUser = typeof getActiveUser === "function" && Boolean(getActiveUser());
+    const clearLabel = hasActiveUser
+      ? "\u0634\u0627\u062a \u062c\u062f\u064a\u062f"
+      : "\u062a\u062d\u062f\u064a\u062b \u0627\u0644\u0634\u0627\u062a";
+    const savedChatsLabel = "\u0627\u0644\u0634\u0627\u062a\u0627\u062a \u0627\u0644\u0645\u062d\u0641\u0648\u0638\u0629";
+
+    document.querySelectorAll("[data-clear-chat]").forEach((button) => {
+      button.textContent = clearLabel;
+      button.setAttribute("aria-label", clearLabel);
+    });
+
+    document.querySelectorAll("[data-new-session]").forEach((button) => {
+      button.textContent = "\u0634\u0627\u062a \u062c\u062f\u064a\u062f";
+      button.setAttribute("aria-label", "\u0634\u0627\u062a \u062c\u062f\u064a\u062f");
+    });
+
+    const sessionHeading = document.querySelector("[data-session-list]")?.closest(".student-section-card")?.querySelector("h3");
+    if (sessionHeading) {
+      sessionHeading.textContent = savedChatsLabel;
+    }
+  }
+
   clearGuestWorkspace();
   applyUserStudyContext();
   syncStudentDashboardHeader();
   enhanceRuntimeChatUi();
+  applyReadableRuntimeLabels();
   bindPromptPlaceholderButtons();
   gradeSelect?.addEventListener("change", syncStudentDashboardHeader);
   function submitHeroExample() {

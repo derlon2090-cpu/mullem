@@ -2570,3 +2570,392 @@ bindPasswordToggles();
 if (isAdminLoggedIn()) {
   refreshAdminData();
 }
+
+(() => {
+  const generatorStageConfig = {
+    "ابتدائي": {
+      grades: [
+        "الأول الابتدائي",
+        "الثاني الابتدائي",
+        "الثالث الابتدائي",
+        "الرابع الابتدائي",
+        "الخامس الابتدائي",
+        "السادس الابتدائي"
+      ],
+      subjects: ["الرياضيات", "العلوم", "اللغة العربية", "اللغة الإنجليزية", "الدراسات الاجتماعية"]
+    },
+    "متوسط": {
+      grades: [
+        "الأول المتوسط",
+        "الثاني المتوسط",
+        "الثالث المتوسط"
+      ],
+      subjects: ["الرياضيات", "العلوم", "اللغة العربية", "اللغة الإنجليزية", "الدراسات الاجتماعية"]
+    },
+    "ثانوي": {
+      grades: [
+        "الأول الثانوي",
+        "الثاني الثانوي",
+        "الثالث الثانوي"
+      ],
+      subjects: ["الرياضيات", "الفيزياء", "الكيمياء", "الأحياء", "اللغة العربية", "اللغة الإنجليزية", "الدراسات الاجتماعية"]
+    }
+  };
+
+  const originalGetQuestionGeneratorSettingsFinal = getQuestionGeneratorSettings;
+  const originalGetGeneratorDraftSettingsFinal = getGeneratorDraftSettings;
+  const originalSyncGeneratorFormFinal = syncGeneratorForm;
+  const originalRenderQuestionBankSummaryFinal = renderQuestionBankSummary;
+  const originalRenderQuestionBankTableFinal = renderQuestionBankTable;
+  const originalRenderGeneratorStatusFinal = renderGeneratorStatus;
+  const originalRenderUsersTableFinal = renderUsersTable;
+  const originalRefreshAdminDataFinal = refreshAdminData;
+
+  function getGeneratorStageFromGrade(grade) {
+    const safeGrade = String(grade || "").trim();
+    return Object.entries(generatorStageConfig).find(([, config]) => config.grades.includes(safeGrade))?.[0] || "";
+  }
+
+  function inferGeneratorStage(settings) {
+    if (settings?.stage && generatorStageConfig[settings.stage]) return settings.stage;
+    const gradeStage = Array.isArray(settings?.grades)
+      ? settings.grades.map(getGeneratorStageFromGrade).find(Boolean)
+      : "";
+    if (gradeStage) return gradeStage;
+    return "ثانوي";
+  }
+
+  function getStageScopedSubjects(stage) {
+    const allowed = generatorStageConfig[stage]?.subjects || generatorStageConfig["ثانوي"].subjects;
+    return allowed.filter((subject) => Object.prototype.hasOwnProperty.call(generatorSeedLibrary, subject));
+  }
+
+  function ensureGeneratorStageSwitch() {
+    if (!generatorForm) return null;
+    let root = generatorForm.querySelector("[data-generator-stage-switch]");
+    if (!root) {
+      const wrapper = document.createElement("div");
+      wrapper.className = "admin-multiselect-block";
+      wrapper.innerHTML = `
+        <div class="admin-multiselect-head">
+          <strong>المرحلة المستهدفة</strong>
+          <span>ابدأ بتحديد المرحلة، ثم اختر الصفوف والمواد الخاصة بها فقط حتى يكون التوليد أدق وأكثر ترتيبًا.</span>
+        </div>
+        <div class="admin-stage-switch" data-generator-stage-switch></div>
+      `;
+      const firstGrid = generatorForm.querySelector(".admin-form-grid");
+      if (firstGrid) {
+        firstGrid.insertAdjacentElement("afterend", wrapper);
+      } else {
+        generatorForm.prepend(wrapper);
+      }
+      root = wrapper.querySelector("[data-generator-stage-switch]");
+    }
+
+    if (root && !root.dataset.bound) {
+      root.addEventListener("click", (event) => {
+        const button = event.target.closest("[data-generator-stage]");
+        if (!button) return;
+        const stage = button.getAttribute("data-generator-stage") || "ثانوي";
+        const current = getQuestionGeneratorSettings();
+        const scopedSubjects = getStageScopedSubjects(stage);
+        const scopedGrades = generatorStageConfig[stage]?.grades || [];
+        saveQuestionGeneratorSettings({
+          ...current,
+          stage,
+          grades: scopedGrades.slice(0, Math.min(3, scopedGrades.length)),
+          subjects: scopedSubjects.slice(0, Math.min(3, scopedSubjects.length))
+        });
+        syncGeneratorForm();
+        renderGeneratorStatus();
+      });
+      root.dataset.bound = "true";
+    }
+
+    return root;
+  }
+
+  function renderGeneratorStageSwitch(settings) {
+    const root = ensureGeneratorStageSwitch();
+    if (!root) return;
+    const activeStage = inferGeneratorStage(settings);
+    root.innerHTML = Object.keys(generatorStageConfig).map((stage) => `
+      <button
+        class="admin-stage-btn ${stage === activeStage ? "active" : ""}"
+        type="button"
+        data-generator-stage="${escapeAdminHtmlEnhanced(stage)}"
+        aria-pressed="${stage === activeStage ? "true" : "false"}"
+      >
+        ${escapeAdminHtmlEnhanced(stage)}
+      </button>
+    `).join("");
+  }
+
+  getQuestionGeneratorSettings = function patchedGetQuestionGeneratorSettings() {
+    const settings = originalGetQuestionGeneratorSettingsFinal();
+    const stage = inferGeneratorStage(settings);
+    const allowedGrades = generatorStageConfig[stage]?.grades || generatorStageConfig["ثانوي"].grades;
+    const allowedSubjects = getStageScopedSubjects(stage);
+    const safeGrades = Array.isArray(settings.grades)
+      ? settings.grades.filter((grade) => allowedGrades.includes(grade))
+      : [];
+    const safeSubjects = Array.isArray(settings.subjects)
+      ? settings.subjects.filter((subject) => allowedSubjects.includes(subject))
+      : [];
+
+    return {
+      ...settings,
+      stage,
+      grades: safeGrades.length ? safeGrades : allowedGrades.slice(0, Math.min(3, allowedGrades.length)),
+      subjects: safeSubjects.length ? safeSubjects : allowedSubjects.slice(0, Math.min(3, allowedSubjects.length))
+    };
+  };
+
+  getGeneratorDraftSettings = function patchedGetGeneratorDraftSettings(baseSettings = getQuestionGeneratorSettings()) {
+    const currentStage = generatorForm?.querySelector("[data-generator-stage].active")?.getAttribute("data-generator-stage")
+      || inferGeneratorStage(baseSettings);
+    const scopedGrades = generatorStageConfig[currentStage]?.grades || generatorStageConfig["ثانوي"].grades;
+    const scopedSubjects = getStageScopedSubjects(currentStage);
+    const selectedGrades = getGeneratorChoiceSelectionEnhanced(generatorGradeChoicesRootEnhanced, scopedGrades.slice(0, Math.min(3, scopedGrades.length)))
+      .filter((grade) => scopedGrades.includes(grade));
+    const selectedSubjects = getGeneratorChoiceSelectionEnhanced(generatorSubjectChoicesRootEnhanced, scopedSubjects.slice(0, Math.min(3, scopedSubjects.length)))
+      .filter((subject) => scopedSubjects.includes(subject));
+
+    const nextSettings = {
+      ...originalGetGeneratorDraftSettingsFinal(baseSettings),
+      stage: currentStage,
+      grades: selectedGrades.length ? selectedGrades : scopedGrades.slice(0, Math.min(3, scopedGrades.length)),
+      subjects: selectedSubjects.length ? selectedSubjects : scopedSubjects.slice(0, Math.min(3, scopedSubjects.length))
+    };
+
+    writeGeneratorSelectionFieldsEnhanced(nextSettings);
+    return nextSettings;
+  };
+
+  syncGeneratorForm = function patchedSyncGeneratorForm() {
+    const settings = getQuestionGeneratorSettings();
+    const activeStage = inferGeneratorStage(settings);
+    const scopedGrades = generatorStageConfig[activeStage]?.grades || generatorStageConfig["ثانوي"].grades;
+    const scopedSubjects = getStageScopedSubjects(activeStage);
+
+    if (generatorCountInput) generatorCountInput.value = enforceGeneratorDailyTargetEnhanced(settings.dailyTarget);
+    if (generatorTermInput) generatorTermInput.value = settings.term || "all";
+
+    renderGeneratorStageSwitch(settings);
+    renderGeneratorChoiceChipsEnhanced(
+      generatorGradeChoicesRootEnhanced,
+      scopedGrades,
+      (settings.grades || []).filter((grade) => scopedGrades.includes(grade)),
+      "grades"
+    );
+    renderGeneratorChoiceChipsEnhanced(
+      generatorSubjectChoicesRootEnhanced,
+      scopedSubjects,
+      (settings.subjects || []).filter((subject) => scopedSubjects.includes(subject)),
+      "subjects"
+    );
+    writeGeneratorSelectionFieldsEnhanced(settings);
+  };
+
+  function getQuestionBankSourceStats(bank) {
+    const sources = bank.reduce((acc, entry) => {
+      const label = entry.sourceType || entry.source || "internal";
+      acc[label] = (acc[label] || 0) + 1;
+      return acc;
+    }, {});
+    const top = Object.entries(sources).sort((a, b) => b[1] - a[1])[0];
+    return {
+      topSource: top?.[0] || "لا يوجد مصدر بارز بعد",
+      topSourceCount: top?.[1] || 0
+    };
+  }
+
+  renderQuestionBankSummary = function patchedRenderQuestionBankSummary() {
+    if (!questionBankSummaryRoot) return;
+    const bank = getQuestionBank();
+    const approved = bank.filter((entry) => entry.isApproved).length;
+    const mcqCount = bank.filter((entry) => entry.questionType === "اختيار من متعدد").length;
+    const trueFalseCount = bank.filter((entry) => entry.questionType === "صح أو خطأ").length;
+    const sourceStats = getQuestionBankSourceStats(bank);
+
+    questionBankSummaryRoot.innerHTML = `
+      <div class="admin-bank-grid">
+        <div class="admin-bank-card">
+          <strong>إجمالي الأسئلة</strong>
+          <span>${bank.length} سؤال محفوظ داخل النظام</span>
+        </div>
+        <div class="admin-bank-card">
+          <strong>الأسئلة المعتمدة</strong>
+          <span>${approved} سؤالًا جاهزًا للمسار السريع</span>
+        </div>
+        <div class="admin-bank-card">
+          <strong>الأكثر إضافة حسب المصدر</strong>
+          <span>${sourceStats.topSource} • ${sourceStats.topSourceCount}</span>
+        </div>
+        <div class="admin-bank-card">
+          <strong>تركيز الأنواع</strong>
+          <span>اختيار: ${mcqCount} • صح/خطأ: ${trueFalseCount}</span>
+        </div>
+      </div>
+    `;
+  };
+
+  renderQuestionBankTable = function patchedRenderQuestionBankTable() {
+    if (!questionBankTableRoot) return;
+    const query = normalizeAdminText(bankSearchInputEnhanced?.value || "");
+    const bank = getQuestionBank()
+      .sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
+
+    if (!query) {
+      questionBankTableRoot.innerHTML = `
+        <div class="admin-bank-search-note">
+          <strong>بنك الأسئلة محفوظ داخليًا</strong>
+          <span>لن نعرض قائمة الأسئلة كاملة هنا حتى تبقى لوحة الأدمن أخف. اكتب اسم السؤال أو جزءًا منه في البحث، أو أضف سؤالًا جديدًا من النموذج المجاور.</span>
+        </div>
+      `;
+      return;
+    }
+
+    const matches = bank.filter((entry) => {
+      const haystack = normalizeAdminText([
+        entry.question,
+        entry.normalizedQuestion,
+        entry.subject,
+        entry.grade,
+        entry.term,
+        entry.lesson
+      ].join(" "));
+      return haystack.includes(query);
+    }).slice(0, 8);
+
+    questionBankTableRoot.innerHTML = matches.length
+      ? `
+          <div class="admin-bank-search-results">
+            ${matches.map((entry) => `
+              <article class="admin-search-result-card">
+                <strong>${escapeAdminHtmlEnhanced(entry.question || "بدون نص")}</strong>
+                <div class="admin-search-result-meta">
+                  <span>${escapeAdminHtmlEnhanced(entry.questionType || "عام")}</span>
+                  <span>${escapeAdminHtmlEnhanced(entry.subject || "عام")}</span>
+                  <span>${escapeAdminHtmlEnhanced(entry.grade || "غير محدد")}</span>
+                  <span>${escapeAdminHtmlEnhanced(entry.term || "غير محدد")}</span>
+                </div>
+                <div class="admin-table-actions">
+                  <button type="button" class="mini-btn" data-bank-edit="${escapeAdminHtmlEnhanced(entry.key)}">تعديل</button>
+                  <button type="button" class="mini-btn admin-action-unban" data-bank-approve="${escapeAdminHtmlEnhanced(entry.key)}">
+                    ${entry.isApproved ? "إلغاء الاعتماد" : "اعتماد"}
+                  </button>
+                  <button type="button" class="mini-btn admin-action-ban" data-bank-delete="${escapeAdminHtmlEnhanced(entry.key)}">حذف</button>
+                </div>
+              </article>
+            `).join("")}
+          </div>
+        `
+      : `
+          <div class="admin-bank-search-note">
+            <strong>لا توجد نتيجة مطابقة</strong>
+            <span>جرّب كتابة جزء آخر من اسم السؤال، أو أضفه يدويًا إذا لم يكن موجودًا بعد.</span>
+          </div>
+        `;
+  };
+
+  renderGeneratorStatus = function patchedRenderGeneratorStatus() {
+    originalRenderGeneratorStatusFinal();
+    const settings = getQuestionGeneratorSettings();
+    const stage = inferGeneratorStage(settings);
+    if (generatorStatusRoot) {
+      generatorStatusRoot.insertAdjacentHTML("beforeend", `
+        <div class="admin-bank-grid">
+          <div class="admin-bank-card">
+            <strong>المرحلة الحالية</strong>
+            <span>${escapeAdminHtmlEnhanced(stage)}</span>
+          </div>
+          <div class="admin-bank-card">
+            <strong>الصفوف المحددة</strong>
+            <span>${escapeAdminHtmlEnhanced((settings.grades || []).join("، "))}</span>
+          </div>
+          <div class="admin-bank-card">
+            <strong>المواد المحددة</strong>
+            <span>${escapeAdminHtmlEnhanced((settings.subjects || []).join("، "))}</span>
+          </div>
+          <div class="admin-bank-card">
+            <strong>التدريب المستمر</strong>
+            <span>كل سؤال معتمد يُحفظ ويُستخدم لاحقًا في المسار السريع داخل الشات.</span>
+          </div>
+        </div>
+      `);
+    }
+  };
+
+  renderUsersTable = function patchedRenderUsersTable() {
+    if (!usersTableRoot) return;
+    const rows = getUsers()
+      .map((user) => `
+        <tr>
+          <td>
+            <div class="admin-user-cell">
+              <strong>${escapeAdminHtmlEnhanced(user.name || "بدون اسم")}</strong>
+              <span>${escapeAdminHtmlEnhanced(user.email || "—")}</span>
+              <small>${escapeAdminHtmlEnhanced(user.grade || "بدون صف")}${user.subject ? ` • ${escapeAdminHtmlEnhanced(user.subject)}` : ""}</small>
+            </div>
+          </td>
+          <td>
+            <div class="admin-user-stack">
+              <strong>${escapeAdminHtmlEnhanced(user.role || "Student")}</strong>
+              <span>${escapeAdminHtmlEnhanced(user.package || "مجاني محدود")}</span>
+            </div>
+          </td>
+          <td>${user.xp ?? 0}</td>
+          <td>
+            <div class="admin-user-stack">
+              <strong>${escapeAdminHtmlEnhanced(user.status || "نشط")}</strong>
+              <span>${escapeAdminHtmlEnhanced(user.activity || "لا يوجد نشاط مسجل")}</span>
+            </div>
+          </td>
+          <td>
+            <div class="admin-table-actions">
+              <button type="button" class="mini-btn" data-admin-edit="${escapeAdminHtmlEnhanced(user.id)}">تعديل البيانات</button>
+              <button type="button" class="mini-btn admin-action-points" data-admin-points="${escapeAdminHtmlEnhanced(user.id)}">تعديل النقاط</button>
+              <button
+                type="button"
+                class="mini-btn ${user.status === "محظور" ? "admin-action-unban" : "admin-action-ban"}"
+                data-admin-ban="${escapeAdminHtmlEnhanced(user.id)}"
+              >
+                ${user.status === "محظور" ? "فك الحظر" : "حظر الحساب"}
+              </button>
+            </div>
+          </td>
+        </tr>
+      `)
+      .join("");
+
+    usersTableRoot.innerHTML = `
+      <div class="admin-inline-note">جميع الإجراءات واضحة من اليمين: تعديل البيانات، تعديل النقاط، ثم الحظر أو فك الحظر.</div>
+      <div class="admin-table-wrap">
+        <table class="table admin-users-table">
+          <thead>
+            <tr>
+              <th>المستخدم</th>
+              <th>الدور والباقة</th>
+              <th>XP</th>
+              <th>الحالة وآخر نشاط</th>
+              <th>الإجراءات</th>
+            </tr>
+          </thead>
+          <tbody>${rows}</tbody>
+        </table>
+      </div>
+    `;
+  };
+
+  refreshAdminData = function patchedRefreshAdminData() {
+    originalRefreshAdminDataFinal();
+    syncGeneratorForm();
+  };
+
+  bankSearchInputEnhanced?.setAttribute("placeholder", "ابحث باسم السؤال أو جزء منه للتأكد من وجوده داخل النظام");
+  ensureGeneratorStageSwitch();
+  if (isAdminLoggedIn()) {
+    refreshAdminData();
+  }
+})();

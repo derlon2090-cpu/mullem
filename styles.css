@@ -2504,6 +2504,32 @@ body.theme-dark .admin-action-unban {
   gap: 10px;
 }
 
+.admin-stage-switch {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.admin-stage-btn {
+  border: 1px solid rgba(34, 197, 94, 0.16);
+  background: rgba(255, 255, 255, 0.96);
+  color: var(--muted);
+  padding: 10px 16px;
+  border-radius: 999px;
+  font-size: 0.92rem;
+  font-weight: 800;
+  cursor: pointer;
+  transition: 180ms ease;
+}
+
+.admin-stage-btn.active,
+.admin-stage-btn[aria-pressed="true"] {
+  background: rgba(34, 197, 94, 0.14);
+  border-color: rgba(34, 197, 94, 0.28);
+  color: var(--brand-strong);
+  box-shadow: 0 12px 24px rgba(34, 197, 94, 0.12);
+}
+
 .admin-choice-chip {
   position: relative;
 }
@@ -2707,6 +2733,64 @@ body.theme-dark .admin-action-unban {
   color: var(--muted);
 }
 
+.admin-bank-search-note {
+  margin-top: 14px;
+  padding: 16px 18px;
+  border-radius: 18px;
+  border: 1px dashed rgba(34, 197, 94, 0.22);
+  background: rgba(255, 255, 255, 0.86);
+  display: grid;
+  gap: 8px;
+}
+
+.admin-bank-search-note strong {
+  color: var(--text);
+}
+
+.admin-bank-search-note span {
+  color: var(--muted);
+  line-height: 1.8;
+}
+
+.admin-bank-search-results {
+  display: grid;
+  gap: 12px;
+  margin-top: 14px;
+}
+
+.admin-search-result-card {
+  padding: 16px 18px;
+  border-radius: 18px;
+  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.94);
+  display: grid;
+  gap: 10px;
+}
+
+.admin-search-result-card strong {
+  color: var(--text);
+  line-height: 1.9;
+}
+
+.admin-search-result-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.admin-search-result-meta span {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 6px 10px;
+  border-radius: 999px;
+  background: rgba(34, 197, 94, 0.1);
+  border: 1px solid rgba(34, 197, 94, 0.14);
+  color: var(--brand-strong);
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+
 body.theme-dark .admin-sidebar-card,
 body.theme-dark .admin-hero-panel,
 body.theme-dark .admin-nav-link,
@@ -2726,6 +2810,29 @@ body.theme-dark .admin-choice-chip input:checked + span {
   background: rgba(34, 197, 94, 0.18);
   border-color: rgba(94, 227, 139, 0.28);
   color: #d9fbe4;
+}
+
+body.theme-dark .admin-stage-btn {
+  background:
+    radial-gradient(circle at top left, rgba(34, 197, 94, 0.08), transparent 26%),
+    linear-gradient(180deg, rgba(20, 31, 24, 0.98), rgba(14, 22, 17, 0.96));
+  border-color: rgba(255, 255, 255, 0.1);
+  color: var(--text);
+}
+
+body.theme-dark .admin-stage-btn.active,
+body.theme-dark .admin-stage-btn[aria-pressed="true"] {
+  background: rgba(34, 197, 94, 0.2);
+  border-color: rgba(94, 227, 139, 0.28);
+  color: #d9fbe4;
+}
+
+body.theme-dark .admin-bank-search-note,
+body.theme-dark .admin-search-result-card {
+  background:
+    radial-gradient(circle at top left, rgba(34, 197, 94, 0.08), transparent 26%),
+    linear-gradient(180deg, rgba(20, 31, 24, 0.98), rgba(14, 22, 17, 0.96));
+  border-color: rgba(255, 255, 255, 0.1);
 }
 
 body.theme-dark .admin-status-banner[data-state="running"] {
