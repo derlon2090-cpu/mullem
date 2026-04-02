@@ -104,6 +104,8 @@ def detect_intent(text: str) -> str:
     stripped = str(text or "").strip()
     lowered = normalize_text(stripped)
 
+    if not stripped:
+        return "general_chat"
     if lowered in {normalize_text(item) for item in GENERAL_CHAT_PATTERNS}:
         return "general_chat"
     if lowered in {normalize_text(item) for item in UI_ACTION_PATTERNS}:
@@ -118,7 +120,7 @@ def detect_intent(text: str) -> str:
         return "academic_question"
     if len(split_question_blocks(stripped)) > 1:
         return "academic_question"
-    return "general_chat"
+    return "academic_question"
 
 
 def detect_question_type(text: str) -> str:
@@ -294,6 +296,171 @@ def render_response(question_type: str, answer: str, explanation: str) -> str:
     if question_type == "matching":
         return f"✅ الإجابة:\n{answer}"
     return f"✅ الإجابة: {answer}\n📘 الشرح: {explanation}"
+
+
+def render_response(question_type: str, answer: str, explanation: str) -> str:
+    if question_type == "multiple_choice":
+        return f"âœ… ط§ظ„ط¥ط¬ط§ط¨ط©: {answer}"
+    if question_type == "true_false":
+        return f"âœ… ط§ظ„ط¥ط¬ط§ط¨ط©: {answer}\nًں“ک ط§ظ„ط³ط¨ط¨: {explanation}"
+    if question_type == "fill_blank":
+        return f"âœ… ط§ظ„ط¥ط¬ط§ط¨ط©: {answer}"
+    if question_type == "direct_math":
+        return f"âœ… ط§ظ„ط¥ط¬ط§ط¨ط©: {answer}"
+    if question_type == "matching":
+        return f"âœ… ط§ظ„ط¥ط¬ط§ط¨ط©:\n{answer}"
+    if not explanation:
+        return f"âœ… ط§ظ„ط¥ط¬ط§ط¨ط©: {answer}"
+    return f"âœ… ط§ظ„ط¥ط¬ط§ط¨ط©: {answer}\nًں“ک ط§ظ„ط´ط±ط­: {explanation}"
+
+
+def extract_search_prompt(question: str, question_type: str) -> str:
+    stripped = re.sub(r"\s+", " ", str(question or "")).strip()
+    if question_type == "multiple_choice" and has_choices(stripped):
+        stem = re.split(r"\s+-\s+", stripped, maxsplit=1)[0].strip()
+        return stem or stripped
+    if question_type == "fill_blank":
+        return stripped.replace("______", " ").replace("____", " ").strip() or stripped
+    return stripped
+
+
+def clean_web_text(text: str, max_chars: int = 220) -> str:
+    compact = " ".join(str(text or "").split()).strip(" -:\n")
+    if not compact:
+        return ""
+    sentence = re.split(r"(?<=[.!؟?])\s+", compact, maxsplit=1)[0].strip() or compact
+    if len(sentence) <= max_chars:
+        return sentence
+    shortened = sentence[:max_chars].rsplit(" ", 1)[0].strip()
+    return shortened or sentence[:max_chars].strip()
+
+
+def best_web_answer_text(item: dict[str, Any]) -> str:
+    return clean_web_text(item.get("page_text") or item.get("snippet") or item.get("title") or "")
+
+
+def build_web_answer_fallback(
+    question: str,
+    question_type: str,
+    web_results: list[dict[str, Any]],
+) -> tuple[str, str, float, str] | None:
+    if not web_results:
+        return None
+
+    if question_type == "multiple_choice":
+        options = extract_options(question)
+        ranked: list[tuple[int, float, str]] = []
+        for option in options:
+            tokens = _tokens_for_candidate(option, question_type)
+            hits = 0
+            reliabilities: list[float] = []
+            for result in web_results:
+                haystack = normalize_text(
+                    f"{result.get('title', '')} {result.get('snippet', '')} {result.get('page_text', '')}"
+                )
+                if any(token and normalize_text(token) in haystack for token in tokens):
+                    hits += 1
+                    reliabilities.append(float(result.get("reliability", 0.45)))
+            if hits:
+                ranked.append((hits, mean(reliabilities) if reliabilities else 0.0, option.strip()))
+
+        ranked.sort(key=lambda item: (item[0], item[1]), reverse=True)
+        if ranked:
+            best = ranked[0]
+            confidence = min(0.78, 0.56 + (best[0] * 0.08) + (best[1] * 0.1))
+            return best[2], "", confidence, "web_multiple_choice_fallback"
+
+    if question_type in {"true_false", "matching", "fill_blank", "direct_math"}:
+        return None
+
+    best_result = web_results[0]
+    answer = best_web_answer_text(best_result)
+    if not answer:
+        return None
+
+    domain = best_result.get("domain") or "trusted_web"
+    explanation = f"تم ترجيح الجواب من الويب الموثوق عبر {domain}."
+    confidence = min(0.76, max(0.52, float(best_result.get("reliability", 0.45)) + 0.12))
+    return answer, explanation, confidence, "web_snippet_fallback"
+
+
+def clean_web_text(text: str, max_chars: int = 220) -> str:
+    compact = " ".join(str(text or "").split()).strip(" -:\n")
+    if not compact:
+        return ""
+    sentence = re.split("(?<=[.!\\u061f?])\\s+", compact, maxsplit=1)[0].strip() or compact
+    if len(sentence) <= max_chars:
+        return sentence
+    shortened = sentence[:max_chars].rsplit(" ", 1)[0].strip()
+    return shortened or sentence[:max_chars].strip()
+
+
+def best_web_answer_text(item: dict[str, Any]) -> str:
+    return clean_web_text(item.get("page_text") or item.get("snippet") or item.get("title") or "")
+
+
+def build_web_answer_fallback(
+    question: str,
+    question_type: str,
+    web_results: list[dict[str, Any]],
+) -> tuple[str, str, float, str] | None:
+    if not web_results:
+        return None
+
+    if question_type == "multiple_choice":
+        options = extract_options(question)
+        ranked: list[tuple[int, float, str]] = []
+        for option in options:
+            tokens = _tokens_for_candidate(option, question_type)
+            hits = 0
+            reliabilities: list[float] = []
+            for result in web_results:
+                haystack = normalize_text(
+                    f"{result.get('title', '')} {result.get('snippet', '')} {result.get('page_text', '')}"
+                )
+                if any(token and normalize_text(token) in haystack for token in tokens):
+                    hits += 1
+                    reliabilities.append(float(result.get("reliability", 0.45)))
+            if hits:
+                ranked.append((hits, mean(reliabilities) if reliabilities else 0.0, option.strip()))
+
+        ranked.sort(key=lambda item: (item[0], item[1]), reverse=True)
+        if ranked:
+            best = ranked[0]
+            confidence = min(0.78, 0.56 + (best[0] * 0.08) + (best[1] * 0.1))
+            return best[2], "", confidence, "web_multiple_choice_fallback"
+
+    if question_type in {"true_false", "matching", "fill_blank", "direct_math"}:
+        return None
+
+    best_result = web_results[0]
+    answer = best_web_answer_text(best_result)
+    if not answer:
+        return None
+
+    domain = best_result.get("domain") or "trusted_web"
+    explanation = f"\u062a\u0645 \u062a\u0631\u062c\u064a\u062d \u0627\u0644\u062c\u0648\u0627\u0628 \u0645\u0646 \u0627\u0644\u0648\u064a\u0628 \u0627\u0644\u0645\u0648\u062b\u0648\u0642 \u0639\u0628\u0631 {domain}."
+    confidence = min(0.76, max(0.52, float(best_result.get("reliability", 0.45)) + 0.12))
+    return answer, explanation, confidence, "web_snippet_fallback"
+
+
+def render_response(question_type: str, answer: str, explanation: str) -> str:
+    answer_label = "\u2705 \u0627\u0644\u0625\u062c\u0627\u0628\u0629"
+    reason_label = "\U0001f4a1 \u0627\u0644\u0633\u0628\u0628"
+    explain_label = "\U0001f4a1 \u0627\u0644\u0634\u0631\u062d"
+    if question_type == "multiple_choice":
+        return f"{answer_label}: {answer}"
+    if question_type == "true_false":
+        return f"{answer_label}: {answer}\n{reason_label}: {explanation}"
+    if question_type == "fill_blank":
+        return f"{answer_label}: {answer}"
+    if question_type == "direct_math":
+        return f"{answer_label}: {answer}"
+    if question_type == "matching":
+        return f"{answer_label}:\n{answer}"
+    if not explanation:
+        return f"{answer_label}: {answer}"
+    return f"{answer_label}: {answer}\n{explain_label}: {explanation}"
 
 
 def build_hidden_analysis(
@@ -553,6 +720,31 @@ def solve_single_academic(request: SolveQuestionRequest, settings: Settings, *, 
             "trusted_domains": trusted_domains,
         }
 
+    rule_result = solve_rule_based_question(request.question, question_type)
+    if rule_result:
+        answer, explanation, decision_basis = rule_result
+        guarded = apply_final_guard(question_type, subject, answer, explanation)
+        if guarded:
+            guarded_answer, guarded_explanation, _, guard_basis = guarded
+            confidence = 0.95
+            return {
+                "answer": guarded_answer,
+                "explanation": guarded_explanation,
+                "display_text": render_response(question_type, guarded_answer, guarded_explanation),
+                "confidence": confidence,
+                "matched_source": "rule_solver",
+                "source_trace": [
+                    SourceTraceItem(source="rule_solver", detail=decision_basis, score=confidence),
+                    SourceTraceItem(source="final_guard", detail=guard_basis, score=confidence),
+                ],
+                "answer_candidates": [],
+                "question_type": question_type,
+                "subject": subject,
+                "decision_basis": decision_basis,
+                "trusted_domains": trusted_domains,
+                "web_results": [],
+            }
+
     curriculum = retrieve_curriculum_evidence(
         request.question,
         grade=request.grade or "",
@@ -575,7 +767,7 @@ def solve_single_academic(request: SolveQuestionRequest, settings: Settings, *, 
     web_results: list[dict[str, Any]] = []
     if request.allow_web_verification:
         web_results = SerpApiClient(settings).search(
-            canonical_question(request.question, subject, question_type),
+            extract_search_prompt(request.question, question_type),
             trusted_domains,
         )
         if web_results:
@@ -640,31 +832,6 @@ def solve_single_academic(request: SolveQuestionRequest, settings: Settings, *, 
             "web_results": web_results,
         }
 
-    rule_result = solve_rule_based_question(request.question, question_type)
-    if rule_result:
-        answer, explanation, decision_basis = rule_result
-        guarded = apply_final_guard(question_type, subject, answer, explanation)
-        if guarded:
-            guarded_answer, guarded_explanation, _, guard_basis = guarded
-            confidence = 0.95
-            return {
-                "answer": guarded_answer,
-                "explanation": guarded_explanation,
-                "display_text": render_response(question_type, guarded_answer, guarded_explanation),
-                "confidence": confidence,
-                "matched_source": "rule_solver",
-                "source_trace": [
-                    SourceTraceItem(source="rule_solver", detail=decision_basis, score=confidence),
-                    SourceTraceItem(source="final_guard", detail=guard_basis, score=confidence),
-                ],
-                "answer_candidates": [],
-                "question_type": question_type,
-                "subject": subject,
-                "decision_basis": decision_basis,
-                "trusted_domains": trusted_domains,
-                "web_results": [],
-            }
-
     candidates = extract_candidates(
         request.question,
         question_type,
@@ -683,6 +850,11 @@ def solve_single_academic(request: SolveQuestionRequest, settings: Settings, *, 
         explanation = curriculum.get("explanation", "")
         confidence = float(curriculum.get("score", 0.7))
         decision_basis = "curriculum_definition"
+
+    if not answer and web_results:
+        web_fallback = build_web_answer_fallback(request.question, question_type, web_results)
+        if web_fallback:
+            answer, explanation, confidence, decision_basis = web_fallback
 
     if not answer:
         answer = ""

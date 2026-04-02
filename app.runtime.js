@@ -2796,7 +2796,11 @@
       return { type: "solve", confidence: 0.9, source: "academic_pattern" };
     }
     if (/[؟?]/.test(raw)) {
-      return { type: "general_question", confidence: 0.7, source: "general_question_mark" };
+      return { type: "solve", confidence: 0.74, source: "question_mark_academic_default" };
+    }
+
+    if (compactRaw.split(/\s+/).filter(Boolean).length >= 2 || compactRaw.length >= 14) {
+      return { type: "solve", confidence: 0.62, source: "academic_default_fallback" };
     }
 
     return { type: "chat", confidence: 0.72, source: "safe_chat_fallback" };
@@ -2912,7 +2916,7 @@
     else if (imageMeta.image_type === "unclear_image") responseMode = "ask_clearer_upload";
     else if (imageMeta.image_type === "educational_page" && !question.trim()) responseMode = "content_interpretation";
     else if (isAcademic && !quickMode && (scope.scope_status === "subject_mismatch" || scope.scope_status === "grade_mismatch" || scope.scope_status === "subject_unknown")) responseMode = "ask_for_confirmation";
-    else if (isAcademic && intent.type !== "chat" && intent.type !== "help" && subjectConfidence < 0.7 && !isObjective) responseMode = "ask_for_confirmation";
+    else if (isAcademic && !quickMode && intent.type !== "chat" && intent.type !== "help" && subjectConfidence < 0.7 && !isObjective) responseMode = "ask_for_confirmation";
 
     return {
       input_type: inputType,
@@ -3100,7 +3104,7 @@
     if (analysis.intent.type === "chat") return { action: "chat" };
     if (analysis.intent.type === "help") return { action: "help" };
     if (analysis.intent.type === "ui_action") return { action: "ui_action" };
-    if (analysis.intent.type === "general_question") return { action: "general_question" };
+    if (analysis.intent.type === "general_question") return { action: "answer", confidence: Math.max(route.subject_confidence || 0, analysis.confidence || 0.6) };
     if (reasoning.multiQuestion) {
       return {
         action: "answer",
@@ -4299,6 +4303,8 @@
 
   saveRuntimeAnswerCandidate = function patchedSaveRuntimeAnswerCandidate(question, route, response) {
     if (!response || !question) return null;
+    if (response.decisionBasis === "final_answer_guard_blocked") return null;
+    if (!String(response.finalAnswer || "").trim()) return null;
     const bank = getRuntimeAnswerBank();
     const analysis = {
       subject: response.subject || route?.detected_subject || "",

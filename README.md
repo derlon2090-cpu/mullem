@@ -54,7 +54,7 @@ npm run dev
 
 ## FastAPI Search Backend Scaffold
 
-The repo now includes a backend scaffold in [C:\mullem\backend](C:\mullem\backend) for a secure search flow:
+The repo now includes a backend scaffold at the project root in [C:\mullem](C:\mullem) for a secure search flow:
 
 - `approved question bank` first
 - `curriculum retrieval` second
@@ -69,21 +69,20 @@ POST /api/solve-question
 Run locally after installing backend dependencies:
 
 ```bash
-cd backend
 pip install -r requirements.txt
 uvicorn main:app --reload
 ```
 
 The scaffold includes:
 
-- [C:\mullem\backend\main.py](C:\mullem\backend\main.py)
-- [C:\mullem\backend\app\config.py](C:\mullem\backend\app\config.py)
-- [C:\mullem\backend\app\engines.py](C:\mullem\backend\app\engines.py)
-- [C:\mullem\backend\app\question_bank.py](C:\mullem\backend\app\question_bank.py)
-- [C:\mullem\backend\app\curriculum.py](C:\mullem\backend\app\curriculum.py)
-- [C:\mullem\backend\app\serpapi_service.py](C:\mullem\backend\app\serpapi_service.py)
-- [C:\mullem\backend\app\admin_config.py](C:\mullem\backend\app\admin_config.py)
-- [C:\mullem\backend\app\log_store.py](C:\mullem\backend\app\log_store.py)
+- [C:\mullem\main.py](C:\mullem\main.py)
+- [C:\mullem\config.py](C:\mullem\config.py)
+- [C:\mullem\engines.py](C:\mullem\engines.py)
+- [C:\mullem\question_bank.py](C:\mullem\question_bank.py)
+- [C:\mullem\curriculum.py](C:\mullem\curriculum.py)
+- [C:\mullem\serpapi_service.py](C:\mullem\serpapi_service.py)
+- [C:\mullem\admin_config.py](C:\mullem\admin_config.py)
+- [C:\mullem\log_store.py](C:\mullem\log_store.py)
 
 Current scope:
 
