@@ -1281,12 +1281,27 @@ generatorForm?.addEventListener("submit", (event) => {
 
 generatorToggleButton?.addEventListener("click", () => {
   const settings = getQuestionGeneratorSettings();
-  saveQuestionGeneratorSettings({ ...settings, enabled: !settings.enabled });
-  if (generatorStateCopy) {
-    generatorStateCopy.textContent = !settings.enabled
-      ? "تم تشغيل المولد، وسيتم تنفيذ التوليد اليومي عند فتح لوحة الأدمن أو تشغيله يدويًا."
-      : "تم إيقاف المولد التلقائي.";
+  const enabling = !settings.enabled;
+  const nextSettings = {
+    ...settings,
+    enabled: enabling,
+    dailyTarget: Math.max(1, Number(generatorCountInput?.value || settings.dailyTarget || 12)),
+    term: generatorTermInput?.value || settings.term || "all",
+    grades: splitAdminLines(generatorGradesInput?.value || "").length
+      ? splitAdminLines(generatorGradesInput?.value || "")
+      : settings.grades,
+    subjects: splitAdminLines(generatorSubjectsInput?.value || "").length
+      ? splitAdminLines(generatorSubjectsInput?.value || "")
+      : settings.subjects
+  };
+  saveQuestionGeneratorSettings(nextSettings);
+
+  if (enabling) {
+    runQuestionGenerator(true);
+  } else if (generatorStateCopy) {
+    generatorStateCopy.textContent = "تم إيقاف المولد التلقائي.";
   }
+
   refreshAdminData();
 });
 
