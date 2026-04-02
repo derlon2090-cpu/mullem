@@ -83,6 +83,87 @@
 
       <section class="admin-grid">
         <article class="admin-panel">
+          <h3 class="admin-section-title">قاعدة الأسئلة والإجابات المحفوظة</h3>
+          <p class="admin-subtitle">يعرض هذا القسم ما أضافه النظام تلقائيًا وما أضافه الأدمن يدويًا، مع الاعتماد والتفاعل والثقة.</p>
+          <div class="admin-list" data-question-bank-summary></div>
+          <div data-question-bank-table></div>
+        </article>
+
+        <article class="admin-panel">
+          <h3 class="admin-section-title">إضافة سؤال محفوظ يدويًا</h3>
+          <p class="admin-subtitle">أضف سؤالًا وإجابته وبيانات الصف والمادة والترم ليصبح متاحًا مباشرة في قاعدة النظام.</p>
+          <form class="admin-question-form" data-question-bank-form>
+            <textarea class="field" rows="4" data-bank-question placeholder="نص السؤال"></textarea>
+            <select class="field" data-bank-type>
+              <option value="اختيار من متعدد">اختيار من متعدد</option>
+              <option value="صح أو خطأ">صح أو خطأ</option>
+              <option value="إكمال فراغ">إكمال فراغ</option>
+              <option value="مطابقة">مطابقة</option>
+              <option value="تعليل / تفسير">تعليل / تفسير</option>
+              <option value="مسألة">مسألة</option>
+            </select>
+            <textarea class="field" rows="3" data-bank-options placeholder="الخيارات إن وجدت - كل خيار في سطر"></textarea>
+            <input class="field" type="text" data-bank-answer placeholder="الإجابة الصحيحة">
+            <textarea class="field" rows="3" data-bank-explanation placeholder="شرح مختصر"></textarea>
+            <div class="admin-form-grid">
+              <input class="field" type="text" data-bank-grade placeholder="الصف">
+              <input class="field" type="text" data-bank-subject placeholder="المادة">
+            </div>
+            <div class="admin-form-grid">
+              <select class="field" data-bank-term>
+                <option value="الفصل الأول">الفصل الأول</option>
+                <option value="الفصل الثاني">الفصل الثاني</option>
+              </select>
+              <input class="field" type="text" data-bank-lesson placeholder="الدرس / المفهوم">
+            </div>
+            <div class="admin-form-grid">
+              <input class="field" type="text" data-bank-source placeholder="المصدر">
+              <input class="field" type="number" min="0" max="1" step="0.01" data-bank-confidence placeholder="الثقة 0 - 1">
+            </div>
+            <label class="admin-check">
+              <input type="checkbox" data-bank-approved checked>
+              <span>اعتماد السؤال مباشرة</span>
+            </label>
+            <button class="primary-btn" type="submit">حفظ السؤال في القاعدة</button>
+            <div class="small-copy" data-bank-form-state>سيُحفظ السؤال داخل قاعدة المنصة مع بياناته الكاملة.</div>
+          </form>
+        </article>
+      </section>
+
+      <section class="admin-grid">
+        <article class="admin-panel">
+          <h3 class="admin-section-title">مولد الأسئلة التلقائي</h3>
+          <p class="admin-subtitle">توليد يومي من المنهج أولًا وبنك النظام ثم نمط المصادر التعليمية الموثوقة، مع إعادة صياغة وعدم نسخ حرفي.</p>
+          <div class="admin-list" data-generator-status></div>
+          <form class="admin-question-form" data-generator-form>
+            <div class="admin-form-grid">
+              <input class="field" type="number" min="1" max="100" data-generator-count placeholder="عدد الأسئلة اليومية">
+              <select class="field" data-generator-term>
+                <option value="all">الترمين</option>
+                <option value="الفصل الأول">الفصل الأول</option>
+                <option value="الفصل الثاني">الفصل الثاني</option>
+              </select>
+            </div>
+            <textarea class="field" rows="2" data-generator-grades placeholder="الصفوف المستهدفة، مثال: الأول الابتدائي, الثاني المتوسط"></textarea>
+            <textarea class="field" rows="2" data-generator-subjects placeholder="المواد المستهدفة، مثال: الرياضيات, العلوم, اللغة الإنجليزية"></textarea>
+            <div class="admin-table-actions">
+              <button class="primary-btn" type="button" data-generator-toggle>تشغيل المولد</button>
+              <button class="mini-btn" type="submit">حفظ الإعدادات</button>
+              <button class="mini-btn admin-action-points" type="button" data-generator-run>تشغيل يدوي الآن</button>
+            </div>
+            <div class="small-copy" data-generator-state-copy>يمكن تشغيله يوميًا محليًا مع كل زيارة للأدمن أو تشغيله يدويًا الآن.</div>
+          </form>
+        </article>
+
+        <article class="admin-panel">
+          <h3 class="admin-section-title">لوحات الصفوف</h3>
+          <p class="admin-subtitle">لكل صف بطاقة تعرض عدد الأسئلة ونوع المادة والترم بشكل مرتب، لتعرف أين توجد التغطية وأين نحتاج توليدًا أكثر.</p>
+          <div class="admin-list" data-grade-bank-panels></div>
+        </article>
+      </section>
+
+      <section class="admin-grid">
+        <article class="admin-panel">
           <h3 class="admin-section-title">المحتوى والباقات</h3>
           <div class="chip-row">
             <div class="top-chip">الصفوف</div>

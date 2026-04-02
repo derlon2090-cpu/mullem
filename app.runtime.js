@@ -220,11 +220,20 @@
   }
 
   function getRuntimeAnswerBank() {
-    return loadRuntimeStore(runtimeMemoryKeys.answerBank, []);
+    try {
+      const value = localStorage.getItem("mlm_runtime_answer_bank_global");
+      return value ? JSON.parse(value) : [];
+    } catch (_) {
+      return [];
+    }
   }
 
   function saveRuntimeAnswerBank(entries) {
-    saveRuntimeStore(runtimeMemoryKeys.answerBank, entries.slice(0, 80));
+    try {
+      localStorage.setItem("mlm_runtime_answer_bank_global", JSON.stringify(entries.slice(0, 250)));
+    } catch (_) {
+      // ignore storage issues
+    }
   }
 
   function getRuntimePatternMemory() {
@@ -345,11 +354,181 @@
     saveRuntimePatternMemory(memory);
   }
 
-  function findRuntimeStoredAnswer(question, route) {
-    const key = normalizeRuntimeQuestionKey(question, route);
+  function normalizeRuntimeBankQuestion(text) {
+    return String(text || "")
+      .toLowerCase()
+      .replace(/\r?\n/g, " \n ")
+      .replace(/[؟?!.,،؛:"'(){}\[\]]/g, " ")
+      .replace(/\s+/g, " ")
+      .trim();
+  }
+
+  function extractRuntimeStoredOptions(question, questionType) {
+    if (questionType === "اختيار من متعدد" || questionType === "إكمال فراغ") {
+      return extractRuntimeMultipleChoiceData(question).options.map((option) => cleanRuntimeChoiceToken(option)).filter(Boolean);
+    }
+    if (questionType === "صح أو خطأ") {
+      return ["صواب", "خطأ"];
+    }
+    return [];
+  }
+
+  function getRuntimeQuestionTokens(text) {
+    return normalizeRuntimeBankQuestion(text)
+      .split(/\s+/)
+      .map((token) => token.trim())
+      .filter((token) => token.length > 1);
+  }
+
+  function buildRuntimeKeywordSignature(text, limit = 5) {
+    return getRuntimeQuestionTokens(text)
+      .filter((token) => token.length > 2)
+      .slice(0, limit);
+  }
+
+  function countRuntimeKeywordOverlap(left, right) {
+    const leftKeywords = new Set(Array.isArray(left) ? left : buildRuntimeKeywordSignature(left));
+    const rightKeywords = new Set(Array.isArray(right) ? right : buildRuntimeKeywordSignature(right));
+    let overlap = 0;
+    leftKeywords.forEach((token) => {
+      if (rightKeywords.has(token)) overlap += 1;
+    });
+    return overlap;
+  }
+
+  function scoreRuntimeQuestionSimilarity(left, right) {
+    const leftText = normalizeRuntimeBankQuestion(left);
+    const rightText = normalizeRuntimeBankQuestion(right);
+    if (!leftText || !rightText) return 0;
+    if (leftText === rightText) return 1;
+
+    const leftTokens = new Set(getRuntimeQuestionTokens(left));
+    const rightTokens = new Set(getRuntimeQuestionTokens(right));
+    if (!leftTokens.size || !rightTokens.size) return 0;
+
+    let overlap = 0;
+    leftTokens.forEach((token) => {
+      if (rightTokens.has(token)) overlap += 1;
+    });
+
+    const union = new Set([...leftTokens, ...rightTokens]).size || 1;
+    return overlap / union;
+  }
+
+  function isRuntimeApprovedAnswerEntry(entry) {
+    if (!entry || !entry.response) return false;
+    const likes = entry.likes || 0;
+    const dislikes = entry.dislikes || 0;
+    const confidence = typeof entry.confidence === "number"
+      ? entry.confidence
+      : (typeof entry.response?.confidence === "number" ? entry.response.confidence : 0);
+    if (entry.isRejected) return false;
+    if (entry.isApproved || entry.isTrusted) return true;
+    if (likes >= 2 && likes > dislikes && dislikes <= 1) return true;
+    if (confidence >= 0.9 && dislikes === 0) return true;
+    return false;
+  }
+
+  function refreshRuntimeAnswerEntryStatus(entry) {
+    if (!entry) return entry;
+    const likes = entry.likes || 0;
+    const dislikes = entry.dislikes || 0;
+    const confidence = typeof entry.confidence === "number"
+      ? entry.confidence
+      : (typeof entry.response?.confidence === "number" ? entry.response.confidence : 0);
+
+    entry.isRejected = dislikes >= 3 && dislikes >= likes;
+    entry.isApproved = !entry.isRejected && (
+      entry.isTrusted ||
+      (likes >= 2 && likes > dislikes) ||
+      (confidence >= 0.9 && dislikes === 0)
+    );
+    entry.qualityScore = Number((
+      (entry.isApproved ? 0.45 : 0.1) +
+      Math.min(0.2, likes * 0.05) +
+      Math.max(0, confidence * 0.2) -
+      Math.min(0.2, dislikes * 0.06)
+    ).toFixed(4));
+    return entry;
+  }
+
+  function searchApprovedQuestionBank(question, route, analysis) {
+    const bank = getRuntimeAnswerBank().map((item) => refreshRuntimeAnswerEntryStatus(item));
+    const queryText = String(question || "").trim();
+    if (!queryText) return null;
+
+    const normalizedQuestion = normalizeRuntimeBankQuestion(queryText);
+    const grade = route?.detected_grade_level || gradeSelect?.value || (typeof getActiveUser === "function" ? getActiveUser()?.grade : "") || "unknown";
+    const subject = route?.detected_subject || analysis?.subject || subjectSelect?.value || "";
+    const term = termSelect?.value || "unknown";
+    const questionType = route?.question_type || analysis?.questionType || "";
+    const options = extractRuntimeStoredOptions(queryText, questionType);
+
+    const ranked = bank
+      .filter((entry) => entry?.response)
+      .map((entry) => {
+        const similarity = scoreRuntimeQuestionSimilarity(normalizedQuestion, entry.normalizedQuestion || entry.question || "");
+        const keywordOverlap = countRuntimeKeywordOverlap(queryText, entry.keywordSignature ? String(entry.keywordSignature).split("|") : (entry.question || ""));
+        const strongKeywordMatch = keywordOverlap >= 5 ? 1 : 0;
+        const sameSubject = !subject || !entry.subject ? 0.7 : (normalizeRuntimeSubjectLabel(entry.subject) === normalizeRuntimeSubjectLabel(subject) ? 1 : 0.35);
+        const sameGrade = !grade || !entry.grade || grade === "unknown" || entry.grade === "unknown" ? 0.75 : (entry.grade === grade ? 1 : 0.45);
+        const sameTerm = !term || !entry.term || term === "unknown" || entry.term === "unknown" ? 0.75 : (entry.term === term ? 1 : 0.45);
+        const entryOptions = Array.isArray(entry.options) ? entry.options : [];
+        const optionSimilarity = !options.length || !entryOptions.length
+          ? 0.75
+          : scoreRuntimeQuestionSimilarity(options.join(" "), entryOptions.join(" "));
+        const approval = isRuntimeApprovedAnswerEntry(entry) ? 1 : 0;
+        const likes = entry.likes || 0;
+        const dislikes = entry.dislikes || 0;
+        const feedbackScore = likes + dislikes > 0 ? likes / Math.max(1, likes + dislikes) : 0.75;
+        const confidence = typeof entry.confidence === "number"
+          ? entry.confidence
+          : (typeof entry.response?.confidence === "number" ? entry.response.confidence : 0.7);
+
+        const finalScore =
+          (approval * 0.42) +
+          (similarity * 0.28) +
+          (strongKeywordMatch * 0.08) +
+          (sameSubject * 0.08) +
+          (sameGrade * 0.06) +
+          (sameTerm * 0.04) +
+          (optionSimilarity * 0.04) +
+          (feedbackScore * 0.05) +
+          (confidence * 0.03);
+
+        return {
+          ...entry,
+          similarity,
+          keywordOverlap,
+          strongKeywordMatch,
+          finalScore: Number(finalScore.toFixed(4))
+        };
+      })
+      .sort((a, b) => b.finalScore - a.finalScore);
+
+    const best = ranked[0];
+    if (!best) return null;
+    if (!isRuntimeApprovedAnswerEntry(best)) return null;
+    if (best.similarity < 0.78 && !best.strongKeywordMatch) return null;
+    return best;
+  }
+
+  function markRuntimeStoredAnswerUsed(answerBankKey) {
+    if (!answerBankKey) return;
     const bank = getRuntimeAnswerBank();
-    const entry = bank.find((item) => item.key === key && (item.likes || 0) >= (item.dislikes || 0) && item.response);
-    return entry || null;
+    const entry = bank.find((item) => item.key === answerBankKey);
+    if (!entry) return;
+    entry.usageCount = (entry.usageCount || 0) + 1;
+    entry.updatedAt = Date.now();
+    refreshRuntimeAnswerEntryStatus(entry);
+    saveRuntimeAnswerBank(bank);
+  }
+
+  function findRuntimeStoredAnswer(question, route) {
+    return searchApprovedQuestionBank(question, route, {
+      subject: route?.detected_subject || "",
+      questionType: route?.question_type || ""
+    });
   }
 
   function saveRuntimeAnswerCandidate(question, route, response) {
@@ -361,6 +540,7 @@
     const nextEntry = {
       key,
       question: String(question).trim(),
+      normalizedQuestion: normalizeRuntimeBankQuestion(question),
       subject: response.subject || route?.detected_subject || "عام",
       questionType: response.questionType || route?.question_type || "سؤال أكاديمي",
       response,
@@ -403,6 +583,94 @@
     if (feedbackType === "like") entry.likes = (entry.likes || 0) + 1;
     if (feedbackType === "dislike") entry.dislikes = (entry.dislikes || 0) + 1;
     entry.updatedAt = Date.now();
+    saveRuntimeAnswerBank(bank);
+    updateRuntimePatternMemory(entry.questionType, entry.subject, feedbackType, entry.response);
+  }
+
+  function saveRuntimeAnswerCandidate(question, route, response) {
+    if (!response || !question) return null;
+    const key = normalizeRuntimeQuestionKey(question, route);
+    const bank = getRuntimeAnswerBank();
+    response.answerBankKey = key;
+    const preview = String(response.finalAnswer || response.explanation || "").trim().slice(0, 140);
+    const existingIndex = bank.findIndex((item) => item.key === key);
+    const existing = existingIndex >= 0 ? bank[existingIndex] : null;
+    const grade = route?.detected_grade_level
+      || gradeSelect?.value
+      || (typeof getActiveUser === "function" ? getActiveUser()?.grade : "")
+      || "unknown";
+    const term = termSelect?.value || "unknown";
+    const questionType = response.questionType || route?.question_type || classifyRuntimeQuestionType(question) || "سؤال أكاديمي";
+    const confidence = typeof response.confidence === "number"
+      ? Number(response.confidence.toFixed(4))
+      : (typeof existing?.confidence === "number" ? existing.confidence : 0.72);
+    const source = response.decisionBasis
+      || response?.structuredResult?.decision_basis
+      || existing?.source
+      || "curriculum_books_first";
+    const nextEntry = refreshRuntimeAnswerEntryStatus({
+      ...existing,
+      key,
+      question: String(question).trim(),
+      normalizedQuestion: normalizeRuntimeBankQuestion(question),
+      subject: response.subject || route?.detected_subject || existing?.subject || "عام",
+      grade,
+      term,
+      questionType,
+      options: extractRuntimeStoredOptions(question, questionType),
+      response,
+      preview,
+      source,
+      sourceType: source.includes("question_bank")
+        ? "approved_question_bank"
+        : (source.includes("web") ? "curriculum_with_web_verification" : "curriculum"),
+      confidence,
+      likes: existing?.likes || 0,
+      dislikes: existing?.dislikes || 0,
+      usageCount: existing?.usageCount || 0,
+      isTrusted: Boolean(
+        existing?.isTrusted
+        || response?.isTrusted
+        || source === "approved_question_bank_fast_path"
+        || source === "stored_best_answer"
+        || confidence >= 0.95
+      ),
+      createdAt: existing?.createdAt || Date.now(),
+      updatedAt: Date.now()
+    });
+
+    if (existingIndex >= 0) {
+      bank[existingIndex] = nextEntry;
+    } else {
+      bank.unshift(nextEntry);
+    }
+
+    saveRuntimeAnswerBank(bank);
+    return nextEntry;
+  }
+
+  function updateRuntimeAnswerFeedbackByPreview(preview, feedbackType) {
+    if (!preview) return;
+    const bank = getRuntimeAnswerBank();
+    const entry = bank.find((item) => item.preview && preview.includes(item.preview));
+    if (!entry) return;
+    if (feedbackType === "like") entry.likes = (entry.likes || 0) + 1;
+    if (feedbackType === "dislike") entry.dislikes = (entry.dislikes || 0) + 1;
+    entry.updatedAt = Date.now();
+    refreshRuntimeAnswerEntryStatus(entry);
+    saveRuntimeAnswerBank(bank);
+    updateRuntimePatternMemory(entry.questionType, entry.subject, feedbackType, entry.response);
+  }
+
+  function updateRuntimeAnswerFeedbackByKey(answerBankKey, feedbackType) {
+    if (!answerBankKey) return;
+    const bank = getRuntimeAnswerBank();
+    const entry = bank.find((item) => item.key === answerBankKey);
+    if (!entry) return;
+    if (feedbackType === "like") entry.likes = (entry.likes || 0) + 1;
+    if (feedbackType === "dislike") entry.dislikes = (entry.dislikes || 0) + 1;
+    entry.updatedAt = Date.now();
+    refreshRuntimeAnswerEntryStatus(entry);
     saveRuntimeAnswerBank(bank);
     updateRuntimePatternMemory(entry.questionType, entry.subject, feedbackType, entry.response);
   }
@@ -2962,6 +3230,146 @@
     if ((route?.question_type || "") === "ط§ط®طھظٹط§ط± ظ…ظ† ظ…طھط¹ط¯ط¯") return false;
 
     const multiStepSignals = /ثم|وبعدها|بعد ذلك|ابدأ بشرح|اشرح.*ثم|لخص.*ثم|حل.*ثم|قارن|حلل|فسر|علل/i;
+    const isLong = text.length >= 90;
+    const hasMultiStepIntent = Boolean(analysis?.intent?.compound || reasoning?.compound || (reasoning?.taskCount || 0) > 1);
+
+    return hasMultiStepIntent || multiStepSignals.test(text) || isLong;
+  }
+
+  function response_builder(question, route, analysis, reasoning) {
+    const rawQuestion = question || route.extracted_text || "حل السؤال من المرفقات";
+    const runtimeReasoning = reasoning || reasoning_engine(rawQuestion, analysis);
+    const decomposition = QuestionDecomposer(rawQuestion, analysis.subject || route.detected_subject || "");
+    const learningMemory = SelfLearningMemory();
+    const storedAnswer = findRuntimeStoredAnswer(rawQuestion, route);
+
+    if (storedAnswer?.response) {
+      markRuntimeStoredAnswerUsed(storedAnswer.key);
+      const storedMeta = buildRuntimeMetaBrain(rawQuestion, route, analysis, runtimeReasoning);
+      const storedConfidence = Math.max(
+        typeof storedAnswer.confidence === "number" ? storedAnswer.confidence : 0,
+        typeof storedAnswer.response?.confidence === "number" ? storedAnswer.response.confidence : 0,
+        0.86
+      );
+      const reusedResponse = AdaptiveResponseStyleSmart(
+        {
+          ...storedAnswer.response,
+          answerBankKey: storedAnswer.key,
+          confidence: storedConfidence,
+          decisionBasis: "approved_question_bank_fast_path",
+          agreementLevel: "high",
+          explanation: storedAnswer.response.explanation || "تم استخدام إجابة محفوظة ومعتمدة لهذا السؤال لأنها حققت تقييمًا جيدًا سابقًا."
+        },
+        analysis,
+        runtimeReasoning
+      );
+
+      return StructuredOutputEngine(
+        reusedResponse,
+        {
+          decisionBasis: "approved_question_bank_fast_path",
+          confidence: storedConfidence,
+          retrieval: {
+            source: "approved_question_bank",
+            usedWebFallback: false,
+            webFallbackAvailable: true,
+            confidenceThreshold: 0.85,
+            decisionBasis: "approved_question_bank_fast_path",
+            sourceWeights: {
+              approvedQuestionBank: 0.6,
+              bookMatch: 0.25,
+              webConsensus: 0.15
+            },
+            evidence: [
+              {
+                type: "approved_question_bank",
+                note: "إجابة محفوظة ومعتمدة من التقييمات السابقة"
+              }
+            ]
+          },
+          webVerification: null,
+          agreementMode: "approved_bank_direct",
+          rankedCandidates: [],
+          bookEvidence: [],
+          webEvidence: []
+        },
+        storedMeta,
+        runtimeReasoning,
+        { learningMemory, decomposition }
+      );
+    }
+
+    const retrievalStage = BookRetrieval(rawQuestion, route, analysis, runtimeReasoning);
+    const meta = retrievalStage.meta;
+    const retrieval = retrievalStage.retrieval;
+    const webVerification = WebVerificationLayer(rawQuestion, route, analysis);
+    const consensus = ConsensusEngine({
+      retrieval: retrievalStage,
+      webVerification,
+      route,
+      analysis,
+      decomposition,
+      question: rawQuestion
+    });
+    const finalizeRuntimeResponse = (candidate, overrides = {}) => {
+      const adapted = AdaptiveResponseStyleSmart(candidate, analysis, runtimeReasoning);
+      return StructuredOutputEngine(
+        adapted,
+        {
+          ...consensus,
+          ...overrides,
+          retrieval: overrides.retrieval || consensus.retrieval || retrieval
+        },
+        meta,
+        runtimeReasoning,
+        { learningMemory, decomposition }
+      );
+    };
+
+    const compositeResponse = solveCompositeQuestionSet(rawQuestion, route);
+    if (compositeResponse) {
+      return finalizeRuntimeResponse(compositeResponse, {
+        decisionBasis: "decomposed_multi_block_answer"
+      });
+    }
+
+    const compoundResponse = buildCompoundResponse(rawQuestion, route);
+    if (compoundResponse) {
+      return finalizeRuntimeResponse(
+        normalizeRuntimeResponse(rawQuestion, compoundResponse, route, analysis),
+        { decisionBasis: "compound_request_planned_response" }
+      );
+    }
+
+    const directObjective = buildDirectObjectiveResponse(rawQuestion, route);
+    if (directObjective) {
+      return finalizeRuntimeResponse(
+        normalizeRuntimeResponse(rawQuestion, directObjective, route, analysis),
+        { decisionBasis: directObjective.decisionBasis || "direct_objective_solver" }
+      );
+    }
+
+    const academicResponse = createAcademicResponse(rawQuestion, analysis.intent, {
+      preferredSubject: route.detected_subject || "",
+      detectedSubject: route.detected_subject || "",
+      subjectConfidence: route.subject_confidence,
+      route
+    });
+
+    return finalizeRuntimeResponse(
+      normalizeRuntimeResponse(rawQuestion, academicResponse, route, analysis),
+      { decisionBasis: consensus.decisionBasis || "book_first_with_web_verification" }
+    );
+  }
+
+  function needsDeliberateAnalysis(question, analysis, reasoning, route) {
+    const text = (question || route?.extracted_text || "").trim();
+    if (!text) return false;
+    if (searchApprovedQuestionBank(text, route, analysis)) return false;
+    if ((route?.question_type || "") === "ط·آµط·آ­ ط¸ث†ط·آ®ط·آ·ط·آ£") return false;
+    if ((route?.question_type || "") === "ط·آ§ط·آ®ط·ع¾ط¸ظ¹ط·آ§ط·آ± ط¸â€¦ط¸â€  ط¸â€¦ط·ع¾ط·آ¹ط·آ¯ط·آ¯") return false;
+
+    const multiStepSignals = /ط«ظ…|ظˆط¨ط¹ط¯ظ‡ط§|ط¨ط¹ط¯ ط°ظ„ظƒ|ط§ط¨ط¯ط£ ط¨ط´ط±ط­|ط§ط´ط±ط­.*ط«ظ…|ظ„ط®طµ.*ط«ظ…|ط­ظ„.*ط«ظ…|ظ‚ط§ط±ظ†|ط­ظ„ظ„|ظپط³ط±|ط¹ظ„ظ„/i;
     const isLong = text.length >= 90;
     const hasMultiStepIntent = Boolean(analysis?.intent?.compound || reasoning?.compound || (reasoning?.taskCount || 0) > 1);
 
