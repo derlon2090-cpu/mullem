@@ -1279,7 +1279,7 @@ generatorForm?.addEventListener("submit", (event) => {
   refreshAdminData();
 });
 
-generatorToggleButton?.addEventListener("click", () => {
+function handleGeneratorToggle() {
   const settings = getQuestionGeneratorSettings();
   const enabling = !settings.enabled;
   const nextSettings = {
@@ -1303,11 +1303,40 @@ generatorToggleButton?.addEventListener("click", () => {
   }
 
   refreshAdminData();
-});
+}
 
-generatorRunButton?.addEventListener("click", () => {
+function handleGeneratorRunNow() {
   runQuestionGenerator(true);
   refreshAdminData();
+}
+
+generatorToggleButton?.addEventListener("click", (event) => {
+  event.preventDefault();
+  event.stopPropagation();
+  handleGeneratorToggle();
+});
+
+generatorRunButton?.addEventListener("click", (event) => {
+  event.preventDefault();
+  event.stopPropagation();
+  handleGeneratorRunNow();
+});
+
+document.addEventListener("click", (event) => {
+  const toggleButton = event.target.closest("[data-generator-toggle]");
+  if (toggleButton) {
+    event.preventDefault();
+    event.stopPropagation();
+    handleGeneratorToggle();
+    return;
+  }
+
+  const runButton = event.target.closest("[data-generator-run]");
+  if (runButton) {
+    event.preventDefault();
+    event.stopPropagation();
+    handleGeneratorRunNow();
+  }
 });
 
 adminLoginForm?.addEventListener("submit", (event) => {
