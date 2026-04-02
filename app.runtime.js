@@ -3459,6 +3459,197 @@
     return new Promise((resolve) => window.setTimeout(resolve, 5000));
   }
 
+  const runtimeBackendConfig = {
+    solveEndpoint: "/api/solve-question",
+    timeoutMs: 5500
+  };
+
+  function getRuntimeSolveModeValue() {
+    try {
+      return localStorage.getItem("mlm_solve_mode") || "quick";
+    } catch (_) {
+      return "quick";
+    }
+  }
+
+  function getRuntimeTrustedDomainsForBackend() {
+    try {
+      const payload = JSON.parse(localStorage.getItem("mlm_admin_search_config") || "{}");
+      return Array.isArray(payload?.trustedDomains)
+        ? payload.trustedDomains.map((item) => String(item || "").trim()).filter(Boolean)
+        : [];
+    } catch (_) {
+      return [];
+    }
+  }
+
+  function mapBackendQuestionTypeToRuntime(type) {
+    const value = String(type || "").trim();
+    if (value === "multiple_choice") return "اختيار من متعدد";
+    if (value === "true_false") return "صح أو خطأ";
+    if (value === "fill_blank") return "إكمال فراغ";
+    if (value === "matching") return "مطابقة";
+    if (value === "direct_math") return "مسألة";
+    if (value === "definition") return "تعريف";
+    if (value === "compound") return "رسالة متعددة الأسئلة";
+    return "سؤال أكاديمي";
+  }
+
+  function mapBackendAnswerMode(type) {
+    const value = String(type || "").trim();
+    if (value === "multiple_choice") return "mcq";
+    if (value === "true_false") return "truefalse";
+    if (value === "fill_blank" || value === "direct_math") return "completion";
+    return "";
+  }
+
+  function describeBackendMatchedSource(source) {
+    const value = String(source || "").trim();
+    if (value === "approved_question_bank") return "بنك الأسئلة المعتمد";
+    if (value === "curriculum_engine") return "المنهج الدراسي";
+    if (value === "web_verification_engine") return "التحقق عبر الويب";
+    if (value === "direct_math_fast_path") return "الحل الرياضي المباشر";
+    return "محرك القرار التعليمي";
+  }
+
+  function shouldUseBackendSolver(question, route, analysis, hasAttachments) {
+    if (!String(question || "").trim()) return false;
+    if (hasAttachments) return false;
+    if (route?.response_mode !== "academic_solve") return false;
+    return isRuntimeAcademicIntent(analysis?.intent?.type);
+  }
+
+  function buildBackendPayload(question, route, analysis) {
+    const activeUser = typeof getActiveUser === "function" ? getActiveUser() : null;
+    const solveMode = getRuntimeSolveModeValue();
+    const payload = {
+      question,
+      grade: "",
+      subject: "",
+      term: "",
+      lesson: "",
+      trusted_domains: getRuntimeTrustedDomainsForBackend(),
+      allow_web_verification: true
+    };
+
+    if (activeUser?.grade) {
+      payload.grade = activeUser.grade;
+    }
+
+    if (solveMode !== "quick") {
+      payload.grade = gradeSelect?.value || payload.grade || "";
+      payload.subject = subjectSelect?.value || route?.detected_subject || analysis?.subject || "";
+      payload.term = termSelect?.value || "";
+      payload.lesson = lessonInput?.value?.trim?.() || "";
+    } else if (route?.detected_subject && Number(route?.subject_confidence || 0) >= 0.7) {
+      payload.subject = route.detected_subject;
+    }
+
+    return payload;
+  }
+
+  function adaptBackendSolveResponse(result, question, route, analysis) {
+    if (!result || !result.answer) return null;
+
+    const backendType = String(result?.hidden_analysis?.question_type || "");
+    const questionType = mapBackendQuestionTypeToRuntime(backendType);
+    const answerMode = mapBackendAnswerMode(backendType);
+    const answer = String(result.answer || "").trim();
+    const explanation = String(result.explanation || "").trim();
+    const matchedSource = String(result.matched_source || "");
+    const decisionBasis = String(result?.hidden_analysis?.decision_basis || matchedSource || "approved_bank_then_curriculum_then_web");
+    const subject = route?.detected_subject || analysis?.subject || subjectSelect?.value || "عام";
+    const lesson = lessonInput?.value?.trim?.() || route?.detected_subject || subject;
+    const confidence = Number(result.confidence || 0.75);
+    const displayMode = answerMode ? "quick" : (getRuntimeSolveModeValue() === "quick" ? "quick" : "educational");
+
+    const runtimeResponse = {
+      mode: "solve",
+      displayMode,
+      answerMode,
+      questionType,
+      subject,
+      lesson,
+      finalAnswer: answer,
+      explanation,
+      trueFalseReason: answerMode === "truefalse" ? explanation : "",
+      confidence,
+      decisionBasis,
+      matchedSource,
+      agreementLevel: confidence >= 0.9 ? "high" : (confidence >= 0.75 ? "medium" : "low"),
+      steps: [],
+      mistakes: [],
+      similar: "",
+      curriculumLink: `تم الترجيح عبر ${describeBackendMatchedSource(matchedSource)} ضمن المسار: بنك الأسئلة ثم المنهج ثم التحقق عبر الويب عند الحاجة.`,
+      structuredResult: {
+        question_type: backendType || "general",
+        subject,
+        grade: gradeSelect?.value || "unknown",
+        term: termSelect?.value || "unknown",
+        final_answer: answer,
+        reason: explanation,
+        confidence,
+        decision_basis: decisionBasis,
+        source_trace: Array.isArray(result.source_trace) ? result.source_trace : []
+      },
+      hiddenAnalysis: result.hidden_analysis || {},
+      answerCandidates: Array.isArray(result.answer_candidates) ? result.answer_candidates : [],
+      sourceTrace: Array.isArray(result.source_trace) ? result.source_trace : []
+    };
+
+    if (questionType === "رسالة متعددة الأسئلة") {
+      runtimeResponse.preRenderedBody = formatSimpleReply(String(result.display_text || answer || "").trim());
+    }
+
+    if (!runtimeResponse.finalAnswer && runtimeResponse.answerMode === "truefalse") {
+      runtimeResponse.finalAnswer = normalizeRuntimeTrueFalseAnswer(answer, explanation) || "";
+    }
+
+    return runtimeResponse;
+  }
+
+  async function fetchRuntimeBackendSolve(question, route, analysis) {
+    const controller = typeof AbortController !== "undefined" ? new AbortController() : null;
+    const timeoutId = controller
+      ? window.setTimeout(() => controller.abort(), runtimeBackendConfig.timeoutMs)
+      : null;
+
+    try {
+      const response = await fetch(runtimeBackendConfig.solveEndpoint, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Accept: "application/json"
+        },
+        body: JSON.stringify(buildBackendPayload(question, route, analysis)),
+        signal: controller?.signal
+      });
+
+      if (!response.ok) return null;
+      const payload = await response.json();
+      return adaptBackendSolveResponse(payload, question, route, analysis);
+    } catch (_) {
+      return null;
+    } finally {
+      if (timeoutId) window.clearTimeout(timeoutId);
+    }
+  }
+
+  async function buildAcademicResponseWithBackend(question, route, analysis, reasoning, decision) {
+    const backendResponse = shouldUseBackendSolver(question, route, analysis, false)
+      ? await fetchRuntimeBackendSolve(question, route, analysis)
+      : null;
+
+    if (backendResponse) {
+      return backendResponse;
+    }
+
+    return self_checker(
+      response_builder(question || route.extracted_text || "", route, analysis, reasoning),
+      decision
+    );
+  }
+
   async function runtimeHandleSubmit(event) {
     if (event.target !== form) return;
     event.preventDefault();
@@ -3493,13 +3684,17 @@
         subject_confidence: Math.max(0.71, stored.route.subject_confidence || 0.71)
       };
       const forcedAnalysis = intent_analyzer(stored.question || forcedRoute.extracted_text || "", false);
-      const response = self_checker(
-        response_builder(stored.question || forcedRoute.extracted_text || "", forcedRoute, forcedAnalysis, reasoning_engine(stored.question || forcedRoute.extracted_text || "", forcedAnalysis)),
+      const forcedReasoning = reasoning_engine(stored.question || forcedRoute.extracted_text || "", forcedAnalysis);
+      const response = await buildAcademicResponseWithBackend(
+        stored.question || forcedRoute.extracted_text || "",
+        forcedRoute,
+        forcedAnalysis,
+        forcedReasoning,
         { action: "answer", confidence: forcedRoute.subject_confidence }
       );
       saveRuntimeAnswerCandidate(stored.question || forcedRoute.extracted_text || "", forcedRoute, response);
       pendingNode?.remove();
-      const body = formatAssistantSections(response);
+      const body = response?.preRenderedBody || formatAssistantSections(response);
       const sources = typeof buildSources === "function" ? buildSources() : [];
       addMessage("assistant", "ملم يحل", body, {
         sources,
@@ -3590,12 +3785,15 @@
       body = formatClarificationReply(createClarificationResponse(question, intent, route));
     } else {
       runtimeState.pendingSolveConfirmation = null;
-      responseForLog = self_checker(
-        response_builder(question || route.extracted_text || "", route, analysis, reasoning),
+      responseForLog = await buildAcademicResponseWithBackend(
+        question || route.extracted_text || "",
+        route,
+        analysis,
+        reasoning,
         decision
       );
       saveRuntimeAnswerCandidate(question || route.extracted_text || "", route, responseForLog);
-      body = formatAssistantSections(responseForLog);
+      body = responseForLog?.preRenderedBody || formatAssistantSections(responseForLog);
       sources = responseForLog?.hideSources ? [] : (typeof buildSources === "function" ? buildSources() : []);
 
       if (typeof saveHistory === "function") {
