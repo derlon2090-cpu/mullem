@@ -51,6 +51,11 @@ except ImportError:  # pragma: no cover - runtime fallback when running as a fla
 
 
 GENERAL_CHAT_PATTERNS = {
+    "هلا",
+    "كيف الحال",
+    "شكرا",
+    "شكرًا",
+    "تسلم",
     "من انت",
     "من أنت",
     "مرحبا",
@@ -284,7 +289,7 @@ def apply_final_guard(question_type: str, subject: str, answer: str, explanation
     return clean_answer, clean_explanation, 0.0, "guard_pass_general"
 
 
-def render_response(question_type: str, answer: str, explanation: str) -> str:
+def _legacy_render_response(question_type: str, answer: str, explanation: str) -> str:
     if question_type == "multiple_choice":
         return f"✅ الإجابة: {answer}"
     if question_type == "true_false":
@@ -298,7 +303,7 @@ def render_response(question_type: str, answer: str, explanation: str) -> str:
     return f"✅ الإجابة: {answer}\n📘 الشرح: {explanation}"
 
 
-def render_response(question_type: str, answer: str, explanation: str) -> str:
+def _legacy_render_response_compact(question_type: str, answer: str, explanation: str) -> str:
     if question_type == "multiple_choice":
         return f"âœ… ط§ظ„ط¥ط¬ط§ط¨ط©: {answer}"
     if question_type == "true_false":
@@ -324,7 +329,7 @@ def extract_search_prompt(question: str, question_type: str) -> str:
     return stripped
 
 
-def clean_web_text(text: str, max_chars: int = 220) -> str:
+def _legacy_clean_web_text(text: str, max_chars: int = 220) -> str:
     compact = " ".join(str(text or "").split()).strip(" -:\n")
     if not compact:
         return ""
@@ -335,11 +340,11 @@ def clean_web_text(text: str, max_chars: int = 220) -> str:
     return shortened or sentence[:max_chars].strip()
 
 
-def best_web_answer_text(item: dict[str, Any]) -> str:
+def _legacy_best_web_answer_text(item: dict[str, Any]) -> str:
     return clean_web_text(item.get("page_text") or item.get("snippet") or item.get("title") or "")
 
 
-def build_web_answer_fallback(
+def _legacy_build_web_answer_fallback(
     question: str,
     question_type: str,
     web_results: list[dict[str, Any]],

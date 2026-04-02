@@ -38,7 +38,8 @@
   if (!form || !messageList || !promptInput) return;
 
   const runtimeState = {
-    pendingSolveConfirmation: null
+    pendingSolveConfirmation: null,
+    lastAcademicRequest: null
   };
 
   const runtimeMemoryKeys = {
@@ -1471,7 +1472,7 @@
   }
 
   function isAffirmativeReply(text) {
-    return /^(نعم|اي|أيوه|ايوه|أكيد|اكمل|كمل|تمام|موافق|نعم أكمل)$/i.test((text || "").trim());
+    return /^(نعم|اي|أيوه|ايوه|أكيد|اكمل|كمل|تمام|موافق|يلا|ابدأ|ابدأ الحل|نعم أكمل)$/i.test((text || "").trim());
   }
 
   function isNegativeReply(text) {
@@ -2756,6 +2757,12 @@
     const raw = String(text || "").trim();
     const compactRaw = raw.replace(/[؟?!.,،]+$/g, "").trim();
     const normalized = typeof normalizeText === "function" ? normalizeText(raw) : raw.toLowerCase();
+    if (/^(هلا|مرحبا|السلام عليكم|كيفك|كيف الحال|من أنت|من انت|وش اسمك|ما اسمك|من تكون)$/i.test(compactRaw)) {
+      return { type: "chat", confidence: 0.99, source: "general_chat_exact" };
+    }
+    if (/^(نعم|لا|اكمل|أكمل|استمر|ابدأ|كمل|يلا|اختيار المادة|غير المادة|غيّر المادة)$/i.test(compactRaw)) {
+      return { type: "ui_action", confidence: 0.99, source: "ui_action_exact" };
+    }
     const learned = checkRuntimeLearnedIntent(raw);
     if (learned) {
       return {
@@ -2837,20 +2844,34 @@
     if (/من انت|من أنت|وش اسمك|ما اسمك/.test(normalized)) {
       return "أنا مساعد ذكي أساعدك في الدراسة، حل الأسئلة، والشرح بطريقة مناسبة لنوع السؤال، وأقدر أيضًا أجاوبك بشكل عام.";
     }
-    return "أقدر أساعدك. اكتب سؤالك بشكل مباشر أو أرسل سؤالك الدراسي وسأرتبه لك بطريقة واضحة.";
+    return "جاري تحليل السؤال والبحث عن الجواب المناسب.";
   }
 
   function runtimeSafeFallback(intentType) {
     if (intentType === "chat") return "أنا مساعد ذكي، أساعدك في الدراسة، حل الأسئلة، والشرح والمحادثة بشكل مباشر.";
     if (intentType === "ui_action") return "تم. أرسل السؤال الكامل أو اختر المادة.";
-    if (intentType === "general_question") return "أقدر أساعدك. اكتب سؤالك بشكل كامل.";
+    if (intentType === "general_question") return "جاري تحليل السؤال والبحث عن الجواب المناسب.";
     return "تعذر تحديد نوع الرسالة بدقة هذه المرة.";
   }
+
+  createRuntimeGeneralQuestionResponse = function patchedCreateRuntimeGeneralQuestionResponse(message) {
+    const normalized = typeof normalizeText === "function" ? normalizeText(message || "") : String(message || "").toLowerCase();
+    if (/من انت|من أنت|وش اسمك|ما اسمك/.test(normalized)) {
+      return "أنا مساعد ذكي أساعدك في الدراسة وحل الأسئلة والشرح، وأقدر أجاوبك أيضًا بشكل عام.";
+    }
+    return "جاري تحليل السؤال والبحث عن الجواب المناسب.";
+  };
+
+  const originalRuntimeSafeFallback = runtimeSafeFallback;
+  runtimeSafeFallback = function patchedRuntimeSafeFallback(intentType) {
+    if (intentType === "general_question") return "جاري تحليل السؤال والبحث عن الجواب المناسب.";
+    return originalRuntimeSafeFallback(intentType);
+  };
 
   function finalRuntimeSafetyGate(input, intentType, responseText) {
     const academicMarkers = ["✅ الإجابة", "📘 الشرح", "🧮 الخطوات", "📚 الربط بالمنهج", "محيط الدائرة"];
 
-    if (intentType === "chat" || intentType === "ui_action" || intentType === "general_question") {
+    if (intentType === "chat" || intentType === "ui_action") {
       const hasAcademicTemplate = academicMarkers.some((marker) => String(responseText || "").includes(marker));
       if (hasAcademicTemplate) {
         recordRuntimeIntentError({
@@ -2917,6 +2938,10 @@
     else if (imageMeta.image_type === "educational_page" && !question.trim()) responseMode = "content_interpretation";
     else if (isAcademic && !quickMode && (scope.scope_status === "subject_mismatch" || scope.scope_status === "grade_mismatch" || scope.scope_status === "subject_unknown")) responseMode = "ask_for_confirmation";
     else if (isAcademic && !quickMode && intent.type !== "chat" && intent.type !== "help" && subjectConfidence < 0.7 && !isObjective) responseMode = "ask_for_confirmation";
+
+    if (isAcademic && responseMode === "ask_for_confirmation") {
+      responseMode = "academic_solve";
+    }
 
     return {
       input_type: inputType,
@@ -3135,6 +3160,13 @@
         action: "answer_with_note",
         confidence: route.subject_confidence || analysis.confidence,
         note: route.detected_subject ? `يبدو أن السؤال من ${route.detected_subject}، وسأكمل الحل مباشرة.` : "يبدو أن السؤال واضح بما يكفي، وسأكمل الحل مباشرة."
+      };
+    }
+    if (route.response_mode === "academic_solve") {
+      return {
+        action: "answer",
+        confidence: Math.max(route.subject_confidence || 0, analysis.confidence || 0.55),
+        strategy: "solve_without_prompt"
       };
     }
     return { action: "ask", confidence: route.subject_confidence || analysis.confidence };
@@ -3665,6 +3697,23 @@
     };
   }
 
+  function isRuntimeOffTopicAnswer(question, response) {
+    const normalizedQuestion = typeof normalizeText === "function" ? normalizeText(question || "") : String(question || "").toLowerCase();
+    const normalizedAnswer = typeof normalizeText === "function"
+      ? normalizeText(`${response?.finalAnswer || ""} ${response?.explanation || ""} ${(response?.steps || []).join(" ")}`)
+      : String(`${response?.finalAnswer || ""} ${response?.explanation || ""} ${(response?.steps || []).join(" ")}`).toLowerCase();
+
+    const asksHistory = /(حضارة|الرومان|اليونان|تاريخ|منهجية الرومان)/.test(normalizedQuestion);
+    const mathAnswer = /(محيط الدائرة|نصف القطر|القطر|التعويض|2\s*[x×*]\s*ط\s*[x×*]\s*نق)/.test(normalizedAnswer);
+    if (asksHistory && mathAnswer) return true;
+
+    const asksMath = /(كيف نضرب|الضرب|رياضيات|الرياضيات|نضرب)/.test(normalizedQuestion);
+    const historyAnswer = /(حضارة الرومان|حضارة اليونان|الإمبراطورية الرومانية|المدينة اليونانية)/.test(normalizedAnswer);
+    if (asksMath && historyAnswer) return true;
+
+    return false;
+  }
+
   function finalizeRuntimeAcademicResponse(question, route, analysis, response, fallbackDecisionBasis = "") {
     if (!response) return null;
 
@@ -3693,6 +3742,10 @@
       normalized.displayMode = "quick";
       normalized.steps = [];
       normalized.mistakes = [];
+    }
+
+    if (isRuntimeOffTopicAnswer(question, normalized)) {
+      return null;
     }
 
     if (!ValidationEngine(normalized, meta)) {
@@ -3835,11 +3888,62 @@
       return;
     }
 
+    if (!runtimeState.pendingSolveConfirmation && runtimeState.lastAcademicRequest && isAffirmativeReply(question) && !hasAttachments) {
+      const stored = runtimeState.lastAcademicRequest;
+      const replayQuestion = stored.question || stored.route?.extracted_text || "";
+      if (replayQuestion.trim()) {
+        addMessage("user", "أنت", question);
+        promptInput.value = "";
+        autoGrow(promptInput);
+
+        const pendingNode = addMessage("assistant", "ملم يحل", createLoadingCopy(), { pending: true });
+        const replayRoute = {
+          ...stored.route,
+          response_mode: "academic_solve",
+          detected_subject: stored.route?.detected_subject || stored.subject || "",
+          subject_confidence: Math.max(0.71, stored.route?.subject_confidence || 0.71)
+        };
+        const replayAnalysis = intent_analyzer(replayQuestion, false);
+        const replayReasoning = reasoning_engine(replayQuestion, replayAnalysis);
+        const response = await buildAcademicResponseWithBackend(
+          replayQuestion,
+          replayRoute,
+          replayAnalysis,
+          replayReasoning,
+          { action: "answer", confidence: replayRoute.subject_confidence }
+        );
+        saveRuntimeAnswerCandidate(replayQuestion, replayRoute, response);
+        pendingNode?.remove();
+        const body = response?.preRenderedBody || formatAssistantSections(response);
+        const sources = response?.hideSources ? [] : (typeof buildSources === "function" ? buildSources() : []);
+        addMessage("assistant", "ملم يحل", body, {
+          sources,
+          enableTools: true,
+          metadata: buildAssistantMeta(response)
+        });
+        appendSessionMessage("assistant", "ملم يحل", body, {
+          sources,
+          enableTools: true,
+          metadata: buildAssistantMeta(response),
+          subject: response?.subject || replayRoute.detected_subject || ""
+        });
+        return;
+      }
+    }
+
     const route = detectRoute(question, attachments);
     const analysis = intent_analyzer(question || route.extracted_text || "", hasAttachments);
     const reasoning = reasoning_engine(question || route.extracted_text || "", analysis);
     const decision = AcademicRouter(route, analysis, reasoning);
     const intent = analysis.intent;
+
+    if (route.response_mode === "academic_solve" && isRuntimeAcademicIntent(intent.type) && (question || route.extracted_text || "").trim()) {
+      runtimeState.lastAcademicRequest = {
+        question: question || route.extracted_text || "",
+        route,
+        subject: route.detected_subject || ""
+      };
+    }
 
     if (hasAttachments && typeof isLoggedIn === "function" && !isLoggedIn()) {
       addMessage("assistant", "ملم يحل", formatSimpleReply('تحليل الصور متاح بعد تسجيل الدخول فقط. يمكنك الآن كتابة السؤال نصيًا، أو <a class="top-link" href="login.html">تسجيل الدخول</a> لتفعيل تحليل الصور.'));
@@ -3887,9 +3991,11 @@
       body = createRouteReply(route);
     } else if (decision.action === "chat") {
       runtimeState.pendingSolveConfirmation = null;
+      runtimeState.lastAcademicRequest = null;
       body = formatSimpleReply(createRuntimeChatResponse(question));
     } else if (decision.action === "help") {
       runtimeState.pendingSolveConfirmation = null;
+      runtimeState.lastAcademicRequest = null;
       body = formatSimpleReply(createHelpResponse());
     } else if (decision.action === "ui_action") {
       runtimeState.pendingSolveConfirmation = null;
@@ -3972,6 +4078,7 @@
   if (originalNeedsClarification) {
     window.needsClarification = function patchedNeedsClarification(message, intent, hasAttachments = false) {
       if (isDirectMathExpression(message)) return false;
+      if (String(message || "").trim().length >= 2) return false;
       return originalNeedsClarification(message, intent, hasAttachments);
     };
   }
