@@ -147,9 +147,9 @@
             <textarea class="field" rows="2" data-generator-grades placeholder="الصفوف المستهدفة، مثال: الأول الابتدائي, الثاني المتوسط"></textarea>
             <textarea class="field" rows="2" data-generator-subjects placeholder="المواد المستهدفة، مثال: الرياضيات, العلوم, اللغة الإنجليزية"></textarea>
             <div class="admin-table-actions">
-              <button class="primary-btn" type="button" data-generator-toggle>تشغيل المولد</button>
+              <button class="primary-btn" type="button" data-generator-toggle onclick="window.adminHandleGeneratorToggle && window.adminHandleGeneratorToggle(event)">تشغيل المولد</button>
               <button class="mini-btn" type="submit">حفظ الإعدادات</button>
-              <button class="mini-btn admin-action-points" type="button" data-generator-run>تشغيل يدوي الآن</button>
+              <button class="mini-btn admin-action-points" type="button" data-generator-run onclick="window.adminHandleGeneratorRunNow && window.adminHandleGeneratorRunNow(event)">تشغيل يدوي الآن</button>
             </div>
             <div class="small-copy" data-generator-state-copy>يمكن تشغيله يوميًا محليًا مع كل زيارة للأدمن أو تشغيله يدويًا الآن.</div>
           </form>

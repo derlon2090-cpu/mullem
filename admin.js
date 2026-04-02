@@ -1310,6 +1310,22 @@ function handleGeneratorRunNow() {
   refreshAdminData();
 }
 
+window.adminHandleGeneratorToggle = (event) => {
+  if (event) {
+    event.preventDefault?.();
+    event.stopPropagation?.();
+  }
+  handleGeneratorToggle();
+};
+
+window.adminHandleGeneratorRunNow = (event) => {
+  if (event) {
+    event.preventDefault?.();
+    event.stopPropagation?.();
+  }
+  handleGeneratorRunNow();
+};
+
 generatorToggleButton?.addEventListener("click", (event) => {
   event.preventDefault();
   event.stopPropagation();
