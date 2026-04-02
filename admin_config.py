@@ -26,6 +26,16 @@ def load_search_config(settings: Settings) -> SearchConfigResponse:
         except json.JSONDecodeError:
             pass
 
+    merged_domains = [
+        domain.strip()
+        for domain in [
+            *(payload.get("trusted_domains", []) or []),
+            *settings.trusted_search_domains,
+        ]
+        if str(domain or "").strip()
+    ]
+    payload["trusted_domains"] = list(dict.fromkeys(merged_domains))
+
     return SearchConfigResponse(
         trusted_domains=[domain.strip() for domain in payload.get("trusted_domains", []) if domain.strip()],
         serpapi_enabled=bool(settings.serpapi_api_key),
@@ -62,5 +72,6 @@ def resolve_trusted_domains(settings: Settings, request_domains: list[str] | Non
         requested = [domain.strip() for domain in request_domains if domain.strip()]
         if requested:
             allowed = [domain for domain in requested if domain in current.trusted_domains]
-            return allowed or current.trusted_domains
+            merged = list(dict.fromkeys([*allowed, *current.trusted_domains]))
+            return merged or current.trusted_domains
     return current.trusted_domains

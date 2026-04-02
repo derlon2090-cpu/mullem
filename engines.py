@@ -289,6 +289,64 @@ def apply_final_guard(question_type: str, subject: str, answer: str, explanation
     return clean_answer, clean_explanation, 0.0, "guard_pass_general"
 
 
+def detect_question_type(text: str) -> str:
+    stripped = str(text or "").strip()
+    lowered = normalize_text(stripped)
+    blocks = split_question_blocks(stripped)
+
+    if len(blocks) > 1:
+        return "compound"
+    if is_direct_math_expression(stripped):
+        return "direct_math"
+    if re.search(r"(صواب|خطأ|صح|true|false)", lowered, re.I):
+        return "true_false"
+    if re.search(r"(match|طابق)", lowered, re.I):
+        return "matching"
+    if has_choices(stripped) or re.search(r"(اختر|أي مما يلي)", lowered, re.I):
+        return "multiple_choice"
+    if "____" in stripped or "______" in stripped:
+        return "fill_blank"
+    if re.search(r"(علل|فسر|عرف|ماهو|ماهي|ما هو|ما هي|ما المقصود|بحث|بحث شامل|what is|define)", lowered, re.I):
+        return "definition"
+    return "general"
+
+
+def infer_subject(text: str, fallback: str = "") -> str:
+    lowered = normalize_text(text)
+    if re.search(r"(went|goes|grammar|past tense|present simple|verb|rewrite)", lowered, re.I):
+        return "اللغة الإنجليزية"
+    if re.search(r"(حضارة|الرومان|الرومانية|روما|اليونان|اليونانية|أثينا|اثينا|إسبرطة|اسبرطة|تاريخ|جغرافيا|إمبراطورية|منهجية الرومان)", lowered):
+        return "الاجتماعيات"
+    if re.search(r"(كورونا|كورنا|كوفيد|فيروس|مرض|وباء|جائحة|عدوى|لقاح|أعراض|اعراض|صحة)", lowered):
+        return "العلوم"
+    if re.search(r"(محيط|مساحة|دائرة|معادلة|جمع|طرح|\*|ضرب|قسمة)", lowered):
+        return "الرياضيات"
+    if re.search(r"(أروماتية|benzene|aromatic|resonance|رنين|الكيمياء)", lowered, re.I):
+        return "الكيمياء"
+    if re.search(r"(خلوي|الميتوكوندريا|الرحم|البلاستولية|الأحياء|respiration|mitochondria)", lowered, re.I):
+        return "الأحياء"
+    if re.search(r"(force|speed|acceleration|نيوتن|سرعة|تسارع|فيزياء)", lowered, re.I):
+        return "الفيزياء"
+    return fallback or "عام"
+
+
+_base_apply_final_guard = apply_final_guard
+
+
+def apply_final_guard(question_type: str, subject: str, answer: str, explanation: str) -> tuple[str, str, float, str] | None:
+    guarded = _base_apply_final_guard(question_type, subject, answer, explanation)
+    if not guarded:
+        return None
+
+    clean_answer, clean_explanation, extra_score, basis = guarded
+    merged_text = f"{clean_answer} {clean_explanation}"
+    if subject == "الاجتماعيات" and re.search(r"(محيط الدائرة|نصف القطر|2\s*[×x*]\s*ط|present simple|goes|grammar)", merged_text, re.I):
+        return None
+    if subject in {"العلوم", "الأحياء"} and re.search(r"(محيط الدائرة|نصف القطر|2\s*[×x*]\s*ط)", merged_text):
+        return None
+    return clean_answer, clean_explanation, extra_score, basis
+
+
 def _legacy_render_response(question_type: str, answer: str, explanation: str) -> str:
     if question_type == "multiple_choice":
         return f"✅ الإجابة: {answer}"
@@ -320,7 +378,14 @@ def _legacy_render_response_compact(question_type: str, answer: str, explanation
 
 
 def extract_search_prompt(question: str, question_type: str) -> str:
-    stripped = re.sub(r"\s+", " ", str(question or "")).strip()
+    stripped = re.sub(r"https?://\S+", " ", str(question or ""))
+    stripped = re.sub(
+        r"(تقدر تبحث لي عبر الويب|ابحث عبر الويب|حل من الويب|بحث شامل|سوي بحث شامل|ابحث لي|من فضلك)",
+        " ",
+        stripped,
+        flags=re.I,
+    )
+    stripped = re.sub(r"\s+", " ", stripped).strip()
     if question_type == "multiple_choice" and has_choices(stripped):
         stem = re.split(r"\s+-\s+", stripped, maxsplit=1)[0].strip()
         return stem or stripped

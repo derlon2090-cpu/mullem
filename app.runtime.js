@@ -297,8 +297,32 @@
     const normalized = typeof normalizeText === "function"
       ? normalizeText(text || "")
       : String(text || "").trim().toLowerCase();
+    const tokenCount = normalized.split(/\s+/).filter(Boolean).length;
+    const looksAcademic = /[؟?]|\n|_{2,}|-{2,}|•|match\b|complete\b|اختر|صواب|خطأ|ماهو|ماهي|ما هو|ما هي|اشرح|فسر|علل|بحث|حضارة|الرومان|اليونان|كورونا|فيروس|مرض/i.test(
+      normalized
+    );
 
-    return getRuntimeIntentRules().find((rule) => normalized === normalizeText(rule.pattern) || normalized.includes(normalizeText(rule.pattern)))?.correctIntent || "";
+    for (const rule of getRuntimeIntentRules()) {
+      const pattern = typeof normalizeText === "function"
+        ? normalizeText(rule?.pattern || "")
+        : String(rule?.pattern || "").trim().toLowerCase();
+      if (!pattern || !rule?.correctIntent) continue;
+
+      if (normalized === pattern) {
+        return rule.correctIntent;
+      }
+
+      const learnedAsUiOrChat = rule.correctIntent === "ui_action" || rule.correctIntent === "general_chat" || rule.correctIntent === "chat";
+      if (learnedAsUiOrChat && (looksAcademic || normalized.length > 20 || tokenCount > 4)) {
+        continue;
+      }
+
+      if (pattern.length >= 4 && normalized.includes(pattern)) {
+        return rule.correctIntent;
+      }
+    }
+
+    return "";
   }
 
   function rememberRuntimeIntentPattern(text, correctIntent) {
@@ -1496,7 +1520,7 @@
     if (/ترجم|translate|translation|ما ترجمة|translate into/i.test(normalized)) return "ترجمة";
     if (/صحح|correct the sentence|rewrite|rewrite the sentence|grammar correction/i.test(normalized)) return "تصحيح";
     if (/احسب|أوجد|ناتج|مساحة|محيط|حل المعادلة|\d/.test(normalized)) return "مسألة";
-    if (/عرف|ما هو|ما هي|ماذا يعني|what is|define/i.test(normalized)) return "تعريف";
+    if (/عرف|ماهو|ماهي|ما هو|ما هي|ماذا يعني|what is|define/i.test(normalized)) return "تعريف";
     if (/اشرح|explain|وضح|فسر/i.test(normalized)) return "شرح";
 
     return typeof detectQuestionType === "function" ? detectQuestionType(source) : "سؤال أكاديمي";
@@ -1555,6 +1579,14 @@
 
     if (questionType === "شرح" && /مبتدأ|خبر|إعراب|نحو|بلاغة/.test(normalized)) {
       promote("اللغة العربية", 0.84, "arabic-explain");
+    }
+
+    if (/(حضارة|الرومان|الرومانية|اليونان|اليونانية|روما|أثينا|اثينا|الإمبراطورية|امبراطورية|تاريخ|جغرافيا|خريطة)/.test(normalized)) {
+      promote("الاجتماعيات", 0.94, "social-studies-history");
+    }
+
+    if (/(كورونا|كورنا|كوفيد|فيروس|مرض|وباء|جائحة|عدوى|لقاح|أعراض|اعراض|صحة)/.test(normalized)) {
+      promote(questionType === "تعريف" ? "العلوم" : "الأحياء", 0.9, "health-science");
     }
 
     if (/الهيدروكربونات الأروماتية|الأروماتية|aromatic|aromaticity|benzene|بنزين|الرنين|delocalization/.test(normalized)) {
@@ -1865,7 +1897,7 @@
     if (/ترجم|translate|translation|ما ترجمة|translate into/.test(normalized)) return "ترجمة";
     if (/صحح|correct the sentence|rewrite|rewrite the sentence|grammar correction/.test(normalized)) return "تصحيح";
     if (/احسب|أوجد|ناتج|مساحة|محيط|حل المعادلة|\d+\s*[+\-*x×\/÷]\s*\d+/.test(normalized)) return "مسألة";
-    if (/عرف|ما هو|ما هي|ماذا يعني|what is|define/.test(normalized)) return "تعريف";
+    if (/عرف|ماهو|ماهي|ما هو|ما هي|ماذا يعني|what is|define/.test(normalized)) return "تعريف";
     if (/اشرح|فسر|وضح|علل|explain/.test(normalized)) return "شرح";
 
     return detectRuntimeQuestionType(text);
@@ -2033,6 +2065,51 @@
       agreementLevel: consensus?.agreementLevel || "medium"
     });
   }
+
+  extractRuntimeMatchingData = function patchedExtractRuntimeMatchingData(block) {
+    const lines = String(block || "")
+      .split(/\r?\n/)
+      .map((line) => line.trim())
+      .filter(Boolean);
+
+    let prompts = lines.filter((line) => hasRuntimeBlankPrompt(line));
+
+    if (!prompts.length) {
+      const inferredPrompts = [];
+      lines.forEach((line, index) => {
+        const previousLine = lines[index - 1] || "";
+        const nextLine = lines[index + 1] || "";
+        const isChoiceMarker = /^اختر$/i.test(line) || /^اختر\s*$/i.test(line);
+        const isSectionLabel = /^\(?[اأب]\)?$/.test(line);
+        const isOptionLine = /^(?:[-•]\s*|https?:\/\/)/i.test(line);
+        const isInstructionLine = /^اختر\s*شكل\s*الإجابة/i.test(line) || /^match\b/i.test(line);
+        const isPromptCandidate = !isChoiceMarker && !isSectionLabel && !isOptionLine && !isInstructionLine
+          && (/\.{1,2}$/.test(line) || /[:：]$/.test(line) || /^[A-Za-z\u0600-\u06FF].{2,120}$/.test(line));
+
+        if (isChoiceMarker && previousLine && !/^اختر$/i.test(previousLine) && !/^\(?[اأب]\)?$/.test(previousLine)) {
+          inferredPrompts.push(previousLine);
+        } else if (isPromptCandidate && !nextLine.startsWith("-") && !nextLine.startsWith("•")) {
+          inferredPrompts.push(line);
+        }
+      });
+
+      prompts = [...new Set(inferredPrompts)].filter((line) => !/^اختر$/i.test(line)).slice(0, 12);
+    }
+
+    const optionLines = lines.filter(
+      (line) =>
+        !prompts.includes(line) &&
+        !hasRuntimeBlankPrompt(line) &&
+        !/^اختر$/i.test(line) &&
+        !/^\(?[اأب]\)?$/.test(line) &&
+        !/^اختر\s*شكل\s*الإجابة/i.test(line) &&
+        !/^https?:\/\//i.test(line) &&
+        !/match the word|match\b|طابق/i.test(line)
+    );
+    const options = optionLines.flatMap((line) => splitRuntimeOptionChunk(line));
+
+    return { prompts, options };
+  };
 
   function solveRuntimeMatchingBlock(block, route) {
     const data = extractRuntimeMatchingData(block);
@@ -2469,20 +2546,23 @@
       "الكيمياء": 0,
       "الأحياء": 0,
       "اللغة العربية": 0,
-      "اللغة الإنجليزية": 0
+      "اللغة الإنجليزية": 0,
+      "الاجتماعيات": 0
     };
 
     const add = (subject, amount) => {
       scores[subject] = (scores[subject] || 0) + amount;
     };
 
-    if (/التنفس الخلوي|الميتوكوندريا|الفجوات|البلاستيدات|الخلية النباتية|الخلية الحيوانية|stress|sick|health|disease|cell|respiration|mitochondria|vacuole|انغراس|البلاستولية|جنين|الرحم/.test(normalized)) add("الأحياء", 80);
+    if (/التنفس الخلوي|الميتوكوندريا|الفجوات|البلاستيدات|الخلية النباتية|الخلية الحيوانية|stress|sick|health|disease|cell|respiration|mitochondria|vacuole|انغراس|البلاستولية|جنين|الرحم|كورونا|كورنا|كوفيد|فيروس|مرض|وباء|جائحة|عدوى|لقاح|أعراض|اعراض/.test(normalized)) add("الأحياء", 80);
     if (/رابطة|أيونية|تساهمية|معادلة كيميائية|حمض|قاعدة|na|cl|ذرة|مول|الهيدروكربونات الأروماتية|الأروماتية|aromatic|aromaticity|benzene|بنزين|resonance|رنين|pi electron|delocalization/.test(normalized)) add("الكيمياء", 72);
     if (/تسارع|قوة|سرعة|نيوتن|زخم|احتكاك|طاقة حركية/.test(normalized)) add("الفيزياء", 65);
     if (/محيط|مساحة|دائرة|نصف القطر|معادلة|جذر|كسر|احسب|أوجد/.test(normalized)) add("الرياضيات", 65);
     if (/مبتدأ|خبر|إعراب|نحو|بلاغة|أعرب|استخرج/.test(normalized)) add("اللغة العربية", 60);
     if (isExplicitEnglishLanguageTask(normalized)) add("اللغة الإنجليزية", 60);
     if (/تبخر|تكاثف|دورة الماء|نظام بيئي/.test(normalized)) add("العلوم", 52);
+    if (/كورونا|كورنا|كوفيد|فيروس|مرض|وباء|جائحة|عدوى|لقاح|أعراض|اعراض|صحة/.test(normalized)) add("العلوم", 68);
+    if (/حضارة|الرومان|الرومانية|اليونان|اليونانية|روما|أثينا|اثينا|الإمبراطورية|امبراطورية|تاريخ|جغرافيا|خريطة/.test(normalized)) add("الاجتماعيات", 90);
 
     const ranking = Object.entries(scores)
       .filter(([, score]) => score > 0)
@@ -2500,6 +2580,39 @@
       passes: ranking.length ? ["runtime-auto-detect"] : []
     };
   }
+
+  window.auto_subject_detector = runtimeAutoSubjectDetector;
+
+  const originalRuntimeAutoSubjectDetector = runtimeAutoSubjectDetector;
+  runtimeAutoSubjectDetector = function patchedRuntimeAutoSubjectDetector(text) {
+    const result = originalRuntimeAutoSubjectDetector(text);
+    const source = String(text || "");
+    const normalized = typeof normalizeText === "function" ? normalizeText(source) : source.toLowerCase();
+    const hasStrongChemistrySignal = /(رابطة|أيونية|تساهمية|معادلة كيميائية|حمض|قاعدة|ذرة|مول|أروماتية|benzene|aromatic|resonance|\bnacl\b|\bna\b|\bcl\b)/i.test(normalized);
+
+    if ((result?.subject || "") === "الكيمياء" && !hasStrongChemistrySignal) {
+      if (/[A-Za-z]/.test(source) || /match\b|complete\b|choose\b|select\b/i.test(normalized)) {
+        return {
+          subject: "اللغة الإنجليزية",
+          confidence: Math.max(result?.confidence || 0, 0.8),
+          candidates: [
+            { subject: "اللغة الإنجليزية", score: 80 },
+            ...(Array.isArray(result?.candidates) ? result.candidates.filter((item) => item.subject !== "اللغة الإنجليزية") : [])
+          ].slice(0, 3),
+          passes: [...new Set([...(result?.passes || []), "weak-chemistry-signal-redirected-to-english"])]
+        };
+      }
+
+      return {
+        subject: "",
+        confidence: 0,
+        candidates: [],
+        passes: [...new Set([...(result?.passes || []), "weak-chemistry-signal-filtered"])]
+      };
+    }
+
+    return result;
+  };
 
   window.auto_subject_detector = runtimeAutoSubjectDetector;
 
@@ -3711,6 +3824,10 @@
     const historyAnswer = /(حضارة الرومان|حضارة اليونان|الإمبراطورية الرومانية|المدينة اليونانية)/.test(normalizedAnswer);
     if (asksMath && historyAnswer) return true;
 
+    const asksHealth = /(كورونا|كورنا|كوفيد|فيروس|مرض|وباء|جائحة|عدوى|لقاح|أعراض|اعراض|صحة)/.test(normalizedQuestion);
+    const healthAnswer = /(فيروس|مرض|وباء|جائحة|عدوى|لقاح|أعراض|اعراض|كوفيد|كورونا|كورنا)/.test(normalizedAnswer);
+    if (asksHealth && mathAnswer && !healthAnswer) return true;
+
     return false;
   }
 
@@ -3818,6 +3935,38 @@
     );
 
     return guardedFallback || createRuntimeGuardBlockedResponse(route, analysis);
+  }
+
+  if (window.__codexRuntimeTestEnabled || ["localhost", "127.0.0.1"].includes(window.location?.hostname || "")) {
+    window.__mullemRuntimeDebug = {
+      detectRoute,
+      detectRuntimeIntentType,
+      detectRuntimeQuestionType,
+      detectRuntimeSubject,
+      async answer(sample) {
+        const route = detectRoute(sample, []);
+        const analysis = intent_analyzer(sample || route.extracted_text || "", false);
+        const reasoning = reasoning_engine(sample || route.extracted_text || "", analysis);
+        const decision = AcademicRouter(route, analysis, reasoning);
+        const response = await buildAcademicResponseWithBackend(
+          sample || route.extracted_text || "",
+          route,
+          analysis,
+          reasoning,
+          decision
+        );
+        return {
+          routeMode: route.response_mode,
+          routeSubject: route.detected_subject || "",
+          questionType: route.question_type || "",
+          intentType: analysis.intent?.type || "",
+          finalAnswer: response?.finalAnswer || "",
+          explanation: response?.explanation || "",
+          decisionBasis: response?.decisionBasis || "",
+          preRenderedBody: response?.preRenderedBody || ""
+        };
+      }
+    };
   }
 
   async function runtimeHandleSubmit(event) {
@@ -4060,6 +4209,11 @@
   };
 
   classifyRuntimeQuestionType = function patchedClassifyRuntimeQuestionType(text) {
+    const source = String(text || "");
+    const normalized = typeof normalizeText === "function" ? normalizeText(source) : source.toLowerCase();
+    if (/match\b|طابق/i.test(source) || /match\b|طابق/i.test(normalized)) {
+      return "مطابقة";
+    }
     if (isDirectMathExpression(text)) return "ظ…ط³ط£ظ„ط©";
     return originalClassifyRuntimeQuestionType(text);
   };

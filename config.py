@@ -30,6 +30,12 @@ class Settings(BaseModel):
             "ien.edu.sa",
             "beitalelm.com",
             "mawdoo3.com",
+            "wikipedia.org",
+            "britannica.com",
+            "khanacademy.org",
+            "who.int",
+            "cdc.gov",
+            "mayo.edu",
         ]
     )
     analysis_budget_ms: int = 5000
@@ -48,7 +54,17 @@ def get_settings() -> Settings:
         serpapi_max_results=int(os.getenv("SERPAPI_MAX_RESULTS", "5")),
         trusted_search_domains=_split_csv(
             os.getenv("TRUSTED_SEARCH_DOMAINS"),
-            ["ien.edu.sa", "beitalelm.com", "mawdoo3.com"],
+            [
+                "ien.edu.sa",
+                "beitalelm.com",
+                "mawdoo3.com",
+                "wikipedia.org",
+                "britannica.com",
+                "khanacademy.org",
+                "who.int",
+                "cdc.gov",
+                "mayo.edu",
+            ],
         ),
         analysis_budget_ms=int(os.getenv("ANALYSIS_BUDGET_MS", "5000")),
     )

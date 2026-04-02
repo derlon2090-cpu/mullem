@@ -14,15 +14,27 @@ except ImportError:  # pragma: no cover - runtime fallback when running as a fla
 
 TRUSTED_DOMAIN_WEIGHTS = {
     "ien.edu.sa": 1.0,
+    "wikipedia.org": 0.9,
+    "britannica.com": 0.95,
+    "khanacademy.org": 0.92,
+    "who.int": 0.98,
+    "cdc.gov": 0.98,
+    "mayo.edu": 0.94,
     "beitalelm.com": 0.78,
     "mawdoo3.com": 0.68,
 }
 
 
 def _domain_queries(question: str, domains: list[str]) -> list[str]:
+    cleaned_question = " ".join(str(question or "").split()).strip()
+    if not cleaned_question:
+        return []
     if not domains:
-        return [question]
-    return [f'site:{domain} "{question}"' for domain in domains[:4]]
+        return [cleaned_question]
+
+    unique_domains = list(dict.fromkeys(domain.strip() for domain in domains if domain.strip()))[:8]
+    domain_queries = [f'site:{domain} "{cleaned_question}"' for domain in unique_domains]
+    return [cleaned_question, *domain_queries]
 
 
 def _domain_weight(link: str) -> float:
