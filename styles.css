@@ -2129,6 +2129,34 @@ body.user-logged-in .selectors {
   gap: 22px;
 }
 
+.admin-main > #admin-overview {
+  order: 1;
+}
+
+.admin-main > .stats-grid {
+  order: 2;
+}
+
+.admin-main > #admin-generator {
+  order: 3;
+}
+
+.admin-main > #admin-coverage {
+  order: 4;
+}
+
+.admin-main > #admin-users {
+  order: 5;
+}
+
+.admin-main > #admin-reports {
+  order: 6;
+}
+
+.admin-main > #admin-questions {
+  order: 7;
+}
+
 .admin-hero-panel {
   padding: 26px;
   display: flex;

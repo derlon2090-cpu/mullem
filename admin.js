@@ -1825,6 +1825,195 @@ function renderGeneratorStatus() {
   }
 }
 
+function getGeneratorPatternEntries(subject, grade, questionType, bank = getQuestionBank()) {
+  return bank.filter((entry) => (
+    entry.isApproved
+    && entry.subject === subject
+    && entry.questionType === questionType
+    && (entry.grade === grade || entry.grade === "unknown")
+    && entry.question
+  ));
+}
+
+function extractGeneratorStylePrefix(question) {
+  const text = String(question || "").trim();
+  if (!text) return "";
+  const markerMatch = text.match(/^(.{0,42}?[:؟?])/);
+  if (markerMatch) return markerMatch[1].trim();
+  return text.split(/\s+/).slice(0, 6).join(" ").trim();
+}
+
+function getGeneratorStylePrefix(subject, grade, questionType, variationIndex, bank = getQuestionBank()) {
+  const entries = getGeneratorPatternEntries(subject, grade, questionType, bank);
+  if (!entries.length) return "";
+  const sample = entries[variationIndex % entries.length];
+  return extractGeneratorStylePrefix(sample.question);
+}
+
+function buildGeneratorQuestionSignature(question, lesson, answer, questionType) {
+  const normalized = normalizeAdminText(`${question} ${lesson} ${answer} ${questionType}`);
+  return normalized.split(/\s+/).slice(0, 12).join("|");
+}
+
+function buildGeneratedQuestion({ grade, subject, term }, index, history = [], bank = []) {
+  const gradeEntriesCount = bank.filter((entry) => entry.grade === grade && entry.subject === subject).length;
+  const dateSeed = Number(new Date().toISOString().slice(8, 10));
+  const variationIndex = gradeEntriesCount + index + dateSeed + history.length;
+  const seed = getGeneratorSeed(subject);
+  const weightedTypes = [
+    "اختيار من متعدد",
+    "صح أو خطأ",
+    "اختيار من متعدد",
+    "صح أو خطأ",
+    "اختيار من متعدد",
+    "إكمال فراغ",
+    "تعليل / تفسير"
+  ];
+  const questionType = weightedTypes[variationIndex % weightedTypes.length];
+  const stylePrefix = getGeneratorStylePrefix(subject, grade, questionType, variationIndex, bank);
+
+  if (questionType === "اختيار من متعدد") {
+    const options = [
+      `${seed.concept} هو الفكرة الصحيحة في ${seed.lesson}`,
+      `${seed.concept} بعيد عن موضوع ${seed.lesson}`,
+      `${seed.lesson} لا يرتبط بـ ${seed.concept}`,
+      `${seed.concept} مثال غير مناسب لهذا الدرس`
+    ];
+    const lead = stylePrefix || `اختر الإجابة الصحيحة في ${subject}`;
+    return {
+      questionType,
+      question: `${lead}:\nأي عبارة تمثل مفهوم "${seed.concept}" في درس ${seed.lesson} للصف ${grade} في ${term}؟`,
+      options,
+      answer: options[0],
+      explanation: seed.explanation,
+      lesson: seed.lesson,
+      concept: seed.concept,
+      confidence: 0.93,
+      generationMode: "curriculum_first_rewritten_weighted"
+    };
+  }
+
+  if (questionType === "صح أو خطأ") {
+    const isTrue = variationIndex % 2 === 0;
+    const statement = isTrue
+      ? `يرتبط مفهوم "${seed.concept}" مباشرة بدرس ${seed.lesson} في ${subject}.`
+      : `لا توجد علاقة بين مفهوم "${seed.concept}" ودرس ${seed.lesson} في ${subject}.`;
+    const lead = stylePrefix || "صواب أم خطأ";
+    return {
+      questionType,
+      question: `${lead}:\n${statement}`,
+      options: ["صواب", "خطأ"],
+      answer: isTrue ? "صواب" : "خطأ",
+      explanation: isTrue
+        ? seed.explanation
+        : `لأن ${seed.concept} من المفاهيم الأساسية في ${seed.lesson} وليس بعيدًا عنه.`,
+      lesson: seed.lesson,
+      concept: seed.concept,
+      confidence: 0.94,
+      generationMode: "curriculum_first_rewritten_weighted"
+    };
+  }
+
+  if (questionType === "إكمال فراغ") {
+    const lead = stylePrefix || "أكمل الفراغ";
+    return {
+      questionType,
+      question: `${lead}:\nالمفهوم الأساسي في درس ${seed.lesson} هو ______.`,
+      options: [],
+      answer: seed.concept,
+      explanation: seed.explanation,
+      lesson: seed.lesson,
+      concept: seed.concept,
+      confidence: 0.9,
+      generationMode: "curriculum_first_rewritten_weighted"
+    };
+  }
+
+  const lead = stylePrefix || "علل";
+  return {
+    questionType,
+    question: `${lead}:\nلماذا يعد مفهوم "${seed.concept}" مهمًا في درس ${seed.lesson} ضمن ${subject}؟`,
+    options: [],
+    answer: `لأنه يوضح الفكرة الأساسية في ${seed.lesson} ويرتبط مباشرة بهدف الدرس.`,
+    explanation: seed.explanation,
+    lesson: seed.lesson,
+    concept: seed.concept,
+    confidence: 0.88,
+    generationMode: "curriculum_first_rewritten_weighted"
+  };
+}
+
+function validateGeneratedQuestion(candidate, bank, history = []) {
+  const hasQuestion = Boolean(candidate.question && candidate.question.trim());
+  const hasAnswer = Boolean(candidate.answer && String(candidate.answer).trim());
+  const normalizedQuestion = normalizeAdminText(candidate.question);
+  const strictSignature = buildGeneratorQuestionSignature(candidate.question, candidate.lesson, candidate.answer, candidate.questionType);
+  const duplicate = bank.some((entry) => (
+    entry.normalizedQuestion === normalizedQuestion
+    || (
+      buildGeneratorQuestionSignature(entry.question, entry.lesson, entry.answer, entry.questionType) === strictSignature
+      && entry.grade === candidate.grade
+      && entry.subject === candidate.subject
+      && entry.term === candidate.term
+    )
+  ));
+  const historyDuplicate = history.some((entry) => entry.signature === `${candidate.grade}|${candidate.subject}|${candidate.term}|${candidate.questionType}|${strictSignature}`);
+  const hasLogicalOptions = candidate.questionType !== "اختيار من متعدد" || (Array.isArray(candidate.options) && candidate.options.length >= 4);
+  const confidence = Number(candidate.confidence || 0);
+  const approved = hasQuestion && hasAnswer && hasLogicalOptions && !duplicate && !historyDuplicate && confidence >= 0.78;
+
+  return {
+    approved,
+    rejected: !approved,
+    reason: duplicate || historyDuplicate ? "مكرر" : (!hasLogicalOptions ? "خيارات غير كافية" : (!hasQuestion || !hasAnswer ? "سؤال غير مكتمل" : "اجتاز الفلترة"))
+  };
+}
+
+function createGeneratedEntry(payload, settings, index, bank, history) {
+  const built = buildGeneratedQuestion(payload, index, history, bank);
+  const candidate = {
+    key: `generated-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+    question: built.question,
+    questionType: payload.questionType || built.questionType || "اختيار من متعدد",
+    options: built.options || [],
+    answer: built.answer,
+    explanation: built.explanation,
+    subject: payload.subject,
+    grade: payload.grade,
+    term: payload.term,
+    lesson: built.lesson,
+    source: "مولد الأسئلة - المنهج السعودي أولًا + بنك داخلي + نمط مواقع تعليمية موثوقة مثل بيت العلم مع إعادة صياغة",
+    sourceType: "generated_curriculum_pattern",
+    keywordSignature: buildGeneratorQuestionSignature(built.question, built.lesson, built.answer, built.questionType),
+    confidence: built.confidence,
+    likes: 0,
+    dislikes: 0,
+    usageCount: 0,
+    isTrusted: true,
+    createdAt: Date.now(),
+    updatedAt: Date.now(),
+    decisionBasis: "curriculum_first_with_internal_bank_and_trusted_pattern_style",
+    sourcePriority: settings.sourcePriority,
+    trustedPatternReference: settings.trustedPatternReference,
+    generationMode: built.generationMode || "curriculum_first_rewritten_weighted",
+    response: buildRuntimeResponseFromBankEntry({
+      questionType: built.questionType || payload.questionType,
+      answer: built.answer,
+      explanation: built.explanation,
+      subject: payload.subject,
+      lesson: built.lesson,
+      confidence: built.confidence
+    })
+  };
+  candidate.questionType = built.questionType || candidate.questionType;
+  const quality = validateGeneratedQuestion(candidate, bank, history);
+  candidate.isApproved = quality.approved;
+  candidate.isRejected = quality.rejected;
+  candidate.qualityScore = Number((candidate.confidence - (quality.rejected ? 0.12 : 0)).toFixed(4));
+  candidate.preview = String(candidate.answer || candidate.explanation || "").trim().slice(0, 140);
+  return normalizeQuestionBankEntry(candidate);
+}
+
 updateAdminView();
 bindPasswordToggles();
 
