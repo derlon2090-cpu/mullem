@@ -2420,6 +2420,7 @@
     }
 
     if (!normalized && !hasAttachments) return { type: "help", confidence: 0.4, source: "empty" };
+    if (hasRuntimeInlineOptions(raw)) return { type: "solve", confidence: 0.99, source: "inline_choices_detected" };
     if (/^(من انت|من أنت|وش اسمك|ما اسمك|السلام عليكم|مرحبا|هلا|كيفك|كيف حالك|من تكون)$/i.test(compactRaw)) {
       return { type: "chat", confidence: 0.99, source: "general_chat_exact" };
     }
@@ -3165,18 +3166,24 @@
 
   function submitPresetPrompt(prompt, subject = "", options = {}) {
     if (!form || !promptInput) return;
-    const runSubmit = () => {
+    const preparePrompt = () => {
       clearRuntimeAttachments();
       promptInput.value = prompt;
       autoGrow(promptInput);
       applyRuntimeSubject(subject);
-      form.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+      if (typeof promptInput.focus === "function") {
+        try {
+          promptInput.focus({ preventScroll: true });
+        } catch (_) {
+          promptInput.focus();
+        }
+      }
     };
     if (options.scrollToChat) {
       scrollToChatSection();
-      window.setTimeout(runSubmit, options.delayMs || 260);
+      window.setTimeout(preparePrompt, options.delayMs || 260);
     } else {
-      preservePageScroll(runSubmit);
+      preservePageScroll(preparePrompt);
     }
   }
 
