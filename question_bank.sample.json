@@ -1,0 +1,53 @@
+[
+  {
+    "question": "What is the past tense of go? goed - went - goes - going",
+    "normalized_question": "what is the past tense of go goed - went - goes - going",
+    "canonical_question": "اللغة الإنجليزية::multiple_choice::what is the past tense of go goed - went - goes - going",
+    "concept_key": "اللغة الإنجليزية::multiple_choice::what|past|tense|go|goed|went",
+    "question_type": "multiple_choice",
+    "subject": "اللغة الإنجليزية",
+    "grade": "unknown",
+    "term": "unknown",
+    "answer": "went",
+    "explanation": "The correct past tense of go is went.",
+    "source": "approved_internal_bank",
+    "likes": 7,
+    "dislikes": 0,
+    "approved": true,
+    "confidence": 0.97
+  },
+  {
+    "question": "محيط الدائرة يساوي ط × نق². صواب خطأ",
+    "normalized_question": "محيط الدائرة يساوي ط * نق² صواب خطأ",
+    "canonical_question": "الرياضيات::true_false::محيط الدائرة يساوي ط * نق²",
+    "concept_key": "الرياضيات::true_false::محيط|الدائرة|يساوي|نق²",
+    "question_type": "true_false",
+    "subject": "الرياضيات",
+    "grade": "unknown",
+    "term": "unknown",
+    "answer": "خطأ",
+    "explanation": "هذه صيغة المساحة وليست المحيط.",
+    "source": "approved_internal_bank",
+    "likes": 6,
+    "dislikes": 0,
+    "approved": true,
+    "confidence": 0.96
+  },
+  {
+    "question": "People with lower stress levels tend to get sick more often. True or False",
+    "normalized_question": "people with lower stress levels tend to get sick more often true or false",
+    "canonical_question": "الأحياء::true_false::people with lower stress levels tend to get sick more often",
+    "concept_key": "الأحياء::true_false::people|lower|stress|levels|sick|often",
+    "question_type": "true_false",
+    "subject": "الأحياء",
+    "grade": "unknown",
+    "term": "unknown",
+    "answer": "خطأ",
+    "explanation": "التوتر المنخفض لا يجعل الشخص يمرض أكثر عادة.",
+    "source": "approved_internal_bank",
+    "likes": 5,
+    "dislikes": 0,
+    "approved": true,
+    "confidence": 0.93
+  }
+]

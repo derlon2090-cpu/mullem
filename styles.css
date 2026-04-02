@@ -2791,6 +2791,65 @@ body.theme-dark .admin-action-unban {
   font-weight: 700;
 }
 
+.admin-domain-manager {
+  margin-top: 18px;
+  padding-top: 18px;
+  border-top: 1px solid rgba(15, 23, 42, 0.08);
+  display: grid;
+  gap: 14px;
+}
+
+.admin-domain-head {
+  display: grid;
+  gap: 4px;
+}
+
+.admin-domain-head strong {
+  color: var(--text);
+}
+
+.admin-domain-head span {
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 1.8;
+}
+
+.admin-domain-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 12px;
+}
+
+.admin-domain-option {
+  border: 1px solid rgba(34, 197, 94, 0.18);
+  border-radius: 18px;
+  padding: 14px 16px;
+  background: rgba(240, 253, 244, 0.82);
+  display: grid;
+  gap: 4px;
+  cursor: pointer;
+}
+
+.admin-domain-option input {
+  accent-color: #16a34a;
+  margin: 0;
+}
+
+.admin-domain-option span {
+  font-weight: 700;
+  color: #0f3b22;
+}
+
+.admin-domain-option small {
+  color: #567060;
+}
+
+.admin-domain-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
 body.theme-dark .admin-sidebar-card,
 body.theme-dark .admin-hero-panel,
 body.theme-dark .admin-nav-link,
@@ -2804,6 +2863,24 @@ body.theme-dark .admin-choice-chip span {
     linear-gradient(180deg, rgba(20, 31, 24, 0.98), rgba(14, 22, 17, 0.96));
   border-color: rgba(255, 255, 255, 0.1);
   color: var(--text);
+}
+
+body.theme-dark .admin-domain-manager {
+  border-top-color: rgba(255, 255, 255, 0.08);
+}
+
+body.theme-dark .admin-domain-option {
+  background: rgba(255, 255, 255, 0.03);
+  border-color: rgba(74, 222, 128, 0.2);
+}
+
+body.theme-dark .admin-domain-option span {
+  color: rgba(245, 247, 250, 0.92);
+}
+
+body.theme-dark .admin-domain-option small,
+body.theme-dark .admin-domain-head span {
+  color: rgba(245, 247, 250, 0.68);
 }
 
 body.theme-dark .admin-choice-chip input:checked + span {

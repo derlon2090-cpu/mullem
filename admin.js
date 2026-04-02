@@ -2959,3 +2959,144 @@ if (isAdminLoggedIn()) {
     refreshAdminData();
   }
 })();
+
+(() => {
+  const adminSearchConfigStorageKey = "mlm_admin_search_config";
+  const defaultTrustedDomains = [
+    { domain: "ien.edu.sa", label: "عين والمنصات الرسمية" },
+    { domain: "beitalelm.com", label: "بيت العلم" },
+    { domain: "mawdoo3.com", label: "موضوع" },
+  ];
+
+  function getLocalAdminSearchConfig() {
+    return {
+      trustedDomains: defaultTrustedDomains.map((item) => item.domain),
+      ...loadJson(adminSearchConfigStorageKey, {}),
+    };
+  }
+
+  function saveLocalAdminSearchConfig(config) {
+    saveJson(adminSearchConfigStorageKey, config);
+  }
+
+  function findAdminSourcePanel() {
+    return document.querySelector(".admin-source-list")?.closest(".admin-panel") || null;
+  }
+
+  function collectSelectedDomains(root) {
+    if (!root) return [];
+    return Array.from(root.querySelectorAll("[data-admin-domain-option]:checked"))
+      .map((input) => input.value.trim())
+      .filter(Boolean);
+  }
+
+  async function syncSearchConfigFromBackend() {
+    try {
+      const response = await fetch("/api/admin/search-config", { headers: { Accept: "application/json" } });
+      if (!response.ok) throw new Error("backend unavailable");
+      const payload = await response.json();
+      const nextConfig = {
+        trustedDomains: Array.isArray(payload.trusted_domains) && payload.trusted_domains.length
+          ? payload.trusted_domains
+          : defaultTrustedDomains.map((item) => item.domain),
+      };
+      saveLocalAdminSearchConfig(nextConfig);
+      renderTrustedDomainsManager();
+    } catch {
+      // Keep the local config silently when backend is not mounted on the same origin yet.
+    }
+  }
+
+  async function pushSearchConfigToBackend(root) {
+    const status = root?.querySelector("[data-admin-domain-status]");
+    const trustedDomains = collectSelectedDomains(root);
+    saveLocalAdminSearchConfig({ trustedDomains });
+    if (status) {
+      status.textContent = "جاري مزامنة المواقع الموثوقة مع الخلفية...";
+    }
+
+    try {
+      const response = await fetch("/api/admin/search-config", {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          Accept: "application/json",
+        },
+        body: JSON.stringify({ trusted_domains: trustedDomains }),
+      });
+      if (!response.ok) throw new Error("sync failed");
+      const payload = await response.json();
+      saveLocalAdminSearchConfig({ trustedDomains: payload.trusted_domains || trustedDomains });
+      if (status) {
+        status.textContent = "تم حفظ المواقع الموثوقة في الخلفية بنجاح.";
+      }
+    } catch {
+      if (status) {
+        status.textContent = "تم حفظ الاختيار محليًا داخل لوحة الأدمن. عند توفر الـ backend سيتم إرسالها إليه مباشرة.";
+      }
+    }
+  }
+
+  function renderTrustedDomainsManager() {
+    const panel = findAdminSourcePanel();
+    if (!panel) return;
+
+    const existing = panel.querySelector("[data-admin-domain-manager]");
+    if (existing) existing.remove();
+
+    const config = getLocalAdminSearchConfig();
+    const block = document.createElement("div");
+    block.className = "admin-domain-manager";
+    block.setAttribute("data-admin-domain-manager", "true");
+    block.innerHTML = `
+      <div class="admin-domain-head">
+        <strong>المواقع الموثوقة للبحث والتحقق</strong>
+        <span>هذه المواقع فقط تُرسل إلى الـ backend كـ whitelist للبحث عبر SerpApi.</span>
+      </div>
+      <div class="admin-domain-grid">
+        ${defaultTrustedDomains.map((item) => `
+          <label class="admin-domain-option">
+            <input
+              type="checkbox"
+              data-admin-domain-option
+              value="${item.domain}"
+              ${config.trustedDomains.includes(item.domain) ? "checked" : ""}
+            >
+            <span>${item.label}</span>
+            <small>${item.domain}</small>
+          </label>
+        `).join("")}
+      </div>
+      <div class="admin-domain-actions">
+        <button type="button" class="mini-btn" data-admin-domain-save>حفظ المواقع</button>
+        <button type="button" class="mini-btn admin-action-points" data-admin-domain-sync>مزامنة مع الخلفية</button>
+      </div>
+      <div class="small-copy" data-admin-domain-status>المفتاح لا يُحفظ هنا، بل على السيرفر فقط. هذه القائمة تضبط النطاقات الموثوقة لا غير.</div>
+    `;
+    panel.appendChild(block);
+
+    block.querySelector("[data-admin-domain-save]")?.addEventListener("click", () => {
+      const trustedDomains = collectSelectedDomains(block);
+      saveLocalAdminSearchConfig({ trustedDomains });
+      const status = block.querySelector("[data-admin-domain-status]");
+      if (status) {
+        status.textContent = "تم حفظ اختيار المواقع الموثوقة داخل لوحة الأدمن.";
+      }
+    });
+
+    block.querySelector("[data-admin-domain-sync]")?.addEventListener("click", () => {
+      pushSearchConfigToBackend(block);
+    });
+  }
+
+  const originalRefreshAdminDataDomains = refreshAdminData;
+  refreshAdminData = function refreshAdminDataWithTrustedDomains() {
+    originalRefreshAdminDataDomains();
+    renderTrustedDomainsManager();
+  };
+
+  if (isAdminLoggedIn()) {
+    renderTrustedDomainsManager();
+    syncSearchConfigFromBackend();
+  }
+})();
