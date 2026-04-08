@@ -5165,7 +5165,7 @@
     } else if (reason === "missing_api_client") {
       message = "ربط الواجهة مع Laravel API غير مكتمل في هذه الصفحة حتى الآن.";
     } else if (reason === "server_unavailable") {
-      message = "خدمة Laravel API غير متاحة الآن. تأكد من تشغيل الـ backend وضبط /api وقاعدة البيانات و OPENAI_API_KEY على الخادم.";
+      message = "خدمة الـ API غير متاحة الآن. تأكد من تشغيل الـ backend وضبط المسارات `/api/chat/send` أو `/api/solve-question` مع قاعدة البيانات و `OPENAI_API_KEY` على الخادم.";
     } else if (reason === "attachment_not_supported") {
       message = "رفع الصور والملفات لم يُربط بعد مع Laravel API في هذه النسخة. اكتب السؤال نصًا الآن وسيتم إرساله إلى الـ AI مباشرة.";
     }
@@ -5211,6 +5211,19 @@
         apiReply,
         "laravel_ai_full_chat"
       );
+    }
+
+    const backendResponse = await fetchRuntimeBackendSolve(resolvedQuestion, route, analysis || {});
+    const guardedBackendResponse = finalizeRuntimeAcademicResponse(
+      resolvedQuestion,
+      route,
+      analysis || {},
+      backendResponse,
+      "approved_bank_then_curriculum_then_web"
+    );
+
+    if (guardedBackendResponse) {
+      return guardedBackendResponse;
     }
 
     return buildRuntimeApiUnavailableResponse(
@@ -5261,13 +5274,14 @@
     let responseForLog = null;
     if (hasAttachments) {
       responseForLog = buildRuntimeApiUnavailableResponse(question, route, "attachment_not_supported");
-    } else if (!canUseRuntimeApiChat()) {
-      responseForLog = buildRuntimeApiUnavailableResponse(question, route, "missing_api_client");
     } else {
       responseForLog = await buildAcademicResponseWithBackend(
         question || route.extracted_text || "",
         route,
-        {},
+        {
+          questionType: route?.question_type || "",
+          subject: route?.detected_subject || subjectSelect?.value || ""
+        },
         {},
         { action: "answer", confidence: 1 }
       );
@@ -5276,7 +5290,7 @@
     const body = finalRuntimeSafetyGate(
       question || route.extracted_text || "",
       "solve",
-      responseForLog?.preRenderedBody || formatSimpleReply("تعذر تجهيز الرد حاليًا.")
+      responseForLog?.preRenderedBody || (responseForLog ? formatAssistantSections(responseForLog) : "") || formatSimpleReply("تعذر تجهيز الرد حاليًا.")
     ).replacement;
 
     pendingNode?.remove();
