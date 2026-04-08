@@ -3665,6 +3665,19 @@
     return normalizedPath.startsWith("/api/") ? normalizedPath : `/api${normalizedPath}`;
   }
 
+  function resolveRuntimeSolveCandidates() {
+    const apiClient = getRuntimeApiClient();
+    if (apiClient && typeof apiClient.buildApiCandidates === "function") {
+      return apiClient.buildApiCandidates(runtimeBackendConfig.solvePath);
+    }
+
+    const primary = resolveRuntimeSolveEndpoint();
+    const cleanPath = String(runtimeBackendConfig.solvePath || "/solve-question");
+    const normalizedPath = cleanPath.startsWith("/") ? cleanPath : `/${cleanPath}`;
+    const sameOrigin = normalizedPath.startsWith("/api/") ? normalizedPath : `/api${normalizedPath}`;
+    return Array.from(new Set([primary, sameOrigin].filter(Boolean)));
+  }
+
   function canUseRuntimeApiChat() {
     const apiClient = getRuntimeApiClient();
     return Boolean(apiClient);
@@ -3918,7 +3931,7 @@
       : null;
 
     try {
-      const response = await fetch(resolveRuntimeSolveEndpoint(), {
+      const requestInit = {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -3926,11 +3939,32 @@
         },
         body: JSON.stringify(buildBackendPayload(question, route, analysis)),
         signal: controller?.signal
-      });
+      };
 
-      if (!response.ok) return null;
-      const payload = await response.json();
-      return adaptBackendSolveResponse(payload, question, route, analysis);
+      for (const url of resolveRuntimeSolveCandidates()) {
+        try {
+          const response = await fetch(url, requestInit);
+          if (!response.ok) {
+            if (response.status !== 404 && response.status < 500) {
+              return null;
+            }
+            continue;
+          }
+          const payload = await response.json();
+          const adapted = adaptBackendSolveResponse(payload, question, route, analysis);
+          if (adapted) {
+            const apiClient = getRuntimeApiClient();
+            if (apiClient && typeof apiClient.buildSameOriginApiUrl === "function" && url === apiClient.buildSameOriginApiUrl(runtimeBackendConfig.solvePath)) {
+              apiClient.setBaseUrl?.("");
+            }
+            return adapted;
+          }
+        } catch (_) {
+          // Try the next candidate endpoint.
+        }
+      }
+
+      return null;
     } catch (_) {
       return null;
     } finally {

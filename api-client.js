@@ -65,6 +65,17 @@
     return `${baseUrl}/api${cleanPath}`;
   }
 
+  function buildSameOriginApiUrl(path) {
+    const cleanPath = `/${String(path || "").replace(/^\/+/, "")}`;
+    return `/api${cleanPath}`;
+  }
+
+  function buildApiCandidates(path) {
+    const configuredUrl = buildApiUrl(path);
+    const sameOriginUrl = buildSameOriginApiUrl(path);
+    return Array.from(new Set([configuredUrl, sameOriginUrl].filter(Boolean)));
+  }
+
   function getToken() {
     try {
       return localStorage.getItem(storageKeys.token) || "";
@@ -195,37 +206,65 @@
           : undefined
     };
 
-    try {
-      const response = await fetch(buildApiUrl(path), requestInit);
-      const payload = await parseResponsePayload(response);
-      const data = payload?.data ?? null;
-      const message =
-        payload?.message ||
-        payload?.error ||
-        (response.ok ? "OK" : "Request failed");
+    let lastFailure = null;
+    const candidates = buildApiCandidates(path);
 
-      return {
-        ok: response.ok && (payload?.success ?? true),
-        status: response.status,
-        data,
-        message,
-        errors: payload?.errors || {},
-        payload,
-        serverUnavailable: response.status === 404 || response.status >= 500,
-        networkError: false
-      };
-    } catch (_) {
-      return {
-        ok: false,
-        status: 0,
-        data: null,
-        message: "Network request failed",
-        errors: {},
-        payload: null,
-        serverUnavailable: true,
-        networkError: true
-      };
+    for (const url of candidates) {
+      try {
+        const response = await fetch(url, requestInit);
+        const payload = await parseResponsePayload(response);
+        const data = payload?.data ?? null;
+        const message =
+          payload?.message ||
+          payload?.error ||
+          (response.ok ? "OK" : "Request failed");
+
+        const result = {
+          ok: response.ok && (payload?.success ?? true),
+          status: response.status,
+          data,
+          message,
+          errors: payload?.errors || {},
+          payload,
+          serverUnavailable: response.status === 404 || response.status >= 500,
+          networkError: false
+        };
+
+        if (result.ok) {
+          if (url === buildSameOriginApiUrl(path) && resolveBaseUrl()) {
+            setBaseUrl("");
+          }
+          return result;
+        }
+
+        lastFailure = result;
+        if (!result.serverUnavailable) {
+          return result;
+        }
+      } catch (_) {
+        lastFailure = {
+          ok: false,
+          status: 0,
+          data: null,
+          message: "Network request failed",
+          errors: {},
+          payload: null,
+          serverUnavailable: true,
+          networkError: true
+        };
+      }
     }
+
+    return lastFailure || {
+      ok: false,
+      status: 0,
+      data: null,
+      message: "Network request failed",
+      errors: {},
+      payload: null,
+      serverUnavailable: true,
+      networkError: true
+    };
   }
 
   async function login(payload) {
@@ -332,6 +371,8 @@
     setBaseUrl,
     buildApiUrl,
     request,
+    buildSameOriginApiUrl,
+    buildApiCandidates,
     login,
     register,
     logout,
