@@ -12,19 +12,19 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800;900&display=swap" rel="stylesheet">
-  <link rel="icon" type="image/svg+xml" href="assets/img/favicon.svg">
-  <link rel="stylesheet" href="assets/css/styles.css">
+  <link rel="icon" type="image/svg+xml" href="favicon.svg">
+  <link rel="stylesheet" href="styles.css">
 </head>
 <body>
   <div class="shell">
     <header class="topbar">
       <div class="brand-wrap">
         <div class="brand-mark brand-mark-logo-image" aria-hidden="true">
-          <img src="assets/img/favicon.svg" alt="">
+          <img src="favicon.svg" alt="">
         </div>
         <div class="brand-text">
           <div class="brand-name">لوحة أدمن ملم</div>
-          <div class="brand-copy">إدارة الأسئلة والمولد والمستخدمين والاشتراكات من مكان واحد.</div>
+          <div class="brand-copy">إدارة الأسئلة والمستخدمين والاشتراكات ومراقبة تكامل الـ API من مكان واحد.</div>
         </div>
       </div>
       <div class="topbar-actions">
@@ -62,7 +62,6 @@
 
           <nav class="admin-sidebar-nav" aria-label="أقسام لوحة الأدمن">
             <a class="admin-nav-link" href="#admin-overview">نظرة عامة</a>
-            <a class="admin-nav-link" href="#admin-generator">مولد الأسئلة</a>
             <a class="admin-nav-link" href="#admin-coverage">التغطية التعليمية</a>
             <a class="admin-nav-link" href="#admin-users">المستخدمون والاشتراكات</a>
             <a class="admin-nav-link" href="#admin-reports">التقارير والسجل</a>
@@ -83,7 +82,7 @@
               <p>تابع مؤشرات الأداء، راقب بنك الأسئلة، وشغّل مولد الأسئلة من بطاقة واضحة تعرض الحالة الحالية وآخر نتيجة تنفيذ.</p>
             </div>
             <div class="admin-hero-actions">
-              <a class="primary-btn top-cta-link" href="#admin-generator">إدارة المولد</a>
+              <a class="primary-btn top-cta-link" href="#admin-questions">إدارة الأسئلة</a>
               <a class="helper-btn" href="#admin-questions">إدارة الأسئلة</a>
               <a class="helper-btn" href="#admin-users">إدارة المستخدمين</a>
             </div>
@@ -152,7 +151,7 @@
             </div>
           </section>
 
-          <section id="admin-generator" class="admin-section-stack">
+          <section id="admin-generator" class="admin-section-stack" hidden>
             <div class="admin-section-head">
               <div>
                 <h3>مولد الأسئلة التلقائي</h3>
@@ -290,7 +289,7 @@
     </div>
   </main>
 
-  <script src="assets/js/api-client.js"></script>
-  <script src="assets/js/admin.js"></script>
+  <script src="api-client.js"></script>
+  <script src="admin.js"></script>
 </body>
 </html>

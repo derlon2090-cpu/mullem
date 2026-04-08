@@ -5108,6 +5108,187 @@
     });
   }, true);
   syncRuntimeScrollButton();
+  fetchRuntimeApiChat = async function patchedFetchRuntimeApiChat(question, route) {
+    const apiClient = getRuntimeApiClient();
+    if (!apiClient) {
+      return {
+        content: "",
+        failed: true,
+        errorType: "missing_api_client"
+      };
+    }
+
+    if (!apiClient.hasToken()) {
+      return {
+        content: "",
+        failed: true,
+        errorType: "missing_auth"
+      };
+    }
+
+    const result = await apiClient.sendChat(buildRuntimeApiChatPayload(question, route));
+    if (!result.ok || !result.data?.assistant_message?.body) {
+      return {
+        content: "",
+        failed: true,
+        errorType: result?.status === 401 || result?.status === 403
+          ? "unauthorized"
+          : result?.serverUnavailable
+            ? "server_unavailable"
+            : "request_failed",
+        message: result?.message || ""
+      };
+    }
+
+    setRuntimeApiConversationId(result.data.conversation_id);
+
+    return {
+      content: String(result.data.assistant_message.body || "").trim(),
+      conversationId: result.data.conversation_id || null,
+      provider: result.data.assistant_message?.source || "openai",
+      failed: false
+    };
+  };
+
+  function buildRuntimeApiUnavailableResponse(question, route, reason = "request_failed", details = "") {
+    let message = "تعذر الوصول إلى خدمة الشات الآن. أعد المحاولة بعد قليل.";
+
+    if (reason === "missing_auth" || reason === "unauthorized") {
+      message = "تم تحويل الشات إلى Laravel API بالكامل. سجّل الدخول بالحساب المرتبط بالخادم أولًا ثم أعد إرسال السؤال.";
+    } else if (reason === "missing_api_client") {
+      message = "ربط الواجهة مع Laravel API غير مكتمل في هذه الصفحة حتى الآن.";
+    } else if (reason === "server_unavailable") {
+      message = "خدمة Laravel API غير متاحة الآن. تأكد من تشغيل الـ backend وضبط /api وقاعدة البيانات و OPENAI_API_KEY على الخادم.";
+    } else if (reason === "attachment_not_supported") {
+      message = "رفع الصور والملفات لم يُربط بعد مع Laravel API في هذه النسخة. اكتب السؤال نصًا الآن وسيتم إرساله إلى الـ AI مباشرة.";
+    }
+
+    if (details && reason === "request_failed") {
+      message = `${message} ${details}`.trim();
+    }
+
+    return {
+      mode: "chat",
+      displayMode: "quick",
+      answerMode: "",
+      questionType: route?.question_type || "سؤال عام",
+      subject: route?.detected_subject || subjectSelect?.value || "عام",
+      lesson: route?.detected_subject || "Laravel API",
+      finalAnswer: "",
+      explanation: "",
+      confidence: 0,
+      decisionBasis: `laravel_api_only_${reason}`,
+      agreementLevel: "low",
+      steps: [],
+      mistakes: [],
+      similar: "",
+      hideSources: true,
+      sourceTrace: [],
+      structuredResult: {
+        final_answer: message,
+        provider: "laravel_api",
+        decision_basis: `laravel_api_only_${reason}`
+      },
+      preRenderedBody: formatSimpleReply(message)
+    };
+  }
+
+  buildAcademicResponseWithBackend = async function patchedBuildAcademicResponseWithBackend(question, route, analysis, reasoning, decision) {
+    const resolvedQuestion = question || route?.extracted_text || "";
+    const apiReply = await fetchRuntimeApiChat(resolvedQuestion, route);
+
+    if (apiReply?.content) {
+      return buildRuntimeApiResponse(
+        resolvedQuestion,
+        route,
+        apiReply,
+        "laravel_ai_full_chat"
+      );
+    }
+
+    return buildRuntimeApiUnavailableResponse(
+      resolvedQuestion,
+      route,
+      apiReply?.errorType || "request_failed",
+      apiReply?.message || ""
+    );
+  };
+
+  runtimeHandleSubmit = async function runtimeHandleSubmitApiOnly(event) {
+    if (event.target !== form) return;
+    event.preventDefault();
+    event.stopImmediatePropagation();
+
+    const question = promptInput.value.trim();
+    const attachments = Array.from(fileInput?.files || []);
+    const hasAttachments = attachments.length > 0;
+
+    if (!question && !hasAttachments) return;
+
+    if (hasBlockedVideo(attachments)) {
+      addMessage("assistant", "ملم يحل", formatSimpleReply("رفع الفيديو غير متاح حاليًا. اكتب السؤال نصًا أو استخدم صورة/ملف بعد ربط الـ API الخاص بالملفات."));
+      clearRuntimeAttachments();
+      return;
+    }
+
+    const route = detectRoute(question, attachments);
+    const renderedQuestion = hasAttachments
+      ? `${question || "أرفقت ملفًا مع السؤال."}<br><span class="muted-inline">المرفقات: ${attachments.map((item) => item.name).join("، ")}</span>`
+      : question;
+
+    runtimeState.pendingSolveConfirmation = null;
+    runtimeState.lastAcademicRequest = null;
+
+    addMessage("user", "أنت", renderedQuestion);
+    appendSessionMessage("user", "أنت", renderedQuestion, {
+      subject: route.detected_subject || "",
+      sessionTitle: question || "سؤال جديد"
+    });
+
+    clearRuntimeAttachments();
+    promptInput.value = "";
+    autoGrow(promptInput);
+
+    const pendingNode = addMessage("assistant", "ملم يحل", createLoadingCopy(), { pending: true });
+
+    let responseForLog = null;
+    if (hasAttachments) {
+      responseForLog = buildRuntimeApiUnavailableResponse(question, route, "attachment_not_supported");
+    } else if (!canUseRuntimeApiChat()) {
+      responseForLog = buildRuntimeApiUnavailableResponse(question, route, "missing_auth");
+    } else {
+      responseForLog = await buildAcademicResponseWithBackend(
+        question || route.extracted_text || "",
+        route,
+        {},
+        {},
+        { action: "answer", confidence: 1 }
+      );
+    }
+
+    const body = finalRuntimeSafetyGate(
+      question || route.extracted_text || "",
+      "solve",
+      responseForLog?.preRenderedBody || formatSimpleReply("تعذر تجهيز الرد حاليًا.")
+    ).replacement;
+
+    pendingNode?.remove();
+    addMessage("assistant", "ملم يحل", body, {
+      sources: [],
+      enableTools: false,
+      metadata: buildAssistantMeta(responseForLog)
+    });
+    appendSessionMessage("assistant", "ملم يحل", body, {
+      sources: [],
+      enableTools: false,
+      metadata: buildAssistantMeta(responseForLog),
+      subject: responseForLog?.subject || route.detected_subject || ""
+    });
+
+    if (typeof renderSessionList === "function") renderSessionList();
+    syncStudentDashboardHeader();
+  };
+
   renderRuntimeAttachments();
   document.addEventListener("submit", runtimeHandleSubmit, true);
 })();

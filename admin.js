@@ -3055,6 +3055,92 @@ if (isAdminLoggedIn()) {
 })();
 
 (() => {
+  const localGeneratorDisabledMessage = "تم تعطيل مولد الأسئلة المحلي. المنصة تعتمد الآن على Laravel API وAI فقط.";
+
+  function hideLocalGeneratorUi() {
+    document.querySelectorAll('a[href="#admin-generator"]').forEach((link) => link.remove());
+    document.querySelectorAll("#admin-generator").forEach((section) => {
+      section.hidden = true;
+    });
+  }
+
+  function disableLocalGeneratorState() {
+    if (typeof getQuestionGeneratorSettings !== "function" || typeof saveQuestionGeneratorSettings !== "function") {
+      return;
+    }
+
+    const settings = getQuestionGeneratorSettings();
+    saveQuestionGeneratorSettings({
+      ...settings,
+      enabled: false,
+      lastResultMessage: localGeneratorDisabledMessage,
+      lastResultStatus: "warning"
+    });
+
+    if (typeof setGeneratorButtonsBusy === "function") {
+      setGeneratorButtonsBusy(false);
+    }
+
+    if (typeof setGeneratorFeedback === "function") {
+      setGeneratorFeedback(localGeneratorDisabledMessage, "warning");
+    }
+  }
+
+  const originalRefreshAdminDataApiOnly = refreshAdminData;
+
+  ensureDailyGeneratorRun = function disabledEnsureDailyGeneratorRun() {
+    return;
+  };
+
+  runQuestionGenerator = function disabledRunQuestionGenerator() {
+    disableLocalGeneratorState();
+    hideLocalGeneratorUi();
+    return {
+      generated: 0,
+      approved: 0,
+      rejected: 0,
+      skipped: true,
+      disabled: true
+    };
+  };
+
+  handleGeneratorToggle = function disabledHandleGeneratorToggle() {
+    disableLocalGeneratorState();
+    hideLocalGeneratorUi();
+  };
+
+  handleGeneratorRunNow = function disabledHandleGeneratorRunNow() {
+    disableLocalGeneratorState();
+    hideLocalGeneratorUi();
+  };
+
+  window.adminHandleGeneratorToggle = (event) => {
+    event?.preventDefault?.();
+    event?.stopPropagation?.();
+    handleGeneratorToggle();
+  };
+
+  window.adminHandleGeneratorRunNow = (event) => {
+    event?.preventDefault?.();
+    event?.stopPropagation?.();
+    handleGeneratorRunNow();
+  };
+
+  refreshAdminData = function refreshAdminDataApiOnly() {
+    disableLocalGeneratorState();
+    originalRefreshAdminDataApiOnly();
+    hideLocalGeneratorUi();
+  };
+
+  hideLocalGeneratorUi();
+
+  if (typeof isAdminLoggedIn === "function" && isAdminLoggedIn()) {
+    disableLocalGeneratorState();
+    hideLocalGeneratorUi();
+  }
+})();
+
+(() => {
   const adminSearchConfigStorageKey = "mlm_admin_search_config";
   const defaultTrustedDomains = [
     { domain: "ien.edu.sa", label: "عين والمنصات الرسمية" },
