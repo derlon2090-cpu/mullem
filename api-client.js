@@ -71,9 +71,23 @@
   }
 
   function buildApiCandidates(path) {
-    const configuredUrl = buildApiUrl(path);
-    const sameOriginUrl = buildSameOriginApiUrl(path);
-    return Array.from(new Set([configuredUrl, sameOriginUrl].filter(Boolean)));
+    const cleanPath = `/${String(path || "").replace(/^\/+/, "")}`;
+    const baseUrl = resolveBaseUrl();
+    const configuredApiUrl = buildApiUrl(cleanPath);
+    const sameOriginApiUrl = buildSameOriginApiUrl(cleanPath);
+    const candidates = [configuredApiUrl, sameOriginApiUrl];
+
+    if (baseUrl) {
+      if (/\/api$/i.test(baseUrl)) {
+        candidates.push(`${baseUrl.replace(/\/api$/i, "")}${cleanPath}`);
+      } else {
+        candidates.push(`${baseUrl}${cleanPath}`);
+      }
+    }
+
+    candidates.push(cleanPath);
+
+    return Array.from(new Set(candidates.filter(Boolean)));
   }
 
   function getToken() {
@@ -212,12 +226,28 @@
     for (const url of candidates) {
       try {
         const response = await fetch(url, requestInit);
+        const contentType = response.headers.get("content-type") || "";
+        const isJsonResponse = contentType.includes("application/json");
         const payload = await parseResponsePayload(response);
         const data = payload?.data ?? null;
         const message =
           payload?.message ||
           payload?.error ||
           (response.ok ? "OK" : "Request failed");
+
+        if (response.ok && !isJsonResponse) {
+          lastFailure = {
+            ok: false,
+            status: response.status,
+            data: null,
+            message: "Invalid API response",
+            errors: {},
+            payload,
+            serverUnavailable: true,
+            networkError: false
+          };
+          continue;
+        }
 
         const result = {
           ok: response.ok && (payload?.success ?? true),
