@@ -15,6 +15,7 @@ class SendMessageRequest extends FormRequest
     {
         return [
             'conversation_id' => ['nullable', 'integer', 'exists:conversations,id'],
+            'guest_session_id' => ['nullable', 'string', 'max:120'],
             'message' => ['required', 'string', 'min:1', 'max:10000'],
             'subject' => ['nullable', 'string', 'max:80'],
             'stage' => ['nullable', 'string', 'max:60'],
@@ -24,4 +25,3 @@ class SendMessageRequest extends FormRequest
         ];
     }
 }
-

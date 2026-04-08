@@ -16,7 +16,7 @@ class AiChatService
     ) {
     }
 
-    public function buildAssistantReply(User $user, ?Conversation $conversation, string $message, array $filters = []): array
+    public function buildAssistantReply(?User $user, ?Conversation $conversation, string $message, array $filters = []): array
     {
         $message = $this->sanitizeMessage($message);
         $template = $this->promptTemplateResolver->resolve((string) config('mullem.ai.system_prompt_key', 'student-chat'));

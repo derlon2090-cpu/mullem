@@ -3625,6 +3625,7 @@
   };
 
   const runtimeApiConversationMapKey = "mlm_api_chat_session_map";
+  const runtimeGuestSessionKey = "mlm_api_guest_session_id";
 
   function getRuntimeSolveModeValue() {
     try {
@@ -3653,7 +3654,7 @@
 
   function canUseRuntimeApiChat() {
     const apiClient = getRuntimeApiClient();
-    return Boolean(apiClient && apiClient.hasToken());
+    return Boolean(apiClient);
   }
 
   function inferRuntimeStageLabel(grade) {
@@ -3677,6 +3678,18 @@
     return typeof activeSessionId !== "undefined" ? activeSessionId : null;
   }
 
+  function getRuntimeGuestSessionId() {
+    const sessionId = getRuntimeLocalSessionId();
+    if (sessionId) return sessionId;
+
+    const saved = loadRuntimeStore(runtimeGuestSessionKey, "");
+    if (saved) return saved;
+
+    const generated = `guest-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+    saveRuntimeStore(runtimeGuestSessionKey, generated);
+    return generated;
+  }
+
   function getRuntimeApiConversationId() {
     const sessionId = getRuntimeLocalSessionId();
     if (!sessionId) return null;
@@ -3694,9 +3707,11 @@
 
   function buildRuntimeApiChatPayload(question, route) {
     const activeUser = typeof getActiveUser === "function" ? getActiveUser() : null;
+    const guestSessionId = !activeUser ? getRuntimeGuestSessionId() : undefined;
     const grade = gradeSelect?.value || activeUser?.grade || "";
     return {
       conversation_id: getRuntimeApiConversationId() || undefined,
+      guest_session_id: guestSessionId,
       message: question,
       subject: route?.detected_subject || subjectSelect?.value || "",
       stage: inferRuntimeStageLabel(grade),
@@ -3708,7 +3723,7 @@
 
   async function fetchRuntimeApiChat(question, route) {
     const apiClient = getRuntimeApiClient();
-    if (!apiClient || !apiClient.hasToken()) return null;
+    if (!apiClient) return null;
 
     const result = await apiClient.sendChat(buildRuntimeApiChatPayload(question, route));
     if (!result.ok || !result.data?.assistant_message?.body) {
@@ -5118,14 +5133,6 @@
       };
     }
 
-    if (!apiClient.hasToken()) {
-      return {
-        content: "",
-        failed: true,
-        errorType: "missing_auth"
-      };
-    }
-
     const result = await apiClient.sendChat(buildRuntimeApiChatPayload(question, route));
     if (!result.ok || !result.data?.assistant_message?.body) {
       return {
@@ -5154,7 +5161,7 @@
     let message = "تعذر الوصول إلى خدمة الشات الآن. أعد المحاولة بعد قليل.";
 
     if (reason === "missing_auth" || reason === "unauthorized") {
-      message = "تم تحويل الشات إلى Laravel API بالكامل. سجّل الدخول بالحساب المرتبط بالخادم أولًا ثم أعد إرسال السؤال.";
+      message = "الخادم طلب تسجيل الدخول قبل إكمال هذه المحادثة. إذا كان الشات عندكم يفترض أن يعمل للزائر، فالمشكلة من حماية endpoint في Laravel وليست من السؤال نفسه.";
     } else if (reason === "missing_api_client") {
       message = "ربط الواجهة مع Laravel API غير مكتمل في هذه الصفحة حتى الآن.";
     } else if (reason === "server_unavailable") {
@@ -5255,7 +5262,7 @@
     if (hasAttachments) {
       responseForLog = buildRuntimeApiUnavailableResponse(question, route, "attachment_not_supported");
     } else if (!canUseRuntimeApiChat()) {
-      responseForLog = buildRuntimeApiUnavailableResponse(question, route, "missing_auth");
+      responseForLog = buildRuntimeApiUnavailableResponse(question, route, "missing_api_client");
     } else {
       responseForLog = await buildAcademicResponseWithBackend(
         question || route.extracted_text || "",

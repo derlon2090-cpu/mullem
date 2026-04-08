@@ -17,6 +17,11 @@ Route::prefix('auth')->group(function (): void {
 
 Route::post('/payments/webhook/{gateway}', [PaymentController::class, 'webhook']);
 
+Route::prefix('chat')->group(function (): void {
+    Route::post('/send', [ChatController::class, 'send'])->middleware('throttle:20,1');
+    Route::post('/stream', [ChatController::class, 'stream'])->middleware('throttle:20,1');
+});
+
 Route::middleware('auth:sanctum')->group(function (): void {
     Route::post('/auth/logout', [AuthController::class, 'logout'])->middleware('throttle:20,1');
 
@@ -27,8 +32,6 @@ Route::middleware('auth:sanctum')->group(function (): void {
     Route::prefix('chat')->group(function (): void {
         Route::get('/sessions', [ChatController::class, 'index']);
         Route::get('/sessions/{conversation}', [ChatController::class, 'show']);
-        Route::post('/send', [ChatController::class, 'send'])->middleware('throttle:20,1');
-        Route::post('/stream', [ChatController::class, 'stream'])->middleware('throttle:20,1');
     });
 
     Route::post('/payments/checkout', [PaymentController::class, 'checkout'])->middleware('throttle:10,1');
