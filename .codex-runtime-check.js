@@ -51,12 +51,12 @@ sandbox.window.localStorage = sandbox.localStorage;
 sandbox.window.fetch = sandbox.fetch;
 sandbox.window.requestAnimationFrame = sandbox.requestAnimationFrame;
 
-const appSource = fs.readFileSync("C:/mullem/app.js", "utf8").replace(/\bbootstrap\(\);/g, "");
-const runtimeSource = fs.readFileSync("C:/mullem/app.runtime.js", "utf8");
+const appSource = fs.readFileSync("C:/mullem/assets/js/app.js", "utf8").replace(/\bbootstrap\(\);/g, "");
+const runtimeSource = fs.readFileSync("C:/mullem/assets/js/app.runtime.js", "utf8");
 
 vm.createContext(sandbox);
-vm.runInContext(appSource, sandbox, { filename: "app.js", timeout: 5000 });
-vm.runInContext(runtimeSource, sandbox, { filename: "app.runtime.js", timeout: 5000 });
+vm.runInContext(appSource, sandbox, { filename: "assets/js/app.js", timeout: 5000 });
+vm.runInContext(runtimeSource, sandbox, { filename: "assets/js/app.runtime.js", timeout: 5000 });
 
 async function run() {
   const tests = [

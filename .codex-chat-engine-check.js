@@ -32,11 +32,11 @@ const sandbox = {
   requestAnimationFrame: () => 0,
 };
 
-let source = fs.readFileSync("C:/mullem/app.js", "utf8");
+let source = fs.readFileSync("C:/mullem/assets/js/app.js", "utf8");
 source = source.replace(/\bbootstrap\(\);/g, "");
 
 vm.createContext(sandbox);
-vm.runInContext(source, sandbox, { filename: "app.js", timeout: 5000 });
+vm.runInContext(source, sandbox, { filename: "assets/js/app.js", timeout: 5000 });
 
 function runEval(expression) {
   return vm.runInContext(expression, sandbox, { timeout: 5000 });

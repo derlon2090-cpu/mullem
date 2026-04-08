@@ -2726,7 +2726,17 @@
     chatSection.scrollIntoView({ behavior: "smooth", block: "start" });
   }
 
-  function logoutUser() {
+  async function logoutUser() {
+    const apiClient = getRuntimeApiClient();
+    if (apiClient && apiClient.hasToken()) {
+      try {
+        await apiClient.performLogout("index.html");
+        return;
+      } catch (_) {
+        // Fall back to local cleanup below.
+      }
+    }
+
     try {
       localStorage.removeItem("mlm_current_user");
       localStorage.removeItem("mlm_admin_session");
@@ -3614,6 +3624,8 @@
     timeoutMs: 5500
   };
 
+  const runtimeApiConversationMapKey = "mlm_api_chat_session_map";
+
   function getRuntimeSolveModeValue() {
     try {
       return localStorage.getItem("mlm_solve_mode") || "quick";
@@ -3631,6 +3643,116 @@
     } catch (_) {
       return [];
     }
+  }
+
+  function getRuntimeApiClient() {
+    return window.mullemApiClient && typeof window.mullemApiClient.sendChat === "function"
+      ? window.mullemApiClient
+      : null;
+  }
+
+  function canUseRuntimeApiChat() {
+    const apiClient = getRuntimeApiClient();
+    return Boolean(apiClient && apiClient.hasToken());
+  }
+
+  function inferRuntimeStageLabel(grade) {
+    const value = String(grade || "").trim();
+    if (!value) return "";
+    if (value.includes("ابتدائي")) return "ابتدائي";
+    if (value.includes("متوسط")) return "متوسط";
+    if (value.includes("ثانوي")) return "ثانوي";
+    return "";
+  }
+
+  function getRuntimeApiConversationMap() {
+    return loadRuntimeStore(runtimeApiConversationMapKey, {});
+  }
+
+  function saveRuntimeApiConversationMap(map) {
+    saveRuntimeStore(runtimeApiConversationMapKey, map || {});
+  }
+
+  function getRuntimeLocalSessionId() {
+    return typeof activeSessionId !== "undefined" ? activeSessionId : null;
+  }
+
+  function getRuntimeApiConversationId() {
+    const sessionId = getRuntimeLocalSessionId();
+    if (!sessionId) return null;
+    const map = getRuntimeApiConversationMap();
+    return map[sessionId] || null;
+  }
+
+  function setRuntimeApiConversationId(conversationId) {
+    const sessionId = getRuntimeLocalSessionId();
+    if (!sessionId || !conversationId) return;
+    const map = getRuntimeApiConversationMap();
+    map[sessionId] = conversationId;
+    saveRuntimeApiConversationMap(map);
+  }
+
+  function buildRuntimeApiChatPayload(question, route) {
+    const activeUser = typeof getActiveUser === "function" ? getActiveUser() : null;
+    const grade = gradeSelect?.value || activeUser?.grade || "";
+    return {
+      conversation_id: getRuntimeApiConversationId() || undefined,
+      message: question,
+      subject: route?.detected_subject || subjectSelect?.value || "",
+      stage: inferRuntimeStageLabel(grade),
+      grade,
+      term: termSelect?.value || "",
+      stream: false
+    };
+  }
+
+  async function fetchRuntimeApiChat(question, route) {
+    const apiClient = getRuntimeApiClient();
+    if (!apiClient || !apiClient.hasToken()) return null;
+
+    const result = await apiClient.sendChat(buildRuntimeApiChatPayload(question, route));
+    if (!result.ok || !result.data?.assistant_message?.body) {
+      return result?.serverUnavailable ? null : {
+        content: "",
+        failed: true
+      };
+    }
+
+    setRuntimeApiConversationId(result.data.conversation_id);
+
+    return {
+      content: String(result.data.assistant_message.body || "").trim(),
+      conversationId: result.data.conversation_id || null,
+      provider: result.data.assistant_message?.source || "openai"
+    };
+  }
+
+  function buildRuntimeApiResponse(question, route, apiReply, decisionBasis = "laravel_ai_chat") {
+    if (!apiReply?.content) return null;
+    return {
+      mode: "chat",
+      displayMode: "quick",
+      answerMode: "",
+      questionType: route?.question_type || "سؤال عام",
+      subject: route?.detected_subject || subjectSelect?.value || "عام",
+      lesson: route?.detected_subject || "محادثة ذكية",
+      finalAnswer: "",
+      explanation: "",
+      confidence: 0.74,
+      decisionBasis,
+      agreementLevel: "medium",
+      steps: [],
+      mistakes: [],
+      similar: "",
+      hideSources: true,
+      sourceTrace: [],
+      structuredResult: {
+        final_answer: apiReply.content,
+        provider: apiReply.provider || "openai",
+        decision_basis: decisionBasis
+      },
+      preRenderedBody: formatSimpleReply(apiReply.content)
+    };
   }
 
   function mapBackendQuestionTypeToRuntime(type) {
@@ -3934,7 +4056,19 @@
       localFallback?.decisionBasis || "local_runtime_fallback"
     );
 
-    return guardedFallback || createRuntimeGuardBlockedResponse(route, analysis);
+    if (guardedFallback && guardedFallback.decisionBasis !== "final_answer_guard_blocked") {
+      return guardedFallback;
+    }
+
+    const apiFallbackReply = await fetchRuntimeApiChat(resolvedQuestion, route);
+    const apiFallbackResponse = buildRuntimeApiResponse(
+      resolvedQuestion,
+      route,
+      apiFallbackReply,
+      "laravel_ai_guard_fallback"
+    );
+
+    return apiFallbackResponse || guardedFallback || createRuntimeGuardBlockedResponse(route, analysis);
   }
 
   if (window.__codexRuntimeTestEnabled || ["localhost", "127.0.0.1"].includes(window.location?.hostname || "")) {
@@ -4141,7 +4275,13 @@
     } else if (decision.action === "chat") {
       runtimeState.pendingSolveConfirmation = null;
       runtimeState.lastAcademicRequest = null;
-      body = formatSimpleReply(createRuntimeChatResponse(question));
+      responseForLog = buildRuntimeApiResponse(
+        question || route.extracted_text || "",
+        route,
+        await fetchRuntimeApiChat(question || route.extracted_text || "", route),
+        "laravel_ai_chat"
+      );
+      body = responseForLog?.preRenderedBody || formatSimpleReply(createRuntimeChatResponse(question));
     } else if (decision.action === "help") {
       runtimeState.pendingSolveConfirmation = null;
       runtimeState.lastAcademicRequest = null;
@@ -4151,7 +4291,13 @@
       body = formatSimpleReply(createRuntimeUiActionResponse(question));
     } else if (decision.action === "general_question") {
       runtimeState.pendingSolveConfirmation = null;
-      body = formatSimpleReply(createRuntimeGeneralQuestionResponse(question));
+      responseForLog = buildRuntimeApiResponse(
+        question || route.extracted_text || "",
+        route,
+        await fetchRuntimeApiChat(question || route.extracted_text || "", route),
+        "laravel_ai_general_answer"
+      );
+      body = responseForLog?.preRenderedBody || formatSimpleReply(createRuntimeGeneralQuestionResponse(question));
     } else if (typeof needsClarification === "function" && needsClarification(question, intent, hasAttachments) && route.question_type !== "صح وخطأ" && route.question_type !== "اختيار من متعدد") {
       runtimeState.pendingSolveConfirmation = null;
       body = formatClarificationReply(createClarificationResponse(question, intent, route));
@@ -4183,12 +4329,12 @@
     pendingNode?.remove();
     addMessage("assistant", "ملم يحل", body, {
       sources,
-      enableTools: route.response_mode === "academic_solve" && Boolean(responseForLog),
+      enableTools: route.response_mode === "academic_solve" && Boolean(responseForLog) && responseForLog.mode !== "chat",
       metadata: buildAssistantMeta(responseForLog)
     });
     appendSessionMessage("assistant", "ملم يحل", body, {
       sources,
-      enableTools: route.response_mode === "academic_solve" && Boolean(responseForLog),
+      enableTools: route.response_mode === "academic_solve" && Boolean(responseForLog) && responseForLog.mode !== "chat",
       metadata: buildAssistantMeta(responseForLog),
       subject: responseForLog?.subject || route.detected_subject || ""
     });

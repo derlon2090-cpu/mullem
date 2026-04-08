@@ -61,6 +61,147 @@ try {
 
 const googleAuthUrl = "https://accounts.google.com/v3/signin/accountchooser?client_id=310079877066-matp293bddarf3hnstcd4t86qcbn6st5.apps.googleusercontent.com&code_challenge=ukLxkUvQSTdXKMpvgFaNecXJL-OMuKYappJshQR2cPg&code_challenge_method=S256&redirect_uri=https%3A%2F%2Ffor-test.runasp.net%2Fsignin-google&response_type=code&scope=openid+profile+email&state=CfDJ8NrJmZRANOhNtI69Ce945adjwp7Isi5KvuQ686lo2OZSc7mi2ByPR9OIRUGFCuoM0GKoPmtPGFeYGfqDlBagKlGcJ1qUvEJLEiOmU25DbgjkOLah1Z0Gzft4zMYpXuZbV7x-msInU3yFey9MJaxAMUAeAnWauRWh82A4agHZRMixBPlcwn7n2OmqIf7kbkYoqwzLJwY53VCVu006sObab8ZFSSumssGv5MQvUZ9ycO4hYoD-5FZ3QoUtNBUcQ25_xpGRb1mhIHkLQo_zU3Ii8JZEPW3fzcbVPFxf_2JSCIuXpPBqZg9-i5y5ro6tQkPyDi28QA_OLXPIDyC7DM_2y8fdfp9j2XgMXckXIparQ2r3sTsuMVuM88hpQRMA-a8WZfnpGDTQ1GV65DFerR3mwzc&dsh=S1310616813%3A1774886189779982&o2v=2&service=lso&flowName=GeneralOAuthFlow&opparams=%253F&continue=https%3A%2F%2Faccounts.google.com%2Fsignin%2Foauth%2Fconsent%3Fauthuser%3Dunknown%26part%3DAJi8hANR2Ua5iZYW7V082zIowf-wy4291zvcivR3wVqEgNKV3AkS1VKhcamB2Ng3oYEDZ_XL4t2TtqFwiphRc9VlyZTXH4wPR6p2lRn0013lTgGpw4enahAV4RZ1d_zFZXsYHMTjSbFhQ67BNaN18tC_LuuNDkJl4QwCM4B3S0ez-xp6GtXe7hinveaGp4F27-DzParuNym9MRD3zsyqBciJdhf27YD4n5hDPTIDI5HW9LONlhZFhcttI9iKBB2upFy8oPTUZsdLy5WVvKUXliwTdMv1cfF3K9t5UNMYfTfql2yEqLXKM6QrZxUoTlgPYLWSaSQTtzAr-K8Adp39VHLFj3272eszFop82qR-1Kqfj5LD-WIrMvQCmcNnWmW_rvhtoc1NApna6nAW2f2WfPHM_N3fvWovjFPFvo3r61QSgw_R8yC0Pwf8yskjUkoJTTD5qcAlTTobhwQCZjU3aw1jB8ONQ8K2OQ%26flowName%3DGeneralOAuthFlow%26as%3DS1310616813%253A1774886189779982%26client_id%3D310079877066-matp293bddarf3hnstcd4t86qcbn6st5.apps.googleusercontent.com%26requestPath%3D%252Fsignin%252Foauth%252Fconsent%23&app_domain=https%3A%2F%2Ffor-test.runasp.net";
 
+function getApiClient() {
+  return window.mullemApiClient && typeof window.mullemApiClient.request === "function"
+    ? window.mullemApiClient
+    : null;
+}
+
+function inferStageFromGrade(grade) {
+  const value = String(grade || "").trim();
+  if (!value) return "";
+  if (value.includes("ابتدائي")) return "ابتدائي";
+  if (value.includes("متوسط")) return "متوسط";
+  if (value.includes("ثانوي")) return "ثانوي";
+  return "";
+}
+
+function normalizeApiUserForLocal(user) {
+  const existing = loadUsers().find((entry) => String(entry.id) === String(user?.id));
+  return {
+    ...(existing || {}),
+    id: String(user?.id ?? existing?.id ?? `student-${Date.now()}`),
+    name: user?.name || existing?.name || "",
+    email: String(user?.email || existing?.email || "").toLowerCase(),
+    password: existing?.password || "",
+    role: String(user?.role || existing?.role || "student").toLowerCase() === "admin" ? "Admin" : "Student",
+    stage: user?.stage || existing?.stage || inferStageFromGrade(user?.grade || existing?.grade || ""),
+    grade: user?.grade || existing?.grade || "",
+    subject: existing?.subject || "الرياضيات",
+    package: existing?.package || "API Connected",
+    xp: Number.isFinite(Number(existing?.xp)) ? Number(existing.xp) : 100,
+    streakDays: Number.isFinite(Number(existing?.streakDays)) ? Number(existing.streakDays) : 0,
+    lastActiveDate: existing?.lastActiveDate || "",
+    achievements: Array.isArray(existing?.achievements) ? existing.achievements : [],
+    status: existing?.status || (String(user?.status || "").toLowerCase() === "active" ? "نشط" : String(user?.status || "نشط")),
+    activity: existing?.activity || "تمت مزامنة الحساب مع الخادم"
+  };
+}
+
+function upsertApiUserLocally(user) {
+  const normalizedUser = normalizeApiUserForLocal(user);
+  const nextUsers = [
+    normalizedUser,
+    ...loadUsers().filter((entry) => String(entry.id) !== String(normalizedUser.id))
+  ];
+  saveUsers(nextUsers);
+  return normalizedUser;
+}
+
+function completeStudentApiLogin(user, message) {
+  const normalizedUser = upsertApiUserLocally(user);
+  localStorage.removeItem(storageKeys.adminSession);
+  localStorage.setItem(storageKeys.currentUser, normalizedUser.id);
+  ensureUserWorkspace(normalizedUser.id);
+  clearPendingAuth();
+  setState(message || `أهلًا ${normalizedUser.name}، تم تسجيل الدخول بنجاح عبر الخادم.`);
+  redirectToStudent();
+}
+
+function completeAdminApiLogin(message) {
+  localStorage.setItem(storageKeys.adminSession, "1");
+  localStorage.removeItem(storageKeys.currentUser);
+  clearPendingAuth();
+  setState(message || "تم تسجيل دخول الأدمن بنجاح عبر الخادم.");
+  window.location.href = "admin.html";
+}
+
+function shouldFallbackToLocalAuth(result) {
+  return !result || result.serverUnavailable;
+}
+
+function handleLocalLoginFallback(email, password) {
+  if (email === adminCredentials.email && password === adminCredentials.password) {
+    localStorage.setItem(storageKeys.adminSession, "1");
+    localStorage.removeItem(storageKeys.currentUser);
+    setState("تم تسجيل دخول الأدمن بنجاح. سيتم تحويلك الآن.");
+    window.location.href = "admin.html";
+    return;
+  }
+
+  const userByEmail = loadUsers().find((entry) => entry.email.toLowerCase() === email);
+  if (!userByEmail) {
+    setState("البريد الإلكتروني غير مسجل في المنصة.");
+    return;
+  }
+
+  if (userByEmail.password !== password) {
+    setState("كلمة المرور غير صحيحة.");
+    return;
+  }
+
+  if (userByEmail.status === "محظور") {
+    setState("هذا الحساب محظور حاليًا. تواصل مع إدارة المنصة إذا كنت ترى أن هذا الإجراء غير صحيح.");
+    return;
+  }
+
+  localStorage.removeItem(storageKeys.adminSession);
+  startAuthVerification({
+    flow: "login",
+    userId: userByEmail.id,
+    name: userByEmail.name,
+    email: userByEmail.email,
+    code: generateVerificationCode()
+  });
+}
+
+function handleLocalRegisterFallback(name, email, password, grade) {
+  if (password.length < 6) {
+    setState("كلمة المرور يجب أن تكون 6 أحرف أو أكثر.");
+    return;
+  }
+
+  const users = loadUsers();
+  if (users.some((entry) => entry.email.toLowerCase() === email)) {
+    setState("هذا البريد مسجل مسبقًا.");
+    return;
+  }
+
+  localStorage.removeItem(storageKeys.adminSession);
+  startAuthVerification({
+    flow: "register",
+    code: generateVerificationCode(),
+    name,
+    email,
+    user: {
+      id: `student-${Date.now()}`,
+      name,
+      email,
+      password,
+      role: "Student",
+      grade,
+      subject: "الرياضيات",
+      package: "مجاني محدود",
+      xp: 100,
+      streakDays: 0,
+      lastActiveDate: "",
+      achievements: [],
+      status: "نشط",
+      activity: "أنشأ حسابًا جديدًا"
+    }
+  });
+}
+
 function loadJson(key, fallback) {
   try {
     const value = localStorage.getItem(key);
@@ -264,6 +405,111 @@ document.addEventListener("click", (event) => {
 openAuthMode(new URLSearchParams(window.location.search).get("mode") || (window.location.hash === "#register" ? "register" : "login"));
 resetForgotFlow();
 bindPasswordToggles();
+
+loginForm?.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  event.stopImmediatePropagation();
+  const email = (loginEmail?.value || "").trim().toLowerCase();
+  const password = loginPassword?.value || "";
+  const apiClient = getApiClient();
+
+  if (!email || !password) {
+    setState("أدخل البريد الإلكتروني وكلمة المرور أولًا.");
+    return;
+  }
+
+  if (!isValidEmail(email)) {
+    setState("البريد الإلكتروني غير صحيح.");
+    return;
+  }
+
+  if (!apiClient) {
+    handleLocalLoginFallback(email, password);
+    return;
+  }
+
+  const apiResult = await apiClient.login({
+    email,
+    password,
+    device_name: "mullem-web"
+  });
+
+  if (shouldFallbackToLocalAuth(apiResult)) {
+    handleLocalLoginFallback(email, password);
+    return;
+  }
+
+  event.preventDefault();
+  event.stopImmediatePropagation();
+
+  if (apiResult.ok && apiResult.data?.user) {
+    if (String(apiResult.data.user.role || "").toLowerCase() === "admin") {
+      completeAdminApiLogin("تم تسجيل دخول الأدمن بنجاح.");
+      return;
+    }
+
+    completeStudentApiLogin(
+      apiResult.data.user,
+      `أهلًا ${apiResult.data.user.name || ""}، تم تسجيل الدخول بنجاح.`
+    );
+    return;
+  }
+
+  setState(apiResult.message || "تعذر تسجيل الدخول. تحقق من البيانات ثم حاول مرة أخرى.");
+}, { capture: true });
+
+registerForm?.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  event.stopImmediatePropagation();
+  const name = (registerName?.value || "").trim();
+  const email = (registerEmail?.value || "").trim().toLowerCase();
+  const password = registerPassword?.value || "";
+  const grade = registerGrade?.value || "الثاني الثانوي";
+  const apiClient = getApiClient();
+
+  if (!name || !email || !password) {
+    setState("أكمل جميع الحقول أولًا.");
+    return;
+  }
+
+  if (!isValidEmail(email)) {
+    setState("البريد الإلكتروني غير صحيح.");
+    return;
+  }
+
+  if (!apiClient) {
+    handleLocalRegisterFallback(name, email, password, grade);
+    return;
+  }
+
+  const apiResult = await apiClient.register({
+    name,
+    email,
+    password,
+    password_confirmation: password,
+    grade,
+    stage: inferStageFromGrade(grade),
+    device_name: "mullem-web"
+  });
+
+  if (shouldFallbackToLocalAuth(apiResult)) {
+    handleLocalRegisterFallback(name, email, password, grade);
+    return;
+  }
+
+  event.preventDefault();
+  event.stopImmediatePropagation();
+
+  if (apiResult.ok && apiResult.data?.user) {
+    completeStudentApiLogin(
+      apiResult.data.user,
+      `تم إنشاء الحساب بنجاح يا ${apiResult.data.user.name || name}.`
+    );
+    return;
+  }
+
+  setState(apiResult.message || "تعذر إنشاء الحساب الآن. تحقق من البيانات ثم حاول مرة أخرى.");
+}, { capture: true });
 
 loginForm?.addEventListener("submit", (event) => {
   event.preventDefault();

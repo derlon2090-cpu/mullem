@@ -8,7 +8,7 @@ from pydantic import BaseModel, Field
 
 
 BASE_DIR = Path(__file__).resolve().parent
-DATA_DIR = BASE_DIR
+DATA_DIR = BASE_DIR / "data"
 
 
 def _split_csv(value: str | None, default: list[str]) -> list[str]:

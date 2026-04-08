@@ -54,7 +54,7 @@ npm run dev
 
 ## FastAPI Search Backend Scaffold
 
-The repo now includes a backend scaffold at the project root in [C:\mullem](C:\mullem) for a secure search flow:
+The repo now includes a backend scaffold in [C:\mullem\backend](C:\mullem\backend) for a secure search flow:
 
 - `approved question bank` first
 - `curriculum retrieval` second
@@ -69,20 +69,36 @@ POST /api/solve-question
 Run locally after installing backend dependencies:
 
 ```bash
-pip install -r requirements.txt
-uvicorn main:app --reload
+pip install -r backend/requirements.txt
+uvicorn backend.main:app --reload
 ```
 
 The scaffold includes:
 
-- [C:\mullem\main.py](C:\mullem\main.py)
-- [C:\mullem\config.py](C:\mullem\config.py)
-- [C:\mullem\engines.py](C:\mullem\engines.py)
-- [C:\mullem\question_bank.py](C:\mullem\question_bank.py)
-- [C:\mullem\curriculum.py](C:\mullem\curriculum.py)
-- [C:\mullem\serpapi_service.py](C:\mullem\serpapi_service.py)
-- [C:\mullem\admin_config.py](C:\mullem\admin_config.py)
-- [C:\mullem\log_store.py](C:\mullem\log_store.py)
+- [C:\mullem\backend\main.py](C:\mullem\backend\main.py)
+- [C:\mullem\backend\config.py](C:\mullem\backend\config.py)
+- [C:\mullem\backend\engines.py](C:\mullem\backend\engines.py)
+- [C:\mullem\backend\question_bank.py](C:\mullem\backend\question_bank.py)
+- [C:\mullem\backend\curriculum.py](C:\mullem\backend\curriculum.py)
+- [C:\mullem\backend\serpapi_service.py](C:\mullem\backend\serpapi_service.py)
+- [C:\mullem\backend\admin_config.py](C:\mullem\backend\admin_config.py)
+- [C:\mullem\backend\log_store.py](C:\mullem\backend\log_store.py)
+
+## Project Structure
+
+```text
+C:\mullem
+├── *.html            # واجهات الموقع العامة كما هي في الجذر للحفاظ على الروابط
+├── assets
+│   ├── css           # ملفات التنسيق
+│   ├── img           # الشعارات والأيقونات
+│   └── js            # منطق الواجهة والشات ولوحة الأدمن
+├── backend           # FastAPI ومحركات الحل والمنهج والبحث
+│   └── data          # بنك الأسئلة وإعدادات البحث
+├── tools
+│   └── checks        # سكربتات الفحص المحلية
+└── misc              # ملفات غير مرتبطة مباشرة بكود الواجهة أو الباكند
+```
 
 Current scope:
 

@@ -99,6 +99,30 @@ function updateAdminView() {
   if (adminLogoutButton) adminLogoutButton.hidden = !loggedIn;
 }
 
+function getAdminApiClient() {
+  return window.mullemApiClient && typeof window.mullemApiClient.request === "function"
+    ? window.mullemApiClient
+    : null;
+}
+
+function shouldFallbackToLocalAdmin(result) {
+  return !result || result.serverUnavailable;
+}
+
+function handleLocalAdminLogin(email, password) {
+  if (email === adminCredentials.email && password === adminCredentials.password) {
+    localStorage.setItem(adminSessionKey, "1");
+    if (adminLoginState) adminLoginState.textContent = "تم تسجيل دخول الأدمن بنجاح.";
+    updateAdminView();
+    refreshAdminData();
+    return;
+  }
+
+  if (adminLoginState) {
+    adminLoginState.textContent = "بيانات دخول الأدمن غير صحيحة. تأكد من البريد وكلمة المرور.";
+  }
+}
+
 function getTopEntry(record, fallback) {
   const top = Object.entries(record || {}).sort((a, b) => b[1] - a[1])[0];
   return top ? `${top[0]} (${top[1]})` : fallback;
@@ -1407,6 +1431,76 @@ document.addEventListener("click", (event) => {
     handleGeneratorRunNow();
   }
 });
+
+adminLoginForm?.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  event.stopImmediatePropagation();
+
+  const email = (adminEmailInput?.value || "").trim().toLowerCase();
+  const password = adminPasswordInput?.value || "";
+  const apiClient = getAdminApiClient();
+
+  if (!email || !password) {
+    if (adminLoginState) {
+      adminLoginState.textContent = "أدخل البريد وكلمة المرور أولًا.";
+    }
+    return;
+  }
+
+  if (!apiClient) {
+    handleLocalAdminLogin(email, password);
+    return;
+  }
+
+  const apiResult = await apiClient.login({
+    email,
+    password,
+    device_name: "mullem-admin-web"
+  });
+
+  if (shouldFallbackToLocalAdmin(apiResult)) {
+    handleLocalAdminLogin(email, password);
+    return;
+  }
+
+  if (apiResult.ok && apiResult.data?.user) {
+    if (String(apiResult.data.user.role || "").toLowerCase() !== "admin") {
+      apiClient.clearSession();
+      if (adminLoginState) {
+        adminLoginState.textContent = "هذا الحساب لا يملك صلاحية دخول لوحة الأدمن.";
+      }
+      return;
+    }
+
+    localStorage.setItem(adminSessionKey, "1");
+    localStorage.removeItem("mlm_current_user");
+    if (adminLoginState) adminLoginState.textContent = "تم تسجيل دخول الأدمن بنجاح عبر الخادم.";
+    updateAdminView();
+    refreshAdminData();
+    return;
+  }
+
+  if (adminLoginState) {
+    adminLoginState.textContent = apiResult.message || "تعذر تسجيل دخول الأدمن. تحقق من البيانات ثم حاول مرة أخرى.";
+  }
+}, { capture: true });
+
+adminLogoutButton?.addEventListener("click", async (event) => {
+  const apiClient = getAdminApiClient();
+  if (!apiClient || !apiClient.hasToken()) {
+    return;
+  }
+
+  event.preventDefault();
+  event.stopImmediatePropagation();
+  await apiClient.logout();
+  localStorage.removeItem(adminSessionKey);
+  if (adminEmailInput) adminEmailInput.value = "";
+  if (adminPasswordInput) adminPasswordInput.value = "";
+  if (adminLoginState) adminLoginState.textContent = "تم تسجيل الخروج.";
+  updateAdminView();
+  window.location.href = "login.html";
+}, { capture: true });
 
 adminLoginForm?.addEventListener("submit", (event) => {
   event.preventDefault();
