@@ -221,6 +221,7 @@
     };
 
     let lastFailure = null;
+    let preferredFailure = null;
     const candidates = buildApiCandidates(path);
 
     for (const url of candidates) {
@@ -268,8 +269,8 @@
         }
 
         lastFailure = result;
-        if (!result.serverUnavailable) {
-          return result;
+        if (!result.serverUnavailable && !preferredFailure) {
+          preferredFailure = result;
         }
       } catch (_) {
         lastFailure = {
@@ -285,7 +286,7 @@
       }
     }
 
-    return lastFailure || {
+    return preferredFailure || lastFailure || {
       ok: false,
       status: 0,
       data: null,

@@ -1,0 +1,10 @@
+{
+  "name": "mullem-root-app",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Mullem static frontend with root Node API server",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js"
+  }
+}

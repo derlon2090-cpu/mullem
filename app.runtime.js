@@ -3945,9 +3945,6 @@
         try {
           const response = await fetch(url, requestInit);
           if (!response.ok) {
-            if (response.status !== 404 && response.status < 500) {
-              return null;
-            }
             continue;
           }
           const payload = await response.json();
@@ -5217,7 +5214,7 @@
       message = "رفع الصور والملفات لم يُربط بعد مع Laravel API في هذه النسخة. اكتب السؤال نصًا الآن وسيتم إرساله إلى الـ AI مباشرة.";
     }
 
-    if (details && reason === "request_failed") {
+    if (details && (reason === "request_failed" || reason === "server_unavailable")) {
       message = `${message} ${details}`.trim();
     }
 
