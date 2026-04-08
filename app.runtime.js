@@ -3620,7 +3620,7 @@
   }
 
   const runtimeBackendConfig = {
-    solveEndpoint: "/api/solve-question",
+    solvePath: "/solve-question",
     timeoutMs: 5500
   };
 
@@ -3650,6 +3650,19 @@
     return window.mullemApiClient && typeof window.mullemApiClient.sendChat === "function"
       ? window.mullemApiClient
       : null;
+  }
+
+  function resolveRuntimeSolveEndpoint() {
+    const apiClient = getRuntimeApiClient();
+    if (apiClient && typeof apiClient.buildApiUrl === "function") {
+      return apiClient.buildApiUrl(runtimeBackendConfig.solvePath);
+    }
+
+    const cleanPath = String(runtimeBackendConfig.solvePath || "/solve-question");
+    if (/^https?:\/\//i.test(cleanPath)) return cleanPath;
+
+    const normalizedPath = cleanPath.startsWith("/") ? cleanPath : `/${cleanPath}`;
+    return normalizedPath.startsWith("/api/") ? normalizedPath : `/api${normalizedPath}`;
   }
 
   function canUseRuntimeApiChat() {
@@ -3905,7 +3918,7 @@
       : null;
 
     try {
-      const response = await fetch(runtimeBackendConfig.solveEndpoint, {
+      const response = await fetch(resolveRuntimeSolveEndpoint(), {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
