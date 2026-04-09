@@ -13,7 +13,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800;900&display=swap" rel="stylesheet">
   <link rel="icon" type="image/svg+xml" href="favicon.svg">
-  <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="styles.css?v=20260409-8">
 </head>
 <body>
   <div class="shell">
@@ -31,8 +31,8 @@
       <div class="topbar-actions">
         <nav class="main-nav" aria-label="التنقل الرئيسي">
           <a href="index.html">الرئيسية</a>
-          <a href="about.html">عن المنصة</a>
           <a href="subscriptions.html">الباقات</a>
+          <a href="about.html">عن المنصة</a>
           <a href="privacy.html">الخصوصية</a>
           <a href="terms.html">الشروط</a>
         </nav>
@@ -40,37 +40,70 @@
     </header>
   </div>
 
-  <main class="page-wrap auth-page">
-    <div class="shell auth-shell">
-      <section class="auth-preview auth-preview-rich">
-        <div class="auth-preview-logo">
+  <main class="page-wrap auth-page auth-premium-page">
+    <div class="shell auth-shell auth-shell-premium">
+      <section class="auth-preview auth-preview-rich auth-preview-premium">
+        <div class="auth-preview-premium-head">
           <div class="hero-logo" aria-hidden="true">
             <div class="hero-logo-mark">
               <img class="hero-icon-image" src="favicon.svg" alt="شعار ملم">
             </div>
             <div class="hero-logo-text">ملم</div>
           </div>
+          <span class="eyebrow">بوابة الدخول إلى مساعدك الذكي</span>
         </div>
 
         <div class="auth-preview-copy">
-          <strong>مساعدك الذكي لحل واجبات المنهج السعودي</strong>
-          <span>ادخل إلى حسابك أو أنشئ حسابًا جديدًا لتبدأ الشات، وتحفظ تقدمك، وتتابع سجل تعلمك وحماسك اليومي.</span>
+          <strong>ادخل إلى حسابك وابدأ رحلة تعلم أوضح وأسرع</strong>
+          <span>
+            سجّل دخولك لحفظ محادثاتك ومشروعاتك ومتابعة رصيدك اليومي وحماسك، مع واجهة أقرب لمنتج AI تعليمي حديث.
+          </span>
         </div>
 
-        <div class="auth-preview-points">
-          <div class="auth-preview-point">حل واجباتك بسرعة</div>
-          <div class="auth-preview-point">شرح مبسط خطوة بخطوة</div>
-          <div class="auth-preview-point">تحليل الأخطاء والتدريب</div>
-          <div class="auth-preview-point">سجل تعلم وحماس يومي</div>
+        <div class="auth-preview-chat">
+          <div class="auth-preview-bubble auth-preview-bubble-user">
+            <span>الطالب</span>
+            <p>اشرح قانون نيوتن الثاني</p>
+          </div>
+          <div class="auth-preview-bubble auth-preview-bubble-ai">
+            <span>ملم AI</span>
+            <p>القانون يقول: القوة = الكتلة × التسارع. وإذا أردت، أشرحها لك بمثال من صفك مباشرة.</p>
+          </div>
+          <div class="auth-preview-typing">
+            <span></span>
+            <span></span>
+            <span></span>
+          </div>
+        </div>
+
+        <div class="auth-preview-points auth-preview-points-premium">
+          <div class="auth-preview-point">
+            <strong>5 رسائل يوميًا للضيف</strong>
+            <span>ابدأ فورًا، ثم ادخل لحفظ تقدمك.</span>
+          </div>
+          <div class="auth-preview-point">
+            <strong>100 XP عند إنشاء الحساب</strong>
+            <span>بداية واضحة مع نقاط يومية ورسائل محفوظة.</span>
+          </div>
+          <div class="auth-preview-point">
+            <strong>مشروعات محفوظة لكل مادة</strong>
+            <span>اربط كل محادثة بدروسك أو مشروعك الدراسي إن أردت.</span>
+          </div>
         </div>
       </section>
 
-      <section class="auth-card">
-        <div class="eyebrow">أهلًا بك في ملم</div>
+      <section class="auth-card auth-card-premium">
+        <div class="eyebrow">تسجيل الدخول</div>
         <h1>ادخل وابدأ حل واجباتك</h1>
-        <p>اختر بين تسجيل الدخول أو إنشاء حساب جديد، ثم انتقل مباشرة إلى الشات الدراسي.</p>
+        <p>واجهة دخول سريعة وآمنة، مع إحساس واضح أنك تدخل إلى مساعد ذكي وليس مجرد فورم تقليدي.</p>
 
-        <div class="auth-tabs">
+        <div class="auth-trust-strip">
+          <span>دخول آمن ومشفّر</span>
+          <span>تجربة مريحة على الجوال</span>
+          <span>يحفظ التقدم والمشروعات</span>
+        </div>
+
+        <div class="auth-tabs auth-tabs-wide">
           <button class="auth-tab active" type="button" data-auth-tab="login" data-auth-open="login">تسجيل الدخول</button>
           <button class="auth-tab" type="button" data-auth-tab="register" data-auth-open="register">إنشاء حساب</button>
         </div>
@@ -78,8 +111,8 @@
         <div class="auth-panels">
           <section class="auth-panel" data-auth-panel="login">
             <div class="auth-mode-copy">
-              <strong>معلومات تسجيل الدخول</strong>
-              <span>أدخل بريدك الإلكتروني وكلمة المرور للدخول مباشرة إلى الشات ومتابعة إجاباتك المحفوظة.</span>
+              <strong>حل واجباتك خلال ثوانٍ باستخدام الذكاء الاصطناعي</strong>
+              <span>ادخل ببريدك وكلمة المرور، ثم انتقل مباشرة إلى الشات أو لوحة الطالب.</span>
             </div>
 
             <form class="auth-form" data-auth-login-form>
@@ -97,15 +130,15 @@
                 <button class="auth-link-btn" type="button" data-auth-open="register">ليس لديك حساب؟ أنشئ حسابًا</button>
               </div>
 
-              <button class="primary-btn" type="submit">ادخل وابدأ حل واجباتك</button>
+              <button class="primary-btn" type="submit">تسجيل الدخول</button>
               <button class="secondary-btn auth-google-btn" type="button" data-auth-google>المتابعة عبر Google</button>
             </form>
           </section>
 
           <section class="auth-panel" data-auth-panel="register" hidden>
             <div class="auth-mode-copy">
-              <strong>معلومات إنشاء الحساب</strong>
-              <span>أنشئ حسابًا جديدًا باسمك وبريدك وصفك الدراسي، ثم أدخل رمز التحقق لإتمام الدخول إلى المنصة بأمان.</span>
+              <strong>ابدأ بحساب جديد واحصل على 100 XP كبداية</strong>
+              <span>أنشئ حسابك، ثم اختر صفك الدراسي ليبدأ ملم في مخاطبتك بأسلوب أقرب إلى مرحلتك.</span>
             </div>
 
             <form class="auth-form" data-auth-register-form>
@@ -144,7 +177,7 @@
           <section class="auth-panel" data-auth-panel="verify" hidden>
             <div class="auth-mode-copy">
               <strong>تأكيد الدخول إلى الحساب</strong>
-              <span data-auth-verify-copy>أدخل رمز التحقق الذي تم تجهيزه لهذا الحساب لإكمال الدخول بأمان.</span>
+              <span data-auth-verify-copy>أدخل رمز التحقق المجهز لهذا الحساب لإكمال الدخول بأمان.</span>
             </div>
 
             <form class="auth-form" data-auth-verify-form>
@@ -163,7 +196,7 @@
           <section class="auth-panel" data-auth-panel="forgot" hidden>
             <div class="auth-mode-copy">
               <strong>استعادة كلمة المرور</strong>
-              <span>أدخل بريدك الإلكتروني، ثم كود التحقق، وبعدها اكتب كلمة المرور الجديدة لتحديث الحساب.</span>
+              <span>أدخل بريدك الإلكتروني ثم كود التحقق وبعدها كلمة المرور الجديدة لتحديث الحساب.</span>
             </div>
 
             <form class="auth-form" data-auth-forgot-email-form>
