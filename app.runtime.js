@@ -34,12 +34,32 @@
   const dashboardCopyNode = document.querySelector("[data-dashboard-copy]");
   const achievementsNode = document.querySelector("[data-achievements]");
   const placeholderButtons = document.querySelectorAll("[data-chat-placeholder]");
+  const usageSummaryNodes = document.querySelectorAll("[data-usage-summary]");
+  const planNameNodes = document.querySelectorAll("[data-plan-name]");
+  const planStatusNodes = document.querySelectorAll("[data-plan-status]");
+  const planBadgeNodes = document.querySelectorAll("[data-plan-badge]");
+  const planPrimaryMetricNodes = document.querySelectorAll("[data-plan-metric-primary]");
+  const planSecondaryMetricNodes = document.querySelectorAll("[data-plan-metric-secondary]");
+  const planTertiaryMetricNodes = document.querySelectorAll("[data-plan-metric-tertiary]");
+  const planCopyNodes = document.querySelectorAll("[data-plan-copy]");
+  const planBenefitsNodes = document.querySelectorAll("[data-plan-benefits]");
+  const planPrimaryLink = document.querySelector("[data-plan-primary-link]");
+  const planSecondaryLink = document.querySelector("[data-plan-secondary-link]");
+  const planUpsellCopyNodes = document.querySelectorAll("[data-plan-upsell-copy]");
+  const packagePreviewList = document.querySelector("[data-package-preview-list]");
+  const projectSelect = document.querySelector("[data-project-select]");
+  const projectTitleInput = document.querySelector("[data-project-title]");
+  const projectLessonInput = document.querySelector("[data-project-lesson]");
+  const projectDescriptionInput = document.querySelector("[data-project-description]");
+  const createProjectButton = document.querySelector("[data-create-project]");
+  const projectContextNote = document.querySelector("[data-project-note]");
 
   if (!form || !messageList || !promptInput) return;
 
   const runtimeState = {
     pendingSolveConfirmation: null,
-    lastAcademicRequest: null
+    lastAcademicRequest: null,
+    packages: []
   };
 
   const runtimeMemoryKeys = {
@@ -48,6 +68,49 @@
     intentRules: "mlm_runtime_intent_rules",
     intentErrors: "mlm_runtime_intent_errors"
   };
+
+  const GUEST_MESSAGE_LIMIT = 5;
+  const fallbackRuntimePackages = [
+    {
+      key: "pro",
+      name: "برو",
+      daily_xp: 200,
+      price_sar: 30,
+      duration_days: 30,
+      summary: "مناسبة للاستخدام اليومي الخفيف مع رصيد ثابت كل يوم.",
+      benefits: [
+        "200 XP يوميًا لمدة شهر",
+        "أفضل للحل السريع والمتابعة المستمرة",
+        "مناسبة لطالب يعتمد على الشات يوميًا"
+      ]
+    },
+    {
+      key: "pro_plus",
+      name: "برو بلس",
+      daily_xp: 500,
+      price_sar: 60,
+      duration_days: 30,
+      summary: "الخطة الأكثر توازنًا بين الرصيد اليومي والسعر.",
+      benefits: [
+        "500 XP يوميًا لمدة شهر",
+        "مريحة للدروس والمراجعات المتكررة",
+        "الأفضل لمعظم الطلاب"
+      ]
+    },
+    {
+      key: "pro_max",
+      name: "برو ماكس",
+      daily_xp: 1000,
+      price_sar: 100,
+      duration_days: 30,
+      summary: "أعلى رصيد يومي لتجربة مكثفة ومشروعات أكثر.",
+      benefits: [
+        "1000 XP يوميًا لمدة شهر",
+        "مناسبة للاستخدام المكثف والملفات والصور",
+        "أفضل خيار للمواد الكثيفة والمشروعات"
+      ]
+    }
+  ];
 
   const blockedVideoExtensions = /\.(mp4|mov|avi|mkv|webm|m4v)$/i;
   const foundationCatalog = {
@@ -2645,11 +2708,207 @@
       : ['<span class="student-achievement-chip student-achievement-chip-muted">ستظهر إنجازاتك هنا بعد أول عدة أسئلة.</span>'];
   }
 
+  function setRuntimeNodeText(nodes, value) {
+    Array.from(nodes || []).forEach((node) => {
+      node.textContent = value;
+    });
+  }
+
+  function setRuntimeNodeHtml(nodes, value) {
+    Array.from(nodes || []).forEach((node) => {
+      node.innerHTML = value;
+    });
+  }
+
+  function escapeRuntimeHtml(value) {
+    return String(value ?? "")
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&#39;");
+  }
+
+  function formatRuntimePlanDate(value) {
+    if (!value) return "غير محدد";
+    const parsed = new Date(value);
+    if (Number.isNaN(parsed.getTime())) return "غير محدد";
+    return parsed.toLocaleDateString("ar-SA", {
+      year: "numeric",
+      month: "short",
+      day: "numeric"
+    });
+  }
+
+  function isPaidRuntimePackage(user) {
+    if (!user) return false;
+    const key = String(user.packageKey || "").trim().toLowerCase();
+    return Number(user.packageDailyXp || 0) > 0 || Boolean(key && !["starter", "free", "guest", "basic_free"].includes(key));
+  }
+
+  function getRuntimePackageList() {
+    return Array.isArray(runtimeState.packages) && runtimeState.packages.length
+      ? runtimeState.packages
+      : fallbackRuntimePackages;
+  }
+
+  function renderRuntimePackagePreviewCards(activeUser) {
+    if (!packagePreviewList) return;
+    const activePackageKey = String(activeUser?.packageKey || "").trim().toLowerCase();
+    const activePackageName = String(activeUser?.package || "").trim();
+    const items = getRuntimePackageList()
+      .filter((item) => Number(item.daily_xp || item.dailyXp || 0) > 0)
+      .slice(0, 3);
+
+    if (!items.length) {
+      packagePreviewList.innerHTML = '<div class="student-package-empty">ستظهر هنا باقات المنصة فور تجهيزها.</div>';
+      return;
+    }
+
+    packagePreviewList.innerHTML = items.map((item, index) => {
+      const key = String(item.key || item.package_key || "").trim().toLowerCase();
+      const name = String(item.name || item.display_name || "باقة").trim();
+      const dailyXp = Number(item.daily_xp || item.dailyXp || 0);
+      const duration = Number(item.duration_days || item.durationDays || 30);
+      const price = Number(item.price_sar || item.priceSar || 0);
+      const isCurrent = Boolean(activeUser) && (
+        (activePackageKey && key && activePackageKey === key) ||
+        (activePackageName && activePackageName === name)
+      );
+      const benefits = Array.isArray(item.benefits) && item.benefits.length
+        ? item.benefits
+        : [
+            `${dailyXp} XP يوميًا طوال الشهر`,
+            "تجربة أسرع داخل الشات ولوحة الطالب",
+            "أنسب للمذاكرة المستمرة"
+          ];
+      const tags = [
+        index === 1 ? '<span class="student-package-tag">الأكثر طلبًا</span>' : '',
+        isCurrent ? '<span class="student-package-tag">خطة مفعلة</span>' : ''
+      ].filter(Boolean).join("");
+      return `
+        <article class="student-package-preview-card ${index === 1 ? "is-featured" : ""} ${isCurrent ? "is-active" : ""}">
+          <div class="student-package-preview-top">
+            <strong>${escapeRuntimeHtml(name)}</strong>
+            <span class="student-package-preview-price">${escapeRuntimeHtml(price > 0 ? `${price} ريال / شهر` : "مجانية")}</span>
+          </div>
+          <div class="student-package-preview-tags">${tags}</div>
+          <div class="student-package-preview-meta">
+            <span>${escapeRuntimeHtml(String(dailyXp))} XP يوميًا</span>
+            <span>${escapeRuntimeHtml(String(duration))} يومًا</span>
+          </div>
+          <p class="student-package-summary">${escapeRuntimeHtml(item.summary || "باقة شهرية تمنحك رصيدًا يوميًا وتجربة أكثر راحة داخل المنصة.")}</p>
+          <ul class="student-package-benefits">
+            ${benefits.slice(0, 3).map((benefit) => `<li>${escapeRuntimeHtml(benefit)}</li>`).join("")}
+          </ul>
+          <div class="student-package-preview-actions">
+            <a class="${isCurrent ? "secondary-btn" : "primary-btn"}" href="${activeUser ? "subscriptions.html" : "login.html"}">${isCurrent ? "خطة مفعلة" : (activeUser ? "اشترك الآن" : "سجّل لتفعيلها")}</a>
+          </div>
+        </article>
+      `;
+    }).join("");
+  }
+
+  function renderRuntimeStudentPlan(activeUser) {
+    const isPaid = isPaidRuntimePackage(activeUser);
+    const planName = activeUser ? (activeUser.package || "الخطة المجانية") : "تجربة الضيف";
+    const planStatus = activeUser
+      ? (isPaid
+          ? "باقتك فعالة الآن، ويتجدد رصيدها يوميًا طوال مدة الاشتراك."
+          : "أنت الآن على الخطة المجانية. فعّل باقة شهرية لفتح رصيد يومي أكبر وتجربة أغنى.")
+      : `يمكنك تجربة الشات الآن مع ${GUEST_MESSAGE_LIMIT} رسائل يوميًا قبل الحاجة إلى تسجيل الدخول.`;
+    const badgeText = activeUser ? (isPaid ? "باقة فعالة" : "مجانية") : "ضيف";
+    const badgeClass = activeUser
+      ? (isPaid ? "student-plan-badge is-paid" : "student-plan-badge is-free")
+      : "student-plan-badge is-guest";
+    const primaryMetric = activeUser ? (isPaid ? `${Number(activeUser.packageDailyXp || 0)} XP` : "مجانية") : `${GUEST_MESSAGE_LIMIT} رسائل`;
+    const secondaryMetric = activeUser
+      ? (isPaid
+          ? (Number.isFinite(Number(activeUser.packageDaysRemaining))
+              ? `${Math.max(0, Number(activeUser.packageDaysRemaining))} يوم`
+              : formatRuntimePlanDate(activeUser.packageExpiresAt))
+          : "ترقية مفتوحة")
+      : "يتجدد يوميًا";
+    const tertiaryMetric = activeUser ? `${Number(activeUser.xp || 0)} XP` : "100 XP بعد التسجيل";
+    const planCopy = activeUser
+      ? (isPaid
+          ? `خطتك الحالية مناسبة إذا كنت تراجع ${activeUser.grade || "دروسك"} يوميًا وتريد أن يبقى رصيدك متجددًا حتى ${formatRuntimePlanDate(activeUser.packageExpiresAt)}.`
+          : "فعّل باقتك لفتح عدد أكبر من الأسئلة اليومية، وتنظيم أفضل للمشروعات، وتجربة أكثر راحة داخل الشات.")
+      : "استعرض الباقات من داخل اللوحة نفسها، ثم سجّل دخولك عندما تريد تفعيل خطة شهرية وحفظ التقدم مدى الحياة.";
+    const benefits = isPaid
+      ? (Array.isArray(activeUser?.packageBenefits) && activeUser.packageBenefits.length
+          ? activeUser.packageBenefits
+          : [
+              "يتجدد الرصيد تلقائيًا كل يوم طوال مدة الباقة",
+              "حفظ المحادثات والمشروعات داخل الحساب",
+              "مناسبة للمراجعة اليومية والمواد المكثفة"
+            ])
+      : (activeUser
+          ? [
+              "ابدأ بالخطة المجانية ثم فعّل باقتك عند الحاجة",
+              "حفظ المشروعات والمحادثات داخل الحساب",
+              "ترقية مرنة إلى باقات شهرية"
+            ]
+          : [
+              "5 رسائل يوميًا قبل إنشاء الحساب",
+              "عرض الباقات كاملة قبل الاشتراك",
+              "100 XP بداية الحساب بعد التسجيل"
+            ]);
+    const upsellCopy = activeUser
+      ? (isPaid
+          ? "هذه هي الخطط المتاحة إذا أردت الترقية لاحقًا أو مقارنة مزايا الباقات الشهرية."
+          : "أنت الآن على الخطة المجانية. اختر الباقة المناسبة عندما تحتاج رصيدًا يوميًا أكبر داخل نفس اللوحة.")
+      : "استعرض الباقات الآن، ثم فعّل ما يناسبك بعد الدخول إلى الحساب بدون أي لخبطة في التجربة.";
+
+    setRuntimeNodeText(planNameNodes, planName);
+    setRuntimeNodeText(planStatusNodes, planStatus);
+    setRuntimeNodeText(planPrimaryMetricNodes, primaryMetric);
+    setRuntimeNodeText(planSecondaryMetricNodes, secondaryMetric);
+    setRuntimeNodeText(planTertiaryMetricNodes, tertiaryMetric);
+    setRuntimeNodeText(planCopyNodes, planCopy);
+    setRuntimeNodeText(planUpsellCopyNodes, upsellCopy);
+    setRuntimeNodeHtml(planBenefitsNodes, benefits.slice(0, 3).map((benefit) => `<span class="student-plan-benefit">${escapeRuntimeHtml(benefit)}</span>`).join(""));
+
+    planBadgeNodes.forEach((node) => {
+      node.className = badgeClass;
+      node.textContent = badgeText;
+    });
+
+    if (planPrimaryLink) {
+      planPrimaryLink.href = activeUser ? "subscriptions.html" : "login.html";
+      planPrimaryLink.textContent = activeUser ? (isPaid ? "إدارة الباقة" : "ترقية الباقة") : "أنشئ حسابًا";
+    }
+    if (planSecondaryLink) {
+      planSecondaryLink.href = "subscriptions.html";
+      planSecondaryLink.textContent = activeUser ? "مقارنة الباقات" : "قارن الباقات";
+    }
+
+    renderRuntimePackagePreviewCards(activeUser);
+  }
+
+  async function fetchRuntimePackages() {
+    const apiClient = getRuntimeApiClient();
+    if (!apiClient || typeof apiClient.getPackages !== "function") {
+      renderRuntimeStudentPlan(typeof getActiveUser === "function" ? getActiveUser() : null);
+      return;
+    }
+    try {
+      const result = await apiClient.getPackages();
+      if (result.ok && result.data?.items) {
+        runtimeState.packages = Array.isArray(result.data.items) ? result.data.items : [];
+      }
+    } catch (_) {
+      runtimeState.packages = fallbackRuntimePackages;
+    }
+    renderRuntimeStudentPlan(typeof getActiveUser === "function" ? getActiveUser() : null);
+  }
+
   function syncStudentDashboardHeader() {
     const activeUser = typeof getActiveUser === "function" ? getActiveUser() : null;
     const gradeLabel = activeUser?.grade || gradeSelect?.value || "هذا الصف";
     const displayName = activeUser?.name || "صديق ملم";
     const streakDays = activeUser?.streakDays || 0;
+    const isPaid = isPaidRuntimePackage(activeUser);
 
     studentNameNodes.forEach((node) => {
       node.textContent = displayName;
@@ -2667,6 +2926,23 @@
     if (achievementsNode) {
       achievementsNode.innerHTML = getAchievementChips(activeUser).join("");
     }
+
+    if (projectContextNote) {
+      projectContextNote.textContent = activeUser
+        ? "مشروعاتك تُحفظ داخل حسابك. اربط كل محادثة بالمادة أو الدرس الذي تريد الرجوع إليه لاحقًا."
+        : "المشروعات الكاملة وحفظ المحادثات يظهران بعد تسجيل الدخول، ويمكنك الآن تجربة الشات مباشرة.";
+    }
+
+    if (usageSummaryNodes.length) {
+      const usageSummary = activeUser
+        ? (isPaid
+            ? `باقتك ${activeUser.package || "الحالية"} فعالة، ورصيدك الحالي ${Number(activeUser.xp || 0)} XP.`
+            : `أنت الآن على الخطة المجانية، ومعك ${Number(activeUser.xp || 0)} XP داخل الحساب.`)
+        : `التجربة الحالية تمنحك ${GUEST_MESSAGE_LIMIT} رسائل يوميًا قبل الحاجة إلى إنشاء حساب.`;
+      setRuntimeNodeText(usageSummaryNodes, usageSummary);
+    }
+
+    renderRuntimeStudentPlan(activeUser);
   }
 
   function bindPromptPlaceholderButtons() {
@@ -2796,13 +3072,30 @@
       }
     });
 
+    [projectSelect, projectTitleInput, projectLessonInput, projectDescriptionInput, createProjectButton].forEach((element) => {
+      if (!element) return;
+      element.disabled = !isLogged;
+    });
+
+    if (projectTitleInput) {
+      projectTitleInput.placeholder = isLogged ? "اسم المشروع" : "سجّل دخولك أولًا لإنشاء مشروع محفوظ";
+    }
+    if (projectLessonInput) {
+      projectLessonInput.placeholder = isLogged ? "الدرس أو الوحدة" : "يتاح بعد تسجيل الدخول";
+    }
+    if (projectDescriptionInput) {
+      projectDescriptionInput.placeholder = isLogged
+        ? "وصف مختصر للمشروع أو الهدف منه"
+        : "حفظ المشروعات والمحادثات مدى الحياة يبدأ بعد تسجيل الدخول.";
+    }
+
     if (selectionSummary) {
       const gradeLabel = activeUser?.grade || gradeSelect?.value || "";
       const termLabel = termSelect?.value || "";
       const lessonLabel = lessonInput?.value?.trim() || "الدرس غير محدد";
       selectionSummary.textContent = isLogged
         ? `${gradeLabel} · ${termLabel} · ${lessonLabel}`
-        : "ابدأ أول محادثة لك الآن.";
+        : `الوضع الضيف · ${GUEST_MESSAGE_LIMIT} رسائل يوميًا.`;
     }
   }
 
@@ -5034,6 +5327,7 @@
   enhanceRuntimeChatUi();
   applyReadableRuntimeLabels();
   bindPromptPlaceholderButtons();
+  fetchRuntimePackages();
   gradeSelect?.addEventListener("change", syncStudentDashboardHeader);
   function submitHeroExample() {
     if (!form || !promptInput) return;
