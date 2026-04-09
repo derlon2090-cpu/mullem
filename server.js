@@ -12,6 +12,16 @@ const OPENAI_API_KEY = String(process.env.OPENAI_API_KEY || "").trim();
 const OPENAI_MODEL = String(process.env.OPENAI_MODEL || "gpt-5.4-mini").trim();
 const OPENAI_RESPONSES_ENDPOINT = String(process.env.OPENAI_RESPONSES_ENDPOINT || "https://api.openai.com/v1/responses").trim();
 const OPENAI_TIMEOUT_MS = Number(process.env.OPENAI_TIMEOUT_MS || 25000);
+const MAX_BODY_BYTES = Math.max(10_000, Number(process.env.MAX_BODY_BYTES || 1_000_000));
+const MAX_MESSAGE_LENGTH = Math.max(200, Number(process.env.MAX_MESSAGE_LENGTH || 4000));
+const MAX_QUESTION_LENGTH = Math.max(200, Number(process.env.MAX_QUESTION_LENGTH || 4000));
+const MAX_METADATA_LENGTH = Math.max(40, Number(process.env.MAX_METADATA_LENGTH || 120));
+const MAX_HISTORY_MESSAGES = Math.max(1, Math.min(Number(process.env.MAX_HISTORY_MESSAGES || 10), 30));
+const RATE_LIMIT_WINDOW_MS = Math.max(1000, Number(process.env.RATE_LIMIT_WINDOW_MS || 60_000));
+const RATE_LIMIT_CHAT_MAX = Math.max(1, Number(process.env.RATE_LIMIT_CHAT_MAX || 20));
+const RATE_LIMIT_SOLVE_MAX = Math.max(1, Number(process.env.RATE_LIMIT_SOLVE_MAX || 20));
+const RATE_LIMIT_GENERAL_MAX = Math.max(1, Number(process.env.RATE_LIMIT_GENERAL_MAX || 60));
+const CORS_ALLOWED_ORIGINS = String(process.env.CORS_ALLOWED_ORIGINS || "*").trim();
 const DB_HOST = String(process.env.DB_HOST || "127.0.0.1").trim();
 const DB_PORT = Number(process.env.DB_PORT || 3306);
 const DB_DATABASE = String(process.env.DB_DATABASE || "mullem").trim();
@@ -33,6 +43,7 @@ const MIME_TYPES = {
 
 const conversations = new Map();
 const guestConversationMap = new Map();
+const rateLimitStore = new Map();
 let databaseClient = null;
 let databaseState = {
   configured: Boolean(DB_HOST && DB_DATABASE && DB_USERNAME),
@@ -61,20 +72,73 @@ function loadEnvFile(filePath) {
   }
 }
 
-function setCorsHeaders(res) {
-  res.setHeader("Access-Control-Allow-Origin", "*");
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
+function normalizeIp(value) {
+  const raw = String(value || "").split(",")[0].trim();
+  if (!raw) return "unknown";
+  return raw.replace(/^::ffff:/i, "");
+}
+
+function getClientIp(req) {
+  return normalizeIp(
+    req.headers["x-forwarded-for"] ||
+    req.headers["x-real-ip"] ||
+    req.socket?.remoteAddress ||
+    ""
+  );
+}
+
+function parseAllowedOrigins() {
+  if (!CORS_ALLOWED_ORIGINS || CORS_ALLOWED_ORIGINS === "*") {
+    return { allowAll: true, values: [] };
+  }
+
+  const values = CORS_ALLOWED_ORIGINS
+    .split(",")
+    .map((item) => item.trim())
+    .filter(Boolean);
+
+  return {
+    allowAll: false,
+    values
+  };
+}
+
+function isOriginAllowed(origin) {
+  const policy = parseAllowedOrigins();
+  if (policy.allowAll) return true;
+  return policy.values.includes(String(origin || "").trim());
+}
+
+function setCorsHeaders(req, res) {
+  const origin = String(req.headers.origin || "").trim();
+  if (origin && isOriginAllowed(origin)) {
+    res.setHeader("Access-Control-Allow-Origin", origin);
+    res.setHeader("Vary", "Origin");
+  } else if (!origin) {
+    res.setHeader("Access-Control-Allow-Origin", "*");
+  }
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Requested-With");
   res.setHeader("Access-Control-Allow-Methods", "GET, POST, PUT, OPTIONS");
 }
 
-function sendJson(res, statusCode, payload) {
-  setCorsHeaders(res);
+function sendJson(req, res, statusCode, payload, extraHeaders = {}) {
+  setCorsHeaders(req, res);
+  for (const [key, value] of Object.entries(extraHeaders)) {
+    if (value != null) {
+      res.setHeader(key, value);
+    }
+  }
   res.writeHead(statusCode, { "Content-Type": "application/json; charset=utf-8" });
   res.end(JSON.stringify(payload));
 }
 
-function sendText(res, statusCode, text, contentType = "text/plain; charset=utf-8") {
-  setCorsHeaders(res);
+function sendText(req, res, statusCode, text, contentType = "text/plain; charset=utf-8", extraHeaders = {}) {
+  setCorsHeaders(req, res);
+  for (const [key, value] of Object.entries(extraHeaders)) {
+    if (value != null) {
+      res.setHeader(key, value);
+    }
+  }
   res.writeHead(statusCode, { "Content-Type": contentType });
   res.end(text);
 }
@@ -84,8 +148,8 @@ function readRequestBody(req) {
     let raw = "";
     req.on("data", (chunk) => {
       raw += chunk;
-      if (raw.length > 1_000_000) {
-        reject(new Error("Payload too large"));
+      if (raw.length > MAX_BODY_BYTES) {
+        reject(createHttpError(413, "Payload too large"));
         req.destroy();
       }
     });
@@ -108,6 +172,90 @@ function createHttpError(statusCode, message) {
   const error = new Error(message);
   error.statusCode = statusCode;
   return error;
+}
+
+function sanitizeOptionalText(value, maxLength = MAX_METADATA_LENGTH) {
+  return String(value || "").trim().slice(0, maxLength);
+}
+
+function requireTextField(value, fieldName, maxLength) {
+  const normalized = String(value || "").trim();
+  if (!normalized) {
+    throw createHttpError(422, `The ${fieldName} field is required.`);
+  }
+  if (normalized.length > maxLength) {
+    throw createHttpError(422, `The ${fieldName} field exceeds the allowed length.`);
+  }
+  return normalized;
+}
+
+function buildRequestId() {
+  return crypto.randomBytes(8).toString("hex");
+}
+
+function getRateLimitConfig(requestPath) {
+  if (requestPath === "/api/chat/send" || requestPath === "/api/chat/stream") {
+    return { limit: RATE_LIMIT_CHAT_MAX, windowMs: RATE_LIMIT_WINDOW_MS, bucket: "chat" };
+  }
+  if (requestPath === "/api/solve-question") {
+    return { limit: RATE_LIMIT_SOLVE_MAX, windowMs: RATE_LIMIT_WINDOW_MS, bucket: "solve" };
+  }
+  if (requestPath.startsWith("/api/")) {
+    return { limit: RATE_LIMIT_GENERAL_MAX, windowMs: RATE_LIMIT_WINDOW_MS, bucket: "api" };
+  }
+  return null;
+}
+
+function applyRateLimit(req, res, requestPath) {
+  const config = getRateLimitConfig(requestPath);
+  if (!config) return false;
+
+  const now = Date.now();
+  const ip = getClientIp(req);
+  const key = `${config.bucket}:${ip}`;
+  const current = rateLimitStore.get(key);
+
+  if (!current || current.expiresAt <= now) {
+    rateLimitStore.set(key, {
+      count: 1,
+      expiresAt: now + config.windowMs
+    });
+    return false;
+  }
+
+  current.count += 1;
+  rateLimitStore.set(key, current);
+
+  if (current.count <= config.limit) {
+    return false;
+  }
+
+  const retryAfterSeconds = Math.max(1, Math.ceil((current.expiresAt - now) / 1000));
+  sendJson(req, res, 429, {
+    success: false,
+    code: "rate_limited",
+    message: "Too many requests. Please try again shortly."
+  }, {
+    "Retry-After": retryAfterSeconds
+  });
+  return true;
+}
+
+function buildConversationSummary(item) {
+  if (!item) return null;
+  return {
+    id: item.id,
+    guest_session_id: item.guest_session_id || item.guestSessionId || null,
+    title: item.title || null,
+    subject: item.subject || null,
+    stage: item.stage || null,
+    grade: item.grade || null,
+    term: item.term || null,
+    status: item.status || "active",
+    last_message_at: item.last_message_at || item.updated_at || null,
+    created_at: item.created_at || null,
+    updated_at: item.updated_at || null
+  };
 }
 
 async function initializeDatabaseLayer() {
@@ -361,6 +509,14 @@ async function getOrCreateConversation(payload) {
   const conversation = {
     id: crypto.randomUUID(),
     guestSessionId: guestSessionId || null,
+    title: String(payload.message || payload.question || "").trim().slice(0, 180) || null,
+    subject: String(payload.subject || "").trim() || null,
+    stage: String(payload.stage || "").trim() || null,
+    grade: String(payload.grade || "").trim() || null,
+    term: String(payload.term || "").trim() || null,
+    status: "active",
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
     messages: []
   };
 
@@ -374,9 +530,9 @@ async function getOrCreateConversation(payload) {
 
 async function listConversationHistory(conversation) {
   if (isDatabaseReady()) {
-    return databaseClient.listMessages(conversation.id, 10);
+    return databaseClient.listMessages(conversation.id, MAX_HISTORY_MESSAGES);
   }
-  return Array.isArray(conversation?.messages) ? conversation.messages.slice(-10) : [];
+  return Array.isArray(conversation?.messages) ? conversation.messages.slice(-MAX_HISTORY_MESSAGES) : [];
 }
 
 async function persistConversationMessage(conversation, role, text, source = "web") {
@@ -385,6 +541,8 @@ async function persistConversationMessage(conversation, role, text, source = "we
     return;
   }
 
+  conversation.updated_at = new Date().toISOString();
+  conversation.last_message_at = conversation.updated_at;
   conversation.messages.push({ role, text, source });
 }
 
@@ -416,20 +574,39 @@ async function buildChatMessages(conversation, payload) {
 
 async function handleChatSend(req, res) {
   const payload = await parseJsonBody(req);
-  const message = String(payload.message || "").trim();
-  if (!message) {
-    throw createHttpError(422, "The message field is required.");
-  }
+  const message = requireTextField(payload.message, "message", MAX_MESSAGE_LENGTH);
+  const guestSessionId = sanitizeOptionalText(payload.guest_session_id, MAX_METADATA_LENGTH);
+  const conversationId = sanitizeOptionalText(payload.conversation_id, MAX_METADATA_LENGTH);
+  const subject = sanitizeOptionalText(payload.subject, MAX_METADATA_LENGTH);
+  const stage = sanitizeOptionalText(payload.stage, MAX_METADATA_LENGTH);
+  const grade = sanitizeOptionalText(payload.grade, MAX_METADATA_LENGTH);
+  const term = sanitizeOptionalText(payload.term, MAX_METADATA_LENGTH);
 
-  const conversation = await getOrCreateConversation(payload);
+  const conversation = await getOrCreateConversation({
+    ...payload,
+    message,
+    guest_session_id: guestSessionId,
+    conversation_id: conversationId,
+    subject,
+    stage,
+    grade,
+    term
+  });
   const result = await callOpenAI({
-    messages: await buildChatMessages(conversation, payload)
+    messages: await buildChatMessages(conversation, {
+      ...payload,
+      message,
+      subject,
+      stage,
+      grade,
+      term
+    })
   });
 
   await persistConversationMessage(conversation, "user", message, "web");
   await persistConversationMessage(conversation, "assistant", result.text, "openai");
 
-  sendJson(res, 200, {
+  sendJson(req, res, 200, {
     success: true,
     data: {
       conversation_id: conversation.id,
@@ -443,16 +620,27 @@ async function handleChatSend(req, res) {
 
 async function handleSolveQuestion(req, res) {
   const payload = await parseJsonBody(req);
-  const question = String(payload.question || "").trim();
-  if (!question) {
-    throw createHttpError(422, "The question field is required.");
-  }
+  const question = requireTextField(payload.question, "question", MAX_QUESTION_LENGTH);
+  const grade = sanitizeOptionalText(payload.grade, MAX_METADATA_LENGTH);
+  const subject = sanitizeOptionalText(payload.subject, MAX_METADATA_LENGTH);
+  const term = sanitizeOptionalText(payload.term, MAX_METADATA_LENGTH);
+  const lesson = sanitizeOptionalText(payload.lesson, 180);
 
   const result = await callOpenAI({
     messages: [
       {
         role: "system",
-        content: [{ type: "input_text", text: buildSolveSystemPrompt(payload) }]
+        content: [{
+          type: "input_text",
+          text: buildSolveSystemPrompt({
+            ...payload,
+            question,
+            grade,
+            subject,
+            term,
+            lesson
+          })
+        }]
       }
     ]
   });
@@ -466,7 +654,78 @@ async function handleSolveQuestion(req, res) {
     confidence: 0.72
   });
 
-  sendJson(res, 200, normalized);
+  sendJson(req, res, 200, normalized);
+}
+
+async function handleListChatSessions(req, res) {
+  const url = new URL(req.url, `http://${req.headers.host || "127.0.0.1"}`);
+  const limit = Number(url.searchParams.get("limit") || 20);
+
+  if (isDatabaseReady()) {
+    const items = await databaseClient.listRecentConversations(limit);
+    sendJson(req, res, 200, {
+      success: true,
+      data: {
+        items: items.map(buildConversationSummary)
+      }
+    });
+    return;
+  }
+
+  const items = Array.from(conversations.values())
+    .slice(-Math.max(1, Math.min(limit || 20, 100)))
+    .reverse()
+    .map(buildConversationSummary);
+
+  sendJson(req, res, 200, {
+    success: true,
+    data: { items }
+  });
+}
+
+async function handleGetChatSession(req, res, conversationId) {
+  const safeConversationId = sanitizeOptionalText(conversationId, MAX_METADATA_LENGTH);
+  const url = new URL(req.url, `http://${req.headers.host || "127.0.0.1"}`);
+  const messagesLimit = Math.max(1, Math.min(Number(url.searchParams.get("messages_limit") || 50), 100));
+
+  if (!safeConversationId) {
+    throw createHttpError(404, "Conversation not found.");
+  }
+
+  if (isDatabaseReady()) {
+    const conversation =
+      await databaseClient.getConversationById(safeConversationId) ||
+      await databaseClient.getConversationByGuestSessionId(safeConversationId);
+
+    if (!conversation) {
+      throw createHttpError(404, "Conversation not found.");
+    }
+    const messages = await databaseClient.listMessages(conversation.id, messagesLimit);
+    sendJson(req, res, 200, {
+      success: true,
+      data: {
+        conversation: buildConversationSummary(conversation),
+        messages
+      }
+    });
+    return;
+  }
+
+  const conversation =
+    conversations.get(safeConversationId) ||
+    conversations.get(guestConversationMap.get(safeConversationId));
+
+  if (!conversation) {
+    throw createHttpError(404, "Conversation not found.");
+  }
+
+  sendJson(req, res, 200, {
+    success: true,
+    data: {
+      conversation: buildConversationSummary(conversation),
+      messages: Array.isArray(conversation.messages) ? conversation.messages.slice(-messagesLimit) : []
+    }
+  });
 }
 
 function resolveStaticFile(urlPath) {
@@ -489,20 +748,23 @@ function resolveStaticFile(urlPath) {
 function serveStatic(req, res) {
   const filePath = resolveStaticFile(req.url);
   if (!filePath) {
-    sendText(res, 404, "Not Found");
+    sendText(req, res, 404, "Not Found");
     return;
   }
 
   const extension = path.extname(filePath).toLowerCase();
   const contentType = MIME_TYPES[extension] || "application/octet-stream";
-  setCorsHeaders(res);
+  setCorsHeaders(req, res);
   res.writeHead(200, { "Content-Type": contentType });
   fs.createReadStream(filePath).pipe(res);
 }
 
 async function routeRequest(req, res) {
+  const requestId = buildRequestId();
+  res.setHeader("X-Request-Id", requestId);
+
   if (req.method === "OPTIONS") {
-    setCorsHeaders(res);
+    setCorsHeaders(req, res);
     res.writeHead(204);
     res.end();
     return;
@@ -510,20 +772,47 @@ async function routeRequest(req, res) {
 
   const requestPath = String(req.url || "/").split("?")[0];
 
+  if (applyRateLimit(req, res, requestPath)) {
+    return;
+  }
+
   if (req.method === "GET" && (requestPath === "/health" || requestPath === "/api/health")) {
-    sendJson(res, 200, {
+    sendJson(req, res, 200, {
       status: "ok",
+      request_id: requestId,
       provider: "openai",
       ai_configured: Boolean(OPENAI_API_KEY),
       model: OPENAI_MODEL,
-      db: databaseState
+      db: databaseState,
+      limits: {
+        max_body_bytes: MAX_BODY_BYTES,
+        max_message_length: MAX_MESSAGE_LENGTH,
+        max_question_length: MAX_QUESTION_LENGTH,
+        rate_limit_window_ms: RATE_LIMIT_WINDOW_MS,
+        rate_limit_chat_max: RATE_LIMIT_CHAT_MAX,
+        rate_limit_solve_max: RATE_LIMIT_SOLVE_MAX
+      }
+    });
+    return;
+  }
+
+  if (req.method === "GET" && requestPath === "/api/ready") {
+    const ready = Boolean(databaseState.connected && OPENAI_API_KEY);
+    sendJson(req, res, ready ? 200 : 503, {
+      success: ready,
+      request_id: requestId,
+      checks: {
+        database_connected: Boolean(databaseState.connected),
+        openai_configured: Boolean(OPENAI_API_KEY)
+      }
     });
     return;
   }
 
   if (req.method === "GET" && requestPath === "/api/admin/db-status") {
-    sendJson(res, 200, {
+    sendJson(req, res, 200, {
       success: true,
+      request_id: requestId,
       data: databaseState
     });
     return;
@@ -531,8 +820,9 @@ async function routeRequest(req, res) {
 
   if (req.method === "GET" && requestPath === "/api/admin/conversations") {
     if (!isDatabaseReady()) {
-      sendJson(res, 503, {
+      sendJson(req, res, 503, {
         success: false,
+        request_id: requestId,
         message: databaseState.message || "MySQL is not connected."
       });
       return;
@@ -541,12 +831,24 @@ async function routeRequest(req, res) {
     const url = new URL(req.url, `http://${req.headers.host || "127.0.0.1"}`);
     const limit = Number(url.searchParams.get("limit") || 20);
     const items = await databaseClient.listRecentConversations(limit);
-    sendJson(res, 200, {
+    sendJson(req, res, 200, {
       success: true,
+      request_id: requestId,
       data: {
-        items
+        items: items.map(buildConversationSummary)
       }
     });
+    return;
+  }
+
+  if (req.method === "GET" && requestPath === "/api/chat/sessions") {
+    await handleListChatSessions(req, res);
+    return;
+  }
+
+  if (req.method === "GET" && requestPath.startsWith("/api/chat/sessions/")) {
+    const conversationId = decodeURIComponent(requestPath.replace("/api/chat/sessions/", ""));
+    await handleGetChatSession(req, res, conversationId);
     return;
   }
 
@@ -561,9 +863,19 @@ async function routeRequest(req, res) {
   }
 
   if (req.method === "POST" && requestPath === "/api/chat/stream") {
-    sendJson(res, 501, {
+    sendJson(req, res, 501, {
       success: false,
+      request_id: requestId,
       message: "Streaming is not enabled in this server build."
+    });
+    return;
+  }
+
+  if (requestPath.startsWith("/api/")) {
+    sendJson(req, res, 404, {
+      success: false,
+      request_id: requestId,
+      message: "Route not found."
     });
     return;
   }
@@ -573,8 +885,9 @@ async function routeRequest(req, res) {
     return;
   }
 
-  sendJson(res, 404, {
+  sendJson(req, res, 404, {
     success: false,
+    request_id: requestId,
     message: "Route not found."
   });
 }
@@ -582,18 +895,95 @@ async function routeRequest(req, res) {
 const server = http.createServer((req, res) => {
   routeRequest(req, res).catch((error) => {
     const statusCode = Number(error?.statusCode) || 500;
-    sendJson(res, statusCode, {
+    sendJson(req, res, statusCode, {
       success: false,
+      code: statusCode >= 500 ? "server_error" : "request_error",
       message: String(error?.message || "Internal server error")
     });
   });
 });
 
-initializeDatabaseLayer()
-  .catch(() => {})
-  .finally(() => {
-    server.listen(PORT, () => {
-      console.log(`Mullem server running on http://127.0.0.1:${PORT}`);
-      console.log(`MySQL status: ${databaseState.connected ? "connected" : databaseState.message}`);
+let serverStartPromise = null;
+
+function startServer(port = PORT) {
+  if (server.listening) {
+    return Promise.resolve(server);
+  }
+
+  if (serverStartPromise) {
+    return serverStartPromise;
+  }
+
+  serverStartPromise = initializeDatabaseLayer()
+    .catch(() => {})
+    .then(() => new Promise((resolve, reject) => {
+      const handleError = (error) => {
+        server.off("listening", handleListening);
+        serverStartPromise = null;
+        reject(error);
+      };
+
+      const handleListening = () => {
+        server.off("error", handleError);
+        console.log(`Mullem server running on http://127.0.0.1:${port}`);
+        console.log(`MySQL status: ${databaseState.connected ? "connected" : databaseState.message}`);
+        resolve(server);
+      };
+
+      server.once("error", handleError);
+      server.once("listening", handleListening);
+      server.listen(port);
+    }));
+
+  return serverStartPromise;
+}
+
+function stopServer() {
+  return new Promise((resolve) => {
+    const finalize = async () => {
+      if (databaseClient && typeof databaseClient.close === "function") {
+        try {
+          await databaseClient.close();
+        } catch (_) {
+          // Ignore shutdown errors.
+        }
+      }
+      serverStartPromise = null;
+      resolve();
+    };
+
+    if (!server.listening) {
+      finalize();
+      return;
+    }
+
+    server.close(() => {
+      finalize();
     });
   });
+}
+
+function cleanupRateLimitStore() {
+  const now = Date.now();
+  for (const [key, value] of rateLimitStore.entries()) {
+    if (!value || value.expiresAt <= now) {
+      rateLimitStore.delete(key);
+    }
+  }
+}
+
+setInterval(cleanupRateLimitStore, RATE_LIMIT_WINDOW_MS).unref?.();
+
+if (require.main === module) {
+  startServer().catch((error) => {
+    console.error(String(error?.message || error));
+    process.exit(1);
+  });
+}
+
+module.exports = {
+  startServer,
+  stopServer,
+  routeRequest,
+  getDatabaseState: () => ({ ...databaseState })
+};

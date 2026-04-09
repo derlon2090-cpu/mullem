@@ -238,6 +238,8 @@ function createDatabaseClient(rawConfig = {}) {
     initialize,
     isReady,
     getState,
+    getConversationById,
+    getConversationByGuestSessionId,
     getOrCreateConversation,
     saveMessage,
     listMessages,

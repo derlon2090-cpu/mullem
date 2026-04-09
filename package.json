@@ -5,7 +5,8 @@
   "description": "Mullem static frontend with root Node API server",
   "scripts": {
     "start": "node server.js",
-    "dev": "node server.js"
+    "dev": "node server.js",
+    "test:backend": "node backend-smoke-test.js"
   },
   "dependencies": {
     "mysql2": "^3.20.0"
