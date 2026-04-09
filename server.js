@@ -4,9 +4,8 @@ const path = require("path");
 const crypto = require("crypto");
 
 const ROOT_DIR = __dirname;
-const PORT = Number(process.env.PORT || 3000);
-
 loadEnvFile(path.join(ROOT_DIR, ".env"));
+const PORT = Number(process.env.PORT || 3000);
 
 const OPENAI_API_KEY = String(process.env.OPENAI_API_KEY || "").trim();
 const OPENAI_MODEL = String(process.env.OPENAI_MODEL || "gpt-5.4-mini").trim();
