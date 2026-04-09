@@ -11,6 +11,12 @@ loadEnvFile(path.join(ROOT_DIR, ".env"));
 const OPENAI_API_KEY = String(process.env.OPENAI_API_KEY || "").trim();
 const OPENAI_MODEL = String(process.env.OPENAI_MODEL || "gpt-5.4-mini").trim();
 const OPENAI_RESPONSES_ENDPOINT = String(process.env.OPENAI_RESPONSES_ENDPOINT || "https://api.openai.com/v1/responses").trim();
+const OPENAI_TIMEOUT_MS = Number(process.env.OPENAI_TIMEOUT_MS || 25000);
+const DB_HOST = String(process.env.DB_HOST || "127.0.0.1").trim();
+const DB_PORT = Number(process.env.DB_PORT || 3306);
+const DB_DATABASE = String(process.env.DB_DATABASE || "mullem").trim();
+const DB_USERNAME = String(process.env.DB_USERNAME || process.env.DB_USER || "root").trim();
+const DB_PASSWORD = String(process.env.DB_PASSWORD || "").trim();
 
 const MIME_TYPES = {
   ".html": "text/html; charset=utf-8",
@@ -27,6 +33,15 @@ const MIME_TYPES = {
 
 const conversations = new Map();
 const guestConversationMap = new Map();
+let databaseClient = null;
+let databaseState = {
+  configured: Boolean(DB_HOST && DB_DATABASE && DB_USERNAME),
+  connected: false,
+  host: DB_HOST,
+  port: DB_PORT,
+  database: DB_DATABASE,
+  message: "MySQL has not been initialized yet."
+};
 
 function loadEnvFile(filePath) {
   if (!fs.existsSync(filePath)) return;
@@ -93,6 +108,35 @@ function createHttpError(statusCode, message) {
   const error = new Error(message);
   error.statusCode = statusCode;
   return error;
+}
+
+async function initializeDatabaseLayer() {
+  try {
+    const { createDatabaseClient } = require("./db");
+    databaseClient = createDatabaseClient({
+      host: DB_HOST,
+      port: DB_PORT,
+      database: DB_DATABASE,
+      username: DB_USERNAME,
+      password: DB_PASSWORD
+    });
+    await databaseClient.initialize();
+    databaseState = databaseClient.getState();
+  } catch (error) {
+    databaseClient = null;
+    databaseState = {
+      configured: Boolean(DB_HOST && DB_DATABASE && DB_USERNAME),
+      connected: false,
+      host: DB_HOST,
+      port: DB_PORT,
+      database: DB_DATABASE,
+      message: String(error?.message || "Failed to initialize MySQL.")
+    };
+  }
+}
+
+function isDatabaseReady() {
+  return Boolean(databaseClient && typeof databaseClient.isReady === "function" && databaseClient.isReady());
 }
 
 function extractResponseText(payload) {
@@ -242,17 +286,31 @@ async function callOpenAI({ messages }) {
     throw createHttpError(503, "OPENAI_API_KEY is not configured on the server.");
   }
 
-  const response = await fetch(OPENAI_RESPONSES_ENDPOINT, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${OPENAI_API_KEY}`,
-      "Content-Type": "application/json"
-    },
-    body: JSON.stringify({
-      model: OPENAI_MODEL,
-      input: messages
-    })
-  });
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), OPENAI_TIMEOUT_MS);
+
+  let response;
+  try {
+    response = await fetch(OPENAI_RESPONSES_ENDPOINT, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${OPENAI_API_KEY}`,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        model: OPENAI_MODEL,
+        input: messages
+      }),
+      signal: controller.signal
+    });
+  } catch (error) {
+    if (error?.name === "AbortError") {
+      throw createHttpError(504, "OpenAI request timed out on the server.");
+    }
+    throw createHttpError(503, "Failed to reach OpenAI API from the server.");
+  } finally {
+    clearTimeout(timeoutId);
+  }
 
   const contentType = response.headers.get("content-type") || "";
   const payload = contentType.includes("application/json")
@@ -275,7 +333,20 @@ async function callOpenAI({ messages }) {
   return { text, raw: payload };
 }
 
-function getOrCreateConversation(payload) {
+async function getOrCreateConversation(payload) {
+  if (isDatabaseReady()) {
+    return databaseClient.getOrCreateConversation({
+      id: String(payload.conversation_id || "").trim() || crypto.randomUUID(),
+      conversation_id: String(payload.conversation_id || "").trim() || undefined,
+      guest_session_id: String(payload.guest_session_id || "").trim() || undefined,
+      subject: String(payload.subject || "").trim() || null,
+      stage: String(payload.stage || "").trim() || null,
+      grade: String(payload.grade || "").trim() || null,
+      term: String(payload.term || "").trim() || null,
+      title: String(payload.message || payload.question || "").trim().slice(0, 180) || null
+    });
+  }
+
   const requestedConversationId = String(payload.conversation_id || "").trim();
   const guestSessionId = String(payload.guest_session_id || "").trim();
 
@@ -301,9 +372,25 @@ function getOrCreateConversation(payload) {
   return conversation;
 }
 
-function buildChatMessages(conversation, payload) {
+async function listConversationHistory(conversation) {
+  if (isDatabaseReady()) {
+    return databaseClient.listMessages(conversation.id, 10);
+  }
+  return Array.isArray(conversation?.messages) ? conversation.messages.slice(-10) : [];
+}
+
+async function persistConversationMessage(conversation, role, text, source = "web") {
+  if (isDatabaseReady()) {
+    await databaseClient.saveMessage(conversation.id, role, text, source);
+    return;
+  }
+
+  conversation.messages.push({ role, text, source });
+}
+
+async function buildChatMessages(conversation, payload) {
   const systemPrompt = buildChatSystemPrompt(payload);
-  const history = Array.isArray(conversation?.messages) ? conversation.messages.slice(-10) : [];
+  const history = await listConversationHistory(conversation);
   const messages = [
     {
       role: "system",
@@ -334,13 +421,13 @@ async function handleChatSend(req, res) {
     throw createHttpError(422, "The message field is required.");
   }
 
-  const conversation = getOrCreateConversation(payload);
+  const conversation = await getOrCreateConversation(payload);
   const result = await callOpenAI({
-    messages: buildChatMessages(conversation, payload)
+    messages: await buildChatMessages(conversation, payload)
   });
 
-  conversation.messages.push({ role: "user", text: message });
-  conversation.messages.push({ role: "assistant", text: result.text });
+  await persistConversationMessage(conversation, "user", message, "web");
+  await persistConversationMessage(conversation, "assistant", result.text, "openai");
 
   sendJson(res, 200, {
     success: true,
@@ -428,7 +515,37 @@ async function routeRequest(req, res) {
       status: "ok",
       provider: "openai",
       ai_configured: Boolean(OPENAI_API_KEY),
-      model: OPENAI_MODEL
+      model: OPENAI_MODEL,
+      db: databaseState
+    });
+    return;
+  }
+
+  if (req.method === "GET" && requestPath === "/api/admin/db-status") {
+    sendJson(res, 200, {
+      success: true,
+      data: databaseState
+    });
+    return;
+  }
+
+  if (req.method === "GET" && requestPath === "/api/admin/conversations") {
+    if (!isDatabaseReady()) {
+      sendJson(res, 503, {
+        success: false,
+        message: databaseState.message || "MySQL is not connected."
+      });
+      return;
+    }
+
+    const url = new URL(req.url, `http://${req.headers.host || "127.0.0.1"}`);
+    const limit = Number(url.searchParams.get("limit") || 20);
+    const items = await databaseClient.listRecentConversations(limit);
+    sendJson(res, 200, {
+      success: true,
+      data: {
+        items
+      }
     });
     return;
   }
@@ -472,6 +589,11 @@ const server = http.createServer((req, res) => {
   });
 });
 
-server.listen(PORT, () => {
-  console.log(`Mullem server running on http://127.0.0.1:${PORT}`);
-});
+initializeDatabaseLayer()
+  .catch(() => {})
+  .finally(() => {
+    server.listen(PORT, () => {
+      console.log(`Mullem server running on http://127.0.0.1:${PORT}`);
+      console.log(`MySQL status: ${databaseState.connected ? "connected" : databaseState.message}`);
+    });
+  });

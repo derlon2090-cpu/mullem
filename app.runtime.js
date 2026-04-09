@@ -3674,8 +3674,13 @@
     const primary = resolveRuntimeSolveEndpoint();
     const cleanPath = String(runtimeBackendConfig.solvePath || "/solve-question");
     const normalizedPath = cleanPath.startsWith("/") ? cleanPath : `/${cleanPath}`;
+    const hostname = String(window.location?.hostname || "").toLowerCase();
+    const isLocal = hostname === "127.0.0.1" || hostname === "localhost" || hostname === "";
+    const localLaravel = isLocal
+      ? [`http://127.0.0.1:8010/api${normalizedPath}`, `http://localhost:8010/api${normalizedPath}`]
+      : [];
     const sameOrigin = normalizedPath.startsWith("/api/") ? normalizedPath : `/api${normalizedPath}`;
-    return Array.from(new Set([primary, sameOrigin].filter(Boolean)));
+    return Array.from(new Set([primary, ...localLaravel, sameOrigin].filter(Boolean)));
   }
 
   function canUseRuntimeApiChat() {
@@ -3951,8 +3956,10 @@
           const adapted = adaptBackendSolveResponse(payload, question, route, analysis);
           if (adapted) {
             const apiClient = getRuntimeApiClient();
-            if (apiClient && typeof apiClient.buildSameOriginApiUrl === "function" && url === apiClient.buildSameOriginApiUrl(runtimeBackendConfig.solvePath)) {
-              apiClient.setBaseUrl?.("");
+            if (apiClient && typeof apiClient.setBaseUrl === "function") {
+              if (/^https?:\/\/(127\.0\.0\.1|localhost):8010\/api\//i.test(url)) {
+                apiClient.setBaseUrl(url.replace(/\/api\/.*$/i, ""));
+              }
             }
             return adapted;
           }
@@ -5202,6 +5209,23 @@
   };
 
   function buildRuntimeApiUnavailableResponse(question, route, reason = "request_failed", details = "") {
+    const readableDetails = (() => {
+      if (typeof details === "string") return details.trim();
+      if (details && typeof details === "object") {
+        if (typeof details.message === "string") return details.message.trim();
+        if (typeof details.error === "string") return details.error.trim();
+        if (details.error && typeof details.error === "object" && typeof details.error.message === "string") {
+          return details.error.message.trim();
+        }
+        try {
+          return JSON.stringify(details);
+        } catch (_) {
+          return "";
+        }
+      }
+      return String(details || "").trim();
+    })();
+
     let message = "تعذر الوصول إلى خدمة الشات الآن. أعد المحاولة بعد قليل.";
 
     if (reason === "missing_auth" || reason === "unauthorized") {
@@ -5209,13 +5233,21 @@
     } else if (reason === "missing_api_client") {
       message = "ربط الواجهة مع Laravel API غير مكتمل في هذه الصفحة حتى الآن.";
     } else if (reason === "server_unavailable") {
-      message = "خدمة الـ API غير متاحة الآن. تأكد من تشغيل الـ backend وضبط المسارات `/api/chat/send` أو `/api/solve-question` مع قاعدة البيانات و `OPENAI_API_KEY` على الخادم.";
+      if (/openai_api_key/i.test(readableDetails)) {
+        message = "الخادم يعمل، لكن `OPENAI_API_KEY` غير مضبوط على السيرفر. أضف المفتاح في ملف البيئة ثم أعد تشغيل الخادم.";
+      } else if (/route not found|not found/i.test(readableDetails)) {
+        message = "الخادم يعمل، لكن مسار الـ API المطلوب غير موجود. تأكد من توفير `/api/chat/send` أو `/api/solve-question` على نفس الخادم.";
+      } else if (/invalid api response/i.test(readableDetails)) {
+        message = "الخادم ردّ بصفحة HTML أو رد غير JSON بدل API JSON. تأكد أن الطلبات تذهب إلى backend الحقيقي وليس إلى صفحة الموقع الثابتة.";
+      } else {
+        message = "خدمة الـ API غير متاحة الآن. تأكد من تشغيل الـ backend وضبط المسارات `/api/chat/send` أو `/api/solve-question` مع قاعدة البيانات و `OPENAI_API_KEY` على الخادم.";
+      }
     } else if (reason === "attachment_not_supported") {
       message = "رفع الصور والملفات لم يُربط بعد مع Laravel API في هذه النسخة. اكتب السؤال نصًا الآن وسيتم إرساله إلى الـ AI مباشرة.";
     }
 
-    if (details && (reason === "request_failed" || reason === "server_unavailable")) {
-      message = `${message} ${details}`.trim();
+    if (readableDetails && (reason === "request_failed" || (reason === "server_unavailable" && !/openai_api_key|route not found|not found|invalid api response/i.test(readableDetails)))) {
+      message = `${message} ${readableDetails}`.trim();
     }
 
     return {

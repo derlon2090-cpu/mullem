@@ -3172,9 +3172,11 @@ if (isAdminLoggedIn()) {
 
   async function syncSearchConfigFromBackend() {
     try {
-      const response = await fetch("/api/admin/search-config", { headers: { Accept: "application/json" } });
-      if (!response.ok) throw new Error("backend unavailable");
-      const payload = await response.json();
+      const apiClient = getAdminApiClient();
+      if (!apiClient) throw new Error("backend unavailable");
+      const result = await apiClient.request("/admin/search-config");
+      if (!result.ok || !result.payload) throw new Error("backend unavailable");
+      const payload = result.payload;
       const nextConfig = {
         trustedDomains: Array.isArray(payload.trusted_domains) && payload.trusted_domains.length
           ? payload.trusted_domains
@@ -3190,22 +3192,20 @@ if (isAdminLoggedIn()) {
   async function pushSearchConfigToBackend(root) {
     const status = root?.querySelector("[data-admin-domain-status]");
     const trustedDomains = collectSelectedDomains(root);
+    const apiClient = getAdminApiClient();
     saveLocalAdminSearchConfig({ trustedDomains });
     if (status) {
       status.textContent = "جاري مزامنة المواقع الموثوقة مع الخلفية...";
     }
 
     try {
-      const response = await fetch("/api/admin/search-config", {
+      if (!apiClient) throw new Error("sync failed");
+      const result = await apiClient.request("/admin/search-config", {
         method: "PUT",
-        headers: {
-          "Content-Type": "application/json",
-          Accept: "application/json",
-        },
-        body: JSON.stringify({ trusted_domains: trustedDomains }),
+        body: { trusted_domains: trustedDomains },
       });
-      if (!response.ok) throw new Error("sync failed");
-      const payload = await response.json();
+      if (!result.ok || !result.payload) throw new Error("sync failed");
+      const payload = result.payload;
       saveLocalAdminSearchConfig({ trustedDomains: payload.trusted_domains || trustedDomains });
       if (status) {
         status.textContent = "تم حفظ المواقع الموثوقة في الخلفية بنجاح.";
@@ -3278,5 +3278,80 @@ if (isAdminLoggedIn()) {
   if (isAdminLoggedIn()) {
     renderTrustedDomainsManager();
     syncSearchConfigFromBackend();
+  }
+})();
+
+(() => {
+  const adminApiStatsStorageKey = "mlm_admin_api_stats";
+
+  function buildAdminStatsFromApi(apiStats) {
+    if (!adminStatsRoot || !apiStats) return false;
+
+    const stats = [
+      { label: "إجمالي المستخدمين", value: apiStats.users_count ?? 0, note: "مأخوذة من Laravel API" },
+      { label: "الطلاب", value: apiStats.students_count ?? 0, note: "عدد حسابات الطلاب" },
+      { label: "الأدمن", value: apiStats.admins_count ?? 0, note: "عدد حسابات الإدارة" },
+      { label: "المحادثات", value: apiStats.conversations_count ?? 0, note: "إجمالي المحادثات المحفوظة" },
+      { label: "الرسائل", value: apiStats.messages_count ?? 0, note: "إجمالي الرسائل في النظام" },
+      { label: "الحسابات النشطة", value: apiStats.active_users_count ?? 0, note: "الحسابات النشطة حاليًا" }
+    ];
+
+    adminStatsRoot.innerHTML = stats
+      .map(
+        (stat) => `
+          <article class="stat-card">
+            <span>${stat.label}</span>
+            <strong>${stat.value}</strong>
+            <span>${stat.note}</span>
+          </article>
+        `
+      )
+      .join("");
+
+    return true;
+  }
+
+  async function syncAdminSnapshotFromApi() {
+    const apiClient = getAdminApiClient();
+    if (!apiClient || !apiClient.hasToken() || !isAdminLoggedIn()) return;
+
+    try {
+      const [statsResult, usersResult] = await Promise.all([
+        apiClient.getAdminStats(),
+        apiClient.getAdminUsers({ per_page: 100 }),
+      ]);
+
+      if (statsResult.ok && statsResult.data?.stats) {
+        saveJson(adminApiStatsStorageKey, statsResult.data.stats);
+        buildAdminStatsFromApi(statsResult.data.stats);
+      }
+
+      if (usersResult.ok && Array.isArray(usersResult.data?.items)) {
+        saveUsers(usersResult.data.items);
+        renderUsersTable();
+      }
+    } catch (_) {
+      // Keep the local admin snapshot when API sync fails.
+    }
+  }
+
+  const originalRenderStatsFromLocal = renderStats;
+  renderStats = function renderStatsWithApiPreference() {
+    const apiStats = loadJson(adminApiStatsStorageKey, null);
+    if (buildAdminStatsFromApi(apiStats)) {
+      return;
+    }
+
+    originalRenderStatsFromLocal();
+  };
+
+  const originalRefreshAdminDataApiSnapshot = refreshAdminData;
+  refreshAdminData = function refreshAdminDataWithApiSnapshot() {
+    originalRefreshAdminDataApiSnapshot();
+    syncAdminSnapshotFromApi();
+  };
+
+  if (isAdminLoggedIn()) {
+    syncAdminSnapshotFromApi();
   }
 })();

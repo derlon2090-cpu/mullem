@@ -28,6 +28,54 @@
     return String(value || "").trim().replace(/\/+$/, "");
   }
 
+  function getHostName() {
+    return String(window.location?.hostname || "").toLowerCase();
+  }
+
+  function isLocalHost() {
+    const hostname = getHostName();
+    return hostname === "127.0.0.1" || hostname === "localhost" || hostname === "";
+  }
+
+  function getLocalLaravelBases() {
+    if (!isLocalHost()) return [];
+    return ["http://127.0.0.1:8010", "http://localhost:8010"];
+  }
+
+  function toReadableMessage(value) {
+    if (typeof value === "string") {
+      return value.trim();
+    }
+
+    if (value && typeof value === "object") {
+      if (typeof value.message === "string" && value.message.trim()) {
+        return value.message.trim();
+      }
+
+      if (typeof value.error === "string" && value.error.trim()) {
+        return value.error.trim();
+      }
+
+      if (value.error && typeof value.error === "object") {
+        if (typeof value.error.message === "string" && value.error.message.trim()) {
+          return value.error.message.trim();
+        }
+      }
+
+      if (typeof value.detail === "string" && value.detail.trim()) {
+        return value.detail.trim();
+      }
+
+      try {
+        return JSON.stringify(value);
+      } catch (_) {
+        return "";
+      }
+    }
+
+    return String(value || "").trim();
+  }
+
   function resolveBaseUrl() {
     const runtimeBase =
       typeof window.MULLEM_API_BASE === "string"
@@ -37,7 +85,10 @@
           localStorage.getItem(storageKeys.baseUrl) ||
           "";
 
-    return sanitizeBaseUrl(runtimeBase);
+    const normalized = sanitizeBaseUrl(runtimeBase);
+    if (normalized) return normalized;
+
+    return getLocalLaravelBases()[0] || "";
   }
 
   function setBaseUrl(value) {
@@ -73,21 +124,25 @@
   function buildApiCandidates(path) {
     const cleanPath = `/${String(path || "").replace(/^\/+/, "")}`;
     const baseUrl = resolveBaseUrl();
-    const configuredApiUrl = buildApiUrl(cleanPath);
-    const sameOriginApiUrl = buildSameOriginApiUrl(cleanPath);
-    const candidates = [configuredApiUrl, sameOriginApiUrl];
+    const candidates = [];
 
     if (baseUrl) {
-      if (/\/api$/i.test(baseUrl)) {
-        candidates.push(`${baseUrl.replace(/\/api$/i, "")}${cleanPath}`);
+      candidates.push(buildApiUrl(cleanPath));
+    }
+
+    for (const localBase of getLocalLaravelBases()) {
+      if (/\/api$/i.test(localBase)) {
+        candidates.push(`${localBase}${cleanPath}`);
       } else {
-        candidates.push(`${baseUrl}${cleanPath}`);
+        candidates.push(`${localBase}/api${cleanPath}`);
       }
     }
 
-    candidates.push(cleanPath);
+    if (!baseUrl || !isLocalHost()) {
+      candidates.push(buildSameOriginApiUrl(cleanPath));
+    }
 
-    return Array.from(new Set(candidates.filter(Boolean)));
+    return Array.from(new Set(candidates.map(sanitizeBaseUrl).filter(Boolean)));
   }
 
   function getToken() {
@@ -232,8 +287,8 @@
         const payload = await parseResponsePayload(response);
         const data = payload?.data ?? null;
         const message =
-          payload?.message ||
-          payload?.error ||
+          toReadableMessage(payload?.message) ||
+          toReadableMessage(payload?.error) ||
           (response.ok ? "OK" : "Request failed");
 
         if (response.ok && !isJsonResponse) {
@@ -262,8 +317,8 @@
         };
 
         if (result.ok) {
-          if (url === buildSameOriginApiUrl(path) && resolveBaseUrl()) {
-            setBaseUrl("");
+          if (url.startsWith("http://127.0.0.1:8010") || url.startsWith("http://localhost:8010")) {
+            setBaseUrl(url.replace(/\/api\/.*$/i, ""));
           }
           return result;
         }
@@ -340,6 +395,36 @@
     return result;
   }
 
+  async function me() {
+    return request("/auth/me");
+  }
+
+  async function getStudentDashboard() {
+    return request("/student/dashboard");
+  }
+
+  async function getAdminStats() {
+    return request("/admin/stats");
+  }
+
+  async function getAdminUsers(params = {}) {
+    const query = new URLSearchParams();
+    Object.entries(params || {}).forEach(([key, value]) => {
+      if (value == null || value === "") return;
+      query.set(key, String(value));
+    });
+
+    const suffix = query.toString() ? `?${query.toString()}` : "";
+    return request(`/admin/users${suffix}`);
+  }
+
+  async function updateAdminUser(userId, payload) {
+    return request(`/admin/users/${encodeURIComponent(String(userId))}`, {
+      method: "PATCH",
+      body: payload
+    });
+  }
+
   async function sendChat(payload) {
     return request("/chat/send", {
       method: "POST",
@@ -407,6 +492,11 @@
     login,
     register,
     logout,
+    me,
+    getStudentDashboard,
+    getAdminStats,
+    getAdminUsers,
+    updateAdminUser,
     sendChat,
     streamChat,
     getChatSessions,

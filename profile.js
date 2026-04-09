@@ -329,3 +329,35 @@ function bootstrapProfile() {
 }
 
 bootstrapProfile();
+
+(async () => {
+  const apiClient =
+    window.mullemApiClient && typeof window.mullemApiClient.getStudentDashboard === "function"
+      ? window.mullemApiClient
+      : null;
+
+  const activeUser = getActiveUser();
+  if (!apiClient || !apiClient.hasToken() || !activeUser) {
+    return;
+  }
+
+  try {
+    const result = await apiClient.getStudentDashboard();
+    if (!result.ok || !result.data?.user) {
+      return;
+    }
+
+    updateUserRecord(activeUser, {
+      ...activeUser,
+      ...result.data.user,
+      streakDays: Number.isFinite(Number(result.data.user.streakDays))
+        ? Number(result.data.user.streakDays)
+        : activeUser.streakDays,
+      lastActiveDate: result.data.user.lastActiveDate || activeUser.lastActiveDate,
+    });
+
+    bootstrapProfile();
+  } catch (_) {
+    // Keep the local profile snapshot if API sync fails.
+  }
+})();
