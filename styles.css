@@ -4995,6 +4995,73 @@ body.theme-dark .admin-status-banner[data-state="error"] {
   flex-wrap: wrap;
 }
 
+.premium-core-ask {
+  display: grid;
+  gap: 14px;
+  padding: 20px;
+  border-radius: 26px;
+  border: 1px solid rgba(34, 197, 94, 0.14);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.92), rgba(243, 250, 245, 0.9));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.8);
+}
+
+.premium-core-label {
+  font-weight: 800;
+  color: var(--brand-strong);
+}
+
+.premium-core-textarea {
+  width: 100%;
+  min-height: 138px;
+  resize: vertical;
+  border: 1px solid rgba(21, 128, 61, 0.12);
+  border-radius: 24px;
+  padding: 18px 20px;
+  background: rgba(255, 255, 255, 0.88);
+  color: var(--text);
+  line-height: 1.8;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.32);
+}
+
+.premium-core-textarea::placeholder {
+  color: var(--muted);
+}
+
+.premium-core-textarea:focus {
+  outline: none;
+  border-color: rgba(34, 197, 94, 0.35);
+  box-shadow: 0 0 0 4px rgba(34, 197, 94, 0.12);
+}
+
+.premium-core-actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.premium-core-submit {
+  min-width: 160px;
+}
+
+.premium-core-helper {
+  min-width: 132px;
+}
+
+.premium-core-examples {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  align-items: center;
+  color: var(--muted);
+  font-size: 0.95rem;
+}
+
+.premium-core-examples > span {
+  font-weight: 700;
+}
+
 .premium-quick-ask {
   display: grid;
   gap: 12px;
@@ -5382,6 +5449,65 @@ body.theme-dark .admin-status-banner[data-state="error"] {
   overflow: hidden;
 }
 
+.landing-accordion-group {
+  display: grid;
+  gap: 16px;
+  margin-bottom: 8px;
+}
+
+.landing-accordion {
+  border: 1px solid rgba(21, 128, 61, 0.12);
+  border-radius: 28px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.94), rgba(246, 252, 248, 0.9));
+  box-shadow: 0 24px 80px rgba(15, 23, 42, 0.06);
+  overflow: hidden;
+}
+
+.landing-accordion-summary {
+  list-style: none;
+  cursor: pointer;
+  padding: 20px 24px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 18px;
+}
+
+.landing-accordion-summary::-webkit-details-marker {
+  display: none;
+}
+
+.landing-accordion-summary strong {
+  display: block;
+  margin-top: 4px;
+  font-size: 1.1rem;
+}
+
+.landing-accordion-hint {
+  color: var(--brand-strong);
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.landing-accordion-summary::after {
+  content: "⌄";
+  color: var(--brand-strong);
+  font-size: 1.15rem;
+  font-weight: 900;
+  transition: transform 0.2s ease;
+}
+
+.landing-accordion[open] .landing-accordion-summary::after {
+  transform: rotate(180deg);
+}
+
+.landing-accordion-body {
+  display: grid;
+  gap: 18px;
+  padding: 0 24px 24px;
+}
+
 .premium-chat-top {
   display: flex;
   justify-content: space-between;
@@ -5540,16 +5666,29 @@ body.theme-dark .auth-card-premium {
 }
 
 body.theme-dark .premium-quick-box,
+body.theme-dark .premium-core-ask,
+body.theme-dark .premium-core-textarea,
 body.theme-dark .premium-mockup-message,
 body.theme-dark .auth-preview-bubble,
 body.theme-dark .premium-mockup-footer div,
 body.theme-dark .auth-trust-strip span,
 body.theme-dark .premium-insight-card,
 body.theme-dark .premium-value-card,
-body.theme-dark .precision-config-panel {
+body.theme-dark .precision-config-panel,
+body.theme-dark .landing-accordion {
   background: rgba(18, 28, 22, 0.88);
   border-color: rgba(255, 255, 255, 0.08);
   color: var(--text);
+}
+
+body.theme-dark .landing-accordion-summary,
+body.theme-dark .landing-accordion-hint,
+body.theme-dark .premium-core-label {
+  color: #d8f6df;
+}
+
+body.theme-dark .premium-core-textarea::placeholder {
+  color: var(--muted);
 }
 
 body.theme-dark .precision-quick-pills span {
@@ -5615,6 +5754,8 @@ body.theme-dark .premium-value-card p {
 
   .premium-hero-actions,
   .premium-final-actions,
+  .premium-core-actions,
+  .premium-core-examples,
   .premium-quick-chips,
   .auth-trust-strip,
   .precision-quick-pills {
@@ -5624,6 +5765,7 @@ body.theme-dark .premium-value-card p {
 
   .premium-hero-actions > *,
   .premium-final-actions > *,
+  .premium-core-actions > *,
   .premium-quick-chips > *,
   .auth-trust-strip > * {
     width: 100%;
@@ -5641,6 +5783,15 @@ body.theme-dark .premium-value-card p {
   .precision-config-summary,
   .precision-config-body {
     padding-inline: 16px;
+  }
+
+  .landing-accordion-summary {
+    padding: 18px;
+    align-items: start;
+  }
+
+  .landing-accordion-body {
+    padding: 0 18px 18px;
   }
 
   .auth-preview-premium {

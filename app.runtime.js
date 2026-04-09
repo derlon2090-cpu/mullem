@@ -13,6 +13,7 @@
   const messageList = document.querySelector("[data-messages]");
   const attachmentList = document.querySelector("[data-attachments]");
   const promptInput = document.querySelector("[data-prompt]");
+  const heroPromptInput = document.querySelector("[data-hero-prompt]");
   const fileInput = document.querySelector("[data-file-input]");
   const gradeSelect = document.querySelector("[data-grade]");
   const subjectSelect = document.querySelector("[data-subject]");
@@ -5386,7 +5387,7 @@
   gradeSelect?.addEventListener("change", syncStudentDashboardHeader);
   function submitHeroExample() {
     if (!form || !promptInput) return;
-    submitPresetPrompt("احسب محيط دائرة نصف قطرها 7", "الرياضيات", { scrollToChat: true });
+    submitPresetPrompt("احسب محيط دائرة نصف قطرها 7", "الرياضيات", { scrollToChat: true, autoSubmit: true });
   }
 
   function applyRuntimeSubject(subject) {
@@ -5416,6 +5417,11 @@
           promptInput.focus();
         }
       }
+      if (options.autoSubmit) {
+        window.setTimeout(() => {
+          form.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+        }, options.submitDelayMs || 40);
+      }
     };
     if (options.scrollToChat) {
       scrollToChatSection();
@@ -5423,6 +5429,25 @@
     } else {
       preservePageScroll(preparePrompt);
     }
+  }
+
+  function submitHeroPrompt() {
+    if (!form || !promptInput) return;
+    const heroValue = (heroPromptInput?.value || "").trim();
+    if (heroValue) {
+      submitPresetPrompt(heroValue, "", { scrollToChat: true, autoSubmit: true });
+      return;
+    }
+    const promptValue = (promptInput?.value || "").trim();
+    if (promptValue) {
+      scrollToChatSection();
+      window.setTimeout(() => {
+        form.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+      }, 80);
+      return;
+    }
+    scrollToChatSection();
+    submitPresetPrompt("ابدأ بشرح أساسيات هذا الدرس ثم أعطني مثالًا محلولًا.");
   }
 
   window.mullemTryExample = submitHeroExample;
@@ -5465,7 +5490,7 @@
       } else if (action === "upload-file") {
         if (typeof openGenericUpload === "function") openGenericUpload();
       } else if (prompt) {
-        submitPresetPrompt(prompt, subject);
+        submitPresetPrompt(prompt, subject, { scrollToChat: true, autoSubmit: true });
       }
       return;
     }
@@ -5482,7 +5507,15 @@
     if (quickSolveButton) {
       event.preventDefault();
       event.stopImmediatePropagation();
-      submitPresetPrompt("ابدأ بحل سؤال من هذا الدرس مع شرح مبسط وخطوات وأخطاء شائعة.");
+      submitPresetPrompt("ابدأ بحل سؤال من هذا الدرس مع شرح مبسط وخطوات وأخطاء شائعة.", "", { scrollToChat: true, autoSubmit: true });
+      return;
+    }
+
+    const heroSubmitButton = event.target.closest("[data-hero-submit]");
+    if (heroSubmitButton) {
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      submitHeroPrompt();
       return;
     }
 
@@ -5511,6 +5544,11 @@
       event.stopImmediatePropagation();
       logoutUser();
     });
+  });
+  heroPromptInput?.addEventListener("keydown", (event) => {
+    if (event.key !== "Enter" || event.shiftKey) return;
+    event.preventDefault();
+    submitHeroPrompt();
   });
   window.addEventListener("scroll", syncRuntimeScrollButton, { passive: true });
   scrollTopButton?.addEventListener("click", (event) => {
