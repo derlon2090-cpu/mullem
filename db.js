@@ -94,6 +94,10 @@ function serializeBenefits(value) {
   return normalizeBenefits(value).join("\n");
 }
 
+function getTodayDateStamp() {
+  return new Date().toISOString().slice(0, 10);
+}
+
 function normalizePackageRow(row) {
   if (!row) return null;
   return {
@@ -401,11 +405,14 @@ function createDatabaseClient(rawConfig = {}) {
       CREATE TABLE IF NOT EXISTS app_guest_usage (
         guest_session_id VARCHAR(120) NOT NULL PRIMARY KEY,
         messages_count INT UNSIGNED NOT NULL DEFAULT 0,
+        usage_date DATE NULL,
         last_message_at DATETIME NULL,
         created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
         updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
     `);
+
+    await ensureGuestUsageDateColumn();
 
     await pool.query(`
       CREATE TABLE IF NOT EXISTS app_projects (
@@ -478,6 +485,24 @@ function createDatabaseClient(rawConfig = {}) {
       if (!Number(rows?.[0]?.total || 0)) {
         await pool.query(column.sql);
       }
+    }
+  }
+
+  async function ensureGuestUsageDateColumn() {
+    const [rows] = await pool.execute(
+      `
+        SELECT COUNT(*) AS total
+        FROM information_schema.COLUMNS
+        WHERE TABLE_SCHEMA = ? AND TABLE_NAME = 'app_guest_usage' AND COLUMN_NAME = 'usage_date'
+      `,
+      [config.database]
+    );
+
+    if (!Number(rows?.[0]?.total || 0)) {
+      await pool.query(`
+        ALTER TABLE app_guest_usage
+        ADD COLUMN usage_date DATE NULL AFTER messages_count
+      `);
     }
   }
 
@@ -1376,21 +1401,40 @@ function createDatabaseClient(rawConfig = {}) {
       "SELECT * FROM app_guest_usage WHERE guest_session_id = ? LIMIT 1",
       [String(guestSessionId || "").trim()]
     );
-    return rows[0] || null;
+    const row = rows[0] || null;
+    if (!row) return null;
+
+    const today = getTodayDateStamp();
+    const usageDate = row.usage_date ? String(row.usage_date).slice(0, 10) : "";
+    if (usageDate && usageDate === today) {
+      return row;
+    }
+
+    return {
+      ...row,
+      usage_date: today,
+      messages_count: 0
+    };
   }
 
   async function incrementGuestUsage(guestSessionId, amount = 1) {
     const safeGuestSessionId = String(guestSessionId || "").trim();
     const safeAmount = Math.max(1, Number(amount) || 1);
+    const today = getTodayDateStamp();
     await pool.execute(
       `
-        INSERT INTO app_guest_usage (guest_session_id, messages_count, last_message_at)
-        VALUES (?, ?, CURRENT_TIMESTAMP)
+        INSERT INTO app_guest_usage (guest_session_id, messages_count, usage_date, last_message_at)
+        VALUES (?, ?, ?, CURRENT_TIMESTAMP)
         ON DUPLICATE KEY UPDATE
-          messages_count = messages_count + VALUES(messages_count),
+          messages_count = IF(
+            usage_date = VALUES(usage_date),
+            messages_count + VALUES(messages_count),
+            VALUES(messages_count)
+          ),
+          usage_date = VALUES(usage_date),
           last_message_at = CURRENT_TIMESTAMP
       `,
-      [safeGuestSessionId, safeAmount]
+      [safeGuestSessionId, safeAmount, today]
     );
     return getGuestUsage(safeGuestSessionId);
   }

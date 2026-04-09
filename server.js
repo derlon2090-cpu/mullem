@@ -1246,14 +1246,17 @@ async function handleStudentConversations(req, res) {
 }
 
 async function handlePackages(req, res) {
-  const auth = await requireAuthenticatedUser(req);
-  const syncedUser = await syncUserDailyProgress(auth.user, "زار صفحة الباقات");
+  requireDatabaseConnection();
+  const auth = await getAuthContext(req);
+  const syncedUser = auth?.user
+    ? await syncUserDailyProgress(auth.user, "زار صفحة الباقات")
+    : null;
   const items = await databaseClient.listPackages({ include_inactive: false });
 
   sendJson(req, res, 200, {
     success: true,
     data: {
-      user: buildApiUser(syncedUser || auth.user),
+      user: auth?.user ? buildApiUser(syncedUser || auth.user) : null,
       items: items.map((item) => ({
         id: item.id,
         key: String(item.package_key || "").trim(),

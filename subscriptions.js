@@ -25,8 +25,7 @@ function escapePackagesHtml(value) {
 }
 
 function formatPackagesPrice(value) {
-  const amount = Number(value || 0);
-  return `${amount} ريال`;
+  return `${Number(value || 0)} ريال`;
 }
 
 function formatPackagesXp(value) {
@@ -35,7 +34,7 @@ function formatPackagesXp(value) {
 
 function formatPackagesDuration(value) {
   const days = Number(value || 0);
-  if (!days) return "مجانية";
+  if (!days) return "بدون مدة اشتراك";
   if (days === 30) return "شهر واحد";
   return `${days} يوم`;
 }
@@ -49,6 +48,23 @@ function formatPackagesDate(value) {
   } catch (_) {
     return parsed.toISOString().slice(0, 10);
   }
+}
+
+function getGuestPackageSnapshot() {
+  return {
+    name: "التجربة المجانية",
+    xpText: "100 XP بعد التسجيل",
+    dailyText: "5 رسائل يوميًا",
+    priceText: "0 ريال",
+    durationText: "متاحة للزائر",
+    expiryText: "يمكنك استعراض الباقات الآن، وتفعيل أي باقة يتطلب تسجيل الدخول إلى حسابك.",
+    summary: "الوضع المجاني يمنح الزائر استعراض الباقات والمنصة، ويبدأ الحساب الجديد بـ 100 XP مع حفظ التقدم بعد تسجيل الدخول.",
+    benefits: [
+      "عرض جميع الباقات قبل إنشاء الحساب",
+      "5 رسائل يوميًا في الشات للضيف",
+      "100 XP بداية للحساب عند التسجيل"
+    ]
+  };
 }
 
 function applyPackagesTheme(theme) {
@@ -68,7 +84,7 @@ function renderPackagesAuthState(message, isError = false) {
   packagesAuthStateRoot.hidden = false;
   packagesAuthStateRoot.innerHTML = `
     <div class="packages-lock-card${isError ? " packages-lock-card-error" : ""}">
-      <strong>${isError ? "تعذر تحميل بيانات الباقات" : "هذه الصفحة تتطلب تسجيل الدخول إلى الحساب"}</strong>
+      <strong>${isError ? "تعذر تحميل الباقات الآن" : "يمكنك استعراض الباقات بدون تسجيل دخول"}</strong>
       <p>${escapePackagesHtml(message)}</p>
       <div class="packages-lock-actions">
         <a class="primary-btn" href="login.html">تسجيل الدخول</a>
@@ -78,34 +94,80 @@ function renderPackagesAuthState(message, isError = false) {
   `;
 }
 
+function hidePackagesAuthState() {
+  if (!packagesAuthStateRoot) return;
+  packagesAuthStateRoot.hidden = true;
+}
+
 function renderCurrentPackage(user) {
-  if (packageTopXpRoot) packageTopXpRoot.textContent = String(Number(user?.xp || 0));
-  if (packageTopStatusRoot) {
-    packageTopStatusRoot.textContent = user?.package
-      ? `باقتك الحالية: ${user.package}`
-      : "سجل الدخول لعرض باقتك الحالية";
+  if (user) {
+    if (packageTopXpRoot) packageTopXpRoot.textContent = String(Number(user.xp || 0));
+    if (packageTopStatusRoot) {
+      packageTopStatusRoot.textContent = user.package
+        ? `باقتك الحالية: ${user.package}`
+        : "سجّل الدخول لمعرفة باقتك الحالية";
+    }
+    if (currentPackageNameRoot) currentPackageNameRoot.textContent = user.package || "التمهيدية";
+    if (currentPackageXpRoot) currentPackageXpRoot.textContent = formatPackagesXp(user.xp || 0);
+    if (currentPackageDailyRoot) currentPackageDailyRoot.textContent = formatPackagesXp(user.packageDailyXp || 0);
+    if (currentPackagePriceRoot) currentPackagePriceRoot.textContent = formatPackagesPrice(user.packagePriceSar || 0);
+    if (currentPackageDurationRoot) currentPackageDurationRoot.textContent = formatPackagesDuration(user.packageDurationDays || 0);
+    if (currentPackageExpiryRoot) {
+      currentPackageExpiryRoot.textContent = user.packageExpiresAt
+        ? `تنتهي الباقة في ${formatPackagesDate(user.packageExpiresAt)}${Number.isFinite(Number(user.packageDaysRemaining)) ? ` (${user.packageDaysRemaining} يوم متبقٍ)` : ""}`
+        : "هذه الباقة لا تملك مدة اشتراك حالية أو أنها الباقة المجانية.";
+    }
+    if (currentPackageSummaryRoot) {
+      currentPackageSummaryRoot.textContent = user.packageSummary
+        || "يمكنك متابعة باقتك الحالية وتجدد رصيدك اليومي من هذه الصفحة.";
+    }
+    if (currentPackageBenefitsRoot) {
+      const benefits = Array.isArray(user.packageBenefits) ? user.packageBenefits : [];
+      currentPackageBenefitsRoot.innerHTML = benefits.length
+        ? benefits.map((item) => `<li>${escapePackagesHtml(item)}</li>`).join("")
+        : "<li>هذه الباقة صالحة لمتابعة دروسك ومحادثاتك داخل المنصة.</li>";
+    }
+    if (packageUserNameRoot) packageUserNameRoot.textContent = user.name || "طالب ملم";
+    return;
   }
-  if (currentPackageNameRoot) currentPackageNameRoot.textContent = user?.package || "التمهيدية";
-  if (currentPackageXpRoot) currentPackageXpRoot.textContent = formatPackagesXp(user?.xp || 0);
-  if (currentPackageDailyRoot) currentPackageDailyRoot.textContent = formatPackagesXp(user?.packageDailyXp || 0);
-  if (currentPackagePriceRoot) currentPackagePriceRoot.textContent = formatPackagesPrice(user?.packagePriceSar || 0);
-  if (currentPackageDurationRoot) currentPackageDurationRoot.textContent = formatPackagesDuration(user?.packageDurationDays || 0);
-  if (currentPackageExpiryRoot) {
-    currentPackageExpiryRoot.textContent = user?.packageExpiresAt
-      ? `تنتهي الباقة في ${formatPackagesDate(user.packageExpiresAt)}${Number.isFinite(Number(user?.packageDaysRemaining)) ? ` (${user.packageDaysRemaining} يوم متبقٍ)` : ""}`
-      : "الباقة المجانية لا تنتهي وتبقى نقطة البداية داخل المنصة.";
-  }
-  if (currentPackageSummaryRoot) {
-    currentPackageSummaryRoot.textContent = user?.packageSummary
-      || "هذه الباقة تعطيك نقطة انطلاق داخل المنصة، ويمكن للأدمن تعديلها أو ترقيتها حسب احتياجك.";
-  }
+
+  const guestView = getGuestPackageSnapshot();
+  if (packageTopXpRoot) packageTopXpRoot.textContent = "0";
+  if (packageTopStatusRoot) packageTopStatusRoot.textContent = "تصفّح الباقات مفتوح، وتسجيل الدخول مطلوب لطلب التفعيل.";
+  if (currentPackageNameRoot) currentPackageNameRoot.textContent = guestView.name;
+  if (currentPackageXpRoot) currentPackageXpRoot.textContent = guestView.xpText;
+  if (currentPackageDailyRoot) currentPackageDailyRoot.textContent = guestView.dailyText;
+  if (currentPackagePriceRoot) currentPackagePriceRoot.textContent = guestView.priceText;
+  if (currentPackageDurationRoot) currentPackageDurationRoot.textContent = guestView.durationText;
+  if (currentPackageExpiryRoot) currentPackageExpiryRoot.textContent = guestView.expiryText;
+  if (currentPackageSummaryRoot) currentPackageSummaryRoot.textContent = guestView.summary;
   if (currentPackageBenefitsRoot) {
-    const benefits = Array.isArray(user?.packageBenefits) ? user.packageBenefits : [];
-    currentPackageBenefitsRoot.innerHTML = benefits.length
-      ? benefits.map((item) => `<li>${escapePackagesHtml(item)}</li>`).join("")
-      : "<li>تجميع الحماس اليومي ومتابعة تقدمك داخل المنصة.</li>";
+    currentPackageBenefitsRoot.innerHTML = guestView.benefits
+      .map((item) => `<li>${escapePackagesHtml(item)}</li>`)
+      .join("");
   }
-  if (packageUserNameRoot) packageUserNameRoot.textContent = user?.name || "طالب ملم";
+  if (packageUserNameRoot) packageUserNameRoot.textContent = "زائر المنصة";
+}
+
+function renderPackageCardAction(item, currentUser, isCurrent) {
+  if (!currentUser) {
+    return `
+      <a class="primary-btn" href="login.html">سجّل الدخول لطلبها</a>
+      <span class="packages-plan-note">عرض الباقات متاح الآن، لكن تفعيل الباقة يتم بعد تسجيل الدخول إلى الحساب.</span>
+    `;
+  }
+
+  if (isCurrent) {
+    return `
+      <button class="primary-btn" type="button" disabled>مفعلة الآن</button>
+      <span class="packages-plan-note">هذه هي الباقة المفعلة على حسابك حاليًا.</span>
+    `;
+  }
+
+  return `
+    <button class="primary-btn" type="button" disabled>الطلب عبر المتجر قريبًا</button>
+    <span class="packages-plan-note">سيتم تفعيل الطلب عبر المتجر لاحقًا، ويمكن للأدمن أيضًا تفعيلها مباشرة لك.</span>
+  `;
 }
 
 function renderPackageCards(items, currentUser) {
@@ -114,9 +176,9 @@ function renderPackageCards(items, currentUser) {
   packagesGridRoot.innerHTML = items.map((item) => {
     const isCurrent = currentPackageId && currentPackageId === String(item.id);
     const tags = [
-      isCurrent ? `<span class="packages-card-badge packages-card-badge-current">مفعلة لحسابك</span>` : "",
-      item.is_default ? `<span class="packages-card-badge">الافتراضية</span>` : "",
-      !item.is_active ? `<span class="packages-card-badge packages-card-badge-muted">متوقفة</span>` : ""
+      isCurrent ? '<span class="packages-card-badge packages-card-badge-current">مفعلة لحسابك</span>' : "",
+      item.is_default ? '<span class="packages-card-badge">الافتراضية</span>' : "",
+      !item.is_active ? '<span class="packages-card-badge packages-card-badge-muted">متوقفة</span>' : ""
     ].filter(Boolean).join("");
 
     return `
@@ -135,8 +197,7 @@ function renderPackageCards(items, currentUser) {
           ${(Array.isArray(item.benefits) ? item.benefits : []).map((benefit) => `<li>${escapePackagesHtml(benefit)}</li>`).join("")}
         </ul>
         <div class="packages-plan-actions">
-          <button class="primary-btn" type="button" disabled>${isCurrent ? "مفعلة الآن" : "اطلبها عبر المتجر قريبًا"}</button>
-          <span class="packages-plan-note">يمكن للأدمن تفعيل هذه الباقة لك مباشرة من لوحة الإدارة.</span>
+          ${renderPackageCardAction(item, currentUser, isCurrent)}
         </div>
       </article>
     `;
@@ -145,40 +206,39 @@ function renderPackageCards(items, currentUser) {
 
 async function bootstrapPackagesPage() {
   const apiClient = window.mullemApiClient;
-  if (!apiClient || typeof apiClient.me !== "function") {
-    renderPackagesAuthState("تعذر الوصول إلى خدمة الحساب الآن. حاول تحديث الصفحة بعد قليل.", true);
+  if (!apiClient || typeof apiClient.getPackages !== "function") {
+    renderPackagesAuthState("تعذر الوصول إلى خدمة الباقات الآن. حاول تحديث الصفحة بعد قليل.", true);
     return;
   }
 
-  if (!apiClient.hasToken()) {
-    renderPackagesAuthState("سجل الدخول إلى حسابك أولًا حتى نعرض باقتك الحالية والباقات اليومية المفعلة داخل المنصة.");
-    return;
-  }
-
-  const [meResult, packagesResult] = await Promise.all([
-    apiClient.me(),
-    apiClient.getPackages()
+  const hasSession = apiClient.hasToken();
+  const [packagesResult, meResult] = await Promise.all([
+    apiClient.getPackages(),
+    hasSession ? apiClient.me() : Promise.resolve({ ok: true, data: { user: null } })
   ]);
-
-  if (!meResult.ok || !meResult.data?.user) {
-    renderPackagesAuthState("لم نتمكن من قراءة جلسة الحساب الحالية. سجل الدخول مرة أخرى ثم افتح صفحة الباقات.", true);
-    return;
-  }
 
   if (!packagesResult.ok || !Array.isArray(packagesResult.data?.items)) {
     renderPackagesAuthState(packagesResult.message || "تعذر تحميل الباقات من الخادم الآن.", true);
     return;
   }
 
-  const user = packagesResult.data?.user || meResult.data.user;
+  const user = packagesResult.data?.user || meResult.data?.user || null;
   const items = packagesResult.data.items
     .slice()
     .sort((left, right) => Number(left.sort_order || 0) - Number(right.sort_order || 0));
 
   renderCurrentPackage(user);
   renderPackageCards(items, user);
-  if (packagesAuthStateRoot) packagesAuthStateRoot.hidden = true;
-  if (packagesDashboardRoot) packagesDashboardRoot.hidden = false;
+
+  if (packagesDashboardRoot) {
+    packagesDashboardRoot.hidden = false;
+  }
+
+  if (user) {
+    hidePackagesAuthState();
+  } else {
+    renderPackagesAuthState("يمكنك الآن الاطلاع على تفاصيل كل باقة ومزاياها. لتفعيل أي باقة أو طلبها يجب تسجيل الدخول إلى حسابك في المنصة.");
+  }
 }
 
 function initializePackagesPage() {
@@ -191,6 +251,7 @@ function initializePackagesPage() {
   packagesScrollTopButton?.addEventListener("click", () => {
     window.scrollTo({ top: 0, behavior: "smooth" });
   });
+
   window.addEventListener("scroll", syncPackagesScrollTop, { passive: true });
   syncPackagesScrollTop();
 
