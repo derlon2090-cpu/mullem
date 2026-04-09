@@ -64,6 +64,7 @@
             <a class="admin-nav-link" href="#admin-overview">نظرة عامة</a>
             <a class="admin-nav-link" href="#admin-coverage">التغطية التعليمية</a>
             <a class="admin-nav-link" href="#admin-users">المستخدمون والاشتراكات</a>
+            <a class="admin-nav-link" href="#admin-packages">الباقات اليومية</a>
             <a class="admin-nav-link" href="#admin-reports">التقارير والسجل</a>
             <a class="admin-nav-link" href="#admin-questions">إدارة الأسئلة</a>
           </nav>
@@ -258,6 +259,19 @@
             </div>
           </section>
 
+          <section id="admin-packages" class="admin-section-stack">
+            <div class="admin-section-head">
+              <div>
+                <h3>الباقات اليومية</h3>
+                <p>إدارة أسماء الباقات وأسعارها ونقاطها اليومية من قاعدة البيانات مباشرة، ثم ربطها بالمستخدمين من نفس اللوحة.</p>
+              </div>
+            </div>
+
+            <article class="admin-panel">
+              <div class="admin-list admin-list-wide" data-admin-packages></div>
+            </article>
+          </section>
+
           <section id="admin-reports" class="admin-section-stack">
             <div class="admin-section-head">
               <div>
@@ -290,7 +304,8 @@
   </main>
 
   <script src="mullem-config.js?v=20260409-5"></script>
-  <script src="api-client.js?v=20260409-3"></script>
+  <script src="api-client.js?v=20260409-7"></script>
   <script src="admin.js?v=20260408-5"></script>
+  <script src="admin-packages.js?v=20260409-2"></script>
 </body>
 </html>

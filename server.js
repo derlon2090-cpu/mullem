@@ -27,6 +27,21 @@ const DB_PORT = Number(process.env.DB_PORT || 3306);
 const DB_DATABASE = String(process.env.DB_DATABASE || "mullem").trim();
 const DB_USERNAME = String(process.env.DB_USERNAME || process.env.DB_USER || "root").trim();
 const DB_PASSWORD = String(process.env.DB_PASSWORD || "").trim();
+const MAX_NAME_LENGTH = Math.max(20, Number(process.env.MAX_NAME_LENGTH || 160));
+const MIN_PASSWORD_LENGTH = Math.max(6, Number(process.env.MIN_PASSWORD_LENGTH || 6));
+const PASSWORD_HASH_ITERATIONS = Math.max(60000, Number(process.env.PASSWORD_HASH_ITERATIONS || 120000));
+const DEFAULT_ADMIN_EMAIL = String(process.env.DEFAULT_ADMIN_EMAIL || "admin@mullem.sa").trim().toLowerCase();
+const DEFAULT_ADMIN_PASSWORD = String(process.env.DEFAULT_ADMIN_PASSWORD || "Mullem@2026").trim();
+const DEFAULT_ADMIN_NAME = String(process.env.DEFAULT_ADMIN_NAME || "مدير المنصة").trim();
+const DEFAULT_STUDENT_EMAIL = String(process.env.DEFAULT_STUDENT_EMAIL || "student@mullem.sa").trim().toLowerCase();
+const DEFAULT_STUDENT_PASSWORD = String(process.env.DEFAULT_STUDENT_PASSWORD || "Student@2026").trim();
+const DEFAULT_STUDENT_NAME = String(process.env.DEFAULT_STUDENT_NAME || "طالب تجريبي").trim();
+const GUEST_MESSAGE_LIMIT = Math.max(1, Number(process.env.GUEST_MESSAGE_LIMIT || 5));
+const TEXT_MESSAGE_XP_REWARD = Math.max(1, Number(process.env.TEXT_MESSAGE_XP_REWARD || 10));
+const IMAGE_MESSAGE_XP_REWARD = Math.max(TEXT_MESSAGE_XP_REWARD, Number(process.env.IMAGE_MESSAGE_XP_REWARD || 15));
+const DAILY_LOGIN_XP_REWARD = Math.max(0, Number(process.env.DAILY_LOGIN_XP_REWARD || 5));
+const DAILY_MOTIVATION_BONUS = Math.max(1, Number(process.env.DAILY_MOTIVATION_BONUS || 5));
+const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 const MIME_TYPES = {
   ".html": "text/html; charset=utf-8",
@@ -118,7 +133,7 @@ function setCorsHeaders(req, res) {
     res.setHeader("Access-Control-Allow-Origin", "*");
   }
   res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Requested-With");
-  res.setHeader("Access-Control-Allow-Methods", "GET, POST, PUT, OPTIONS");
+  res.setHeader("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, OPTIONS");
 }
 
 function sendJson(req, res, statusCode, payload, extraHeaders = {}) {
@@ -246,6 +261,8 @@ function buildConversationSummary(item) {
   return {
     id: item.id,
     guest_session_id: item.guest_session_id || item.guestSessionId || null,
+    user_id: item.user_id != null ? String(item.user_id) : null,
+    project_id: item.project_id != null ? String(item.project_id) : null,
     title: item.title || null,
     subject: item.subject || null,
     stage: item.stage || null,
@@ -256,6 +273,357 @@ function buildConversationSummary(item) {
     created_at: item.created_at || null,
     updated_at: item.updated_at || null
   };
+}
+
+function normalizeEmail(value) {
+  return String(value || "").trim().toLowerCase();
+}
+
+function requireEmail(value, fieldName = "email") {
+  const normalized = normalizeEmail(value);
+  if (!normalized) {
+    throw createHttpError(422, `The ${fieldName} field is required.`);
+  }
+  if (!EMAIL_PATTERN.test(normalized)) {
+    throw createHttpError(422, `The ${fieldName} field must be a valid email address.`);
+  }
+  return normalized;
+}
+
+function requirePassword(value, fieldName = "password") {
+  const password = String(value || "");
+  if (!password.trim()) {
+    throw createHttpError(422, `The ${fieldName} field is required.`);
+  }
+  if (password.length < MIN_PASSWORD_LENGTH) {
+    throw createHttpError(422, `The ${fieldName} field must be at least ${MIN_PASSWORD_LENGTH} characters.`);
+  }
+  return password;
+}
+
+function requireDatabaseConnection() {
+  if (!isDatabaseReady()) {
+    throw createHttpError(503, databaseState.message || "MySQL is not connected.");
+  }
+}
+
+function normalizeUserRole(value) {
+  const normalized = String(value || "").trim().toLowerCase();
+  if (!normalized) return "student";
+  return normalized.includes("admin") ? "admin" : "student";
+}
+
+function normalizeUserStatus(value) {
+  const normalized = String(value || "").trim().toLowerCase();
+  if (!normalized) return "active";
+  if (normalized.includes("محظور") || normalized.includes("banned") || normalized === "ban") return "banned";
+  if (normalized.includes("موقوف") || normalized.includes("suspend")) return "suspended";
+  return "active";
+}
+
+function formatUserRole(role) {
+  return normalizeUserRole(role) === "admin" ? "Admin" : "Student";
+}
+
+function formatUserStatus(status) {
+  const normalized = normalizeUserStatus(status);
+  if (normalized === "banned") return "محظور";
+  if (normalized === "suspended") return "موقوف";
+  return "نشط";
+}
+
+function inferStageFromGrade(grade) {
+  const value = String(grade || "").trim();
+  if (!value) return "";
+  if (value.includes("ط§ط¨طھط¯ط§ط¦ظٹ")) return "ط§ط¨طھط¯ط§ط¦ظٹ";
+  if (value.includes("ظ…طھظˆط³ط·")) return "ظ…طھظˆط³ط·";
+  if (value.includes("ط«ط§ظ†ظˆظٹ")) return "ط«ط§ظ†ظˆظٹ";
+  return "";
+}
+
+function getTodayStamp() {
+  return new Date().toISOString().slice(0, 10);
+}
+
+function diffDays(fromStamp, toStamp) {
+  if (!fromStamp || !toStamp) return 0;
+  const from = new Date(`${fromStamp}T00:00:00Z`);
+  const to = new Date(`${toStamp}T00:00:00Z`);
+  return Math.round((to - from) / 86400000);
+}
+
+function addDays(date, days) {
+  return new Date(date.getTime() + (Math.max(0, Number(days) || 0) * 86400000));
+}
+
+function calculateRemainingDays(expiresAt) {
+  if (!expiresAt) return null;
+  const expireDate = new Date(expiresAt);
+  if (Number.isNaN(expireDate.getTime())) return null;
+  return Math.max(0, Math.ceil((expireDate.getTime() - Date.now()) / 86400000));
+}
+
+function buildPackagePeriodWindow(selectedPackage) {
+  const durationDays = Math.max(0, Number(selectedPackage?.duration_days || 0));
+  if (!durationDays) {
+    return {
+      package_started_at: null,
+      package_expires_at: null
+    };
+  }
+
+  const startDate = new Date();
+  return {
+    package_started_at: startDate,
+    package_expires_at: addDays(startDate, durationDays)
+  };
+}
+
+async function ensureUserPackageLifecycle(user) {
+  if (!user || !isDatabaseReady()) {
+    return user;
+  }
+
+  const durationDays = Math.max(0, Number(user.package_duration_days || 0));
+  const expiresAt = user.package_expires_at ? new Date(user.package_expires_at) : null;
+  if (!durationDays || !expiresAt || Number.isNaN(expiresAt.getTime()) || expiresAt.getTime() > Date.now()) {
+    return user;
+  }
+
+  const defaultPackage = await databaseClient.findDefaultPackage();
+  if (!defaultPackage) {
+    return user;
+  }
+
+  return databaseClient.updateUser(user.id, {
+    package_id: defaultPackage.id,
+    package_name: defaultPackage.display_name,
+    package_started_at: null,
+    package_expires_at: null,
+    activity: `انتهت مدة باقة ${String(user.package_name || user.package || "الحالية").trim()} وعاد الحساب إلى ${defaultPackage.display_name}`
+  });
+}
+
+async function syncUserDailyProgress(user, activityText = "") {
+  if (!user || !isDatabaseReady()) {
+    return user;
+  }
+
+  const effectiveUser = await ensureUserPackageLifecycle(user) || user;
+
+  const today = getTodayStamp();
+  const lastActiveDate = String(effectiveUser.last_active_date || "");
+  if (lastActiveDate === today) {
+    if (activityText) {
+      return databaseClient.updateUser(effectiveUser.id, {
+        activity: activityText
+      });
+    }
+    return effectiveUser;
+  }
+
+  let streakDays = Number(effectiveUser.streak_days || 0);
+  if (!lastActiveDate) {
+    streakDays = 1;
+  } else {
+    const gap = diffDays(lastActiveDate, today);
+    if (gap === 1) streakDays += 1;
+    else if (gap > 1) streakDays = 1;
+    else if (gap < 0) streakDays = Math.max(1, streakDays);
+  }
+
+  const achievements = Array.isArray(effectiveUser.achievements) ? [...effectiveUser.achievements] : [];
+  if (streakDays >= 5 && !achievements.includes("5_days_streak")) achievements.push("5_days_streak");
+  if (streakDays >= 30 && !achievements.includes("30_days_streak")) achievements.push("30_days_streak");
+
+  const packageDailyXp = Math.max(0, Number(effectiveUser.package_daily_xp || 0));
+  const dailyXpAward = packageDailyXp + DAILY_LOGIN_XP_REWARD;
+  const packageLabel = String(effectiveUser.package_name || effectiveUser.package || "التمهيدية").trim() || "التمهيدية";
+
+  return databaseClient.updateUser(effectiveUser.id, {
+    last_active_date: today,
+    streak_days: streakDays,
+    motivation_score: Number(effectiveUser.motivation_score || 0) + DAILY_MOTIVATION_BONUS,
+    xp: Number(effectiveUser.xp || 0) + dailyXpAward,
+    achievements,
+    activity: activityText || `تجددت باقته اليومية (${packageLabel}) وحصل على ${dailyXpAward} XP`
+  });
+}
+
+async function rewardUserForMessage(user, amount, activityText) {
+  if (!user || !isDatabaseReady() || !amount) {
+    return user;
+  }
+
+  return databaseClient.updateUser(user.id, {
+    xp: Number(user.xp || 0) + Math.max(0, Number(amount) || 0),
+    activity: activityText || "تمت إضافة نقاط على الرسالة"
+  });
+}
+
+function hashPassword(password, salt = crypto.randomBytes(16).toString("hex")) {
+  const derived = crypto.pbkdf2Sync(password, salt, PASSWORD_HASH_ITERATIONS, 64, "sha512").toString("hex");
+  return `pbkdf2$${PASSWORD_HASH_ITERATIONS}$${salt}$${derived}`;
+}
+
+function verifyPassword(password, storedHash) {
+  const raw = String(storedHash || "").trim();
+  if (!raw) return false;
+
+  const parts = raw.split("$");
+  if (parts.length !== 4 || parts[0] !== "pbkdf2") {
+    return false;
+  }
+
+  const iterations = Number(parts[1]);
+  const salt = parts[2];
+  const expectedHex = parts[3];
+  if (!Number.isFinite(iterations) || !salt || !expectedHex) {
+    return false;
+  }
+
+  const actualHex = crypto.pbkdf2Sync(password, salt, iterations, 64, "sha512").toString("hex");
+  const expectedBuffer = Buffer.from(expectedHex, "hex");
+  const actualBuffer = Buffer.from(actualHex, "hex");
+  if (expectedBuffer.length !== actualBuffer.length) {
+    return false;
+  }
+  return crypto.timingSafeEqual(expectedBuffer, actualBuffer);
+}
+
+function hashApiToken(token) {
+  return crypto.createHash("sha256").update(String(token || "")).digest("hex");
+}
+
+function generateApiToken() {
+  return crypto.randomBytes(32).toString("hex");
+}
+
+function buildApiUser(user) {
+  if (!user) return null;
+  return {
+    id: String(user.id),
+    name: String(user.name || "").trim(),
+    email: normalizeEmail(user.email),
+    role: formatUserRole(user.role),
+    stage: String(user.stage || "").trim(),
+    grade: String(user.grade || "").trim(),
+    subject: String(user.subject || "").trim(),
+    packageId: user.package_id != null ? Number(user.package_id) : null,
+    packageKey: String(user.package_key || "").trim(),
+    packageDailyXp: Number(user.package_daily_xp || 0),
+    packagePriceSar: Number(user.package_price_sar || 0),
+    packageDurationDays: Number(user.package_duration_days || 0),
+    packageSummary: String(user.package_summary || "").trim(),
+    packageBenefits: Array.isArray(user.package_benefits) ? user.package_benefits : [],
+    packageStartedAt: user.package_started_at || null,
+    packageExpiresAt: user.package_expires_at || null,
+    packageDaysRemaining: calculateRemainingDays(user.package_expires_at),
+    package: String(user.package_name || user.package || "مجاني محدود").trim() || "مجاني محدود",
+    xp: Number.isFinite(Number(user.xp)) ? Number(user.xp) : 0,
+    streakDays: Number.isFinite(Number(user.streak_days)) ? Number(user.streak_days) : 0,
+    motivationScore: Number.isFinite(Number(user.motivation_score)) ? Number(user.motivation_score) : 0,
+    lastActiveDate: user.last_active_date || null,
+    achievements: Array.isArray(user.achievements) ? user.achievements : [],
+    status: formatUserStatus(user.status),
+    activity: String(user.activity || "").trim(),
+    createdAt: user.created_at || null,
+    updatedAt: user.updated_at || null
+  };
+}
+
+async function issueAuthToken(user, deviceName = "mullem-web") {
+  requireDatabaseConnection();
+  const rawToken = generateApiToken();
+  await databaseClient.createApiToken({
+    user_id: user.id,
+    name: sanitizeOptionalText(deviceName, MAX_METADATA_LENGTH) || "mullem-web",
+    token_hash: hashApiToken(rawToken)
+  });
+  return rawToken;
+}
+
+async function ensureDefaultUsers() {
+  if (!isDatabaseReady()) return;
+
+  await databaseClient.ensureUserByEmail({
+    name: DEFAULT_ADMIN_NAME,
+    email: DEFAULT_ADMIN_EMAIL,
+    password_hash: hashPassword(DEFAULT_ADMIN_PASSWORD),
+    role: "admin",
+    package_name: "إدارة المنصة",
+    xp: 0,
+    status: "active",
+    activity: "حساب إدارة افتراضي"
+  });
+
+  await databaseClient.ensureUserByEmail({
+    name: DEFAULT_STUDENT_NAME,
+    email: DEFAULT_STUDENT_EMAIL,
+    password_hash: hashPassword(DEFAULT_STUDENT_PASSWORD),
+    role: "student",
+    package_key: "starter",
+    stage: "ثانوي",
+    grade: "الثاني الثانوي",
+    subject: "الرياضيات",
+    package_name: "مجاني محدود",
+    xp: 100,
+    motivation_score: 0,
+    status: "active",
+    activity: "حساب طالب تجريبي"
+  });
+}
+
+async function getAuthContext(req) {
+  if (req.__mullemAuthContext) {
+    return req.__mullemAuthContext;
+  }
+
+  const authorization = String(req.headers.authorization || "").trim();
+  const match = authorization.match(/^Bearer\s+(.+)$/i);
+  if (!match) {
+    req.__mullemAuthContext = null;
+    return null;
+  }
+
+  if (!isDatabaseReady()) {
+    req.__mullemAuthContext = null;
+    return null;
+  }
+
+  const rawToken = String(match[1] || "").trim();
+  if (!rawToken) {
+    req.__mullemAuthContext = null;
+    return null;
+  }
+
+  const tokenHash = hashApiToken(rawToken);
+  const user = await databaseClient.findUserByTokenHash(tokenHash);
+  if (!user) {
+    req.__mullemAuthContext = null;
+    return null;
+  }
+
+  await databaseClient.touchApiToken(tokenHash);
+  req.__mullemAuthContext = { token: rawToken, tokenHash, user };
+  return req.__mullemAuthContext;
+}
+
+async function requireAuthenticatedUser(req) {
+  requireDatabaseConnection();
+  const auth = await getAuthContext(req);
+  if (!auth?.user) {
+    throw createHttpError(401, "Authentication is required.");
+  }
+  return auth;
+}
+
+async function requireAdminUser(req) {
+  const auth = await requireAuthenticatedUser(req);
+  if (normalizeUserRole(auth.user.role) !== "admin") {
+    throw createHttpError(403, "Admin access is required.");
+  }
+  return auth;
 }
 
 async function initializeDatabaseLayer() {
@@ -269,6 +637,7 @@ async function initializeDatabaseLayer() {
       password: DB_PASSWORD
     });
     await databaseClient.initialize();
+    await ensureDefaultUsers();
     databaseState = databaseClient.getState();
   } catch (error) {
     databaseClient = null;
@@ -310,6 +679,23 @@ function extractResponseText(payload) {
   return parts.join("\n\n").trim();
 }
 
+function buildResponsesInput(messages = []) {
+  return messages
+    .map((item) => {
+      const role = String(item?.role || "").trim().toLowerCase();
+      const label = role === "system"
+        ? "تعليمات النظام"
+        : role === "assistant"
+          ? "رد المساعد"
+          : "رسالة المستخدم";
+      const content = String(item?.content || "").trim();
+      if (!content) return "";
+      return `${label}:\n${content}`;
+    })
+    .filter(Boolean)
+    .join("\n\n");
+}
+
 function extractJsonObject(text) {
   const raw = String(text || "").trim();
   if (!raw) return null;
@@ -346,6 +732,37 @@ function buildChatSystemPrompt(meta) {
   if (meta?.grade) contextLines.push(`الصف: ${meta.grade}`);
   if (meta?.stage) contextLines.push(`المرحلة: ${meta.stage}`);
   if (meta?.term) contextLines.push(`الفصل: ${meta.term}`);
+
+  return contextLines.join("\n");
+}
+
+function buildAudienceAwareChatPrompt(meta) {
+  const contextLines = [
+    "أنت مساعد منصة ملم التعليمية.",
+    "أجب بالعربية الواضحة والمباشرة.",
+    "ابدأ بالجواب المفيد مباشرة ثم أضف شرحًا قصيرًا ومنظمًا عند الحاجة.",
+    "لا تذكر أي تفاصيل داخلية عن النظام أو الـ API.",
+    "حافظ على أسلوب مناسب لعمر الطالب ومستواه الدراسي."
+  ];
+
+  const stage = String(meta?.stage || inferStageFromGrade(meta?.grade) || "").trim();
+
+  if (stage.includes("ابتدائي")) {
+    contextLines.push("الأسلوب: بسيط جدًا ومشجّع وبجمل قصيرة مع أمثلة سهلة.");
+  } else if (stage.includes("متوسط")) {
+    contextLines.push("الأسلوب: واضح ومباشر مع شرح مبسط وربط سريع بالمفهوم.");
+  } else if (stage.includes("ثانوي")) {
+    contextLines.push("الأسلوب: أدق وأكثر نضجًا، مع سبب مختصر أو قانون أو مقارنة عند الحاجة.");
+  } else {
+    contextLines.push("الأسلوب: تعليمي مرن وواضح يناسب الطالب العام.");
+  }
+
+  if (meta?.subject) contextLines.push(`المادة المرجحة: ${meta.subject}`);
+  if (meta?.grade) contextLines.push(`الصف: ${meta.grade}`);
+  if (stage) contextLines.push(`المرحلة: ${stage}`);
+  if (meta?.term) contextLines.push(`الفصل: ${meta.term}`);
+  if (meta?.projectTitle) contextLines.push(`المشروع الحالي: ${meta.projectTitle}`);
+  if (meta?.lesson) contextLines.push(`الدرس أو التركيز الحالي: ${meta.lesson}`);
 
   return contextLines.join("\n");
 }
@@ -429,7 +846,7 @@ function normalizeQuestionType(value) {
   return allowed.has(String(value || "").trim()) ? String(value).trim() : "general";
 }
 
-async function callOpenAI({ messages }) {
+async function callOpenAI({ input }) {
   if (!OPENAI_API_KEY) {
     throw createHttpError(503, "OPENAI_API_KEY is not configured on the server.");
   }
@@ -447,7 +864,7 @@ async function callOpenAI({ messages }) {
       },
       body: JSON.stringify({
         model: OPENAI_MODEL,
-        input: messages
+        input: String(input || "").trim()
       }),
       signal: controller.signal
     });
@@ -466,10 +883,13 @@ async function callOpenAI({ messages }) {
     : { error: await response.text() };
 
   if (!response.ok) {
-    const message =
+    let message =
       payload?.error?.message ||
       payload?.message ||
       `OpenAI request failed with status ${response.status}`;
+    if (message.includes("Invalid value: 'input_text'")) {
+      message = "OpenAI request format mismatch on the server.";
+    }
     throw createHttpError(response.status, message);
   }
 
@@ -487,6 +907,7 @@ async function getOrCreateConversation(payload) {
       id: String(payload.conversation_id || "").trim() || crypto.randomUUID(),
       conversation_id: String(payload.conversation_id || "").trim() || undefined,
       guest_session_id: String(payload.guest_session_id || "").trim() || undefined,
+      project_id: payload.project_id ? Number(payload.project_id) : undefined,
       subject: String(payload.subject || "").trim() || null,
       stage: String(payload.stage || "").trim() || null,
       grade: String(payload.grade || "").trim() || null,
@@ -509,6 +930,8 @@ async function getOrCreateConversation(payload) {
   const conversation = {
     id: crypto.randomUUID(),
     guestSessionId: guestSessionId || null,
+    user_id: payload.user_id ? String(payload.user_id) : null,
+    project_id: payload.project_id ? String(payload.project_id) : null,
     title: String(payload.message || payload.question || "").trim().slice(0, 180) || null,
     subject: String(payload.subject || "").trim() || null,
     stage: String(payload.stage || "").trim() || null,
@@ -546,13 +969,538 @@ async function persistConversationMessage(conversation, role, text, source = "we
   conversation.messages.push({ role, text, source });
 }
 
+function parseListUsersQuery(req) {
+  const url = new URL(req.url, `http://${req.headers.host || "127.0.0.1"}`);
+  const perPage = Math.max(1, Math.min(Number(url.searchParams.get("per_page") || url.searchParams.get("limit") || 20), 200));
+  const page = Math.max(1, Number(url.searchParams.get("page") || 1));
+  const rawRole = sanitizeOptionalText(url.searchParams.get("role"), MAX_METADATA_LENGTH);
+  const rawStatus = sanitizeOptionalText(url.searchParams.get("status"), MAX_METADATA_LENGTH);
+  return {
+    limit: perPage,
+    offset: (page - 1) * perPage,
+    page,
+    perPage,
+    search: sanitizeOptionalText(url.searchParams.get("q") || url.searchParams.get("search"), 120),
+    role: rawRole ? normalizeUserRole(rawRole) : "",
+    status: rawStatus ? normalizeUserStatus(rawStatus) : ""
+  };
+}
+
+async function handleRegister(req, res) {
+  requireDatabaseConnection();
+  const payload = await parseJsonBody(req);
+  const name = requireTextField(payload.name, "name", MAX_NAME_LENGTH);
+  const email = requireEmail(payload.email);
+  const password = requirePassword(payload.password);
+  const passwordConfirmation = String(payload.password_confirmation || payload.passwordConfirmation || "");
+  const grade = sanitizeOptionalText(payload.grade, MAX_METADATA_LENGTH);
+  const stage = sanitizeOptionalText(payload.stage, MAX_METADATA_LENGTH) || inferStageFromGrade(grade);
+  const deviceName = sanitizeOptionalText(payload.device_name || payload.deviceName, MAX_METADATA_LENGTH) || "mullem-web";
+
+  if (passwordConfirmation && passwordConfirmation !== password) {
+    throw createHttpError(422, "Password confirmation does not match.");
+  }
+
+  const existing = await databaseClient.findUserByEmail(email);
+  if (existing) {
+    throw createHttpError(422, "This email is already registered.");
+  }
+
+  const user = await databaseClient.createUser({
+    name,
+    email,
+    password_hash: hashPassword(password),
+    role: "student",
+    package_key: "starter",
+    stage,
+    grade,
+    package_name: "مجاني محدود",
+    xp: 100,
+    status: "active",
+    activity: "أنشأ حسابًا جديدًا"
+  });
+
+  const token = await issueAuthToken(user, deviceName);
+
+  sendJson(req, res, 201, {
+    success: true,
+    data: {
+      token,
+      user: buildApiUser(user)
+    }
+  });
+}
+
+async function handleLogin(req, res) {
+  requireDatabaseConnection();
+  const payload = await parseJsonBody(req);
+  const email = requireEmail(payload.email);
+  const password = requirePassword(payload.password);
+  const deviceName = sanitizeOptionalText(payload.device_name || payload.deviceName, MAX_METADATA_LENGTH) || "mullem-web";
+
+  const user = await databaseClient.findUserByEmail(email);
+  if (!user || !verifyPassword(password, user.password_hash)) {
+    throw createHttpError(401, "Invalid email or password.");
+  }
+
+  const normalizedStatus = normalizeUserStatus(user.status);
+  if (normalizedStatus === "banned") {
+    throw createHttpError(403, "This account is banned.");
+  }
+  if (normalizedStatus === "suspended") {
+    throw createHttpError(403, "This account is suspended.");
+  }
+
+  const updatedUser = await syncUserDailyProgress(user, "تم تسجيل الدخول عبر الخادم");
+
+  const token = await issueAuthToken(updatedUser || user, deviceName);
+
+  sendJson(req, res, 200, {
+    success: true,
+    data: {
+      token,
+      user: buildApiUser(updatedUser || user)
+    }
+  });
+}
+
+async function handleAuthMe(req, res) {
+  const auth = await requireAuthenticatedUser(req);
+  const syncedUser = await syncUserDailyProgress(auth.user, "تم تحديث جلسة المستخدم");
+  sendJson(req, res, 200, {
+    success: true,
+    data: {
+      user: buildApiUser(syncedUser || auth.user)
+    }
+  });
+}
+
+async function handleLogout(req, res) {
+  const auth = await getAuthContext(req);
+  if (auth?.tokenHash && isDatabaseReady()) {
+    await databaseClient.revokeApiToken(auth.tokenHash);
+  }
+
+  sendJson(req, res, 200, {
+    success: true,
+    message: "Logged out successfully."
+  });
+}
+
+async function handleStudentDashboard(req, res) {
+  const auth = await requireAuthenticatedUser(req);
+  const syncedUser = await syncUserDailyProgress(auth.user, "زار لوحة الطالب");
+  const dashboard = await databaseClient.getStudentDashboard((syncedUser || auth.user).id);
+  if (!dashboard) {
+    throw createHttpError(404, "User not found.");
+  }
+
+  sendJson(req, res, 200, {
+    success: true,
+    data: {
+      user: buildApiUser(dashboard.user),
+      stats: dashboard.stats,
+      projects: Array.isArray(dashboard.projects) ? dashboard.projects : [],
+      recent_conversations: Array.isArray(dashboard.recent_conversations)
+        ? dashboard.recent_conversations.map(buildConversationSummary)
+        : []
+    }
+  });
+}
+
+function buildProjectSummary(project) {
+  if (!project) return null;
+  return {
+    id: String(project.id),
+    title: String(project.title || "").trim(),
+    subject: String(project.subject || "").trim(),
+    stage: String(project.stage || "").trim(),
+    grade: String(project.grade || "").trim(),
+    term: String(project.term || "").trim(),
+    lesson: String(project.lesson || "").trim(),
+    description: String(project.description || "").trim(),
+    isArchived: Boolean(project.is_archived),
+    conversationsCount: Number(project.conversations_count || 0),
+    lastActivityAt: project.last_activity_at || null,
+    createdAt: project.created_at || null,
+    updatedAt: project.updated_at || null
+  };
+}
+
+async function handleGuestStatus(req, res) {
+  const url = new URL(req.url, `http://${req.headers.host || "127.0.0.1"}`);
+  const guestSessionId = sanitizeOptionalText(url.searchParams.get("guest_session_id"), MAX_METADATA_LENGTH);
+  if (!guestSessionId) {
+    throw createHttpError(422, "guest_session_id is required.");
+  }
+
+  let usage = { messages_count: 0, remaining_messages: GUEST_MESSAGE_LIMIT };
+  if (isDatabaseReady()) {
+    const usageRow = await databaseClient.getGuestUsage(guestSessionId);
+    const count = Number(usageRow?.messages_count || 0);
+    usage = {
+      messages_count: count,
+      remaining_messages: Math.max(0, GUEST_MESSAGE_LIMIT - count)
+    };
+  }
+
+  sendJson(req, res, 200, {
+    success: true,
+    data: {
+      guest_session_id: guestSessionId,
+      limit: GUEST_MESSAGE_LIMIT,
+      used_messages: usage.messages_count,
+      remaining_messages: usage.remaining_messages
+    }
+  });
+}
+
+async function handleStudentProjects(req, res) {
+  const auth = await requireAuthenticatedUser(req);
+  const url = new URL(req.url, `http://${req.headers.host || "127.0.0.1"}`);
+  const includeArchived = url.searchParams.get("include_archived") === "1";
+  const limit = Math.max(1, Math.min(Number(url.searchParams.get("limit") || 50), 200));
+  const items = await databaseClient.listProjects(auth.user.id, {
+    include_archived: includeArchived,
+    limit
+  });
+
+  sendJson(req, res, 200, {
+    success: true,
+    data: {
+      items: items.map(buildProjectSummary)
+    }
+  });
+}
+
+async function handleCreateStudentProject(req, res) {
+  const auth = await requireAuthenticatedUser(req);
+  const payload = await parseJsonBody(req);
+  const grade = sanitizeOptionalText(payload.grade || auth.user.grade, MAX_METADATA_LENGTH);
+  const stage = sanitizeOptionalText(payload.stage || auth.user.stage || inferStageFromGrade(grade), MAX_METADATA_LENGTH);
+
+  const project = await databaseClient.createProject({
+    user_id: auth.user.id,
+    title: requireTextField(payload.title, "title", 180),
+    subject: sanitizeOptionalText(payload.subject, MAX_METADATA_LENGTH) || null,
+    stage: stage || null,
+    grade: grade || null,
+    term: sanitizeOptionalText(payload.term, MAX_METADATA_LENGTH) || null,
+    lesson: sanitizeOptionalText(payload.lesson, 180) || null,
+    description: String(payload.description || "").trim().slice(0, 2000) || null
+  });
+
+  sendJson(req, res, 201, {
+    success: true,
+    data: {
+      project: buildProjectSummary(project)
+    }
+  });
+}
+
+async function handleUpdateStudentProject(req, res, projectId) {
+  const auth = await requireAuthenticatedUser(req);
+  const payload = await parseJsonBody(req);
+  const changes = {};
+
+  if ("title" in payload) changes.title = requireTextField(payload.title, "title", 180);
+  if ("subject" in payload) changes.subject = sanitizeOptionalText(payload.subject, MAX_METADATA_LENGTH) || null;
+  if ("stage" in payload) changes.stage = sanitizeOptionalText(payload.stage, MAX_METADATA_LENGTH) || null;
+  if ("grade" in payload) changes.grade = sanitizeOptionalText(payload.grade, MAX_METADATA_LENGTH) || null;
+  if ("term" in payload) changes.term = sanitizeOptionalText(payload.term, MAX_METADATA_LENGTH) || null;
+  if ("lesson" in payload) changes.lesson = sanitizeOptionalText(payload.lesson, 180) || null;
+  if ("description" in payload) changes.description = String(payload.description || "").trim().slice(0, 2000) || null;
+  if ("isArchived" in payload || "is_archived" in payload) {
+    changes.is_archived = Boolean(payload.isArchived ?? payload.is_archived);
+  }
+
+  const project = await databaseClient.updateProject(projectId, auth.user.id, changes);
+  if (!project) {
+    throw createHttpError(404, "Project not found.");
+  }
+
+  sendJson(req, res, 200, {
+    success: true,
+    data: {
+      project: buildProjectSummary(project)
+    }
+  });
+}
+
+async function handleStudentConversations(req, res) {
+  const auth = await requireAuthenticatedUser(req);
+  const url = new URL(req.url, `http://${req.headers.host || "127.0.0.1"}`);
+  const limit = Math.max(1, Math.min(Number(url.searchParams.get("limit") || 20), 100));
+  const projectId = sanitizeOptionalText(url.searchParams.get("project_id"), MAX_METADATA_LENGTH);
+  const items = await databaseClient.listUserConversations(auth.user.id, {
+    limit,
+    project_id: projectId || null
+  });
+
+  sendJson(req, res, 200, {
+    success: true,
+    data: {
+      items: items.map(buildConversationSummary)
+    }
+  });
+}
+
+async function handlePackages(req, res) {
+  const auth = await requireAuthenticatedUser(req);
+  const syncedUser = await syncUserDailyProgress(auth.user, "زار صفحة الباقات");
+  const items = await databaseClient.listPackages({ include_inactive: false });
+
+  sendJson(req, res, 200, {
+    success: true,
+    data: {
+      user: buildApiUser(syncedUser || auth.user),
+      items: items.map((item) => ({
+        id: item.id,
+        key: String(item.package_key || "").trim(),
+        name: String(item.display_name || "").trim(),
+        daily_xp: Number(item.daily_xp || 0),
+        price_sar: Number(item.price_sar || 0),
+        duration_days: Number(item.duration_days || 0),
+        summary: String(item.summary || "").trim(),
+        benefits: Array.isArray(item.benefits) ? item.benefits : [],
+        is_active: Boolean(item.is_active),
+        is_default: Boolean(item.is_default),
+        sort_order: Number(item.sort_order || 0)
+      }))
+    }
+  });
+}
+
+async function handleAdminStats(req, res) {
+  await requireAdminUser(req);
+  const stats = await databaseClient.getAdminStats();
+  sendJson(req, res, 200, {
+    success: true,
+    data: { stats }
+  });
+}
+
+async function handleAdminPackages(req, res) {
+  await requireAdminUser(req);
+  const items = await databaseClient.listPackages({ include_inactive: true });
+  sendJson(req, res, 200, {
+    success: true,
+    data: {
+      items: items.map((item) => ({
+        id: item.id,
+        key: String(item.package_key || "").trim(),
+        name: String(item.display_name || "").trim(),
+        daily_xp: Number(item.daily_xp || 0),
+        price_sar: Number(item.price_sar || 0),
+        duration_days: Number(item.duration_days || 0),
+        summary: String(item.summary || "").trim(),
+        benefits: Array.isArray(item.benefits) ? item.benefits : [],
+        is_active: Boolean(item.is_active),
+        is_default: Boolean(item.is_default),
+        sort_order: Number(item.sort_order || 0)
+      }))
+    }
+  });
+}
+
+async function handleAdminUpdatePackage(req, res, packageId) {
+  await requireAdminUser(req);
+  const payload = await parseJsonBody(req);
+  const changes = {};
+
+  if ("name" in payload || "display_name" in payload) {
+    changes.display_name = requireTextField(payload.display_name || payload.name, "name", 160);
+  }
+
+  if ("key" in payload || "package_key" in payload) {
+    changes.package_key = requireTextField(payload.package_key || payload.key, "key", 80)
+      .toLowerCase()
+      .replace(/\s+/g, "_");
+  }
+
+  if ("daily_xp" in payload || "dailyXp" in payload) {
+    const dailyXp = Number(payload.daily_xp ?? payload.dailyXp);
+    if (!Number.isFinite(dailyXp) || dailyXp < 0) {
+      throw createHttpError(422, "daily_xp must be a non-negative number.");
+    }
+    changes.daily_xp = Math.round(dailyXp);
+  }
+
+  if ("price_sar" in payload || "priceSar" in payload) {
+    const priceSar = Number(payload.price_sar ?? payload.priceSar);
+    if (!Number.isFinite(priceSar) || priceSar < 0) {
+      throw createHttpError(422, "price_sar must be a non-negative number.");
+    }
+    changes.price_sar = Number(priceSar.toFixed(2));
+  }
+
+  if ("duration_days" in payload || "durationDays" in payload) {
+    const durationDays = Number(payload.duration_days ?? payload.durationDays);
+    if (!Number.isFinite(durationDays) || durationDays < 0) {
+      throw createHttpError(422, "duration_days must be a non-negative number.");
+    }
+    changes.duration_days = Math.round(durationDays);
+  }
+
+  if ("summary" in payload) {
+    changes.summary = sanitizeOptionalText(payload.summary, 500) || "";
+  }
+
+  if ("benefits" in payload) {
+    changes.benefits = Array.isArray(payload.benefits)
+      ? payload.benefits
+      : String(payload.benefits || "")
+        .split(/\r?\n+/)
+        .map((item) => item.trim())
+        .filter(Boolean);
+  }
+
+  if ("is_active" in payload || "isActive" in payload) {
+    changes.is_active = Boolean(payload.is_active ?? payload.isActive);
+  }
+
+  if ("is_default" in payload || "isDefault" in payload) {
+    changes.is_default = Boolean(payload.is_default ?? payload.isDefault);
+  }
+
+  if ("sort_order" in payload || "sortOrder" in payload) {
+    const sortOrder = Number(payload.sort_order ?? payload.sortOrder);
+    if (!Number.isFinite(sortOrder) || sortOrder < 0) {
+      throw createHttpError(422, "sort_order must be a non-negative number.");
+    }
+    changes.sort_order = Math.round(sortOrder);
+  }
+
+  const updated = await databaseClient.updatePackage(packageId, changes);
+  if (!updated) {
+    throw createHttpError(404, "Package not found.");
+  }
+
+  sendJson(req, res, 200, {
+    success: true,
+    data: {
+      item: {
+        id: updated.id,
+        key: String(updated.package_key || "").trim(),
+        name: String(updated.display_name || "").trim(),
+        daily_xp: Number(updated.daily_xp || 0),
+        price_sar: Number(updated.price_sar || 0),
+        duration_days: Number(updated.duration_days || 0),
+        summary: String(updated.summary || "").trim(),
+        benefits: Array.isArray(updated.benefits) ? updated.benefits : [],
+        is_active: Boolean(updated.is_active),
+        is_default: Boolean(updated.is_default),
+        sort_order: Number(updated.sort_order || 0)
+      }
+    }
+  });
+}
+
+async function handleAdminUsers(req, res) {
+  await requireAdminUser(req);
+  const query = parseListUsersQuery(req);
+  const result = await databaseClient.listUsers(query);
+
+  sendJson(req, res, 200, {
+    success: true,
+    data: {
+      items: result.items.map(buildApiUser),
+      total: result.total,
+      page: query.page,
+      per_page: query.perPage
+    }
+  });
+}
+
+async function handleAdminUpdateUser(req, res, userId) {
+  await requireAdminUser(req);
+  const payload = await parseJsonBody(req);
+  const changes = {};
+  const existingUser = await databaseClient.findUserById(userId);
+  if (!existingUser) {
+    throw createHttpError(404, "User not found.");
+  }
+
+  if ("name" in payload) {
+    changes.name = requireTextField(payload.name, "name", MAX_NAME_LENGTH);
+  }
+
+  if ("email" in payload) {
+    const nextEmail = requireEmail(payload.email);
+    const emailOwner = await databaseClient.findUserByEmail(nextEmail);
+    if (emailOwner && String(emailOwner.id) !== String(existingUser.id)) {
+      throw createHttpError(422, "This email is already assigned to another user.");
+    }
+    changes.email = nextEmail;
+  }
+
+  if ("role" in payload) {
+    changes.role = normalizeUserRole(payload.role);
+  }
+
+  if ("stage" in payload) {
+    changes.stage = sanitizeOptionalText(payload.stage, MAX_METADATA_LENGTH) || null;
+  }
+
+  if ("grade" in payload) {
+    changes.grade = sanitizeOptionalText(payload.grade, MAX_METADATA_LENGTH) || null;
+  }
+
+  if ("subject" in payload) {
+    changes.subject = sanitizeOptionalText(payload.subject, MAX_METADATA_LENGTH) || null;
+  }
+
+  if ("package_id" in payload || "package" in payload || "package_name" in payload) {
+    const selectedPackage =
+      ("package_id" in payload && String(payload.package_id || "").trim())
+        ? await databaseClient.findPackageById(payload.package_id)
+        : await databaseClient.findPackageByKeyOrName(payload.package_name || payload.package || "");
+
+    if (selectedPackage) {
+      changes.package_id = selectedPackage.id;
+      changes.package_name = selectedPackage.display_name;
+      Object.assign(changes, buildPackagePeriodWindow(selectedPackage));
+    } else {
+      changes.package_id = null;
+      changes.package_started_at = null;
+      changes.package_expires_at = null;
+      changes.package_name = sanitizeOptionalText(payload.package_name || payload.package, 150) || "التمهيدية";
+    }
+  }
+
+  if ("xp" in payload) {
+    const xp = Number(payload.xp);
+    if (!Number.isFinite(xp) || xp < 0) {
+      throw createHttpError(422, "XP must be a non-negative number.");
+    }
+    changes.xp = Math.round(xp);
+  }
+
+  if ("status" in payload) {
+    changes.status = normalizeUserStatus(payload.status);
+  }
+
+  if ("activity" in payload) {
+    changes.activity = sanitizeOptionalText(payload.activity, 255) || null;
+  }
+
+  const updated = await databaseClient.updateUser(userId, changes);
+
+  sendJson(req, res, 200, {
+    success: true,
+    data: {
+      user: buildApiUser(updated)
+    }
+  });
+}
+
 async function buildChatMessages(conversation, payload) {
-  const systemPrompt = buildChatSystemPrompt(payload);
+  const systemPrompt = buildAudienceAwareChatPrompt(payload);
   const history = await listConversationHistory(conversation);
   const messages = [
     {
       role: "system",
-      content: [{ type: "input_text", text: systemPrompt }]
+      content: systemPrompt
     }
   ];
 
@@ -560,13 +1508,13 @@ async function buildChatMessages(conversation, payload) {
     if (!item?.role || !item?.text) continue;
     messages.push({
       role: item.role,
-      content: [{ type: "input_text", text: item.text }]
+      content: item.text
     });
   }
 
   messages.push({
     role: "user",
-    content: [{ type: "input_text", text: String(payload.message || "").trim() }]
+    content: String(payload.message || "").trim()
   });
 
   return messages;
@@ -578,42 +1526,94 @@ async function handleChatSend(req, res) {
   const guestSessionId = sanitizeOptionalText(payload.guest_session_id, MAX_METADATA_LENGTH);
   const conversationId = sanitizeOptionalText(payload.conversation_id, MAX_METADATA_LENGTH);
   const subject = sanitizeOptionalText(payload.subject, MAX_METADATA_LENGTH);
-  const stage = sanitizeOptionalText(payload.stage, MAX_METADATA_LENGTH);
+  const lesson = sanitizeOptionalText(payload.lesson, 180);
   const grade = sanitizeOptionalText(payload.grade, MAX_METADATA_LENGTH);
+  const stage = sanitizeOptionalText(payload.stage, MAX_METADATA_LENGTH) || inferStageFromGrade(grade);
   const term = sanitizeOptionalText(payload.term, MAX_METADATA_LENGTH);
+  const projectId = sanitizeOptionalText(payload.project_id, MAX_METADATA_LENGTH);
+  const hasAttachment = Boolean(payload.has_attachment || payload.hasAttachment || Number(payload.attachment_count || 0) > 0);
+  const auth = await getAuthContext(req);
+  const activeUser = auth?.user ? await syncUserDailyProgress(auth.user, "بدأ جلسة شات جديدة") : null;
+
+  if (!activeUser && !guestSessionId) {
+    throw createHttpError(422, "guest_session_id is required for guest chat.");
+  }
+
+  let guestUsage = null;
+  if (!activeUser && isDatabaseReady()) {
+    guestUsage = await databaseClient.getGuestUsage(guestSessionId);
+    const usedMessages = Number(guestUsage?.messages_count || 0);
+    if (usedMessages >= GUEST_MESSAGE_LIMIT) {
+      throw createHttpError(403, "Guest message limit reached. Please sign in to continue.");
+    }
+  }
+
+  let project = null;
+  if (activeUser && projectId && isDatabaseReady()) {
+    project = await databaseClient.findProjectById(projectId, activeUser.id);
+    if (!project) {
+      throw createHttpError(404, "Project not found.");
+    }
+  }
 
   const conversation = await getOrCreateConversation({
     ...payload,
     message,
     guest_session_id: guestSessionId,
     conversation_id: conversationId,
+    user_id: activeUser?.id || null,
+    project_id: project?.id || null,
     subject,
     stage,
     grade,
     term
   });
   const result = await callOpenAI({
-    messages: await buildChatMessages(conversation, {
+    input: buildResponsesInput(await buildChatMessages(conversation, {
       ...payload,
       message,
-      subject,
+      subject: subject || project?.subject || activeUser?.subject || "",
       stage,
-      grade,
-      term
-    })
+      grade: grade || project?.grade || activeUser?.grade || "",
+      term: term || project?.term || "",
+      lesson: lesson || project?.lesson || "",
+      projectTitle: project?.title || ""
+    }))
   });
 
   await persistConversationMessage(conversation, "user", message, "web");
   await persistConversationMessage(conversation, "assistant", result.text, "openai");
 
+  let rewardedUser = activeUser || null;
+  if (activeUser && isDatabaseReady()) {
+    const rewardAmount = hasAttachment ? IMAGE_MESSAGE_XP_REWARD : TEXT_MESSAGE_XP_REWARD;
+    rewardedUser = await rewardUserForMessage(
+      activeUser,
+      rewardAmount,
+      hasAttachment ? "أرسل رسالة مع صورة/ملف" : "أرسل رسالة نصية"
+    );
+  } else if (!activeUser && isDatabaseReady()) {
+    guestUsage = await databaseClient.incrementGuestUsage(guestSessionId, 1);
+  }
+
   sendJson(req, res, 200, {
     success: true,
     data: {
       conversation_id: conversation.id,
+      project: project ? buildProjectSummary(project) : null,
       assistant_message: {
         body: result.text,
         source: "openai"
-      }
+      },
+      rewards: activeUser ? {
+        xp_earned: hasAttachment ? IMAGE_MESSAGE_XP_REWARD : TEXT_MESSAGE_XP_REWARD
+      } : null,
+      user: rewardedUser ? buildApiUser(rewardedUser) : null,
+      guest: !activeUser ? {
+        limit: GUEST_MESSAGE_LIMIT,
+        used_messages: Number(guestUsage?.messages_count || 0),
+        remaining_messages: Math.max(0, GUEST_MESSAGE_LIMIT - Number(guestUsage?.messages_count || 0))
+      } : null
     }
   });
 }
@@ -627,22 +1627,14 @@ async function handleSolveQuestion(req, res) {
   const lesson = sanitizeOptionalText(payload.lesson, 180);
 
   const result = await callOpenAI({
-    messages: [
-      {
-        role: "system",
-        content: [{
-          type: "input_text",
-          text: buildSolveSystemPrompt({
-            ...payload,
-            question,
-            grade,
-            subject,
-            term,
-            lesson
-          })
-        }]
-      }
-    ]
+    input: buildSolveSystemPrompt({
+      ...payload,
+      question,
+      grade,
+      subject,
+      term,
+      lesson
+    })
   });
 
   const parsed = extractJsonObject(result.text);
@@ -806,6 +1798,89 @@ async function routeRequest(req, res) {
         openai_configured: Boolean(OPENAI_API_KEY)
       }
     });
+    return;
+  }
+
+  if (req.method === "POST" && requestPath === "/api/auth/register") {
+    await handleRegister(req, res);
+    return;
+  }
+
+  if (req.method === "POST" && requestPath === "/api/auth/login") {
+    await handleLogin(req, res);
+    return;
+  }
+
+  if (req.method === "GET" && requestPath === "/api/auth/me") {
+    await handleAuthMe(req, res);
+    return;
+  }
+
+  if (req.method === "POST" && requestPath === "/api/auth/logout") {
+    await handleLogout(req, res);
+    return;
+  }
+
+  if (req.method === "GET" && requestPath === "/api/student/dashboard") {
+    await handleStudentDashboard(req, res);
+    return;
+  }
+
+  if (req.method === "GET" && requestPath === "/api/guest/status") {
+    await handleGuestStatus(req, res);
+    return;
+  }
+
+  if (req.method === "GET" && requestPath === "/api/student/projects") {
+    await handleStudentProjects(req, res);
+    return;
+  }
+
+  if (req.method === "POST" && requestPath === "/api/student/projects") {
+    await handleCreateStudentProject(req, res);
+    return;
+  }
+
+  if (req.method === "PATCH" && requestPath.startsWith("/api/student/projects/")) {
+    const projectId = decodeURIComponent(requestPath.replace("/api/student/projects/", ""));
+    await handleUpdateStudentProject(req, res, projectId);
+    return;
+  }
+
+  if (req.method === "GET" && requestPath === "/api/student/conversations") {
+    await handleStudentConversations(req, res);
+    return;
+  }
+
+  if (req.method === "GET" && requestPath === "/api/packages") {
+    await handlePackages(req, res);
+    return;
+  }
+
+  if (req.method === "GET" && requestPath === "/api/admin/stats") {
+    await handleAdminStats(req, res);
+    return;
+  }
+
+  if (req.method === "GET" && requestPath === "/api/admin/packages") {
+    await handleAdminPackages(req, res);
+    return;
+  }
+
+  if (req.method === "GET" && requestPath === "/api/admin/users") {
+    await handleAdminUsers(req, res);
+    return;
+  }
+
+  if (req.method === "PATCH" && requestPath.startsWith("/api/admin/packages/")) {
+    const packageId = decodeURIComponent(requestPath.replace("/api/admin/packages/", ""));
+    await handleAdminUpdatePackage(req, res, packageId);
+    return;
+  }
+
+  if (req.method === "PATCH" && requestPath.startsWith("/api/admin/users/")) {
+    const userId = decodeURIComponent(requestPath.replace("/api/admin/users/", ""));
+    await handleAdminUpdateUser(req, res, userId);
     return;
   }
 

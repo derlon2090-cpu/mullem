@@ -67,6 +67,10 @@
           <strong>إعدادك الحالي</strong>
           <span data-selection-summary>ابدأ أول محادثة لك الآن.</span>
         </article>
+        <article class="student-mini-card">
+          <strong>حالة الاستخدام</strong>
+          <span data-guest-status>للضيف 5 رسائل فقط قبل تسجيل الدخول.</span>
+        </article>
       </section>
 
       <section class="student-quick-grid">
@@ -124,6 +128,37 @@
           <input class="field" data-lesson type="text" placeholder="اسم الدرس اختياري">
         </div>
       </details>
+
+      <section class="student-section-card student-projects-panel">
+        <div class="student-section-head">
+          <div>
+            <h3>المشروعات</h3>
+            <p class="student-section-copy">احفظ محادثات مادة أو درس داخل مشروع مستقل إذا أردت الرجوع لها لاحقًا من نفس اللوحة.</p>
+          </div>
+          <span class="student-projects-badge">اختياري</span>
+        </div>
+
+        <div class="student-project-toolbar">
+          <label class="student-project-picker">
+            <span>اربط هذه المحادثة بمشروع</span>
+            <select class="field" data-project-select>
+              <option value="">بدون مشروع محفوظ</option>
+            </select>
+          </label>
+          <div class="student-guest-note" data-guest-usage-note>للضيف 5 رسائل فقط. سجّل دخولك لحفظ المشروعات والمحادثات مدى الحياة.</div>
+        </div>
+
+        <div class="student-project-form">
+          <input class="field" type="text" placeholder="اسم المشروع" data-project-title>
+          <input class="field" type="text" placeholder="الدرس أو الوحدة" data-project-lesson>
+          <textarea class="field student-project-description" rows="3" placeholder="وصف مختصر للمشروع أو الهدف منه" data-project-description></textarea>
+          <button class="primary-btn" type="button" data-create-project>إنشاء مشروع جديد</button>
+        </div>
+
+        <div class="student-project-list" data-project-list>
+          <div class="student-project-empty">أنشئ مشروعًا إذا أردت حفظ محادثات مادة أو درس معين في مكان مستقل.</div>
+        </div>
+      </section>
 
       <section class="chat-shell student-chat-shell" id="chat">
         <div class="chat-top student-chat-top">
@@ -216,8 +251,8 @@
   <button class="scroll-top-btn" type="button" data-scroll-top aria-label="التنقل بين أعلى الصفحة وأسفلها">↑</button>
   <script src="guest-preinit.js?v=20260408-5"></script>
   <script src="mullem-config.js?v=20260409-5"></script>
-  <script src="api-client.js?v=20260409-3"></script>
-  <script src="app.js?v=20260409-1"></script>
-  <script src="app.runtime.js?v=20260409-3"></script>
+  <script src="api-client.js?v=20260409-7"></script>
+  <script src="app.js?v=20260409-2"></script>
+  <script src="app.runtime.js?v=20260409-4"></script>
 </body>
 </html>

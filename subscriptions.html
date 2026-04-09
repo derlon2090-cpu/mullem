@@ -8,7 +8,7 @@
     if ("scrollRestoration" in history) history.scrollRestoration = "manual";
     if (location.hash === "#chat") history.replaceState(null, "", location.pathname + location.search);
   </script>
-  <title>ملم | الباقات والنقاط</title>
+  <title>ملم | الباقات اليومية</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800;900&display=swap" rel="stylesheet">
@@ -24,85 +24,121 @@
         </div>
         <div class="brand-text">
           <div class="brand-name">ملم</div>
-          <div class="brand-copy">الباقات والنقاط</div>
+          <div class="brand-copy">الباقات اليومية ورصيد التعلم</div>
         </div>
       </a>
 
       <div class="topbar-actions">
         <div class="top-status">
-          <div class="top-chip xp-chip">رصيدك: <span data-xp-balance>0</span> نقطة</div>
-          <div class="top-chip" data-status>اختر الباقة المناسبة</div>
-          <button class="theme-toggle" type="button" data-theme-toggle aria-label="تبديل الوضع الداكن">🌙</button>
+          <div class="top-chip xp-chip">الرصيد: <span data-package-top-xp>0</span> XP</div>
+          <div class="top-chip" data-package-top-status>سجّل الدخول لعرض باقتك الحالية</div>
+          <button class="theme-toggle" type="button" data-theme-toggle aria-label="تبديل الوضع الداكن">☙</button>
         </div>
         <div class="top-cta">
           <a class="secondary-btn top-cta-link" href="index.html">الرئيسية</a>
-          <a class="primary-btn top-cta-link" href="student.html">الشات</a>
+          <a class="secondary-btn top-cta-link" href="student.html">الشات</a>
+          <a class="primary-btn top-cta-link" href="profile.html">ملفي</a>
         </div>
       </div>
     </header>
   </div>
 
-  <main class="page-wrap">
-    <section class="shell hero-stage">
-      <section class="hero-card hero-card-showcase">
-        <div class="hero-logo" aria-hidden="true">
-          <div class="hero-logo-mark">
-            <img class="hero-icon-image" src="favicon.svg" alt="شعار ملم">
-          </div>
-          <div class="hero-logo-text">ملم</div>
+  <main class="page-wrap packages-page">
+    <div class="shell packages-shell">
+      <section class="packages-hero-card">
+        <div class="packages-hero-copy">
+          <span class="eyebrow">باقات ملم</span>
+          <h1>اختر باقة يومية تناسب استخدامك</h1>
+          <p>كل باقة تعيد شحن رصيدك اليومي تلقائيًا حسب ما يحدده الأدمن داخل المنصة. الشراء عبر المتجر سيكون متاحًا قريبًا بعد إطلاق الدومين الخاص به.</p>
         </div>
-        <div class="eyebrow">اختر الباقة المناسبة لطريقة استخدامك</div>
-        <h1>النقاط داخل ملم يحل</h1>
-        <p>كل استخدام للشات النصي يستهلك 10 نقاط، وتحليل الصور وحلها يستهلك 15 نقطة. يبدأ المستخدم المسجل بـ 100 نقطة.</p>
+
+        <div class="packages-hero-stats">
+          <article class="packages-hero-stat">
+            <strong>+10 XP</strong>
+            <span>لكل رسالة نصية بعد تسجيل الدخول</span>
+          </article>
+          <article class="packages-hero-stat">
+            <strong>+15 XP</strong>
+            <span>لكل رسالة تتضمن صورة أو مرفقًا</span>
+          </article>
+          <article class="packages-hero-stat">
+            <strong>+5 XP</strong>
+            <span>هدية الحماس اليومية مع كل يوم دخول</span>
+          </article>
+        </div>
       </section>
-    </section>
 
-    <section class="shell platform-insights">
-      <div class="platform-insights-wrap">
-        <article class="info-stat-card">
-          <div class="info-stat-icon">🎁</div>
-          <strong>100</strong>
-          <span>نقطة مجانية عند إنشاء الحساب أو أول تسجيل دخول</span>
-        </article>
-        <article class="info-stat-card">
-          <div class="info-stat-icon">💬</div>
-          <strong>10</strong>
-          <span>نقاط لكل استخدام للشات النصي</span>
-        </article>
-        <article class="info-stat-card">
-          <div class="info-stat-icon">📷</div>
-          <strong>15</strong>
-          <span>نقطة لتحليل الصورة والحل</span>
-        </article>
+      <section class="packages-auth-state" data-packages-auth-state>
+        <div class="packages-lock-card">
+          <strong>هذه الصفحة تتطلب تسجيل الدخول إلى الحساب</strong>
+          <p>سجّل الدخول أولًا لعرض باقتك الحالية، ومعرفة رصيدك اليومي، وطلب تفعيل الباقة المناسبة من خلال المنصة.</p>
+          <div class="packages-lock-actions">
+            <a class="primary-btn" href="login.html">تسجيل الدخول</a>
+            <a class="secondary-btn" href="student.html">العودة إلى الشات</a>
+          </div>
+        </div>
+      </section>
 
-        <article class="info-stat-card info-stat-card-wide">
-          <div class="info-stat-icon">🟢</div>
-          <h3>الباقة المجانية</h3>
-          <p>0 ريال</p>
-          <span>100 نقطة بداية، استخدام الشات النصي، ورفع الصور بعد تسجيل الدخول.</span>
-          <a class="secondary-btn" href="login.html">ابدأ مجانًا</a>
-        </article>
-        <article class="info-stat-card info-stat-card-wide">
-          <div class="info-stat-icon">🟡</div>
-          <h3>باقة الطالب</h3>
-          <p>19 ريال</p>
-          <span>300 نقطة إضافية، مناسبة للمذاكرة اليومية والمراجعة الأسبوعية.</span>
-          <a class="primary-btn" href="login.html">اشترك الآن</a>
-        </article>
-        <article class="info-stat-card info-stat-card-wide">
-          <div class="info-stat-icon">🟣</div>
-          <h3>باقة المتقدم</h3>
-          <p>39 ريال</p>
-          <span>700 نقطة إضافية، مناسبة لفترات الاختبارات وكثرة تحليل الصور.</span>
-          <a class="primary-btn" href="login.html">اشترك الآن</a>
-        </article>
-      </div>
-    </section>
+      <section class="packages-dashboard" data-packages-dashboard hidden>
+        <div class="packages-dashboard-grid">
+          <article class="packages-current-card">
+            <div class="packages-current-head">
+              <span class="eyebrow">الباقة الحالية</span>
+              <strong data-current-package-name>التمهيدية</strong>
+            </div>
+            <div class="packages-current-meta">
+              <div>
+                <span>الرصيد الحالي</span>
+                <strong data-current-package-xp>0 XP</strong>
+              </div>
+              <div>
+                <span>التجديد اليومي</span>
+                <strong data-current-package-daily>0 XP</strong>
+              </div>
+              <div>
+                <span>السعر الشهري</span>
+                <strong data-current-package-price>0 ريال</strong>
+              </div>
+              <div>
+                <span>مدة الباقة</span>
+                <strong data-current-package-duration>مجانية</strong>
+              </div>
+            </div>
+            <div class="packages-current-expiry" data-current-package-expiry>الباقة المجانية لا تنتهي.</div>
+            <p data-current-package-summary>هذه الباقة تعطيك نقطة انطلاق داخل المنصة، ويمكن للأدمن ترقية حسابك إلى إحدى الباقات اليومية.</p>
+            <ul class="packages-plan-benefits packages-current-benefits" data-current-package-benefits></ul>
+          </article>
+
+          <article class="packages-info-card">
+            <span class="eyebrow">معلومة مهمة</span>
+            <h2>الطلب عبر المتجر قريبًا</h2>
+            <p>في هذه المرحلة لا نعرض بوابة دفع داخل المنصة. عند اختيار الباقة المناسبة ستجد أن الطلب يتم عبر المتجر قريبًا، وسنضيف الدومين الخاص به بعد إطلاقه.</p>
+            <div class="packages-info-points">
+              <span>يتحكم الأدمن في تفعيل الباقات للمستخدمين من لوحة الإدارة.</span>
+              <span>يتجدد رصيد الباقة يوميًا تلقائيًا حسب إعدادات الحساب.</span>
+              <span>يمكن تغيير الباقة أو تخصيصها لكل مستخدم بدون فقد سجل الشات أو المشاريع.</span>
+            </div>
+          </article>
+        </div>
+
+        <section class="packages-list-section">
+          <div class="packages-section-head">
+            <div>
+              <h2>الباقات المتاحة</h2>
+              <p>الباقات التالية قابلة للتعديل من لوحة الأدمن، وما يظهر هنا يُسحب مباشرة من قاعدة البيانات.</p>
+            </div>
+            <span class="packages-hint">الحساب الحالي: <strong data-package-user-name>—</strong></span>
+          </div>
+
+          <div class="packages-grid" data-packages-grid></div>
+        </section>
+      </section>
+    </div>
   </main>
 
   <button class="scroll-top-btn" type="button" data-scroll-top aria-label="العودة إلى أعلى الصفحة">↑</button>
   <script src="mullem-config.js?v=20260409-5"></script>
-  <script src="api-client.js?v=20260409-3"></script>
-  <script src="app.js?v=20260409-1"></script>
+  <script src="api-client.js?v=20260409-7"></script>
+  <script src="subscriptions.js?v=20260409-2"></script>
 </body>
 </html>
