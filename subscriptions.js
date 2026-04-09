@@ -67,6 +67,56 @@ function getGuestPackageSnapshot() {
   };
 }
 
+function getFallbackPackagesCatalog() {
+  return [
+    {
+      id: "fallback-pro",
+      name: "برو",
+      daily_xp: 200,
+      price_sar: 30,
+      duration_days: 30,
+      is_active: 1,
+      is_default: 0,
+      summary: "للاستخدام اليومي الخفيف مع تجديد ثابت كل يوم.",
+      benefits: [
+        "200 XP يوميًا لمدة شهر",
+        "مناسب للواجبات اليومية السريعة",
+        "حفظ المحادثات والمشروعات داخل الحساب"
+      ]
+    },
+    {
+      id: "fallback-pro-plus",
+      name: "برو بلس",
+      daily_xp: 500,
+      price_sar: 60,
+      duration_days: 30,
+      is_active: 1,
+      is_default: 0,
+      summary: "الخطة الأكثر توازنًا بين الرصيد اليومي والسعر.",
+      benefits: [
+        "500 XP يوميًا لمدة شهر",
+        "أفضل للمراجعة المتكررة والصور",
+        "مناسبة لمعظم الطلاب"
+      ]
+    },
+    {
+      id: "fallback-pro-max",
+      name: "برو ماكس",
+      daily_xp: 1000,
+      price_sar: 100,
+      duration_days: 30,
+      is_active: 1,
+      is_default: 0,
+      summary: "أعلى رصيد يومي لتجربة مكثفة ومشروعات أكثر.",
+      benefits: [
+        "1000 XP يوميًا لمدة شهر",
+        "مثالية للاستخدام المكثف ورفع الملفات",
+        "أفضل خيار للمواد الثقيلة والمشروعات"
+      ]
+    }
+  ];
+}
+
 function applyPackagesTheme(theme) {
   const nextTheme = theme === "dark" ? "dark" : "light";
   document.body.classList.toggle("theme-dark", nextTheme === "dark");
@@ -206,8 +256,12 @@ function renderPackageCards(items, currentUser) {
 
 async function bootstrapPackagesPage() {
   const apiClient = window.mullemApiClient;
+  const fallbackItems = getFallbackPackagesCatalog();
   if (!apiClient || typeof apiClient.getPackages !== "function") {
-    renderPackagesAuthState("تعذر الوصول إلى خدمة الباقات الآن. حاول تحديث الصفحة بعد قليل.", true);
+    renderCurrentPackage(null);
+    renderPackageCards(fallbackItems, null);
+    if (packagesDashboardRoot) packagesDashboardRoot.hidden = false;
+    renderPackagesAuthState("يمكنك استعراض الباقات الآن، وتفعيل أي باقة يتطلب تسجيل الدخول إلى الحساب.", false);
     return;
   }
 
@@ -216,16 +270,13 @@ async function bootstrapPackagesPage() {
     apiClient.getPackages(),
     hasSession ? apiClient.me() : Promise.resolve({ ok: true, data: { user: null } })
   ]);
-
-  if (!packagesResult.ok || !Array.isArray(packagesResult.data?.items)) {
-    renderPackagesAuthState(packagesResult.message || "تعذر تحميل الباقات من الخادم الآن.", true);
-    return;
-  }
-
-  const user = packagesResult.data?.user || meResult.data?.user || null;
-  const items = packagesResult.data.items
-    .slice()
-    .sort((left, right) => Number(left.sort_order || 0) - Number(right.sort_order || 0));
+  const cachedUser = typeof apiClient.getSessionUser === "function" ? apiClient.getSessionUser() : null;
+  const user = packagesResult.data?.user || meResult.data?.user || cachedUser || null;
+  const items = Array.isArray(packagesResult.data?.items)
+    ? packagesResult.data.items
+        .slice()
+        .sort((left, right) => Number(left.sort_order || 0) - Number(right.sort_order || 0))
+    : fallbackItems;
 
   renderCurrentPackage(user);
   renderPackageCards(items, user);
@@ -237,7 +288,10 @@ async function bootstrapPackagesPage() {
   if (user) {
     hidePackagesAuthState();
   } else {
-    renderPackagesAuthState("يمكنك الآن الاطلاع على تفاصيل كل باقة ومزاياها. لتفعيل أي باقة أو طلبها يجب تسجيل الدخول إلى حسابك في المنصة.");
+    const fallbackNotice = !packagesResult.ok
+      ? "نعرض لك الباقات المتاحة الآن مباشرة. قد تتأخر مزامنة التفاصيل من الخادم لحظيًا، لكن طلب أي باقة ما زال يتطلب تسجيل الدخول."
+      : "يمكنك الآن الاطلاع على تفاصيل كل باقة ومزاياها. لتفعيل أي باقة أو طلبها يجب تسجيل الدخول إلى حسابك في المنصة.";
+    renderPackagesAuthState(fallbackNotice);
   }
 }
 
@@ -256,7 +310,10 @@ function initializePackagesPage() {
   syncPackagesScrollTop();
 
   bootstrapPackagesPage().catch((error) => {
-    renderPackagesAuthState(error?.message || "حدث خطأ غير متوقع أثناء تحميل صفحة الباقات.", true);
+    renderCurrentPackage(null);
+    renderPackageCards(getFallbackPackagesCatalog(), null);
+    if (packagesDashboardRoot) packagesDashboardRoot.hidden = false;
+    renderPackagesAuthState(error?.message || "نعرض لك الباقات الآن، وتعذر فقط مزامنة البيانات المباشرة من الخادم.", false);
   });
 }
 

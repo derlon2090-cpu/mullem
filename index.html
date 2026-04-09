@@ -13,7 +13,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800;900&display=swap" rel="stylesheet">
   <link rel="icon" type="image/svg+xml" href="favicon.svg">
-  <link rel="stylesheet" href="styles.css?v=20260409-8">
+  <link rel="stylesheet" href="styles.css?v=20260409-9">
 </head>
 <body>
   <div class="shell">
@@ -58,7 +58,6 @@
           <div class="premium-hero-actions">
             <button class="primary-btn top-cta-link" type="button" data-start-chat>ابدأ الآن</button>
             <button class="secondary-btn" type="button" data-hero-example>جرّب مثالًا</button>
-            <a class="helper-btn helper-btn-ghost premium-login-link" href="login.html">سجّل دخولك لحفظ تقدمك</a>
           </div>
 
           <div class="premium-hero-pills">
@@ -122,6 +121,21 @@
             </div>
           </div>
         </article>
+
+        <div class="premium-hero-insights" aria-label="مزايا سريعة">
+          <article class="premium-insight-card">
+            <strong>أسلوب مناسب لكل مرحلة</strong>
+            <span>الشرح يتدرج بحسب عمر الطالب وصفه الدراسي.</span>
+          </article>
+          <article class="premium-insight-card">
+            <strong>مشروعات محفوظة</strong>
+            <span>يمكن حفظ محادثات الدرس أو المشروع داخل لوحة الطالب.</span>
+          </article>
+          <article class="premium-insight-card">
+            <strong>خطة يومية واضحة</strong>
+            <span>تعرف استخدامك الحالي ووقت التجديد والباقات المتاحة بسهولة.</span>
+          </article>
+        </div>
       </section>
     </section>
 
@@ -147,6 +161,32 @@
           <div class="premium-step-number">03</div>
           <strong>استلم حلًا منظمًا وواضحًا</strong>
           <p>إجابة مختصرة عند الطلب، أو شرح خطوة بخطوة، أو اختبار قصير وتدريب على نفس الدرس.</p>
+        </article>
+      </div>
+    </section>
+
+    <section class="shell premium-section premium-value-section" aria-label="مزايا ملم">
+      <div class="premium-section-head">
+        <span class="eyebrow">لماذا ملم</span>
+        <h2>مزايا واضحة داخل تجربة AI تعليمية أنظف</h2>
+        <p>بدل القوائم الطويلة، هذه أهم الأشياء التي يحتاجها الطالب فعلًا أثناء الاستخدام اليومي.</p>
+      </div>
+
+      <div class="premium-value-grid">
+        <article class="premium-value-card">
+          <div class="premium-value-icon" aria-hidden="true">✦</div>
+          <strong>يفهم الطلب</strong>
+          <p>يلتقط السؤال المباشر، ويعرف متى يعطي جوابًا سريعًا ومتى يحتاج شرحًا منظمًا.</p>
+        </article>
+        <article class="premium-value-card">
+          <div class="premium-value-icon" aria-hidden="true">◎</div>
+          <strong>يراعي المنهج</strong>
+          <p>يربط الصف والمادة والترم عند اختيار الحل الدقيق ليكون الأسلوب أقرب للمقرر.</p>
+        </article>
+        <article class="premium-value-card">
+          <div class="premium-value-icon" aria-hidden="true">↗</div>
+          <strong>يتابع التقدم</strong>
+          <p>يحفظ المحادثات والمشروعات والخطة الحالية داخل لوحة الطالب بدل التشتيت بين الصفحات.</p>
         </article>
       </div>
     </section>
@@ -198,72 +238,80 @@
         <div class="premium-section-head premium-section-head-inline">
           <div>
             <span class="eyebrow">الحل الدقيق</span>
-            <h2>خصص الصف والمادة والترم إن أردت جوابًا أدق</h2>
+            <h2>خصص الحل عند الحاجة فقط</h2>
           </div>
-          <p>عند اختيار الحل الدقيق، يرسل النظام صف الطالب والمادة والترم إلى الـ API ليصيغ الجواب بشكل أنسب.</p>
+          <p>بدل عرض كل التفاصيل من البداية، افتح الإعدادات فقط عندما تريد جوابًا أدق حسب الصف والمادة والترم.</p>
         </div>
 
-        <div class="solve-mode-row" aria-label="وضع الحل">
-          <button class="solve-mode-btn active" type="button" data-solve-mode="quick">
-            <strong>حل سريع</strong>
-            <span>إذا كان السؤال واضحًا سيجيب مباشرة</span>
-          </button>
-          <button class="solve-mode-btn" type="button" data-solve-mode="structured">
-            <strong>حل دقيق</strong>
-            <span>يراعي الصف والمادة والترم والدروس المختارة</span>
-          </button>
+        <div class="precision-quick-pills">
+          <span>يحدد المادة تلقائيًا عند وضوح السؤال</span>
+          <span>الحل الدقيق يرسل الصف والمادة والترم إلى الـ API</span>
+          <span>يمكن ترك الإعدادات كما هي والبدء مباشرة</span>
         </div>
 
-        <div class="stage-cards" aria-label="اختيار المرحلة">
-          <button class="stage-card" type="button" data-stage-button="ابتدائي">
-            <strong>ابتدائي</strong>
-            <span>الأول إلى السادس</span>
-            <small>لغة بسيطة وتأسيس واضح</small>
-          </button>
-          <button class="stage-card" type="button" data-stage-button="متوسط">
-            <strong>متوسط</strong>
-            <span>الأول إلى الثالث</span>
-            <small>توازن بين الشرح والتطبيق</small>
-          </button>
-          <button class="stage-card active" type="button" data-stage-button="ثانوي">
-            <strong>ثانوي</strong>
-            <span>الأول إلى الثالث</span>
-            <small>مستوى أدق ومصطلحات أوضح</small>
-          </button>
-        </div>
+        <details class="precision-config-panel">
+          <summary class="precision-config-summary">افتح إعدادات الحل الدقيق</summary>
+          <div class="precision-config-body">
+            <div class="solve-mode-row" aria-label="وضع الحل">
+              <button class="solve-mode-btn active" type="button" data-solve-mode="quick">
+                <strong>حل سريع</strong>
+                <span>إجابة مباشرة إذا كان السؤال واضحًا</span>
+              </button>
+              <button class="solve-mode-btn" type="button" data-solve-mode="structured">
+                <strong>حل دقيق</strong>
+                <span>يراعي الصف والمادة والترم</span>
+              </button>
+            </div>
 
-        <div class="selectors selectors-hero premium-selectors">
-          <select class="field" data-grade>
-            <option>الأول الابتدائي</option>
-            <option>الثاني الابتدائي</option>
-            <option>الثالث الابتدائي</option>
-            <option>الرابع الابتدائي</option>
-            <option>الخامس الابتدائي</option>
-            <option>السادس الابتدائي</option>
-            <option>الأول المتوسط</option>
-            <option>الثاني المتوسط</option>
-            <option>الثالث المتوسط</option>
-            <option>الأول الثانوي</option>
-            <option selected>الثاني الثانوي</option>
-            <option>الثالث الثانوي</option>
-          </select>
-          <select class="field" data-subject>
-            <option selected>الرياضيات</option>
-            <option>العلوم</option>
-            <option>الفيزياء</option>
-            <option>الكيمياء</option>
-            <option>الأحياء</option>
-            <option>اللغة العربية</option>
-            <option>اللغة الإنجليزية</option>
-            <option>الاجتماعيات</option>
-            <option>المهارات الرقمية</option>
-          </select>
-          <select class="field" data-term>
-            <option selected>الفصل الدراسي الأول</option>
-            <option>الفصل الدراسي الثاني</option>
-          </select>
-          <input class="field" data-lesson type="text" placeholder="اسم الدرس اختياري">
-        </div>
+            <div class="stage-cards" aria-label="اختيار المرحلة">
+              <button class="stage-card" type="button" data-stage-button="ابتدائي">
+                <strong>ابتدائي</strong>
+                <span>تأسيس واضح ولغة أبسط</span>
+              </button>
+              <button class="stage-card" type="button" data-stage-button="متوسط">
+                <strong>متوسط</strong>
+                <span>توازن بين الشرح والتطبيق</span>
+              </button>
+              <button class="stage-card active" type="button" data-stage-button="ثانوي">
+                <strong>ثانوي</strong>
+                <span>صياغة أدق وربط أوضح بالمقرر</span>
+              </button>
+            </div>
+
+            <div class="selectors selectors-hero premium-selectors">
+              <select class="field" data-grade>
+                <option>الأول الابتدائي</option>
+                <option>الثاني الابتدائي</option>
+                <option>الثالث الابتدائي</option>
+                <option>الرابع الابتدائي</option>
+                <option>الخامس الابتدائي</option>
+                <option>السادس الابتدائي</option>
+                <option>الأول المتوسط</option>
+                <option>الثاني المتوسط</option>
+                <option>الثالث المتوسط</option>
+                <option>الأول الثانوي</option>
+                <option selected>الثاني الثانوي</option>
+                <option>الثالث الثانوي</option>
+              </select>
+              <select class="field" data-subject>
+                <option selected>الرياضيات</option>
+                <option>العلوم</option>
+                <option>الفيزياء</option>
+                <option>الكيمياء</option>
+                <option>الأحياء</option>
+                <option>اللغة العربية</option>
+                <option>اللغة الإنجليزية</option>
+                <option>الاجتماعيات</option>
+                <option>المهارات الرقمية</option>
+              </select>
+              <select class="field" data-term>
+                <option selected>الفصل الدراسي الأول</option>
+                <option>الفصل الدراسي الثاني</option>
+              </select>
+              <input class="field" data-lesson type="text" placeholder="اسم الدرس اختياري">
+            </div>
+          </div>
+        </details>
       </div>
     </section>
 
@@ -308,7 +356,6 @@
             <button class="helper-btn" type="button" data-upload-image>رفع صورة</button>
             <button class="helper-btn" type="button" data-upload-file>رفع ملف</button>
             <button class="helper-btn" type="button" data-focus-subject>اختيار مادة</button>
-            <a class="helper-btn helper-btn-ghost" href="login.html">تسجيل الدخول</a>
           </div>
 
           <div class="composer-note">قد تصدر عن الشات الذكي بعض الأخطاء غير المقصودة، لذلك يستحسن التحقق من المعلومات المهمة قبل اعتمادها.</div>
@@ -321,27 +368,26 @@
         <div>
           <span class="eyebrow">جاهز للبدء؟</span>
           <h2>ابدأ كضيف، أو ادخل إلى حسابك لحفظ التقدم والمشروعات</h2>
-          <p>الواجهة الآن أسرع وأوضح، والشات يحافظ على نفس الهوية التعليمية مع تجربة أقرب لمنتج AI حديث.</p>
+          <p>الواجهة الآن أسرع وأوضح، والشات يحافظ على نفس الهوية التعليمية مع تجربة أقرب لمنصة AI تعليمية حديثة.</p>
         </div>
         <div class="premium-final-actions">
-          <button class="primary-btn" type="button" data-quick-solve>ابدأ الحل الآن</button>
-          <a class="secondary-btn" href="subscriptions.html">استعرض الباقات</a>
+          <button class="primary-btn" type="button" data-quick-solve>ابدأ الآن</button>
         </div>
       </div>
     </section>
 
-    <div hidden>
+    <div hidden class="runtime-support-hidden" aria-hidden="true">
       <div data-selection-summary>ابدأ أول محادثة لك الآن.</div>
-      <div data-runtime-summary>الإعدادات التقنية مخفية عن الطالب داخل النسخة العامة.</div>
+      <div data-runtime-summary>الإعدادات التعليمية تتم تلقائيًا داخل المنصة.</div>
       <select data-runtime>
-        <option selected>vLLM Runtime</option>
-        <option>Ollama Runtime</option>
-        <option>وضع تجريبي داخل الواجهة</option>
+        <option selected>الوضع الأساسي</option>
+        <option>الوضع المتوازن</option>
+        <option>الوضع المخصص</option>
       </select>
       <select data-training-mode>
-        <option selected>Prompt + RAG</option>
-        <option>Prompt + RAG + LoRA</option>
-        <option>Prompt + RAG + LoRA + DPO</option>
+        <option selected>حل مباشر</option>
+        <option>شرح موسع</option>
+        <option>دعم تعليمي متقدم</option>
       </select>
       <button type="button" data-start-chat>ابدأ الشات</button>
       <button type="button" data-quick-solve>ابدأ حل سؤال الآن</button>
