@@ -5228,7 +5228,9 @@
 
     let message = "تعذر الوصول إلى خدمة الشات الآن. أعد المحاولة بعد قليل.";
 
-    if (reason === "missing_auth" || reason === "unauthorized") {
+    if (/quota|billing details|exceeded your current quota|insufficient_quota/i.test(readableDetails)) {
+      message = "الشات مربوط فعلًا مع OpenAI، لكن الطلب مرفوض الآن لأن حصة الحساب أو الفوترة غير كافية (`429 quota exceeded`). فعّل Billing أو استخدم مفتاحًا عليه رصيد ثم أعد المحاولة.";
+    } else if (reason === "missing_auth" || reason === "unauthorized") {
       message = "الخادم طلب تسجيل الدخول قبل إكمال هذه المحادثة. إذا كان الشات عندكم يفترض أن يعمل للزائر، فالمشكلة من حماية endpoint في Laravel وليست من السؤال نفسه.";
     } else if (reason === "missing_api_client") {
       message = "ربط الواجهة مع Laravel API غير مكتمل في هذه الصفحة حتى الآن.";
