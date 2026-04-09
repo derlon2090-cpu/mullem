@@ -1,4 +1,4 @@
-(() => {
+﻿(() => {
   if (window.mullemApiClient) return;
 
   const storageKeys = {
@@ -49,7 +49,11 @@
 
   function toReadableMessage(value) {
     if (typeof value === "string") {
-      return value.trim();
+      const message = value.trim();
+      if (message.includes("Invalid value: 'input_text'")) {
+        return "تعذر الوصول إلى خدمة الشات الآن. أعد المحاولة بعد قليل.";
+      }
+      return message;
     }
 
     if (value && typeof value === "object") {
@@ -179,14 +183,35 @@
       role: role === "admin" ? "Admin" : "Student",
       stage: user?.stage || existing.stage || "",
       grade: user?.grade || existing.grade || "",
-      subject: existing.subject || "",
-      package: existing.package || "API Connected",
-      xp: Number.isFinite(Number(existing.xp)) ? Number(existing.xp) : 100,
-      streakDays: Number.isFinite(Number(existing.streakDays)) ? Number(existing.streakDays) : 0,
-      lastActiveDate: existing.lastActiveDate || "",
-      achievements: Array.isArray(existing.achievements) ? existing.achievements : [],
-      status: existing.status || (status === "active" ? "نشط" : status),
-      activity: existing.activity || "تمت مزامنة الحساب مع الخادم"
+      subject: user?.subject || existing.subject || "",
+      package: user?.package || existing.package || "API Connected",
+      packageId: user?.packageId ?? existing.packageId ?? null,
+      packageKey: user?.packageKey || existing.packageKey || "",
+      packageDailyXp: Number.isFinite(Number(user?.packageDailyXp))
+        ? Number(user.packageDailyXp)
+        : Number(existing.packageDailyXp || 0),
+      packagePriceSar: Number.isFinite(Number(user?.packagePriceSar))
+        ? Number(user.packagePriceSar)
+        : Number(existing.packagePriceSar || 0),
+      packageDurationDays: Number.isFinite(Number(user?.packageDurationDays))
+        ? Number(user.packageDurationDays)
+        : Number(existing.packageDurationDays || 0),
+      packageSummary: user?.packageSummary || existing.packageSummary || "",
+      packageBenefits: Array.isArray(user?.packageBenefits)
+        ? user.packageBenefits
+        : (Array.isArray(existing.packageBenefits) ? existing.packageBenefits : []),
+      packageStartedAt: user?.packageStartedAt || existing.packageStartedAt || null,
+      packageExpiresAt: user?.packageExpiresAt || existing.packageExpiresAt || null,
+      packageDaysRemaining: Number.isFinite(Number(user?.packageDaysRemaining))
+        ? Number(user.packageDaysRemaining)
+        : (Number.isFinite(Number(existing.packageDaysRemaining)) ? Number(existing.packageDaysRemaining) : null),
+      xp: Number.isFinite(Number(user?.xp)) ? Number(user.xp) : (Number.isFinite(Number(existing.xp)) ? Number(existing.xp) : 100),
+      streakDays: Number.isFinite(Number(user?.streakDays)) ? Number(user.streakDays) : (Number.isFinite(Number(existing.streakDays)) ? Number(existing.streakDays) : 0),
+      motivationScore: Number.isFinite(Number(user?.motivationScore)) ? Number(user.motivationScore) : Number(existing.motivationScore || 0),
+      lastActiveDate: user?.lastActiveDate || existing.lastActiveDate || "",
+      achievements: Array.isArray(user?.achievements) ? user.achievements : (Array.isArray(existing.achievements) ? existing.achievements : []),
+      status: user?.status || existing.status || (status === "active" ? "نشط" : status),
+      activity: user?.activity || existing.activity || "تمت مزامنة الحساب مع الخادم"
     };
   }
 
@@ -417,15 +442,71 @@
   }
 
   async function me() {
-    return request("/auth/me");
+    const result = await request("/auth/me");
+    if (result.ok && result.data?.user && hasToken()) {
+      setSession({
+        token: getToken(),
+        user: result.data.user
+      });
+    }
+    return result;
+  }
+
+  async function getPackages() {
+    return request("/packages");
   }
 
   async function getStudentDashboard() {
     return request("/student/dashboard");
   }
 
+  async function getGuestStatus(guestSessionId) {
+    const query = new URLSearchParams();
+    if (guestSessionId) query.set("guest_session_id", String(guestSessionId));
+    return request(`/guest/status${query.toString() ? `?${query.toString()}` : ""}`, {
+      method: "GET",
+      skipAuth: true
+    });
+  }
+
+  async function getStudentProjects(params = {}) {
+    const query = new URLSearchParams();
+    Object.entries(params || {}).forEach(([key, value]) => {
+      if (value == null || value === "") return;
+      query.set(key, String(value));
+    });
+    return request(`/student/projects${query.toString() ? `?${query.toString()}` : ""}`);
+  }
+
+  async function createStudentProject(payload) {
+    return request("/student/projects", {
+      method: "POST",
+      body: payload
+    });
+  }
+
+  async function updateStudentProject(projectId, payload) {
+    return request(`/student/projects/${encodeURIComponent(String(projectId))}`, {
+      method: "PATCH",
+      body: payload
+    });
+  }
+
+  async function getStudentConversations(params = {}) {
+    const query = new URLSearchParams();
+    Object.entries(params || {}).forEach(([key, value]) => {
+      if (value == null || value === "") return;
+      query.set(key, String(value));
+    });
+    return request(`/student/conversations${query.toString() ? `?${query.toString()}` : ""}`);
+  }
+
   async function getAdminStats() {
     return request("/admin/stats");
+  }
+
+  async function getAdminPackages() {
+    return request("/admin/packages");
   }
 
   async function getAdminUsers(params = {}) {
@@ -441,6 +522,13 @@
 
   async function updateAdminUser(userId, payload) {
     return request(`/admin/users/${encodeURIComponent(String(userId))}`, {
+      method: "PATCH",
+      body: payload
+    });
+  }
+
+  async function updateAdminPackage(packageId, payload) {
+    return request(`/admin/packages/${encodeURIComponent(String(packageId))}`, {
       method: "PATCH",
       body: payload
     });
@@ -521,9 +609,17 @@
     register,
     logout,
     me,
+    getPackages,
     getStudentDashboard,
+    getGuestStatus,
+    getStudentProjects,
+    createStudentProject,
+    updateStudentProject,
+    getStudentConversations,
     getAdminStats,
+    getAdminPackages,
     getAdminUsers,
+    updateAdminPackage,
     updateAdminUser,
     sendChat,
     getHealth,
@@ -539,3 +635,4 @@
     performLogout
   };
 })();
+
