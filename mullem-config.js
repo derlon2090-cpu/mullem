@@ -1,6 +1,7 @@
 (() => {
   const STORAGE_KEY = "mlm_api_base_url";
   const STATIC_HOST_SUFFIXES = [".github.io", ".pages.dev", ".netlify.app"];
+  const DEFAULT_BACKEND_URL = "https://mullem.onrender.com";
 
   function sanitizeBaseUrl(value) {
     return String(value || "").trim().replace(/\/+$/, "");
@@ -32,7 +33,7 @@
     document.querySelector('meta[name="mullem-api-base"]')?.getAttribute("content") || ""
   );
   const storedBase = sanitizeBaseUrl(safeLocalStorageGet(STORAGE_KEY));
-  const presetBase = sanitizeBaseUrl(window.MULLEM_API_BASE || "");
+  const presetBase = sanitizeBaseUrl(window.MULLEM_API_BASE || DEFAULT_BACKEND_URL);
 
   const resolvedBase = queryBase || presetBase || metaBase || storedBase || "";
   const host = String(window.location.hostname || "").toLowerCase();
