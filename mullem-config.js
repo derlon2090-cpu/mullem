@@ -25,6 +25,11 @@
     }
   }
 
+  function isLocalHost(hostname) {
+    const host = String(hostname || "").toLowerCase();
+    return host === "127.0.0.1" || host === "localhost" || host === "";
+  }
+
   const currentUrl = new URL(window.location.href);
   const queryBase = sanitizeBaseUrl(
     currentUrl.searchParams.get("api") || currentUrl.searchParams.get("backend")
@@ -35,7 +40,7 @@
   const storedBase = sanitizeBaseUrl(safeLocalStorageGet(STORAGE_KEY));
   const host = String(window.location.hostname || "").toLowerCase();
   const isStaticHost = STATIC_HOST_SUFFIXES.some((suffix) => host.endsWith(suffix));
-  const fallbackBase = isStaticHost ? DEFAULT_BACKEND_URL : "";
+  const fallbackBase = isLocalHost(host) ? "" : DEFAULT_BACKEND_URL;
   const presetBase = sanitizeBaseUrl(window.MULLEM_API_BASE || fallbackBase);
 
   const resolvedBase = queryBase || presetBase || metaBase || storedBase || "";
@@ -54,8 +59,8 @@
     backendConfigured: Boolean(resolvedBase),
     backendUrl: resolvedBase || null,
     notes: [
-      "If the site is deployed as a full Node app, leave MULLEM_API_BASE empty.",
-      "If the frontend is deployed separately as static files, set MULLEM_API_BASE to the backend URL.",
+      "If the site is deployed locally, leave MULLEM_API_BASE empty.",
+      "In production, the frontend will default to the Render backend unless another API base is provided.",
       "You can temporarily override the backend from the URL using ?api=https://your-backend-domain.com."
     ]
   };
