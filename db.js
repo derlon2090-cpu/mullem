@@ -12,13 +12,18 @@ function normalizeConfig(rawConfig = {}) {
     "root"
   ).trim();
   const password = String(rawConfig.password || rawConfig.DB_PASSWORD || "").trim();
+  const connectTimeout = Math.max(
+    1000,
+    Number(rawConfig.connectTimeout || rawConfig.DB_CONNECT_TIMEOUT_MS || 8000)
+  );
 
   return {
     host,
     port,
     database,
     user,
-    password
+    password,
+    connectTimeout
   };
 }
 
@@ -45,6 +50,7 @@ function createDatabaseClient(rawConfig = {}) {
       port: config.port,
       user: config.user,
       password: config.password,
+      connectTimeout: config.connectTimeout,
       multipleStatements: true
     });
 
@@ -62,6 +68,7 @@ function createDatabaseClient(rawConfig = {}) {
       user: config.user,
       password: config.password,
       database: config.database,
+      connectTimeout: config.connectTimeout,
       waitForConnections: true,
       connectionLimit: 10,
       queueLimit: 0,

@@ -11,6 +11,7 @@ const OPENAI_API_KEY = String(process.env.OPENAI_API_KEY || "").trim();
 const OPENAI_MODEL = String(process.env.OPENAI_MODEL || "gpt-5.4-mini").trim();
 const OPENAI_RESPONSES_ENDPOINT = String(process.env.OPENAI_RESPONSES_ENDPOINT || "https://api.openai.com/v1/responses").trim();
 const OPENAI_TIMEOUT_MS = Number(process.env.OPENAI_TIMEOUT_MS || 25000);
+const DB_INIT_TIMEOUT_MS = Math.max(1000, Number(process.env.DB_INIT_TIMEOUT_MS || 8000));
 const MAX_BODY_BYTES = Math.max(10_000, Number(process.env.MAX_BODY_BYTES || 1_000_000));
 const MAX_MESSAGE_LENGTH = Math.max(200, Number(process.env.MAX_MESSAGE_LENGTH || 4000));
 const MAX_QUESTION_LENGTH = Math.max(200, Number(process.env.MAX_QUESTION_LENGTH || 4000));
@@ -913,8 +914,7 @@ function startServer(port = PORT) {
     return serverStartPromise;
   }
 
-  serverStartPromise = initializeDatabaseLayer()
-    .catch(() => {})
+  serverStartPromise = initializeDatabaseLayerWithTimeout()
     .then(() => new Promise((resolve, reject) => {
       const handleError = (error) => {
         server.off("listening", handleListening);
@@ -971,9 +971,47 @@ function cleanupRateLimitStore() {
   }
 }
 
+async function initializeDatabaseLayerWithTimeout() {
+  let timeoutId = null;
+
+  try {
+    await Promise.race([
+      initializeDatabaseLayer(),
+      new Promise((_, reject) => {
+        timeoutId = setTimeout(() => {
+          reject(new Error(`MySQL initialization timed out after ${DB_INIT_TIMEOUT_MS}ms.`));
+        }, DB_INIT_TIMEOUT_MS);
+      })
+    ]);
+  } catch (error) {
+    databaseClient = null;
+    databaseState = {
+      configured: Boolean(DB_HOST && DB_DATABASE && DB_USERNAME),
+      connected: false,
+      host: DB_HOST,
+      port: DB_PORT,
+      database: DB_DATABASE,
+      message: String(error?.message || "Failed to initialize MySQL.")
+    };
+    console.error(`[mullem] database init warning: ${databaseState.message}`);
+  } finally {
+    if (timeoutId) {
+      clearTimeout(timeoutId);
+    }
+  }
+}
+
 setInterval(cleanupRateLimitStore, RATE_LIMIT_WINDOW_MS).unref?.();
 
 if (require.main === module) {
+  process.on("unhandledRejection", (error) => {
+    console.error("[mullem] unhandledRejection", error);
+  });
+
+  process.on("uncaughtException", (error) => {
+    console.error("[mullem] uncaughtException", error);
+  });
+
   startServer().catch((error) => {
     console.error(String(error?.message || error));
     process.exit(1);
