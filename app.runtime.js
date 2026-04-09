@@ -5235,6 +5235,8 @@
     } else if (reason === "server_unavailable") {
       if (/openai_api_key/i.test(readableDetails)) {
         message = "الخادم يعمل، لكن `OPENAI_API_KEY` غير مضبوط على السيرفر. أضف المفتاح في ملف البيئة ثم أعد تشغيل الخادم.";
+      } else if (/static hosting detected|page could not be found/i.test(readableDetails)) {
+        message = "أنت نشرت الواجهة فقط على استضافة static مثل GitHub Pages، بينما الشات يحتاج backend حقيقي. انشر `server.js` أو Laravel على Render أو Railway ثم ضع رابط الخادم في `mullem-config.js` عبر `window.MULLEM_API_BASE`.";
       } else if (/route not found|not found/i.test(readableDetails)) {
         message = "الخادم يعمل، لكن مسار الـ API المطلوب غير موجود. تأكد من توفير `/api/chat/send` أو `/api/solve-question` على نفس الخادم.";
       } else if (/invalid api response/i.test(readableDetails)) {
@@ -5246,7 +5248,7 @@
       message = "رفع الصور والملفات لم يُربط بعد مع Laravel API في هذه النسخة. اكتب السؤال نصًا الآن وسيتم إرساله إلى الـ AI مباشرة.";
     }
 
-    if (readableDetails && (reason === "request_failed" || (reason === "server_unavailable" && !/openai_api_key|route not found|not found|invalid api response/i.test(readableDetails)))) {
+    if (readableDetails && (reason === "request_failed" || (reason === "server_unavailable" && !/openai_api_key|route not found|not found|invalid api response|static hosting detected|page could not be found/i.test(readableDetails)))) {
       message = `${message} ${readableDetails}`.trim();
     }
 

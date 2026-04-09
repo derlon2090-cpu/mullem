@@ -28,6 +28,11 @@
     return String(value || "").trim().replace(/\/+$/, "");
   }
 
+  function isStaticHostLikely() {
+    const host = getHostName();
+    return host.endsWith(".github.io") || host.endsWith(".pages.dev") || host.endsWith(".netlify.app");
+  }
+
   function getHostName() {
     return String(window.location?.hostname || "").toLowerCase();
   }
@@ -290,6 +295,22 @@
           toReadableMessage(payload?.message) ||
           toReadableMessage(payload?.error) ||
           (response.ok ? "OK" : "Request failed");
+
+        if (!isJsonResponse && /the page could not be found/i.test(message)) {
+          lastFailure = {
+            ok: false,
+            status: response.status || 404,
+            data: null,
+            message: isStaticHostLikely()
+              ? "Static hosting detected. Configure MULLEM_API_BASE with a real backend URL."
+              : "The page could not be found",
+            errors: {},
+            payload,
+            serverUnavailable: true,
+            networkError: false
+          };
+          continue;
+        }
 
         if (response.ok && !isJsonResponse) {
           lastFailure = {

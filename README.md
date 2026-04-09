@@ -1,124 +1,128 @@
-# Mullem Platform
+# Mullem
 
-Saudi educational web app MVP with an AI tutor for the Saudi curriculum.
+منصة تعليمية عربية بواجهة ثابتة في الجذر، مع backend Node في نفس المشروع، ومشروع Laravel داخل [C:\mullem\laravel-api](C:\mullem\laravel-api) للتوسع.
 
-## Stack
+## مهم جدًا
 
-- `Next.js` App Router
-- `Tailwind CSS v4`
-- `TypeScript`
-- `OpenAI Responses API`
-- local curriculum retrieval layer with room to upgrade to `PostgreSQL + pgvector`
+رفع الملفات إلى GitHub لا يعني أن الشات سيعمل.
 
-## Implemented MVP
+`GitHub Pages` يشغّل الواجهة الثابتة فقط، ولا يشغّل:
 
-- Arabic landing page and role-based dashboards
-- Student academic chat
-- Student answer analysis
-- Local session-based auth demo for `student`, `teacher`, `parent`, `admin`
-- Curriculum endpoints: `subjects`, `grades`, `lessons`, `lesson/:id`
-- Question solving and similar-question APIs
-- Image question upload endpoint with model-based extraction when `OPENAI_API_KEY` is set
-- Basic moderation, rate limiting, and logging utilities
+- `node server.js`
+- `PHP / Laravel`
+- `MySQL`
+- `OPENAI_API_KEY`
 
-## Environment
+ولهذا إذا نُشرت الواجهة فقط على GitHub Pages فطلبات:
 
-Copy `.env.example` to `.env.local` and set:
+- `/api/chat/send`
+- `/api/solve-question`
 
-```bash
-OPENAI_API_KEY=your_key
+ستنتهي غالبًا إلى `The page could not be found`.
+
+## بنية المشروع الحالية
+
+- صفحات الموقع كلها في الجذر:
+  - [C:\mullem\index.html](C:\mullem\index.html)
+  - [C:\mullem\chat.html](C:\mullem\chat.html)
+  - [C:\mullem\admin.html](C:\mullem\admin.html)
+  - [C:\mullem\student.html](C:\mullem\student.html)
+- خادم Node الفعلي:
+  - [C:\mullem\server.js](C:\mullem\server.js)
+- طبقة MySQL:
+  - [C:\mullem\db.js](C:\mullem\db.js)
+- ملف ضبط رابط الـ backend:
+  - [C:\mullem\mullem-config.js](C:\mullem\mullem-config.js)
+- مشروع Laravel:
+  - [C:\mullem\laravel-api](C:\mullem\laravel-api)
+
+## أسرع نشر صحيح
+
+انشر المشروع كـ Node Web Service من الجذر.
+
+الملفات الجاهزة للنشر:
+
+- Railway:
+  - [C:\mullem\railway.json](C:\mullem\railway.json)
+- Render:
+  - [C:\mullem\render.yaml](C:\mullem\render.yaml)
+
+إذا نشرت **الخادم والواجهة معًا** من هذا الجذر، فغالبًا لا تحتاج ضبط `MULLEM_API_BASE` أصلًا، لأن الواجهة والـ API سيكونان على نفس الدومين.
+
+## تشغيل محلي
+
+1. انسخ [C:\mullem\.env.example](C:\mullem\.env.example) إلى `.env`
+2. عبئ القيم:
+
+```env
+PORT=3000
+OPENAI_API_KEY=your_real_key
 OPENAI_MODEL=gpt-5.4-mini
-APP_URL=http://localhost:3000
-JWT_SECRET=change-me-in-production
-SERPAPI_API_KEY=server-only-key
-SERPAPI_BASE_URL=https://serpapi.com/search.json
-SERPAPI_TIMEOUT_SECONDS=8
-SERPAPI_MAX_RESULTS=5
-TRUSTED_SEARCH_DOMAINS=ien.edu.sa,beitalelm.com,mawdoo3.com
-ANALYSIS_BUDGET_MS=5000
+DB_HOST=127.0.0.1
+DB_PORT=3306
+DB_DATABASE=mullem
+DB_USERNAME=root
+DB_PASSWORD=
 ```
 
-## Run
+3. شغّل:
 
 ```bash
 npm install
-npm run dev
+node server.js
 ```
 
-## Notes
-
-- Without `OPENAI_API_KEY`, the platform uses a local fallback response mode so the UI and API still work.
-- The current auth layer is a prototype cookie session for fast MVP delivery; production should move to signed JWT/OTP or a full auth provider.
-- The retrieval layer is currently in-memory sample curriculum content and is designed to be replaced by real curriculum ingestion and vector search.
-- `SERPAPI_API_KEY` must live on the server only. Do not expose it in frontend JavaScript or HTML.
-
-## FastAPI Search Backend Scaffold
-
-The repo now includes a backend scaffold in [C:\mullem\backend](C:\mullem\backend) for a secure search flow:
-
-- `approved question bank` first
-- `curriculum retrieval` second
-- `SerpApi web verification` third
-
-Main endpoint:
-
-```bash
-POST /api/solve-question
-```
-
-Run locally after installing backend dependencies:
-
-```bash
-pip install -r backend/requirements.txt
-uvicorn backend.main:app --reload
-```
-
-The scaffold includes:
-
-- [C:\mullem\backend\main.py](C:\mullem\backend\main.py)
-- [C:\mullem\backend\config.py](C:\mullem\backend\config.py)
-- [C:\mullem\backend\engines.py](C:\mullem\backend\engines.py)
-- [C:\mullem\backend\question_bank.py](C:\mullem\backend\question_bank.py)
-- [C:\mullem\backend\curriculum.py](C:\mullem\backend\curriculum.py)
-- [C:\mullem\backend\serpapi_service.py](C:\mullem\backend\serpapi_service.py)
-- [C:\mullem\backend\admin_config.py](C:\mullem\backend\admin_config.py)
-- [C:\mullem\backend\log_store.py](C:\mullem\backend\log_store.py)
-
-## Project Structure
+4. افتح:
 
 ```text
-C:\mullem
-├── *.html            # واجهات الموقع العامة كما هي في الجذر للحفاظ على الروابط
-├── assets
-│   ├── css           # ملفات التنسيق
-│   ├── img           # الشعارات والأيقونات
-│   └── js            # منطق الواجهة والشات ولوحة الأدمن
-├── backend           # FastAPI ومحركات الحل والمنهج والبحث
-│   └── data          # بنك الأسئلة وإعدادات البحث
-├── tools
-│   └── checks        # سكربتات الفحص المحلية
-└── misc              # ملفات غير مرتبطة مباشرة بكود الواجهة أو الباكند
+http://127.0.0.1:3000
 ```
 
-Current scope:
+## إذا كانت الواجهة منفصلة عن الـ backend
 
-- secure environment-based SerpApi integration
-- trusted-domain web verification
-- hidden analysis output with normalized/canonical question forms
-- sample approved question bank and curriculum evidence
-- admin-configurable trusted domains via:
-  - `GET /api/admin/search-config`
-  - `PUT /api/admin/search-config`
-- internal search logs via:
-  - `GET /api/admin/search-logs`
+إذا نشرت الواجهة static في مكان، والـ backend في مكان آخر، عدّل:
 
-Next production step:
+- [C:\mullem\mullem-config.js](C:\mullem\mullem-config.js)
 
-- replace the sample bank with PostgreSQL/pgvector or Qdrant-backed storage
-- connect admin-selected trusted domains from the dashboard to the backend settings
-- add persistent logs and caching via Redis/Celery
+مثال:
 
-Security note:
+```js
+window.MULLEM_API_BASE = "https://your-backend-domain.com";
+```
 
-- Never place `SERPAPI_API_KEY` in frontend JavaScript or HTML.
-- If a key was pasted in chat or shared in plaintext, rotate it from the SerpApi dashboard and set the new value on the server only.
+## متغيرات البيئة المطلوبة على الاستضافة
+
+```env
+PORT=3000
+OPENAI_API_KEY=your_real_key
+OPENAI_MODEL=gpt-5.4-mini
+DB_HOST=your_mysql_host
+DB_PORT=3306
+DB_DATABASE=mullem
+DB_USERNAME=your_mysql_user
+DB_PASSWORD=your_mysql_password
+```
+
+## فحص نجاح النشر
+
+افتح:
+
+```text
+/api/health
+```
+
+إذا رجع JSON، فالخادم يعمل.
+
+إذا رجع HTML أو `The page could not be found`، فأنت نشرت الواجهة فقط ولم تنشر backend الحقيقي.
+
+## ملاحظة أمنية
+
+هذه الملفات لا يجب رفعها علنًا داخل المستودع:
+
+- `.env`
+- `mysql-data`
+- `node_modules`
+- `laravel-api/vendor`
+- ملفات PHP/MySQL الثنائية المحلية
+
+وهي مستبعدة من الرفع عمدًا حتى يبقى المشروع آمنًا وقابلًا للنشر الصحيح.
