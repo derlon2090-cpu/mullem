@@ -5186,6 +5186,25 @@
 
     const result = await apiClient.sendChat(buildRuntimeApiChatPayload(question, route));
     if (!result.ok || !result.data?.assistant_message?.body) {
+      let failureMessage = result?.message || "";
+
+      if ((result?.serverUnavailable || result?.status >= 500) && apiClient.getHealth) {
+        try {
+          const health = await apiClient.getHealth();
+          const healthPayload = health?.payload || {};
+          const aiConfigured = healthPayload?.ai_configured;
+          const dbState = healthPayload?.db || {};
+
+          if (aiConfigured === false) {
+            failureMessage = "OPENAI_API_KEY is not configured on the server.";
+          } else if (dbState?.connected === false && dbState?.message) {
+            failureMessage = `${failureMessage} ${dbState.message}`.trim();
+          }
+        } catch (_) {
+          // Ignore health probe failures and keep original error details.
+        }
+      }
+
       return {
         content: "",
         failed: true,
@@ -5194,7 +5213,7 @@
           : result?.serverUnavailable
             ? "server_unavailable"
             : "request_failed",
-        message: result?.message || ""
+        message: failureMessage
       };
     }
 

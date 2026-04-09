@@ -453,6 +453,13 @@
     });
   }
 
+  async function getHealth() {
+    return request("/health", {
+      method: "GET",
+      skipAuth: true
+    });
+  }
+
   async function streamChat(payload) {
     return request("/chat/stream", {
       method: "POST",
@@ -519,6 +526,7 @@
     getAdminUsers,
     updateAdminUser,
     sendChat,
+    getHealth,
     streamChat,
     getChatSessions,
     getChatSession,
