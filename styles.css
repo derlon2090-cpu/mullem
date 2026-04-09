@@ -80,6 +80,7 @@ body.theme-dark .student-summary-strip,
 body.theme-dark .student-quick-card,
 body.theme-dark .student-settings-card,
 body.theme-dark .student-section-card,
+body.theme-dark .student-progress-card,
 body.theme-dark .stage-card,
 body.theme-dark .session-card,
 body.theme-dark .stat-card,
@@ -208,7 +209,9 @@ body.theme-dark .student-mini-card strong {
 body.theme-dark .student-project-card,
 body.theme-dark .student-api-session-card,
 body.theme-dark .student-guest-note,
-body.theme-dark .student-project-empty {
+body.theme-dark .student-project-empty,
+body.theme-dark .auth-security-note,
+body.theme-dark .auth-guest-cta {
   background: rgba(19, 31, 23, 0.96);
   border-color: rgba(255, 255, 255, 0.12);
   color: var(--text);
@@ -219,7 +222,10 @@ body.theme-dark .student-project-card small,
 body.theme-dark .student-api-session-card span,
 body.theme-dark .student-section-copy,
 body.theme-dark .student-guest-note,
-body.theme-dark .student-project-empty {
+body.theme-dark .student-project-empty,
+body.theme-dark .student-progress-card p,
+body.theme-dark .auth-guest-cta span,
+body.theme-dark .auth-security-points span {
   color: var(--muted);
 }
 
@@ -3742,6 +3748,12 @@ body.theme-dark .admin-status-banner[data-state="error"] {
   gap: 12px;
 }
 
+.student-progress-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+}
+
 .student-plan-grid {
   display: grid;
   grid-template-columns: minmax(0, 1.2fr) minmax(320px, 0.8fr);
@@ -3996,6 +4008,63 @@ body.theme-dark .admin-status-banner[data-state="error"] {
 .student-mini-card span {
   color: var(--muted);
   line-height: 1.8;
+}
+
+.student-progress-card {
+  padding: 18px 20px;
+  border-radius: 24px;
+  border: 1px solid rgba(34, 197, 94, 0.12);
+  background:
+    radial-gradient(circle at top left, rgba(34, 197, 94, 0.08), transparent 28%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.97), rgba(248, 252, 248, 0.95));
+  box-shadow: var(--shadow);
+  display: grid;
+  gap: 10px;
+}
+
+.student-progress-card-accent {
+  background:
+    radial-gradient(circle at top right, rgba(34, 197, 94, 0.12), transparent 30%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.99), rgba(244, 252, 246, 0.97));
+}
+
+.student-progress-label {
+  color: var(--brand-strong);
+  font-weight: 800;
+  font-size: 0.92rem;
+}
+
+.student-progress-card strong {
+  font-size: 1.8rem;
+  color: var(--text);
+}
+
+.student-progress-card p {
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.85;
+}
+
+.student-progress-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.student-progress-bar {
+  height: 12px;
+  border-radius: 999px;
+  background: rgba(15, 23, 42, 0.08);
+  overflow: hidden;
+}
+
+.student-progress-bar-fill {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #22c55e, #86efac);
+  transition: width 220ms ease;
 }
 
 .student-projects-panel {
@@ -5403,6 +5472,45 @@ body.theme-dark .admin-status-banner[data-state="error"] {
   font-size: 0.92rem;
 }
 
+.auth-guest-cta {
+  margin-top: 16px;
+  padding: 16px 18px;
+  border-radius: 22px;
+  border: 1px solid rgba(34, 197, 94, 0.12);
+  background: rgba(255, 255, 255, 0.84);
+  display: grid;
+  gap: 10px;
+}
+
+.auth-guest-cta span {
+  color: var(--muted);
+  line-height: 1.8;
+}
+
+.auth-security-note {
+  margin-top: 18px;
+  padding: 18px 20px;
+  border-radius: 24px;
+  border: 1px solid rgba(34, 197, 94, 0.12);
+  background: rgba(255, 255, 255, 0.88);
+  display: grid;
+  gap: 12px;
+}
+
+.auth-security-note strong {
+  color: var(--brand-strong);
+}
+
+.auth-security-points {
+  display: grid;
+  gap: 8px;
+}
+
+.auth-security-points span {
+  color: var(--muted);
+  line-height: 1.8;
+}
+
 .auth-preview-points-premium {
   grid-template-columns: repeat(3, minmax(0, 1fr));
 }
@@ -5482,6 +5590,10 @@ body.theme-dark .premium-value-card p {
   .auth-shell-premium {
     grid-template-columns: 1fr;
   }
+
+  .student-progress-grid {
+    grid-template-columns: 1fr;
+  }
 }
 
 @media (max-width: 760px) {
@@ -5537,5 +5649,9 @@ body.theme-dark .premium-value-card p {
 
   .auth-card-premium {
     order: 1;
+  }
+
+  .auth-guest-cta .secondary-btn {
+    width: 100%;
   }
 }

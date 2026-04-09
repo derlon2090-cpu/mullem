@@ -13,7 +13,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800;900&display=swap" rel="stylesheet">
   <link rel="icon" type="image/svg+xml" href="favicon.svg">
-  <link rel="stylesheet" href="styles.css?v=20260409-9">
+  <link rel="stylesheet" href="styles.css?v=20260409-10">
 </head>
 <body>
   <div class="shell">
@@ -129,6 +129,29 @@
         <article class="student-mini-card">
           <strong>خطتك اليوم</strong>
           <span data-usage-summary>جارٍ تجهيز حالة الحساب الحالية...</span>
+        </article>
+      </section>
+
+      <section class="student-progress-grid" aria-label="لوحة الإنجازات">
+        <article class="student-progress-card">
+          <span class="student-progress-label">عدد الأسئلة</span>
+          <strong data-progress-questions>0</strong>
+          <p>إجمالي الأسئلة التعليمية التي أنجزتها داخل حسابك حتى الآن.</p>
+        </article>
+        <article class="student-progress-card">
+          <span class="student-progress-label">أفضل مادة</span>
+          <strong data-progress-best-subject>—</strong>
+          <p data-progress-best-subject-copy>ستظهر المادة الأكثر استخدامًا بعد أول عدة أسئلة.</p>
+        </article>
+        <article class="student-progress-card student-progress-card-accent">
+          <div class="student-progress-head">
+            <span class="student-progress-label">تقدمك</span>
+            <strong data-progress-level>0%</strong>
+          </div>
+          <div class="student-progress-bar">
+            <span class="student-progress-bar-fill" data-progress-bar-fill style="width: 0%"></span>
+          </div>
+          <p data-progress-level-copy>ابدأ أول سؤال ليظهر مستوى تقدمك الحالي.</p>
         </article>
       </section>
 
@@ -312,6 +335,6 @@
   <script src="mullem-config.js?v=20260409-5"></script>
   <script src="api-client.js?v=20260409-7"></script>
   <script src="app.js?v=20260409-2"></script>
-  <script src="app.runtime.js?v=20260409-5"></script>
+  <script src="app.runtime.js?v=20260409-6"></script>
 </body>
 </html>

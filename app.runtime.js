@@ -35,6 +35,12 @@
   const achievementsNode = document.querySelector("[data-achievements]");
   const placeholderButtons = document.querySelectorAll("[data-chat-placeholder]");
   const usageSummaryNodes = document.querySelectorAll("[data-usage-summary]");
+  const progressQuestionsNodes = document.querySelectorAll("[data-progress-questions]");
+  const progressBestSubjectNodes = document.querySelectorAll("[data-progress-best-subject]");
+  const progressBestSubjectCopyNodes = document.querySelectorAll("[data-progress-best-subject-copy]");
+  const progressLevelNodes = document.querySelectorAll("[data-progress-level]");
+  const progressLevelCopyNodes = document.querySelectorAll("[data-progress-level-copy]");
+  const progressBarFillNodes = document.querySelectorAll("[data-progress-bar-fill]");
   const planNameNodes = document.querySelectorAll("[data-plan-name]");
   const planStatusNodes = document.querySelectorAll("[data-plan-status]");
   const planBadgeNodes = document.querySelectorAll("[data-plan-badge]");
@@ -2708,6 +2714,26 @@
       : ['<span class="student-achievement-chip student-achievement-chip-muted">ستظهر إنجازاتك هنا بعد أول عدة أسئلة.</span>'];
   }
 
+  function getRuntimeProgressSnapshot() {
+    const totalQuestions = Number(analytics?.totalMessages || 0);
+    const rankedSubjects = Object.entries(analytics?.subjects || {}).sort((left, right) => right[1] - left[1]);
+    const bestSubject = rankedSubjects[0]?.[0] || "";
+    const bestSubjectCount = Number(rankedSubjects[0]?.[1] || 0);
+    const level = Math.max(1, Math.floor(totalQuestions / 4) + 1);
+    const cycleBase = Math.floor(Math.max(0, totalQuestions - 1) / 5) * 5;
+    const completedInCycle = totalQuestions > 0 ? totalQuestions - cycleBase : 0;
+    const progressPercent = totalQuestions > 0 ? Math.max(8, Math.min(100, Math.round((completedInCycle / 5) * 100))) : 0;
+    const remainingToNext = totalQuestions > 0 ? Math.max(0, cycleBase + 5 - totalQuestions) : 5;
+    return {
+      totalQuestions,
+      bestSubject,
+      bestSubjectCount,
+      level,
+      progressPercent,
+      remainingToNext
+    };
+  }
+
   function setRuntimeNodeText(nodes, value) {
     Array.from(nodes || []).forEach((node) => {
       node.textContent = value;
@@ -2886,6 +2912,34 @@
     renderRuntimePackagePreviewCards(activeUser);
   }
 
+  function renderRuntimeProgressOverview(activeUser) {
+    const snapshot = getRuntimeProgressSnapshot();
+    setRuntimeNodeText(progressQuestionsNodes, String(snapshot.totalQuestions));
+
+    const bestSubjectTitle = snapshot.bestSubject || (activeUser ? "ابدأ أول مادة" : "للضيف بعد أول سؤال");
+    setRuntimeNodeText(progressBestSubjectNodes, bestSubjectTitle);
+    setRuntimeNodeText(
+      progressBestSubjectCopyNodes,
+      snapshot.bestSubject
+        ? `الأكثر استخدامًا لديك الآن هي ${snapshot.bestSubject} بعد ${snapshot.bestSubjectCount} سؤال.`
+        : (activeUser
+            ? "ستظهر المادة الأكثر نشاطًا بعد أول عدة أسئلة محفوظة في الحساب."
+            : "سجّل دخولك أو ابدأ أول سؤال لتظهر المادة الأكثر استخدامًا هنا.")
+    );
+
+    setRuntimeNodeText(progressLevelNodes, `${snapshot.progressPercent}%`);
+    setRuntimeNodeText(
+      progressLevelCopyNodes,
+      snapshot.totalQuestions
+        ? `مستواك الحالي ${snapshot.level}، ويتبقى ${snapshot.remainingToNext} ${snapshot.remainingToNext === 1 ? "سؤال" : "أسئلة"} للوصول إلى التقدم التالي.`
+        : "ابدأ أول سؤال ليظهر مستوى تقدمك الحالي داخل اللوحة."
+    );
+
+    Array.from(progressBarFillNodes || []).forEach((node) => {
+      node.style.width = `${snapshot.progressPercent}%`;
+    });
+  }
+
   async function fetchRuntimePackages() {
     const apiClient = getRuntimeApiClient();
     if (!apiClient || typeof apiClient.getPackages !== "function") {
@@ -2943,6 +2997,7 @@
     }
 
     renderRuntimeStudentPlan(activeUser);
+    renderRuntimeProgressOverview(activeUser);
   }
 
   function bindPromptPlaceholderButtons() {
