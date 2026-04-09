@@ -1,4 +1,22 @@
-const mysql = require("mysql2/promise");
+let mysqlModule = null;
+
+function getMysqlModule() {
+  if (mysqlModule) {
+    return mysqlModule;
+  }
+
+  try {
+    mysqlModule = require("mysql2/promise");
+    return mysqlModule;
+  } catch (error) {
+    const friendlyError = new Error(
+      "mysql2 dependency is not installed. Backend will continue in memory-only mode until the package is available."
+    );
+    friendlyError.code = "MYSQL2_MISSING";
+    friendlyError.cause = error;
+    throw friendlyError;
+  }
+}
 
 function normalizeConfig(rawConfig = {}) {
   const host = String(rawConfig.host || rawConfig.DB_HOST || "127.0.0.1").trim();
@@ -44,6 +62,8 @@ function createDatabaseClient(rawConfig = {}) {
       state.message = "MySQL environment variables are incomplete.";
       return;
     }
+
+    const mysql = getMysqlModule();
 
     const adminConnection = await mysql.createConnection({
       host: config.host,
