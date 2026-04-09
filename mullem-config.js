@@ -33,11 +33,12 @@
     document.querySelector('meta[name="mullem-api-base"]')?.getAttribute("content") || ""
   );
   const storedBase = sanitizeBaseUrl(safeLocalStorageGet(STORAGE_KEY));
-  const presetBase = sanitizeBaseUrl(window.MULLEM_API_BASE || DEFAULT_BACKEND_URL);
-
-  const resolvedBase = queryBase || presetBase || metaBase || storedBase || "";
   const host = String(window.location.hostname || "").toLowerCase();
   const isStaticHost = STATIC_HOST_SUFFIXES.some((suffix) => host.endsWith(suffix));
+  const fallbackBase = isStaticHost ? DEFAULT_BACKEND_URL : "";
+  const presetBase = sanitizeBaseUrl(window.MULLEM_API_BASE || fallbackBase);
+
+  const resolvedBase = queryBase || presetBase || metaBase || storedBase || "";
   const deploymentMode = resolvedBase
     ? "external-backend"
     : (isStaticHost ? "static-host-needs-backend" : "same-origin-or-external-backend");
