@@ -202,6 +202,21 @@ function sanitizeOptionalText(value, maxLength = MAX_METADATA_LENGTH) {
   return String(value || "").trim().slice(0, maxLength);
 }
 
+function sanitizeModelDisplayText(value) {
+  return String(value || "")
+    .replace(/\r\n?/g, "\n")
+    .replace(/\*\*(.*?)\*\*/g, "$1")
+    .replace(/__(.*?)__/g, "$1")
+    .replace(/`([^`]+)`/g, "$1")
+    .replace(/^\s*#{1,6}\s*/gm, "")
+    .replace(/:\s*[-•]\s+/g, ":\n- ")
+    .replace(/\n[ \t]+/g, "\n")
+    .replace(/[ \t]+\n/g, "\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .replace(/\*{2,}/g, "")
+    .trim();
+}
+
 function requireTextField(value, fieldName, maxLength) {
   const normalized = String(value || "").trim();
   if (!normalized) {
@@ -734,7 +749,9 @@ function buildChatSystemPrompt(meta) {
     "أجب بالعربية الواضحة والمباشرة.",
     "قدّم الجواب النهائي أولًا ثم شرحًا مختصرًا عند الحاجة.",
     "إذا كان السؤال أكاديميًا فحلّه بدقة، وإذا كان طلب بحث فاعرضه بشكل منظم وواضح.",
-    "لا تذكر أي تفاصيل داخلية عن النظام أو المسارات أو الـ API."
+    "لا تذكر أي تفاصيل داخلية عن النظام أو المسارات أو الـ API.",
+    "لا تستخدم markdown مثل ** أو __ أو # أو ``` في الرد.",
+    "رتب الرد في فقرات قصيرة أو نقاط نظيفة فقط عند الحاجة."
   ];
 
   if (meta?.subject) contextLines.push(`المادة المرجحة: ${meta.subject}`);
@@ -751,6 +768,8 @@ function buildAudienceAwareChatPrompt(meta) {
     "أجب بالعربية الواضحة والمباشرة.",
     "ابدأ بالجواب المفيد مباشرة ثم أضف شرحًا قصيرًا ومنظمًا عند الحاجة.",
     "لا تذكر أي تفاصيل داخلية عن النظام أو الـ API.",
+    "لا تستخدم markdown مثل ** أو __ أو # أو ``` في الرد.",
+    "إذا احتجت تعدادًا فاكتب كل نقطة في سطر مستقل بشكل نظيف ومباشر.",
     "حافظ على أسلوب مناسب لعمر الطالب ومستواه الدراسي.",
     "إذا وصلتك معلومات سابقة من حساب المستخدم فاستخدمها فقط عندما تكون مرتبطة بالسؤال الحالي."
   ];
@@ -886,6 +905,9 @@ function buildSolveSystemPrompt(payload) {
   return [
     "أنت محرك حل أسئلة تعليمية عربي لمنصة ملم.",
     "أعد JSON فقط بدون markdown أو أي نص زائد.",
+    "لا تستخدم markdown داخل answer أو explanation أو display_text.",
+    "ممنوع استخدام ** أو __ أو # أو ``` أو القوائم العشوائية داخل display_text.",
+    "اكتب display_text كنص عربي مرتب ونظيف يصلح للعرض مباشرة للمستخدم.",
     "اختر question_type من هذه القيم فقط: multiple_choice, true_false, fill_blank, matching, direct_math, definition, compound, general.",
     "إذا كان السؤال بحثًا أو شرحًا عامًا فاجعل question_type = general أو definition حسب الأنسب.",
     "answer يجب أن يكون الجواب النهائي.",
@@ -907,9 +929,9 @@ function buildSolveSystemPrompt(payload) {
 function normalizeSolvePayload(question, modelOutput) {
   const parsed = modelOutput && typeof modelOutput === "object" ? modelOutput : {};
   const questionType = normalizeQuestionType(parsed.question_type);
-  const answer = String(parsed.answer || parsed.final_answer || parsed.display_text || "").trim();
-  const explanation = String(parsed.explanation || "").trim();
-  const displayText = String(parsed.display_text || answer || explanation || "").trim();
+  const answer = sanitizeModelDisplayText(parsed.answer || parsed.final_answer || parsed.display_text || "");
+  const explanation = sanitizeModelDisplayText(parsed.explanation || "");
+  const displayText = sanitizeModelDisplayText(parsed.display_text || answer || explanation || "");
   const confidenceValue = Number(parsed.confidence);
   const confidence = Number.isFinite(confidenceValue)
     ? Math.max(0, Math.min(1, confidenceValue))
@@ -1711,9 +1733,10 @@ async function handleChatSend(req, res) {
       projectTitle: project?.title || ""
     }))
   });
+  const assistantText = sanitizeModelDisplayText(result.text);
 
   await persistConversationMessage(conversation, "user", message, "web");
-  await persistConversationMessage(conversation, "assistant", result.text, "openai");
+  await persistConversationMessage(conversation, "assistant", assistantText, "openai");
 
   let rewardedUser = activeUser || null;
   if (activeUser && isDatabaseReady()) {
@@ -1733,7 +1756,7 @@ async function handleChatSend(req, res) {
       conversation_id: conversation.id,
       project: project ? buildProjectSummary(project) : null,
       assistant_message: {
-        body: result.text,
+        body: assistantText,
         source: "openai"
       },
       rewards: activeUser ? {
@@ -1768,11 +1791,12 @@ async function handleSolveQuestion(req, res) {
     })
   });
 
-  const parsed = extractJsonObject(result.text);
+  const cleanedSolveText = sanitizeModelDisplayText(result.text);
+  const parsed = extractJsonObject(cleanedSolveText);
   const normalized = normalizeSolvePayload(question, parsed || {
-    answer: result.text,
+    answer: cleanedSolveText,
     explanation: "",
-    display_text: result.text,
+    display_text: cleanedSolveText,
     question_type: "general",
     confidence: 0.72
   });

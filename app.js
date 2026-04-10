@@ -1023,8 +1023,67 @@ function createClarificationResponse(message, intent) {
   };
 }
 
+function escapeReplyHtml(value) {
+  return String(value || "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
+function normalizeSimpleReplyText(value) {
+  return String(value || "")
+    .replace(/\r\n?/g, "\n")
+    .replace(/\*\*(.*?)\*\*/g, "$1")
+    .replace(/__(.*?)__/g, "$1")
+    .replace(/`([^`]+)`/g, "$1")
+    .replace(/^\s*#{1,6}\s*/gm, "")
+    .replace(/:\s*[-•]\s+/g, ":\n- ")
+    .replace(/\n[ \t]+/g, "\n")
+    .replace(/[ \t]+\n/g, "\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .replace(/\*{2,}/g, "")
+    .trim();
+}
+
+function renderSimpleReplyBody(text) {
+  const normalized = normalizeSimpleReplyText(text);
+  if (!normalized) {
+    return "<p>تعذر تجهيز الرد الحالي.</p>";
+  }
+
+  const lines = normalized
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean);
+
+  const parts = [];
+  let listItems = [];
+
+  function flushList() {
+    if (!listItems.length) return;
+    parts.push(`<ul>${listItems.map((item) => `<li>${escapeReplyHtml(item)}</li>`).join("")}</ul>`);
+    listItems = [];
+  }
+
+  lines.forEach((line) => {
+    const bulletMatch = line.match(/^(?:[-•]\s+|\d+[.)]\s+)(.+)$/);
+    if (bulletMatch) {
+      listItems.push(bulletMatch[1].trim());
+      return;
+    }
+
+    flushList();
+    parts.push(`<p>${escapeReplyHtml(line)}</p>`);
+  });
+
+  flushList();
+  return parts.join("");
+}
+
 function formatSimpleReply(text) {
-  return `<div class="simple-reply"><p>${text}</p></div>`;
+  return `<div class="simple-reply">${renderSimpleReplyBody(text)}</div>`;
 }
 
 function formatClarificationReply(payload) {

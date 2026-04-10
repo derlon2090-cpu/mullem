@@ -1951,12 +1951,29 @@ a.memory-item {
   filter: grayscale(0.15);
 }
 
-.simple-reply p {
+.simple-reply {
+  display: grid;
+  gap: 10px;
+  padding: 2px 0;
+}
+
+.simple-reply p,
+.simple-reply ul {
   margin: 0;
 }
 
-.simple-reply {
-  padding: 2px 0;
+.simple-reply p {
+  line-height: 1.9;
+}
+
+.simple-reply ul {
+  display: grid;
+  gap: 8px;
+  padding-inline-start: 1.1rem;
+}
+
+.simple-reply li {
+  line-height: 1.85;
 }
 
 .clarify-card {
