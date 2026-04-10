@@ -106,6 +106,12 @@
       if (message.includes("Invalid value: 'input_text'")) {
         return "تعذر الوصول إلى خدمة الشات الآن. أعد المحاولة بعد قليل.";
       }
+      if (/the page could not be found/i.test(message)) {
+        return "تعذر الوصول إلى الخدمة المطلوبة الآن. حدّث الصفحة أو أعد المحاولة بعد قليل.";
+      }
+      if (/static hosting detected/i.test(message)) {
+        return "تعذر الوصول إلى خادم الموقع الآن. حدّث الصفحة أو أعد المحاولة بعد قليل.";
+      }
       return message;
     }
 
@@ -183,6 +189,25 @@
     return `/api${cleanPath}`;
   }
 
+  function isSameOriginBase(baseUrl) {
+    const normalized = sanitizeBaseUrl(baseUrl);
+    if (!normalized) return true;
+
+    try {
+      const target = new URL(normalized, window.location.href);
+      return target.origin === window.location.origin;
+    } catch (_) {
+      return true;
+    }
+  }
+
+  function shouldTrySameOriginFallback() {
+    const baseUrl = resolveBaseUrl();
+    if (!baseUrl) return true;
+    if (isLocalHost()) return true;
+    return isSameOriginBase(baseUrl);
+  }
+
   function buildApiCandidates(path) {
     const cleanPath = `/${String(path || "").replace(/^\/+/, "")}`;
     const baseUrl = resolveBaseUrl();
@@ -200,7 +225,7 @@
       }
     }
 
-    if (!baseUrl || !isLocalHost()) {
+    if (shouldTrySameOriginFallback()) {
       candidates.push(buildSameOriginApiUrl(cleanPath));
     }
 

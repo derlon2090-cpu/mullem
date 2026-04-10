@@ -3204,9 +3204,13 @@
         runtimeState.projects = result.data.items
           .map(normalizeRuntimeProject)
           .filter(Boolean);
+      } else if (projectContextNote && result?.message) {
+        projectContextNote.textContent = String(result.message);
       }
-    } catch (_) {
-      // Keep the latest known list if the server is temporarily unavailable.
+    } catch (error) {
+      if (projectContextNote) {
+        projectContextNote.textContent = String(error?.message || "تعذر تحميل المشروعات الآن. حاول مرة أخرى بعد قليل.");
+      }
     }
 
     renderRuntimeProjects(activeUser);
