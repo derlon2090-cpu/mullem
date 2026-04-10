@@ -447,6 +447,10 @@ textarea {
   stroke-linecap: round;
 }
 
+.theme-toggle-sun {
+  opacity: 0;
+}
+
 .theme-toggle-moon {
   opacity: 1;
 }
