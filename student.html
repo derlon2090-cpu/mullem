@@ -218,15 +218,40 @@
         </div>
       </section>
 
-      <section class="student-section-card student-precision-card student-area-precision" aria-label="تخصيص الحل">
+      <section class="student-section-card student-precision-card student-area-precision" aria-label="طريقة الحل">
         <div class="student-section-head student-precision-head">
           <div>
-            <h3>تخصيص الحل</h3>
-            <p class="student-section-copy">اختر الصف والمادة والفصل إذا أردت جوابًا أدق، أو اتركها كما هي ليكتشفها ملم تلقائيًا.</p>
+            <h3>طريقة الحل</h3>
+            <p class="student-section-copy">السريع يجيب مباشرة، والدقيق يفتح الصف والمادة والترم عند الحاجة فقط.</p>
           </div>
           <span class="student-projects-badge">اختياري</span>
         </div>
-        <div class="student-filters-grid student-filters-grid-compact selectors">
+
+        <div class="chat-ai-status student-precision-status" aria-live="polite">
+          <div class="chat-ai-status-main">
+            <span class="chat-ai-status-pulse"></span>
+            <strong>جاري التفكير...</strong>
+          </div>
+          <div class="chat-ai-status-typing" aria-hidden="true">
+            <span></span>
+            <span></span>
+            <span></span>
+          </div>
+          <span class="chat-ai-status-copy">المنصة تجهز ردًا سريعًا أو شرحًا أدق بحسب اختيارك.</span>
+        </div>
+
+        <div class="solve-mode-row student-solve-mode-row" aria-label="وضع الحل">
+          <button class="solve-mode-btn active" type="button" data-solve-mode="quick">
+            <strong>سريع</strong>
+            <span>إجابة مباشرة إذا كان السؤال واضحًا</span>
+          </button>
+          <button class="solve-mode-btn" type="button" data-solve-mode="structured">
+            <strong>دقيق</strong>
+            <span>يراعي الصف والمادة والترم</span>
+          </button>
+        </div>
+
+        <div class="selectors selectors-hero student-precision-selectors">
           <select class="field" data-grade>
             <option>الأول الابتدائي</option>
             <option>الثاني الابتدائي</option>
@@ -256,7 +281,7 @@
             <option selected>الفصل الدراسي الأول</option>
             <option>الفصل الدراسي الثاني</option>
           </select>
-          <input class="field" data-lesson type="text" placeholder="اسم الدرس أو الوحدة اختياري">
+          <input type="hidden" data-lesson value="">
         </div>
       </section>
       </div>

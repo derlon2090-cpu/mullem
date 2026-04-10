@@ -4823,18 +4823,29 @@ body.theme-dark .admin-status-banner[data-state="error"] {
 }
 
 .student-precision-card {
-  gap: 14px;
+  gap: 16px;
 }
 
 .student-precision-head {
   align-items: end;
 }
 
-.student-filters-grid-compact {
-  margin-top: 0;
+.student-precision-status {
+  margin-top: 2px;
 }
 
-.student-filters-grid-compact .field {
+.student-solve-mode-row .solve-mode-btn {
+  border-radius: 18px;
+  padding: 14px 16px;
+}
+
+.student-precision-selectors {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.student-precision-selectors .field {
   min-height: 52px;
 }
 
@@ -4954,6 +4965,7 @@ body.theme-dark .admin-status-banner[data-state="error"] {
   .student-bottom-grid,
   .student-quick-grid,
   .student-filters-grid,
+  .student-precision-selectors,
   .student-project-form,
   .student-project-toolbar {
     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -5047,6 +5059,7 @@ body.theme-dark .admin-status-banner[data-state="error"] {
   .student-bottom-grid,
   .student-quick-grid,
   .student-filters-grid,
+  .student-precision-selectors,
   .student-project-form,
   .student-project-toolbar,
   .student-project-list,
