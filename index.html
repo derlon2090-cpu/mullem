@@ -13,7 +13,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800;900&display=swap" rel="stylesheet">
   <link rel="icon" type="image/svg+xml" href="favicon.svg">
-  <link rel="stylesheet" href="styles.css?v=20260410-1">
+  <link rel="stylesheet" href="styles.css?v=20260410-2">
 </head>
 <body>
   <div class="shell">
@@ -75,12 +75,6 @@
               <button class="helper-btn premium-core-helper" type="button" data-upload-file>📄 رفع ملف</button>
             </div>
 
-            <div class="premium-core-examples">
-              <span>أمثلة سريعة:</span>
-              <button class="subject-pill" type="button" data-starter-prompt="حل معادلة 2س + 6 = 14" data-starter-subject="الرياضيات">حل معادلة</button>
-              <button class="subject-pill" type="button" data-starter-prompt="اشرح درس الحضارة الرومانية بأسلوب مبسط" data-starter-subject="الاجتماعيات">اشرح درس</button>
-              <button class="subject-pill" type="button" data-starter-prompt="اختبرني في الأحياء بثلاثة أسئلة قصيرة" data-starter-subject="الأحياء">اختبرني</button>
-            </div>
           </div>
         </div>
       </section>
@@ -125,21 +119,6 @@
             </div>
           </div>
         </article>
-
-        <div class="premium-hero-insights" aria-label="مزايا سريعة">
-          <article class="premium-insight-card">
-            <strong>أسلوب مناسب لكل مرحلة</strong>
-            <span>الشرح يتدرج بحسب عمر الطالب وصفه الدراسي.</span>
-          </article>
-          <article class="premium-insight-card">
-            <strong>مشروعات محفوظة</strong>
-            <span>يمكن حفظ محادثات الدرس أو المشروع داخل لوحة الطالب.</span>
-          </article>
-          <article class="premium-insight-card">
-            <strong>خطة يومية واضحة</strong>
-            <span>تعرف استخدامك الحالي ووقت التجديد والباقات المتاحة بسهولة.</span>
-          </article>
-        </div>
       </section>
     </section>
 
@@ -157,6 +136,19 @@
           <div class="landing-chat-config-head">
             <strong>طريقة الحل</strong>
             <span>السريع يجيب مباشرة، والدقيق يفتح الصف والمادة والترم عند الحاجة فقط.</span>
+          </div>
+
+          <div class="chat-ai-status" aria-live="polite">
+            <div class="chat-ai-status-main">
+              <span class="chat-ai-status-pulse"></span>
+              <strong>جاري التفكير...</strong>
+            </div>
+            <div class="chat-ai-status-typing" aria-hidden="true">
+              <span></span>
+              <span></span>
+              <span></span>
+            </div>
+            <span class="chat-ai-status-copy">المنصة تجهز ردًا سريعًا أو شرحًا أدق بحسب اختيارك.</span>
           </div>
 
           <div class="solve-mode-row landing-solve-mode-row" aria-label="وضع الحل">
@@ -229,6 +221,19 @@
           <div class="helper-toolbar">
             <button class="helper-btn" type="button" data-upload-image>رفع صورة</button>
             <button class="helper-btn" type="button" data-upload-file>رفع ملف</button>
+          </div>
+
+          <div class="chat-starter-strip" aria-label="أمثلة جاهزة">
+            <span class="chat-starter-strip-label">ابدأ بسرعة:</span>
+            <button class="subject-pill" type="button" data-starter-prompt="حل معادلة 2س + 6 = 14" data-starter-subject="الرياضيات">حل معادلة</button>
+            <button class="subject-pill" type="button" data-starter-prompt="اشرح درس الحضارة الرومانية بأسلوب مبسط" data-starter-subject="الاجتماعيات">اشرح درس</button>
+            <button class="subject-pill" type="button" data-starter-prompt="اختبرني في الأحياء بثلاثة أسئلة قصيرة" data-starter-subject="الأحياء">اختبرني</button>
+          </div>
+
+          <div class="chat-mini-benefits" aria-label="مزايا سريعة">
+            <span class="chat-mini-benefit">⚡ سريع</span>
+            <span class="chat-mini-benefit">🧠 دقيق</span>
+            <span class="chat-mini-benefit">📊 يتابع تقدمك</span>
           </div>
 
           <div class="composer-note">تحقق من المعلومات المهمة قبل الاعتماد النهائي.</div>
