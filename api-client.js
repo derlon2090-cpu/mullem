@@ -106,6 +106,12 @@
       if (message.includes("Invalid value: 'input_text'")) {
         return "تعذر الوصول إلى خدمة الشات الآن. أعد المحاولة بعد قليل.";
       }
+      if (/authentication is required/i.test(message)) {
+        return "انتهت جلسة تسجيل الدخول أو لم يتم التحقق منها. سجّل دخولك مرة أخرى للمتابعة.";
+      }
+      if (/admin access is required/i.test(message)) {
+        return "هذه العملية متاحة لحساب الأدمن فقط.";
+      }
       if (/the page could not be found/i.test(message)) {
         return "تعذر الوصول إلى الخدمة المطلوبة الآن. حدّث الصفحة أو أعد المحاولة بعد قليل.";
       }
@@ -468,6 +474,8 @@
     try {
       localStorage.removeItem(storageKeys.token);
       localStorage.removeItem(storageKeys.user);
+      localStorage.removeItem("mlm_current_user");
+      localStorage.removeItem("mlm_admin_session");
     } catch (_) {
       // Ignore cleanup issues.
     }
@@ -475,6 +483,26 @@
     deleteCookie(cookieKeys.user);
     deleteCookie(cookieKeys.currentUser);
     deleteCookie(cookieKeys.adminSession);
+  }
+
+  function shouldRedirectAfterAuthFailure() {
+    const path = String(window.location?.pathname || "").toLowerCase();
+    return ["student.html", "admin.html", "profile.html"].some((page) => path.endsWith(`/${page}`) || path.endsWith(page));
+  }
+
+  function redirectToLoginAfterAuthFailure() {
+    if (!shouldRedirectAfterAuthFailure()) return;
+
+    try {
+      if (window.__mullemAuthRedirectScheduled) return;
+      window.__mullemAuthRedirectScheduled = true;
+    } catch (_) {
+      // Ignore guard assignment issues.
+    }
+
+    window.setTimeout(() => {
+      window.location.href = "login.html";
+    }, 250);
   }
 
   async function parseResponsePayload(response) {
@@ -576,6 +604,11 @@
           serverUnavailable: response.status === 404 || response.status >= 500,
           networkError: false
         };
+
+        if ((response.status === 401 || response.status === 403) && hasToken()) {
+          clearSession();
+          redirectToLoginAfterAuthFailure();
+        }
 
         if (result.ok) {
           if (url.startsWith("http://127.0.0.1:8010") || url.startsWith("http://localhost:8010")) {
