@@ -129,13 +129,11 @@ function syncPackagesScrollTop() {
   packagesScrollTopButton.classList.toggle("visible", window.scrollY > 400);
 }
 
-function renderPackagesAuthState(message, isError = false) {
+function renderPackagesAuthState(_message, isError = false) {
   if (!packagesAuthStateRoot) return;
   packagesAuthStateRoot.hidden = false;
   packagesAuthStateRoot.innerHTML = `
-    <div class="packages-lock-card${isError ? " packages-lock-card-error" : ""}">
-      <strong>${isError ? "تعذر تحميل الباقات الآن" : "يمكنك استعراض الباقات بدون تسجيل دخول"}</strong>
-      <p>${escapePackagesHtml(message)}</p>
+    <div class="packages-lock-card packages-lock-card-minimal${isError ? " packages-lock-card-error" : ""}">
       <div class="packages-lock-actions">
         <a class="primary-btn" href="login.html">تسجيل الدخول</a>
         <a class="secondary-btn" href="student.html">العودة إلى الشات</a>

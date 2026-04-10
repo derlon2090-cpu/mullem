@@ -1211,6 +1211,10 @@ body.solve-mode-structured .student-settings-card {
   text-align: center;
 }
 
+.packages-auth-state-footer {
+  margin-top: 6px;
+}
+
 .packages-lock-card strong {
   font-size: 1.25rem;
 }
@@ -1231,6 +1235,11 @@ body.solve-mode-structured .student-settings-card {
   justify-content: center;
   gap: 12px;
   flex-wrap: wrap;
+}
+
+.packages-lock-card-minimal {
+  padding: 18px 22px;
+  gap: 0;
 }
 
 .packages-dashboard[hidden] {
