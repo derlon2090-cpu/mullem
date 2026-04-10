@@ -198,6 +198,29 @@ function createHttpError(statusCode, message) {
   return error;
 }
 
+function getPublicDatabaseMessage(featureLabel = "هذه الميزة") {
+  return `${String(featureLabel || "هذه الميزة").trim()} غير متاح مؤقتًا. حاول مرة أخرى بعد قليل.`;
+}
+
+function buildPublicDatabaseState() {
+  return {
+    configured: Boolean(databaseState?.configured),
+    connected: Boolean(databaseState?.connected),
+    host: databaseState?.host || DB_HOST,
+    port: databaseState?.port || DB_PORT,
+    database: databaseState?.database || DB_DATABASE,
+    message: databaseState?.connected
+      ? String(databaseState?.message || "MySQL connected successfully.")
+      : getPublicDatabaseMessage("حفظ البيانات")
+  };
+}
+
+function ensureDatabaseFeatureAvailable(featureLabel) {
+  if (!isDatabaseReady()) {
+    throw createHttpError(503, getPublicDatabaseMessage(featureLabel));
+  }
+}
+
 function sanitizeOptionalText(value, maxLength = MAX_METADATA_LENGTH) {
   return String(value || "").trim().slice(0, maxLength);
 }
@@ -1227,6 +1250,7 @@ async function handleLogout(req, res) {
 
 async function handleStudentDashboard(req, res) {
   const auth = await requireAuthenticatedUser(req);
+  ensureDatabaseFeatureAvailable("لوحة الطالب");
   const syncedUser = await syncUserDailyProgress(auth.user, "زار لوحة الطالب");
   const dashboard = await databaseClient.getStudentDashboard((syncedUser || auth.user).id);
   if (!dashboard) {
@@ -1295,6 +1319,7 @@ async function handleGuestStatus(req, res) {
 
 async function handleStudentProjects(req, res) {
   const auth = await requireAuthenticatedUser(req);
+  ensureDatabaseFeatureAvailable("حفظ المشروعات");
   const url = new URL(req.url, `http://${req.headers.host || "127.0.0.1"}`);
   const includeArchived = url.searchParams.get("include_archived") === "1";
   const limit = Math.max(1, Math.min(Number(url.searchParams.get("limit") || 50), 200));
@@ -1313,6 +1338,7 @@ async function handleStudentProjects(req, res) {
 
 async function handleCreateStudentProject(req, res) {
   const auth = await requireAuthenticatedUser(req);
+  ensureDatabaseFeatureAvailable("إنشاء المشروعات");
   const payload = await parseJsonBody(req);
   const grade = sanitizeOptionalText(payload.grade || auth.user.grade, MAX_METADATA_LENGTH);
   const stage = sanitizeOptionalText(payload.stage || auth.user.stage || inferStageFromGrade(grade), MAX_METADATA_LENGTH);
@@ -1338,6 +1364,7 @@ async function handleCreateStudentProject(req, res) {
 
 async function handleUpdateStudentProject(req, res, projectId) {
   const auth = await requireAuthenticatedUser(req);
+  ensureDatabaseFeatureAvailable("تعديل المشروعات");
   const payload = await parseJsonBody(req);
   const changes = {};
 
@@ -1367,6 +1394,7 @@ async function handleUpdateStudentProject(req, res, projectId) {
 
 async function handleStudentConversations(req, res) {
   const auth = await requireAuthenticatedUser(req);
+  ensureDatabaseFeatureAvailable("دردشات المشروعات");
   const url = new URL(req.url, `http://${req.headers.host || "127.0.0.1"}`);
   const limit = Math.max(1, Math.min(Number(url.searchParams.get("limit") || 20), 100));
   const projectId = sanitizeOptionalText(url.searchParams.get("project_id"), MAX_METADATA_LENGTH);
@@ -1385,6 +1413,7 @@ async function handleStudentConversations(req, res) {
 
 async function handleCreateStudentConversation(req, res) {
   const auth = await requireAuthenticatedUser(req);
+  ensureDatabaseFeatureAvailable("إنشاء دردشة داخل المشروع");
   const payload = await parseJsonBody(req);
   const requestedProjectId = sanitizeOptionalText(payload.project_id, MAX_METADATA_LENGTH);
 
@@ -2000,7 +2029,7 @@ async function routeRequest(req, res) {
       provider: "openai",
       ai_configured: Boolean(OPENAI_API_KEY),
       model: OPENAI_MODEL,
-      db: databaseState,
+      db: buildPublicDatabaseState(),
       limits: {
         max_body_bytes: MAX_BODY_BYTES,
         max_message_length: MAX_MESSAGE_LENGTH,

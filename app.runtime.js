@@ -6163,8 +6163,8 @@
 
           if (aiConfigured === false) {
             failureMessage = "OPENAI_API_KEY is not configured on the server.";
-          } else if (dbState?.connected === false && dbState?.message) {
-            failureMessage = `${failureMessage} ${dbState.message}`.trim();
+          } else if (dbState?.connected === false) {
+            failureMessage = failureMessage || "بعض ميزات الحفظ غير متاحة مؤقتًا على الخادم.";
           }
         } catch (_) {
           // Ignore health probe failures and keep original error details.
