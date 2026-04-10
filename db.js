@@ -911,6 +911,54 @@ function createDatabaseClient(rawConfig = {}) {
     return rows;
   }
 
+  async function listUserMemoryCandidates(userId, options = {}) {
+    const safeLimit = Math.max(1, Math.min(Number(options.limit || 36), 80));
+    const params = [Number(userId)];
+    let whereClause = "WHERE c.user_id = ?";
+
+    if (options.exclude_conversation_id) {
+      whereClause += " AND c.id <> ?";
+      params.push(String(options.exclude_conversation_id));
+    }
+
+    const [rows] = await pool.execute(
+      `
+        SELECT
+          m.role,
+          m.body,
+          m.source,
+          m.created_at,
+          c.id AS conversation_id,
+          c.title,
+          c.subject,
+          c.stage,
+          c.grade,
+          c.term,
+          c.project_id
+        FROM messages m
+        INNER JOIN conversations c ON c.id = m.conversation_id
+        ${whereClause}
+        ORDER BY m.created_at DESC, m.id DESC
+        LIMIT ${safeLimit}
+      `,
+      params
+    );
+
+    return rows.map((row) => ({
+      role: row.role,
+      text: row.body,
+      source: row.source,
+      created_at: row.created_at,
+      conversation_id: row.conversation_id,
+      title: row.title || null,
+      subject: row.subject || null,
+      stage: row.stage || null,
+      grade: row.grade || null,
+      term: row.term || null,
+      project_id: row.project_id != null ? Number(row.project_id) : null
+    }));
+  }
+
   async function findPackageById(packageId) {
     const [rows] = await pool.execute(
       "SELECT * FROM app_packages WHERE id = ? LIMIT 1",
@@ -1550,6 +1598,7 @@ function createDatabaseClient(rawConfig = {}) {
     listMessages,
     listRecentConversations,
     listUserConversations,
+    listUserMemoryCandidates,
     findPackageById,
     findDefaultPackage,
     findPackageByKeyOrName,

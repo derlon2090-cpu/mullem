@@ -42,6 +42,15 @@ const IMAGE_MESSAGE_XP_REWARD = Math.max(TEXT_MESSAGE_XP_REWARD, Number(process.
 const DAILY_LOGIN_XP_REWARD = Math.max(0, Number(process.env.DAILY_LOGIN_XP_REWARD || 5));
 const DAILY_MOTIVATION_BONUS = Math.max(1, Number(process.env.DAILY_MOTIVATION_BONUS || 5));
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const ACCOUNT_MEMORY_LIMIT = Math.max(1, Math.min(Number(process.env.ACCOUNT_MEMORY_LIMIT || 5), 8));
+const ACCOUNT_MEMORY_CANDIDATES = Math.max(ACCOUNT_MEMORY_LIMIT, Math.min(Number(process.env.ACCOUNT_MEMORY_CANDIDATES || 28), 60));
+const MEMORY_STOP_WORDS = new Set([
+  "هذا", "هذه", "ذلك", "تلك", "هناك", "هنا", "الذي", "التي", "الى", "إلى", "على", "من", "عن", "في", "مع",
+  "ثم", "او", "أو", "كما", "بعد", "قبل", "لقد", "كان", "كانت", "يكون", "يمكن", "عندي", "عندك", "عنده",
+  "لدي", "عندي", "انا", "أنا", "انت", "أنت", "هو", "هي", "هم", "نحن", "لك", "له", "لها", "ما", "ماذا",
+  "كيف", "متى", "أين", "ليش", "لماذا", "هل", "تم", "إذا", "اذا", "the", "and", "for", "from", "with",
+  "that", "this", "what", "when", "where", "your", "have", "about"
+]);
 
 const MIME_TYPES = {
   ".html": "text/html; charset=utf-8",
@@ -742,7 +751,8 @@ function buildAudienceAwareChatPrompt(meta) {
     "أجب بالعربية الواضحة والمباشرة.",
     "ابدأ بالجواب المفيد مباشرة ثم أضف شرحًا قصيرًا ومنظمًا عند الحاجة.",
     "لا تذكر أي تفاصيل داخلية عن النظام أو الـ API.",
-    "حافظ على أسلوب مناسب لعمر الطالب ومستواه الدراسي."
+    "حافظ على أسلوب مناسب لعمر الطالب ومستواه الدراسي.",
+    "إذا وصلتك معلومات سابقة من حساب المستخدم فاستخدمها فقط عندما تكون مرتبطة بالسؤال الحالي."
   ];
 
   const stage = String(meta?.stage || inferStageFromGrade(meta?.grade) || "").trim();
@@ -765,6 +775,111 @@ function buildAudienceAwareChatPrompt(meta) {
   if (meta?.lesson) contextLines.push(`الدرس أو التركيز الحالي: ${meta.lesson}`);
 
   return contextLines.join("\n");
+}
+
+function normalizeMemoryText(value) {
+  return String(value || "")
+    .replace(/\s+/g, " ")
+    .replace(/[^\p{L}\p{N}\s]/gu, " ")
+    .trim()
+    .toLowerCase();
+}
+
+function extractMemoryTerms(value) {
+  const normalized = normalizeMemoryText(value);
+  if (!normalized) return [];
+  const unique = [];
+  for (const part of normalized.split(" ")) {
+    const token = part.trim();
+    if (!token || token.length < 3 || MEMORY_STOP_WORDS.has(token)) continue;
+    if (!unique.includes(token)) unique.push(token);
+    if (unique.length >= 8) break;
+  }
+  return unique;
+}
+
+function shortenMemorySnippet(value, maxLength = 180) {
+  const normalized = String(value || "").replace(/\s+/g, " ").trim();
+  if (!normalized) return "";
+  return normalized.length > maxLength ? `${normalized.slice(0, maxLength - 1).trim()}…` : normalized;
+}
+
+function scoreMemoryCandidate(candidate, terms = [], query = "", index = 0, currentProjectId = null) {
+  const sourceText = [
+    candidate?.text,
+    candidate?.title,
+    candidate?.subject,
+    candidate?.grade,
+    candidate?.term
+  ]
+    .filter(Boolean)
+    .join(" ");
+  const haystack = normalizeMemoryText(sourceText);
+  const recallIntent = /سابق|قبل|تذكر|ذك[ّ]?ر|قلت|ذكرنا|رجع|استرجع|المرة الماضية|المحادثة السابقة|مشروعي|مشروع/i.test(String(query || ""));
+  let score = Math.max(0, 12 - index);
+
+  if (candidate?.role === "user") score += 3;
+  if (currentProjectId && Number(candidate?.project_id || 0) === Number(currentProjectId)) score += 5;
+
+  for (const term of terms) {
+    if (haystack.includes(term)) score += 4;
+  }
+
+  if (recallIntent) score += 2;
+  if (!terms.length && !recallIntent) score = 0;
+
+  return score;
+}
+
+function buildAccountMemoryNote(snippets = []) {
+  if (!Array.isArray(snippets) || !snippets.length) return "";
+  const lines = snippets.map((item, index) => {
+    const label = item.role === "assistant" ? "من رد سابق للمساعد" : "من كلام المستخدم سابقًا";
+    const meta = [item.subject, item.grade, item.term].filter(Boolean).join(" • ");
+    const snippet = shortenMemorySnippet(item.text, 170);
+    return `${index + 1}. ${label}${meta ? ` [${meta}]` : ""}: ${snippet}`;
+  });
+
+  return [
+    "هذه ملاحظات مختصرة من سجل الحساب. استخدمها فقط إذا كانت مرتبطة بالسؤال الحالي، ولا تذكرها إذا لم تكن مفيدة:",
+    ...lines
+  ].join("\n");
+}
+
+async function getAccountMemoryMessages(payload = {}) {
+  if (!isDatabaseReady() || !payload.user_id || !databaseClient?.listUserMemoryCandidates) {
+    return [];
+  }
+
+  const candidates = await databaseClient.listUserMemoryCandidates(payload.user_id, {
+    exclude_conversation_id: payload.conversation_id || null,
+    limit: ACCOUNT_MEMORY_CANDIDATES
+  });
+
+  if (!Array.isArray(candidates) || !candidates.length) {
+    return [];
+  }
+
+  const terms = extractMemoryTerms(payload.message || "");
+  const ranked = candidates
+    .map((item, index) => ({
+      item,
+      score: scoreMemoryCandidate(item, terms, payload.message || "", index, payload.project_id || null)
+    }))
+    .filter((entry) => entry.score > 0)
+    .sort((a, b) => b.score - a.score)
+    .slice(0, ACCOUNT_MEMORY_LIMIT)
+    .map((entry) => entry.item);
+
+  const memoryNote = buildAccountMemoryNote(ranked);
+  if (!memoryNote) return [];
+
+  return [
+    {
+      role: "system",
+      content: memoryNote
+    }
+  ];
 }
 
 function buildSolveSystemPrompt(payload) {
@@ -1506,6 +1621,17 @@ async function buildChatMessages(conversation, payload) {
       content: systemPrompt
     }
   ];
+  const accountMemoryMessages = await getAccountMemoryMessages({
+    user_id: payload.user_id,
+    conversation_id: conversation?.id || payload.conversation_id || null,
+    project_id: payload.project_id || null,
+    message: payload.message || ""
+  });
+
+  for (const memoryMessage of accountMemoryMessages) {
+    if (!memoryMessage?.content) continue;
+    messages.push(memoryMessage);
+  }
 
   for (const item of history) {
     if (!item?.role || !item?.text) continue;
@@ -1575,6 +1701,8 @@ async function handleChatSend(req, res) {
     input: buildResponsesInput(await buildChatMessages(conversation, {
       ...payload,
       message,
+      user_id: activeUser?.id || null,
+      project_id: project?.id || null,
       subject: subject || project?.subject || activeUser?.subject || "",
       stage,
       grade: grade || project?.grade || activeUser?.grade || "",

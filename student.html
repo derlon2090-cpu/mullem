@@ -13,7 +13,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800;900&display=swap" rel="stylesheet">
   <link rel="icon" type="image/svg+xml" href="favicon.svg">
-  <link rel="stylesheet" href="styles.css?v=20260409-10">
+  <link rel="stylesheet" href="styles.css?v=20260409-11">
 </head>
 <body>
   <div class="shell">
@@ -174,10 +174,46 @@
         </button>
       </section>
 
-      <details class="student-settings-card">
-        <summary>تخصيص الجواب بدقة أعلى</summary>
-        <p>يمكنك تعديل الصف أو المادة أو الفصل إن أردت جوابًا أدق، أو تركها لملم ليستنتج المطلوب تلقائيًا.</p>
-        <div class="student-filters-grid selectors">
+      <section class="student-section-card student-projects-panel">
+        <div class="student-section-head">
+          <div>
+            <h3>المشروعات</h3>
+            <p class="student-section-copy">احفظ محادثات مادة أو درس داخل مشروع مستقل إذا أردت الرجوع لها لاحقًا من نفس اللوحة.</p>
+          </div>
+          <span class="student-projects-badge">اختياري</span>
+        </div>
+
+        <div class="student-project-toolbar">
+          <label class="student-project-picker">
+            <span>اربط هذه المحادثة بمشروع</span>
+            <select class="field" data-project-select>
+              <option value="">بدون مشروع محفوظ</option>
+            </select>
+          </label>
+          <div class="student-guest-note" data-project-note>جارٍ تجهيز حالة المشروعات حسب حسابك الحالي...</div>
+        </div>
+
+        <div class="student-project-form">
+          <input class="field" type="text" placeholder="اسم المشروع" data-project-title>
+          <input class="field" type="text" placeholder="الدرس أو الوحدة" data-project-lesson>
+          <textarea class="field student-project-description" rows="3" placeholder="وصف مختصر للمشروع أو الهدف منه" data-project-description></textarea>
+          <button class="primary-btn" type="button" data-create-project>إنشاء مشروع جديد</button>
+        </div>
+
+        <div class="student-project-list" data-project-list>
+          <div class="student-project-empty">أنشئ مشروعًا إذا أردت حفظ محادثات مادة أو درس معين في مكان مستقل.</div>
+        </div>
+      </section>
+
+      <section class="student-section-card student-precision-card" aria-label="تخصيص الحل">
+        <div class="student-section-head student-precision-head">
+          <div>
+            <h3>تخصيص الحل</h3>
+            <p class="student-section-copy">اختر الصف والمادة والفصل إذا أردت جوابًا أدق، أو اتركها كما هي ليكتشفها ملم تلقائيًا.</p>
+          </div>
+          <span class="student-projects-badge">اختياري</span>
+        </div>
+        <div class="student-filters-grid student-filters-grid-compact selectors">
           <select class="field" data-grade>
             <option>الأول الابتدائي</option>
             <option>الثاني الابتدائي</option>
@@ -207,38 +243,7 @@
             <option selected>الفصل الدراسي الأول</option>
             <option>الفصل الدراسي الثاني</option>
           </select>
-          <input class="field" data-lesson type="text" placeholder="اسم الدرس اختياري">
-        </div>
-      </details>
-
-      <section class="student-section-card student-projects-panel">
-        <div class="student-section-head">
-          <div>
-            <h3>المشروعات</h3>
-            <p class="student-section-copy">احفظ محادثات مادة أو درس داخل مشروع مستقل إذا أردت الرجوع لها لاحقًا من نفس اللوحة.</p>
-          </div>
-          <span class="student-projects-badge">اختياري</span>
-        </div>
-
-        <div class="student-project-toolbar">
-          <label class="student-project-picker">
-            <span>اربط هذه المحادثة بمشروع</span>
-            <select class="field" data-project-select>
-              <option value="">بدون مشروع محفوظ</option>
-            </select>
-          </label>
-          <div class="student-guest-note" data-project-note>جارٍ تجهيز حالة المشروعات حسب حسابك الحالي...</div>
-        </div>
-
-        <div class="student-project-form">
-          <input class="field" type="text" placeholder="اسم المشروع" data-project-title>
-          <input class="field" type="text" placeholder="الدرس أو الوحدة" data-project-lesson>
-          <textarea class="field student-project-description" rows="3" placeholder="وصف مختصر للمشروع أو الهدف منه" data-project-description></textarea>
-          <button class="primary-btn" type="button" data-create-project>إنشاء مشروع جديد</button>
-        </div>
-
-        <div class="student-project-list" data-project-list>
-          <div class="student-project-empty">أنشئ مشروعًا إذا أردت حفظ محادثات مادة أو درس معين في مكان مستقل.</div>
+          <input class="field" data-lesson type="text" placeholder="اسم الدرس أو الوحدة اختياري">
         </div>
       </section>
 
@@ -335,6 +340,6 @@
   <script src="mullem-config.js?v=20260409-5"></script>
   <script src="api-client.js?v=20260409-7"></script>
   <script src="app.js?v=20260409-2"></script>
-  <script src="app.runtime.js?v=20260409-6"></script>
+  <script src="app.runtime.js?v=20260409-7"></script>
 </body>
 </html>
