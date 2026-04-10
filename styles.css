@@ -396,35 +396,35 @@ textarea {
 }
 
 .theme-toggle {
-  width: 70px;
-  height: 38px;
-  padding: 4px;
-  border-radius: 999px;
-  border: 1px solid rgba(34, 197, 94, 0.18);
-  background: rgba(233, 240, 232, 0.96);
+  width: 46px;
+  height: 46px;
+  padding: 0;
+  border-radius: 50%;
+  border: 1px solid rgba(148, 163, 184, 0.45);
+  background: rgba(255, 255, 255, 0.96);
   cursor: pointer;
-  display: inline-flex;
-  align-items: center;
-  justify-content: flex-start;
-  transition: background 180ms ease, border-color 180ms ease;
+  display: grid;
+  place-items: center;
+  transition: background 180ms ease, border-color 180ms ease, box-shadow 180ms ease;
+  box-shadow: 0 12px 22px rgba(15, 23, 42, 0.12);
 }
 
 .theme-toggle-track {
   width: 100%;
   height: 100%;
-  display: flex;
-  align-items: center;
+  display: grid;
+  place-items: center;
 }
 
 .theme-toggle-thumb {
-  width: 30px;
-  height: 30px;
-  border-radius: 999px;
-  background: #fff;
+  width: 100%;
+  height: 100%;
+  border-radius: inherit;
+  background: transparent;
   position: relative;
   display: grid;
   place-items: center;
-  box-shadow: 0 8px 18px rgba(15, 23, 42, 0.18);
+  box-shadow: none;
   transition: transform 200ms ease;
 }
 
@@ -448,7 +448,7 @@ textarea {
 }
 
 .theme-toggle-moon {
-  opacity: 0;
+  opacity: 1;
 }
 
 .theme-toggle-moon path {
@@ -494,21 +494,22 @@ body.theme-dark .secondary-btn {
 }
 
 body.theme-dark .theme-toggle {
-  background: rgba(20, 28, 22, 0.96);
-  border-color: rgba(255, 255, 255, 0.18);
+  background: rgba(15, 23, 42, 0.96);
+  border-color: rgba(148, 163, 184, 0.35);
+  box-shadow: 0 12px 24px rgba(0, 0, 0, 0.35);
 }
 
 body.theme-dark .theme-toggle-thumb {
-  background: #f8fafc;
-  transform: translateX(32px);
+  background: transparent;
+  transform: none;
 }
 
 body.theme-dark .theme-toggle-sun {
-  opacity: 0;
+  opacity: 1;
 }
 
 body.theme-dark .theme-toggle-moon {
-  opacity: 1;
+  opacity: 0;
 }
 
 .page-wrap {
