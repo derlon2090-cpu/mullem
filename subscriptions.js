@@ -136,7 +136,7 @@ function renderPackagesAuthState(_message, isError = false) {
     <div class="packages-lock-card packages-lock-card-minimal${isError ? " packages-lock-card-error" : ""}">
       <div class="packages-lock-actions">
         <a class="primary-btn" href="login.html">تسجيل الدخول</a>
-        <a class="secondary-btn" href="student.html">العودة إلى الشات</a>
+        <a class="secondary-btn" href="index.html">العودة إلى الشات</a>
       </div>
     </div>
   `;

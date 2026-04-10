@@ -2593,6 +2593,21 @@ body.user-logged-in .selectors {
   gap: 12px;
 }
 
+.auth-error {
+  padding: 10px 12px;
+  border-radius: 14px;
+  border: 1px solid rgba(220, 38, 38, 0.26);
+  background: rgba(254, 242, 242, 0.9);
+  color: #b91c1c;
+  font-weight: 700;
+  font-size: 0.92rem;
+}
+
+.field.is-error {
+  border-color: rgba(220, 38, 38, 0.45);
+  background: rgba(254, 242, 242, 0.55);
+}
+
 .auth-panels {
   display: grid;
   gap: 16px;

@@ -20,6 +20,8 @@ const confirmPassword = document.querySelector("[data-auth-confirm-password]");
 const verifyCodeInput = document.querySelector("[data-auth-verify-code]");
 const verifyCopy = document.querySelector("[data-auth-verify-copy]");
 const verifyNote = document.querySelector("[data-auth-verify-note]");
+const loginError = document.querySelector("[data-auth-login-error]");
+const registerError = document.querySelector("[data-auth-register-error]");
 const googleButton = document.querySelector("[data-auth-google]");
 const forgotButton = document.querySelector("[data-auth-forgot]");
 const backButton = document.querySelector("[data-auth-back]");
@@ -265,6 +267,29 @@ function setState(text) {
   if (authState) authState.textContent = text;
 }
 
+function setFieldError(field, hasError) {
+  if (!field) return;
+  field.classList.toggle("is-error", Boolean(hasError));
+}
+
+function setInlineError(target, message) {
+  if (!target) return;
+  if (!message) {
+    target.hidden = true;
+    target.textContent = "";
+    return;
+  }
+  target.hidden = false;
+  target.textContent = message;
+}
+
+function resetInlineErrors() {
+  setInlineError(loginError, "");
+  setInlineError(registerError, "");
+  setFieldError(loginPassword, false);
+  setFieldError(registerPassword, false);
+}
+
 function setActivePanel(mode) {
   authTabs.forEach((tab) => {
     tab.classList.toggle("active", tab.getAttribute("data-auth-tab") === mode);
@@ -428,6 +453,7 @@ bindPasswordToggles();
 loginForm?.addEventListener("submit", async (event) => {
   event.preventDefault();
   event.stopImmediatePropagation();
+  resetInlineErrors();
   const email = (loginEmail?.value || "").trim().toLowerCase();
   const password = loginPassword?.value || "";
   const apiClient = getApiClient();
@@ -443,7 +469,8 @@ loginForm?.addEventListener("submit", async (event) => {
   }
 
   if (!apiClient) {
-    handleLocalLoginFallback(email, password);
+    setInlineError(loginError, "تعذر الاتصال بالخادم الآن. حاول مرة أخرى بعد قليل.");
+    setState("تعذر الاتصال بالخادم الآن. حاول مرة أخرى بعد قليل.");
     return;
   }
 
@@ -454,7 +481,8 @@ loginForm?.addEventListener("submit", async (event) => {
   });
 
   if (shouldFallbackToLocalAuth(apiResult)) {
-    handleLocalLoginFallback(email, password);
+    setInlineError(loginError, "الخادم غير متاح الآن. حاول مرة أخرى بعد قليل.");
+    setState("الخادم غير متاح الآن. حاول مرة أخرى بعد قليل.");
     return;
   }
 
@@ -474,12 +502,20 @@ loginForm?.addEventListener("submit", async (event) => {
     return;
   }
 
-  setState(apiResult.message || "تعذر تسجيل الدخول. تحقق من البيانات ثم حاول مرة أخرى.");
+  const loginMessage = apiResult.message || "تعذر تسجيل الدخول. تحقق من البيانات ثم حاول مرة أخرى.";
+  if (/invalid email or password/i.test(loginMessage) || /كلمة المرور/i.test(loginMessage)) {
+    setInlineError(loginError, "كلمة المرور غير صحيحة.");
+    setFieldError(loginPassword, true);
+  } else {
+    setInlineError(loginError, loginMessage);
+  }
+  setState(loginMessage);
 }, { capture: true });
 
 registerForm?.addEventListener("submit", async (event) => {
   event.preventDefault();
   event.stopImmediatePropagation();
+  resetInlineErrors();
   const name = (registerName?.value || "").trim();
   const email = (registerEmail?.value || "").trim().toLowerCase();
   const password = registerPassword?.value || "";
@@ -488,6 +524,10 @@ registerForm?.addEventListener("submit", async (event) => {
 
   if (!name || !email || !password) {
     setState("أكمل جميع الحقول أولًا.");
+    if (!password) {
+      setInlineError(registerError, "اكتب كلمة مرور صالحة أولًا.");
+      setFieldError(registerPassword, true);
+    }
     return;
   }
 
@@ -497,7 +537,8 @@ registerForm?.addEventListener("submit", async (event) => {
   }
 
   if (!apiClient) {
-    handleLocalRegisterFallback(name, email, password, grade);
+    setInlineError(registerError, "تعذر الاتصال بالخادم الآن. حاول مرة أخرى بعد قليل.");
+    setState("تعذر الاتصال بالخادم الآن. حاول مرة أخرى بعد قليل.");
     return;
   }
 
@@ -512,7 +553,8 @@ registerForm?.addEventListener("submit", async (event) => {
   });
 
   if (shouldFallbackToLocalAuth(apiResult)) {
-    handleLocalRegisterFallback(name, email, password, grade);
+    setInlineError(registerError, "الخادم غير متاح الآن. حاول مرة أخرى بعد قليل.");
+    setState("الخادم غير متاح الآن. حاول مرة أخرى بعد قليل.");
     return;
   }
 
@@ -527,126 +569,24 @@ registerForm?.addEventListener("submit", async (event) => {
     return;
   }
 
-  setState(apiResult.message || "تعذر إنشاء الحساب الآن. تحقق من البيانات ثم حاول مرة أخرى.");
+  const registerMessage = apiResult.message || "تعذر إنشاء الحساب الآن. تحقق من البيانات ثم حاول مرة أخرى.";
+  if (/password/i.test(registerMessage) || /كلمة المرور/i.test(registerMessage)) {
+    setInlineError(registerError, "تحقق من كلمة المرور مرة أخرى.");
+    setFieldError(registerPassword, true);
+  } else {
+    setInlineError(registerError, registerMessage);
+  }
+  setState(registerMessage);
 }, { capture: true });
 
-loginForm?.addEventListener("submit", (event) => {
-  event.preventDefault();
-  const apiClient = getApiClient();
-  if (apiClient) {
-    return;
-  }
-
-  const email = (loginEmail?.value || "").trim().toLowerCase();
-  const password = loginPassword?.value || "";
-
-  if (!email || !password) {
-    setState("أدخل البريد الإلكتروني وكلمة المرور أولًا.");
-    return;
-  }
-
-  if (!isValidEmail(email)) {
-    setState("البريد الإلكتروني غير صحيح.");
-    return;
-  }
-
-  if (email === adminCredentials.email && password === adminCredentials.password) {
-    localStorage.setItem(storageKeys.adminSession, "1");
-    localStorage.removeItem(storageKeys.currentUser);
-    persistClientAuthState();
-    setState("تم تسجيل دخول الأدمن بنجاح. سيتم تحويلك الآن.");
-    window.location.href = "admin.html";
-    return;
-  }
-
-  const userByEmail = loadUsers().find((entry) => entry.email.toLowerCase() === email);
-  if (!userByEmail) {
-    setState("البريد الإلكتروني غير مسجل في المنصة.");
-    return;
-  }
-
-  if (userByEmail.password !== password) {
-    setState("كلمة المرور غير صحيحة.");
-    return;
-  }
-
-  const user = userByEmail;
-  if (!user) {
-    setState("كلمة المرور غير صحيحة أو الحساب غير موجود.");
-    return;
-  }
-
-  if (user.status === "محظور") {
-    setState("هذا الحساب محظور حاليًا. تواصل مع إدارة المنصة إذا كنت ترى أن هذا الإجراء غير صحيح.");
-    return;
-  }
-
-  localStorage.removeItem(storageKeys.adminSession);
-  startAuthVerification({
-    flow: "login",
-    userId: user.id,
-    name: user.name,
-    email: user.email,
-    code: generateVerificationCode()
-  });
+loginPassword?.addEventListener("input", () => {
+  setInlineError(loginError, "");
+  setFieldError(loginPassword, false);
 });
 
-registerForm?.addEventListener("submit", (event) => {
-  event.preventDefault();
-  const apiClient = getApiClient();
-  if (apiClient) {
-    return;
-  }
-
-  const name = (registerName?.value || "").trim();
-  const email = (registerEmail?.value || "").trim().toLowerCase();
-  const password = registerPassword?.value || "";
-  const grade = registerGrade?.value || "الثاني الثانوي";
-
-  if (!name || !email || !password) {
-    setState("أكمل جميع الحقول أولًا.");
-    return;
-  }
-
-  if (!isValidEmail(email)) {
-    setState("البريد الإلكتروني غير صحيح.");
-    return;
-  }
-
-  if (password.length < 6) {
-    setState("كلمة المرور يجب أن تكون 6 أحرف أو أكثر.");
-    return;
-  }
-
-  const users = loadUsers();
-  if (users.some((entry) => entry.email.toLowerCase() === email)) {
-    setState("هذا البريد مسجل مسبقًا.");
-    return;
-  }
-
-  localStorage.removeItem(storageKeys.adminSession);
-  startAuthVerification({
-    flow: "register",
-    code: generateVerificationCode(),
-    name,
-    email,
-    user: {
-      id: `student-${Date.now()}`,
-      name,
-      email,
-      password,
-      role: "Student",
-      grade,
-      subject: "الرياضيات",
-      package: "مجاني محدود",
-      xp: 100,
-      streakDays: 0,
-      lastActiveDate: "",
-      achievements: [],
-      status: "نشط",
-      activity: "أنشأ حسابًا جديدًا"
-    }
-  });
+registerPassword?.addEventListener("input", () => {
+  setInlineError(registerError, "");
+  setFieldError(registerPassword, false);
 });
 
 forgotButton?.addEventListener("click", () => {
