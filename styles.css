@@ -2851,13 +2851,13 @@ body.theme-dark .auth-google-btn {
   position: fixed;
   left: 20px;
   bottom: 20px;
-  width: 58px;
-  height: 58px;
+  width: 54px;
+  height: 54px;
   border: 0;
   border-radius: 20px;
-  background: linear-gradient(135deg, var(--brand), var(--accent));
+  background: linear-gradient(135deg, rgba(34, 197, 94, 0.92), rgba(22, 163, 74, 0.92));
   color: #fff;
-  font-size: 1.7rem;
+  font-size: 1.2rem;
   font-weight: 900;
   box-shadow: var(--shadow);
   cursor: pointer;
@@ -2866,12 +2866,21 @@ body.theme-dark .auth-google-btn {
   transform: translateY(12px);
   transition: 180ms ease;
   z-index: 50;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 16px;
 }
 
 .scroll-top-btn.visible {
   opacity: 1;
   visibility: visible;
   transform: translateY(0);
+}
+
+.scroll-top-btn:active {
+  opacity: 0.9;
+  transform: scale(0.98);
 }
 
 .admin-wrap {
@@ -5607,8 +5616,17 @@ body.theme-dark .admin-status-banner[data-state="error"] {
   }
 
 .scroll-top-btn {
-  bottom: 14px;
-  left: 14px;
+  bottom: 16px;
+  left: 50%;
+  width: min(72vw, 320px);
+  height: 48px;
+  border-radius: 22px;
+  font-size: 1rem;
+  transform: translate(-50%, 12px);
+}
+
+.scroll-top-btn.visible {
+  transform: translate(-50%, 0);
 }
 }
 
