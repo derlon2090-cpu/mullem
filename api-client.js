@@ -170,6 +170,47 @@
     return Boolean(getToken());
   }
 
+  function isAuthenticatedStudent() {
+    const sessionUser = getSessionUser();
+    if (hasToken() && sessionUser && String(sessionUser.role || "").toLowerCase() !== "admin") {
+      return true;
+    }
+
+    try {
+      const currentUser = localStorage.getItem("mlm_current_user");
+      const isAdmin = localStorage.getItem("mlm_admin_session") === "1";
+      return Boolean(currentUser) && !isAdmin;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  function isPublicLandingPage() {
+    const path = String(window.location?.pathname || "").toLowerCase();
+    return !path || path.endsWith("/") || path.endsWith("/index.html");
+  }
+
+  function redirectAuthenticatedUserFromLanding() {
+    if (!isAuthenticatedStudent() || !isPublicLandingPage()) return;
+
+    const search = String(window.location?.search || "");
+    const hash = String(window.location?.hash || "");
+    if (search.includes("public=1") || hash === "#public") return;
+
+    window.location.replace("student.html");
+  }
+
+  function upgradeHomeLinksForAuthenticatedUser() {
+    if (!isAuthenticatedStudent()) return;
+
+    document
+      .querySelectorAll('a[href="index.html"], a[href="./index.html"], a[href="/index.html"], a[href="#home"]')
+      .forEach((link) => {
+        if (link.hasAttribute("data-public-home")) return;
+        link.setAttribute("href", "student.html");
+      });
+  }
+
   function normalizeLegacyUser(user, existingUser = null) {
     const existing = existingUser || {};
     const role = String(user?.role || existing.role || "student").toLowerCase();
@@ -596,6 +637,8 @@
   });
 
   syncLegacySessionUser();
+  redirectAuthenticatedUserFromLanding();
+  upgradeHomeLinksForAuthenticatedUser();
 
   window.mullemApiClient = {
     storageKeys,
@@ -628,11 +671,14 @@
     getChatSession,
     getToken,
     hasToken,
+    isAuthenticatedStudent,
     getSessionUser,
     setSession,
     clearSession,
     syncLegacySessionUser,
-    performLogout
+    performLogout,
+    redirectAuthenticatedUserFromLanding,
+    upgradeHomeLinksForAuthenticatedUser
   };
 })();
 
