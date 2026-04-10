@@ -7,6 +7,34 @@ const { execSync } = require("child_process");
 const ROOT_DIR = __dirname;
 loadEnvFile(path.join(ROOT_DIR, ".env"));
 const PORT = Number(process.env.PORT || 3000);
+const IS_CLOUD_RUNTIME = Boolean(
+  process.env.RENDER ||
+  process.env.RENDER_EXTERNAL_URL ||
+  process.env.RENDER_SERVICE_ID ||
+  process.env.RAILWAY_ENVIRONMENT ||
+  process.env.RAILWAY_PROJECT_ID ||
+  process.env.VERCEL
+);
+
+function readEnvValue(keys, fallback = "") {
+  const list = Array.isArray(keys) ? keys : [keys];
+  for (const key of list) {
+    const value = String(process.env[key] || "").trim();
+    if (value) return value;
+  }
+  return String(fallback || "").trim();
+}
+
+function readEnvNumber(keys, fallback) {
+  const list = Array.isArray(keys) ? keys : [keys];
+  for (const key of list) {
+    const raw = String(process.env[key] || "").trim();
+    if (!raw) continue;
+    const parsed = Number(raw);
+    if (Number.isFinite(parsed)) return parsed;
+  }
+  return Number(fallback);
+}
 
 const OPENAI_API_KEY = String(process.env.OPENAI_API_KEY || "").trim();
 const OPENAI_MODEL = String(process.env.OPENAI_MODEL || "gpt-5.4-mini").trim();
@@ -23,11 +51,20 @@ const RATE_LIMIT_CHAT_MAX = Math.max(1, Number(process.env.RATE_LIMIT_CHAT_MAX |
 const RATE_LIMIT_SOLVE_MAX = Math.max(1, Number(process.env.RATE_LIMIT_SOLVE_MAX || 20));
 const RATE_LIMIT_GENERAL_MAX = Math.max(1, Number(process.env.RATE_LIMIT_GENERAL_MAX || 60));
 const CORS_ALLOWED_ORIGINS = String(process.env.CORS_ALLOWED_ORIGINS || "*").trim();
-const DB_HOST = String(process.env.DB_HOST || "127.0.0.1").trim();
-const DB_PORT = Number(process.env.DB_PORT || 3306);
-const DB_DATABASE = String(process.env.DB_DATABASE || "mullem").trim();
-const DB_USERNAME = String(process.env.DB_USERNAME || process.env.DB_USER || "root").trim();
-const DB_PASSWORD = String(process.env.DB_PASSWORD || "").trim();
+const DB_HOST = readEnvValue(
+  ["DB_HOST", "MYSQLHOST", "MY_SQL_HOST", "DATABASE_HOST"],
+  IS_CLOUD_RUNTIME ? "" : "127.0.0.1"
+);
+const DB_PORT = readEnvNumber(["DB_PORT", "MYSQLPORT", "DATABASE_PORT"], 3306);
+const DB_DATABASE = readEnvValue(
+  ["DB_DATABASE", "MYSQLDATABASE", "DATABASE_NAME"],
+  IS_CLOUD_RUNTIME ? "" : "mullem"
+);
+const DB_USERNAME = readEnvValue(
+  ["DB_USERNAME", "DB_USER", "MYSQLUSER", "DATABASE_USER"],
+  IS_CLOUD_RUNTIME ? "" : "root"
+);
+const DB_PASSWORD = readEnvValue(["DB_PASSWORD", "MYSQLPASSWORD", "DATABASE_PASSWORD"], "");
 const MAX_NAME_LENGTH = Math.max(20, Number(process.env.MAX_NAME_LENGTH || 160));
 const MIN_PASSWORD_LENGTH = Math.max(6, Number(process.env.MIN_PASSWORD_LENGTH || 6));
 const PASSWORD_HASH_ITERATIONS = Math.max(60000, Number(process.env.PASSWORD_HASH_ITERATIONS || 120000));
