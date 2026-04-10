@@ -213,7 +213,10 @@ body.theme-dark .student-guest-note,
 body.theme-dark .student-project-empty,
 body.theme-dark .auth-security-note,
 body.theme-dark .auth-guest-cta,
-body.theme-dark .info-link-card {
+body.theme-dark .info-link-card,
+body.theme-dark .info-flow-card,
+body.theme-dark .info-mode-card,
+body.theme-dark .info-chip-group {
   background: rgba(19, 31, 23, 0.96);
   border-color: rgba(255, 255, 255, 0.12);
   color: var(--text);
@@ -227,7 +230,10 @@ body.theme-dark .student-guest-note,
 body.theme-dark .student-project-empty,
 body.theme-dark .student-progress-card p,
 body.theme-dark .auth-guest-cta span,
-body.theme-dark .auth-security-points span {
+body.theme-dark .auth-security-points span,
+body.theme-dark .info-flow-card span,
+body.theme-dark .info-mode-card span,
+body.theme-dark .info-chip-group span {
   color: var(--muted);
 }
 
@@ -3615,6 +3621,22 @@ body.theme-dark .admin-status-banner[data-state="error"] {
   gap: 14px;
 }
 
+.info-flow-grid,
+.info-mode-grid,
+.info-chip-groups {
+  display: grid;
+  gap: 14px;
+}
+
+.info-flow-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.info-mode-grid,
+.info-chip-groups {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
 .info-link-card {
   padding: 18px 20px;
   border-radius: 22px;
@@ -3644,7 +3666,10 @@ body.theme-dark .admin-status-banner[data-state="error"] {
 .history-card,
 .about-feature-item,
 .policy-item,
-.strength-card {
+.strength-card,
+.info-flow-card,
+.info-mode-card,
+.info-chip-group {
   padding: 16px 18px;
   border-radius: 20px;
   border: 1px solid var(--line);
@@ -3660,9 +3685,36 @@ body.theme-dark .admin-status-banner[data-state="error"] {
 .history-card strong,
 .about-feature-item strong,
 .policy-item strong,
-.strength-card strong {
+.strength-card strong,
+.info-flow-card strong,
+.info-mode-card strong,
+.info-chip-group strong {
   display: block;
   margin-bottom: 6px;
+}
+
+.info-flow-card span,
+.info-mode-card span,
+.info-chip-group span {
+  color: var(--muted);
+  line-height: 1.8;
+}
+
+.info-chip-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.info-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 10px 14px;
+  border-radius: 999px;
+  border: 1px solid rgba(34, 197, 94, 0.14);
+  background: var(--brand-soft);
+  color: var(--brand-strong);
+  font-weight: 700;
 }
 
 .strength-card.warning {
@@ -4489,6 +4541,12 @@ body.theme-dark .admin-status-banner[data-state="error"] {
   }
 
   .info-link-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .info-flow-grid,
+  .info-mode-grid,
+  .info-chip-groups {
     grid-template-columns: 1fr;
   }
 
@@ -5502,6 +5560,42 @@ body.theme-dark .admin-status-banner[data-state="error"] {
   overflow: hidden;
 }
 
+.landing-chat-config {
+  display: grid;
+  gap: 14px;
+  margin: 0 24px;
+  padding: 18px 20px;
+  border-radius: 24px;
+  border: 1px solid rgba(34, 197, 94, 0.12);
+  background:
+    radial-gradient(circle at top left, rgba(34, 197, 94, 0.08), transparent 24%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(246, 252, 248, 0.94));
+}
+
+.landing-chat-config-head {
+  display: grid;
+  gap: 6px;
+}
+
+.landing-chat-config-head strong {
+  color: var(--brand-strong);
+  font-size: 1rem;
+}
+
+.landing-chat-config-head span {
+  color: var(--muted);
+  line-height: 1.8;
+}
+
+.landing-solve-mode-row {
+  margin: 0;
+}
+
+.landing-precision-selectors {
+  margin: 0;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
 .landing-accordion-group {
   display: grid;
   gap: 16px;
@@ -5722,6 +5816,7 @@ body.theme-dark .premium-quick-box,
 body.theme-dark .premium-core-ask,
 body.theme-dark .premium-core-textarea,
 body.theme-dark .premium-mockup-message,
+body.theme-dark .landing-chat-config,
 body.theme-dark .auth-preview-bubble,
 body.theme-dark .premium-mockup-footer div,
 body.theme-dark .auth-trust-strip span,
@@ -5777,6 +5872,10 @@ body.theme-dark .premium-value-card p {
   .premium-chat-top {
     flex-direction: column;
     align-items: stretch;
+  }
+
+  .landing-precision-selectors {
+    grid-template-columns: 1fr;
   }
 
   .auth-shell-premium {
@@ -5836,6 +5935,11 @@ body.theme-dark .premium-value-card p {
   .precision-config-summary,
   .precision-config-body {
     padding-inline: 16px;
+  }
+
+  .landing-chat-config {
+    margin: 0 18px;
+    padding: 16px;
   }
 
   .landing-accordion-summary {

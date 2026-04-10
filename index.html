@@ -13,7 +13,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800;900&display=swap" rel="stylesheet">
   <link rel="icon" type="image/svg+xml" href="favicon.svg">
-  <link rel="stylesheet" href="styles.css?v=20260409-10">
+  <link rel="stylesheet" href="styles.css?v=20260410-1">
 </head>
 <body>
   <div class="shell">
@@ -148,13 +148,59 @@
         <div class="chat-top premium-chat-top">
           <div class="premium-chat-copy">
             <span class="eyebrow">تجربة مباشرة</span>
-            <h2>جرّب الشات الذكي الآن</h2>
-            <p>ابدأ كضيف حتى 5 رسائل يوميًا، أو سجّل دخولك لتحفظ المحادثات والمشروعات وتحصل على 100 XP كبداية.</p>
+            <h2>اسأل ملم الآن</h2>
+            <p>اختر طريقة الحل مرة واحدة، ثم اكتب سؤالك أو ارفع صورة مباشرة.</p>
           </div>
-          <div class="example-list">
-            <button class="example-chip" type="button" data-starter-prompt="احسب محيط دائرة نصف قطرها 7" data-starter-subject="الرياضيات">احسب محيط دائرة</button>
-            <button class="example-chip" type="button" data-starter-prompt="اشرح قانون نيوتن الثاني" data-starter-subject="الفيزياء">اشرح نيوتن</button>
-            <button class="example-chip" type="button" data-starter-action="upload-image">حل من صورة</button>
+        </div>
+
+        <div class="landing-chat-config">
+          <div class="landing-chat-config-head">
+            <strong>طريقة الحل</strong>
+            <span>السريع يجيب مباشرة، والدقيق يفتح الصف والمادة والترم عند الحاجة فقط.</span>
+          </div>
+
+          <div class="solve-mode-row landing-solve-mode-row" aria-label="وضع الحل">
+            <button class="solve-mode-btn active" type="button" data-solve-mode="quick">
+              <strong>سريع</strong>
+              <span>إجابة مباشرة إذا كان السؤال واضحًا</span>
+            </button>
+            <button class="solve-mode-btn" type="button" data-solve-mode="structured">
+              <strong>دقيق</strong>
+              <span>يراعي الصف والمادة والترم</span>
+            </button>
+          </div>
+
+          <div class="selectors selectors-hero landing-precision-selectors">
+            <select class="field" data-grade>
+              <option>الأول الابتدائي</option>
+              <option>الثاني الابتدائي</option>
+              <option>الثالث الابتدائي</option>
+              <option>الرابع الابتدائي</option>
+              <option>الخامس الابتدائي</option>
+              <option>السادس الابتدائي</option>
+              <option>الأول المتوسط</option>
+              <option>الثاني المتوسط</option>
+              <option>الثالث المتوسط</option>
+              <option>الأول الثانوي</option>
+              <option selected>الثاني الثانوي</option>
+              <option>الثالث الثانوي</option>
+            </select>
+            <select class="field" data-subject>
+              <option selected>الرياضيات</option>
+              <option>العلوم</option>
+              <option>الفيزياء</option>
+              <option>الكيمياء</option>
+              <option>الأحياء</option>
+              <option>اللغة العربية</option>
+              <option>اللغة الإنجليزية</option>
+              <option>الاجتماعيات</option>
+              <option>المهارات الرقمية</option>
+            </select>
+            <select class="field" data-term>
+              <option selected>الفصل الدراسي الأول</option>
+              <option>الفصل الدراسي الثاني</option>
+            </select>
+            <input type="hidden" data-lesson value="">
           </div>
         </div>
 
@@ -183,198 +229,11 @@
           <div class="helper-toolbar">
             <button class="helper-btn" type="button" data-upload-image>رفع صورة</button>
             <button class="helper-btn" type="button" data-upload-file>رفع ملف</button>
-            <button class="helper-btn" type="button" data-focus-subject>اختيار مادة</button>
           </div>
 
-          <div class="composer-note">قد تصدر عن الشات الذكي بعض الأخطاء غير المقصودة، لذلك يستحسن التحقق من المعلومات المهمة قبل اعتمادها.</div>
+          <div class="composer-note">تحقق من المعلومات المهمة قبل الاعتماد النهائي.</div>
         </div>
       </section>
-    </section>
-
-    <section class="shell landing-accordion-group" aria-label="تفاصيل إضافية">
-      <details class="landing-accordion" id="how-it-works">
-        <summary class="landing-accordion-summary">
-          <div>
-            <span class="eyebrow">كيف يعمل</span>
-            <strong>3 خطوات فقط لتبدأ</strong>
-          </div>
-          <span class="landing-accordion-hint">افتح التفاصيل</span>
-        </summary>
-        <div class="landing-accordion-body">
-          <div class="premium-steps-grid">
-            <article class="premium-step-card">
-              <div class="premium-step-number">01</div>
-              <strong>اكتب السؤال أو صوّره</strong>
-              <p>ابدأ بسؤال مباشر، أو أرسل صورة أو ملف، أو جرّب أحد الأمثلة الجاهزة.</p>
-            </article>
-            <article class="premium-step-card">
-              <div class="premium-step-number">02</div>
-              <strong>حدد المادة والصف عند الحاجة</strong>
-              <p>يمكنك ترك النظام يستنتج المطلوب، أو استخدام الحل الدقيق لإرسال الصف والمادة والترم.</p>
-            </article>
-            <article class="premium-step-card">
-              <div class="premium-step-number">03</div>
-              <strong>استلم حلًا منظمًا وواضحًا</strong>
-              <p>إجابة مباشرة أو شرح خطوة بخطوة أو تدريب قصير على نفس الدرس.</p>
-            </article>
-          </div>
-        </div>
-      </details>
-
-      <details class="landing-accordion">
-        <summary class="landing-accordion-summary">
-          <div>
-            <span class="eyebrow">المزايا</span>
-            <strong>لماذا ملم؟</strong>
-          </div>
-          <span class="landing-accordion-hint">افتح التفاصيل</span>
-        </summary>
-        <div class="landing-accordion-body">
-          <div class="premium-value-grid">
-            <article class="premium-value-card">
-              <div class="premium-value-icon" aria-hidden="true">✦</div>
-              <strong>يفهم الطلب</strong>
-              <p>يلتقط السؤال المباشر ويعرف متى يعطي جوابًا سريعًا ومتى يحتاج شرحًا منظمًا.</p>
-            </article>
-            <article class="premium-value-card">
-              <div class="premium-value-icon" aria-hidden="true">◎</div>
-              <strong>يراعي المنهج</strong>
-              <p>يربط الصف والمادة والترم عند اختيار الحل الدقيق ليكون الأسلوب أقرب للمقرر.</p>
-            </article>
-            <article class="premium-value-card">
-              <div class="premium-value-icon" aria-hidden="true">↗</div>
-              <strong>يتابع التقدم</strong>
-              <p>يحفظ المحادثات والمشروعات والخطة الحالية داخل لوحة الطالب بدل التشتيت بين الصفحات.</p>
-            </article>
-          </div>
-        </div>
-      </details>
-
-      <details class="landing-accordion" id="stages">
-        <summary class="landing-accordion-summary">
-          <div>
-            <span class="eyebrow">المراحل والمواد</span>
-            <strong>اختر ما يناسب مرحلتك</strong>
-          </div>
-          <span class="landing-accordion-hint">افتح التفاصيل</span>
-        </summary>
-        <div class="landing-accordion-body">
-          <div class="premium-stage-tabs">
-            <article class="premium-stage-panel premium-stage-panel-active">
-              <strong>الابتدائي</strong>
-              <span>تأسيس قوي بلغة سهلة، وأمثلة مبسطة، وبداية مريحة على الجوال.</span>
-            </article>
-            <article class="premium-stage-panel">
-              <strong>المتوسط</strong>
-              <span>حلول أوضح، وتدرج في الشرح، ومراعاة للانتقال بين الفهم والتطبيق.</span>
-            </article>
-            <article class="premium-stage-panel">
-              <strong>الثانوي</strong>
-              <span>صياغة أدق، وربط بالمقرر والدرس والترم، ومحادثات محفوظة لكل مشروع أو مادة.</span>
-            </article>
-          </div>
-
-          <div class="premium-subject-grid">
-            <article class="premium-subject-card">
-              <strong>رياضيات</strong>
-              <span>خطوات مرتبة، قوانين واضحة، وأخطاء شائعة مختصرة.</span>
-            </article>
-            <article class="premium-subject-card">
-              <strong>علوم وكيمياء</strong>
-              <span>شرح المفاهيم وربطها بالسؤال بدل الاكتفاء بالإجابة المجردة.</span>
-            </article>
-            <article class="premium-subject-card">
-              <strong>إنجليزي وعربي</strong>
-              <span>أسلوب مناسب للصف، مع تصحيح مباشر وإكمالات وقواعد واضحة.</span>
-            </article>
-            <article class="premium-subject-card">
-              <strong>شرح دروس ومشاريع</strong>
-              <span>يمكن حفظ كل مادة أو مشروع في مساحة مستقلة داخل لوحة الطالب.</span>
-            </article>
-          </div>
-        </div>
-      </details>
-
-      <details class="landing-accordion">
-        <summary class="landing-accordion-summary">
-          <div>
-            <span class="eyebrow">الحل الدقيق</span>
-            <strong>خصص الحل عند الحاجة فقط</strong>
-          </div>
-          <span class="landing-accordion-hint">افتح التفاصيل</span>
-        </summary>
-        <div class="landing-accordion-body">
-          <div class="precision-quick-pills">
-            <span>يحدد المادة تلقائيًا عند وضوح السؤال</span>
-            <span>الحل الدقيق يرسل الصف والمادة والترم إلى الـ API</span>
-            <span>يمكن ترك الإعدادات كما هي والبدء مباشرة</span>
-          </div>
-
-          <details class="precision-config-panel">
-            <summary class="precision-config-summary">افتح إعدادات الحل الدقيق</summary>
-            <div class="precision-config-body">
-              <div class="solve-mode-row" aria-label="وضع الحل">
-                <button class="solve-mode-btn active" type="button" data-solve-mode="quick">
-                  <strong>حل سريع</strong>
-                  <span>إجابة مباشرة إذا كان السؤال واضحًا</span>
-                </button>
-                <button class="solve-mode-btn" type="button" data-solve-mode="structured">
-                  <strong>حل دقيق</strong>
-                  <span>يراعي الصف والمادة والترم</span>
-                </button>
-              </div>
-
-              <div class="stage-cards" aria-label="اختيار المرحلة">
-                <button class="stage-card" type="button" data-stage-button="ابتدائي">
-                  <strong>ابتدائي</strong>
-                  <span>تأسيس واضح ولغة أبسط</span>
-                </button>
-                <button class="stage-card" type="button" data-stage-button="متوسط">
-                  <strong>متوسط</strong>
-                  <span>توازن بين الشرح والتطبيق</span>
-                </button>
-                <button class="stage-card active" type="button" data-stage-button="ثانوي">
-                  <strong>ثانوي</strong>
-                  <span>صياغة أدق وربط أوضح بالمقرر</span>
-                </button>
-              </div>
-
-              <div class="selectors selectors-hero premium-selectors">
-                <select class="field" data-grade>
-                  <option>الأول الابتدائي</option>
-                  <option>الثاني الابتدائي</option>
-                  <option>الثالث الابتدائي</option>
-                  <option>الرابع الابتدائي</option>
-                  <option>الخامس الابتدائي</option>
-                  <option>السادس الابتدائي</option>
-                  <option>الأول المتوسط</option>
-                  <option>الثاني المتوسط</option>
-                  <option>الثالث المتوسط</option>
-                  <option>الأول الثانوي</option>
-                  <option selected>الثاني الثانوي</option>
-                  <option>الثالث الثانوي</option>
-                </select>
-                <select class="field" data-subject>
-                  <option selected>الرياضيات</option>
-                  <option>العلوم</option>
-                  <option>الفيزياء</option>
-                  <option>الكيمياء</option>
-                  <option>الأحياء</option>
-                  <option>اللغة العربية</option>
-                  <option>اللغة الإنجليزية</option>
-                  <option>الاجتماعيات</option>
-                  <option>المهارات الرقمية</option>
-                </select>
-                <select class="field" data-term>
-                  <option selected>الفصل الدراسي الأول</option>
-                  <option>الفصل الدراسي الثاني</option>
-                </select>
-                <input class="field" data-lesson type="text" placeholder="اسم الدرس اختياري">
-              </div>
-            </div>
-          </details>
-        </div>
-      </details>
     </section>
 
     <div hidden class="runtime-support-hidden" aria-hidden="true">
@@ -398,7 +257,7 @@
   <button class="scroll-top-btn" type="button" data-scroll-top aria-label="العودة إلى أعلى الصفحة">↑</button>
   <script src="guest-preinit.js?v=20260408-5"></script>
   <script src="mullem-config.js?v=20260409-5"></script>
-  <script src="api-client.js?v=20260409-7"></script>
+  <script src="api-client.js?v=20260410-1"></script>
   <script src="app.js?v=20260409-2"></script>
   <script src="app.runtime.js?v=20260409-5"></script>
 </body>
