@@ -3099,7 +3099,7 @@
   }
 
   async function fetchRuntimeProjects() {
-    const activeUser = typeof getActiveUser === "function" ? getActiveUser() : null;
+    const activeUser = getRuntimeActiveUser();
     if (!activeUser) {
       runtimeState.projects = [];
       renderRuntimeProjects(null);
@@ -3127,7 +3127,7 @@
   }
 
   async function handleRuntimeCreateProject() {
-    const activeUser = typeof getActiveUser === "function" ? getActiveUser() : null;
+    const activeUser = getRuntimeActiveUser();
     if (!activeUser) {
       updateRuntimeProjectContextNote(null);
       window.location.href = "login.html";
@@ -3176,7 +3176,8 @@
       }
 
       const createdProject = upsertRuntimeProject(result.data.project);
-      setSelectedRuntimeProjectId(createdProject?.id || "");
+      setSelectedRuntimeProjectId(String(result.data.project?.id || createdProject?.id || ""));
+      await fetchRuntimeProjects();
 
       if (projectTitleInput) projectTitleInput.value = "";
       if (projectLessonInput) projectLessonInput.value = "";
@@ -4247,6 +4248,22 @@
     return window.mullemApiClient && typeof window.mullemApiClient.sendChat === "function"
       ? window.mullemApiClient
       : null;
+  }
+
+  function getRuntimeActiveUser() {
+    try {
+      const apiClient = getRuntimeApiClient();
+      if (apiClient && typeof apiClient.getSessionUser === "function") {
+        const sessionUser = apiClient.getSessionUser();
+        if (sessionUser?.id && String(sessionUser.role || "").toLowerCase() !== "admin") {
+          return sessionUser;
+        }
+      }
+    } catch (_) {
+      // Ignore session lookup problems and fall back to the legacy page state.
+    }
+
+    return typeof getActiveUser === "function" ? getActiveUser() : null;
   }
 
   function resolveRuntimeSolveEndpoint() {

@@ -487,10 +487,47 @@ function getUsers() {
   ]);
 }
 
+function getSessionBackedUser() {
+  try {
+    const apiClient = window.mullemApiClient;
+    if (!apiClient || typeof apiClient.getSessionUser !== "function") return null;
+
+    const sessionUser = apiClient.getSessionUser();
+    if (!sessionUser?.id || String(sessionUser.role || "").toLowerCase() === "admin") {
+      return null;
+    }
+
+    const normalizedId = String(sessionUser.id).trim();
+    if (!normalizedId) return null;
+
+    const users = getUsers();
+    const existingUser = users.find((user) => String(user.id) === normalizedId) || null;
+    const mergedUser = {
+      ...(existingUser || {}),
+      ...sessionUser,
+      id: normalizedId,
+      role: existingUser?.role || (String(sessionUser.role || "").toLowerCase() === "admin" ? "Admin" : "Student")
+    };
+
+    const nextUsers = [
+      mergedUser,
+      ...users.filter((user) => String(user.id) !== normalizedId)
+    ];
+
+    saveJson(storageKeys.users, nextUsers);
+    localStorage.setItem(storageKeys.currentUser, normalizedId);
+    return mergedUser;
+  } catch (_) {
+    return null;
+  }
+}
+
 function getActiveUser() {
   const users = getUsers();
-  const currentId = localStorage.getItem(storageKeys.currentUser);
-  return users.find((user) => user.id === currentId) || null;
+  const currentId = String(localStorage.getItem(storageKeys.currentUser) || "").trim();
+  const localUser = users.find((user) => String(user.id) === currentId) || null;
+  if (localUser) return localUser;
+  return getSessionBackedUser();
 }
 
 function createEmptyAnalytics() {
