@@ -44,6 +44,7 @@ body {
   margin: 0;
   min-height: 100vh;
   font-family: "Cairo", "IBM Plex Sans Arabic", sans-serif;
+  font-size: 16.5px;
   color: var(--text);
   background:
     radial-gradient(circle at top left, rgba(34, 197, 94, 0.12), transparent 22%),
@@ -363,7 +364,9 @@ textarea {
 
 .main-nav a {
   color: var(--muted);
-  font-weight: 700;
+  font-weight: 600;
+  font-size: 1rem;
+  letter-spacing: 0.1px;
 }
 
 .main-nav a:hover {
@@ -393,12 +396,63 @@ textarea {
 }
 
 .theme-toggle {
-  width: 44px;
-  height: 44px;
-  border-radius: 14px;
-  border: 1px solid var(--line);
-  background: rgba(255, 255, 255, 0.94);
+  width: 70px;
+  height: 38px;
+  padding: 4px;
+  border-radius: 999px;
+  border: 1px solid rgba(34, 197, 94, 0.18);
+  background: rgba(233, 240, 232, 0.96);
   cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-start;
+  transition: background 180ms ease, border-color 180ms ease;
+}
+
+.theme-toggle-track {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+}
+
+.theme-toggle-thumb {
+  width: 30px;
+  height: 30px;
+  border-radius: 999px;
+  background: #fff;
+  position: relative;
+  display: grid;
+  place-items: center;
+  box-shadow: 0 8px 18px rgba(15, 23, 42, 0.18);
+  transition: transform 200ms ease;
+}
+
+.theme-toggle-icon {
+  width: 16px;
+  height: 16px;
+  position: absolute;
+  inset: 0;
+  margin: auto;
+  transition: opacity 180ms ease;
+}
+
+.theme-toggle-sun circle {
+  fill: #22c55e;
+}
+
+.theme-toggle-sun line {
+  stroke: #16a34a;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+}
+
+.theme-toggle-moon {
+  opacity: 0;
+}
+
+.theme-toggle-moon path {
+  fill: #0f172a;
 }
 
 .top-cta-link {
@@ -431,6 +485,30 @@ body.theme-dark .top-logout-btn:hover {
   border-color: rgba(248, 113, 113, 0.32);
   background: rgba(127, 29, 29, 0.22);
   color: #fecaca;
+}
+
+body.theme-dark .secondary-btn {
+  border-color: rgba(94, 227, 139, 0.3);
+  color: #d8f6df;
+  background: transparent;
+}
+
+body.theme-dark .theme-toggle {
+  background: rgba(20, 28, 22, 0.96);
+  border-color: rgba(255, 255, 255, 0.18);
+}
+
+body.theme-dark .theme-toggle-thumb {
+  background: #f8fafc;
+  transform: translateX(32px);
+}
+
+body.theme-dark .theme-toggle-sun {
+  opacity: 0;
+}
+
+body.theme-dark .theme-toggle-moon {
+  opacity: 1;
 }
 
 .page-wrap {
@@ -1813,26 +1891,49 @@ body.solve-mode-structured .student-settings-card {
 .primary-btn,
 .secondary-btn {
   width: 100%;
-  border: 0;
+  border: 1px solid transparent;
   cursor: pointer;
   border-radius: 18px;
   padding: 13px 16px;
   transition: 180ms ease;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  font-weight: 700;
 }
 
 .primary-btn {
   color: #fff;
-  background: linear-gradient(135deg, var(--brand), var(--accent));
+  background: linear-gradient(135deg, #2ecc71, #22c55e);
+  box-shadow: 0 14px 28px rgba(34, 197, 94, 0.26);
 }
 
 .secondary-btn {
   color: var(--brand-strong);
-  background: var(--brand-soft);
+  background: transparent;
+  border-color: rgba(34, 197, 94, 0.38);
 }
 
 .primary-btn:hover,
 .secondary-btn:hover {
   transform: translateY(-1px);
+}
+
+.btn-icon {
+  width: 22px;
+  height: 22px;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 900;
+  line-height: 1;
+  background: rgba(255, 255, 255, 0.18);
+}
+
+.secondary-btn .btn-icon {
+  background: rgba(34, 197, 94, 0.12);
 }
 
 .stack {
