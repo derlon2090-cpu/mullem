@@ -532,6 +532,10 @@ registerForm?.addEventListener("submit", async (event) => {
 
 loginForm?.addEventListener("submit", (event) => {
   event.preventDefault();
+  const apiClient = getApiClient();
+  if (apiClient) {
+    return;
+  }
 
   const email = (loginEmail?.value || "").trim().toLowerCase();
   const password = loginPassword?.value || "";
@@ -589,6 +593,10 @@ loginForm?.addEventListener("submit", (event) => {
 
 registerForm?.addEventListener("submit", (event) => {
   event.preventDefault();
+  const apiClient = getApiClient();
+  if (apiClient) {
+    return;
+  }
 
   const name = (registerName?.value || "").trim();
   const email = (registerEmail?.value || "").trim().toLowerCase();

@@ -437,6 +437,210 @@ body.theme-dark .top-logout-btn:hover {
   padding: 24px 0 64px;
 }
 
+.student-simple-page {
+  padding-bottom: 72px;
+}
+
+.student-dashboard {
+  margin-top: 18px;
+  display: grid;
+  grid-template-columns: minmax(0, 1.1fr) minmax(0, 0.9fr);
+  grid-template-areas:
+    "plan plan"
+    "summary summary"
+    "progress quick"
+    "projects precision";
+  gap: 20px;
+}
+
+.student-area-plan {
+  grid-area: plan;
+}
+
+.student-area-summary {
+  grid-area: summary;
+}
+
+.student-area-progress {
+  grid-area: progress;
+}
+
+.student-area-quick {
+  grid-area: quick;
+}
+
+.student-area-projects {
+  grid-area: projects;
+}
+
+.student-area-precision {
+  grid-area: precision;
+}
+
+.student-hero-card {
+  display: grid;
+  grid-template-columns: minmax(0, 1.2fr) minmax(0, 0.8fr);
+  gap: 18px;
+  align-items: center;
+  border-radius: 30px;
+  background:
+    radial-gradient(circle at top right, rgba(34, 197, 94, 0.14), transparent 35%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(244, 251, 246, 0.96));
+}
+
+.student-hero-side {
+  display: grid;
+  justify-items: flex-start;
+  gap: 12px;
+}
+
+.student-summary-strip {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.student-progress-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.student-quick-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.student-section-card {
+  border-radius: 26px;
+  box-shadow: var(--shadow);
+}
+
+.student-projects-panel,
+.student-precision-card {
+  display: grid;
+  gap: 16px;
+}
+
+.student-projects-panel .student-project-form {
+  display: grid;
+  gap: 12px;
+}
+
+.student-project-form .primary-btn {
+  justify-self: flex-start;
+}
+
+.student-project-conversations {
+  display: grid;
+  gap: 12px;
+}
+
+.student-project-conversation-card {
+  border-radius: 18px;
+}
+
+.student-plan-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.1fr) minmax(0, 0.9fr);
+  gap: 16px;
+}
+
+.student-plan-card {
+  border-radius: 26px;
+  box-shadow: var(--shadow);
+}
+
+.student-plan-metrics {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.student-progress-card {
+  border-radius: 22px;
+  box-shadow: 0 16px 50px rgba(15, 23, 42, 0.06);
+}
+
+.admin-layout-modern {
+  display: grid;
+  grid-template-columns: minmax(0, 280px) minmax(0, 1fr);
+  gap: 18px;
+}
+
+.admin-sidebar {
+  position: sticky;
+  top: 24px;
+  align-self: start;
+}
+
+.admin-tab-nav-modern {
+  display: grid;
+  gap: 10px;
+}
+
+@media (max-width: 1100px) {
+  .student-dashboard {
+    grid-template-columns: 1fr;
+    grid-template-areas:
+      "plan"
+      "summary"
+      "progress"
+      "quick"
+      "projects"
+      "precision";
+  }
+
+  .student-plan-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .student-progress-grid,
+  .student-quick-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .admin-layout-modern {
+    grid-template-columns: 1fr;
+  }
+
+  .admin-sidebar {
+    position: static;
+  }
+
+  .admin-tab-nav-modern {
+    grid-auto-flow: column;
+    grid-auto-columns: minmax(160px, 1fr);
+    overflow-x: auto;
+    padding-bottom: 6px;
+  }
+}
+
+@media (max-width: 780px) {
+  .student-hero-card {
+    grid-template-columns: 1fr;
+  }
+
+  .student-summary-strip,
+  .student-progress-grid,
+  .student-quick-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .student-plan-metrics {
+    grid-template-columns: 1fr;
+  }
+
+  .student-hero-side {
+    justify-items: stretch;
+  }
+
+  .admin-tab-nav-modern {
+    grid-auto-flow: row;
+  }
+}
+
 .hero-stage {
   margin-bottom: 22px;
 }
