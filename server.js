@@ -1616,6 +1616,31 @@ async function handleAdminUpdateUser(req, res, userId) {
     changes.xp = Math.round(xp);
   }
 
+  if ("streak_days" in payload) {
+    const streakDays = Number(payload.streak_days);
+    if (!Number.isFinite(streakDays) || streakDays < 0) {
+      throw createHttpError(422, "streak_days must be a non-negative number.");
+    }
+    changes.streak_days = Math.round(streakDays);
+  }
+
+  if ("motivation_score" in payload) {
+    const motivationScore = Number(payload.motivation_score);
+    if (!Number.isFinite(motivationScore) || motivationScore < 0) {
+      throw createHttpError(422, "motivation_score must be a non-negative number.");
+    }
+    changes.motivation_score = Math.round(motivationScore);
+  }
+
+  if ("last_active_date" in payload) {
+    const lastActiveDate = sanitizeOptionalText(payload.last_active_date, 32) || null;
+    changes.last_active_date = lastActiveDate;
+  }
+
+  if ("achievements" in payload) {
+    changes.achievements = Array.isArray(payload.achievements) ? payload.achievements : [];
+  }
+
   if ("status" in payload) {
     changes.status = normalizeUserStatus(payload.status);
   }
