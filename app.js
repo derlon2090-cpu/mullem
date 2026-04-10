@@ -1974,17 +1974,20 @@ function getActiveSession() {
   return chatSessions.find((session) => session.id === activeSessionId) || null;
 }
 
-function createSession(question = "", subject = "") {
+function createSession(question = "", subject = "", options = {}) {
   const now = Date.now();
+  const normalizedProjectId = String(options.projectId || "").trim();
   const session = {
     id: `session_${now}_${Math.random().toString(36).slice(2, 8)}`,
-    title: createSessionTitle(question, subject),
-    preview: stripHtml(question) || "ابدأ أول رسالة في هذه المحادثة.",
-    subject: subject || "",
-    createdAt: now,
-    updatedAt: now,
-    pinned: false,
-    messages: []
+    title: String(options.title || createSessionTitle(question, subject)).trim() || "محادثة جديدة",
+    preview: String(options.preview || stripHtml(question) || "ابدأ أول رسالة في هذه المحادثة.").trim(),
+    subject: String(options.subject || subject || "").trim(),
+    projectId: normalizedProjectId || "",
+    apiConversationId: String(options.apiConversationId || "").trim() || "",
+    createdAt: Number(options.createdAt || now),
+    updatedAt: Number(options.updatedAt || options.createdAt || now),
+    pinned: Boolean(options.pinned),
+    messages: Array.isArray(options.messages) ? options.messages : []
   };
   chatSessions.unshift(session);
   chatSessions = sortSessions(chatSessions);
@@ -1994,11 +1997,11 @@ function createSession(question = "", subject = "") {
   return session;
 }
 
-function ensureActiveSession(question = "", subject = "") {
+function ensureActiveSession(question = "", subject = "", options = {}) {
   if (!isLoggedIn()) return null;
   let session = getActiveSession();
   if (!session) {
-    session = createSession(question, subject);
+    session = createSession(question, subject, options);
   }
   return session;
 }
@@ -2017,7 +2020,9 @@ function updateSession(sessionId, updater) {
 
 function appendMessageToSession(type, author, body, options = {}) {
   if (!isLoggedIn()) return;
-  const session = ensureActiveSession(options.sessionTitle || body, options.subject || "");
+  const session = ensureActiveSession(options.sessionTitle || body, options.subject || "", {
+    projectId: options.projectId || ""
+  });
   if (!session) return;
   const now = Date.now();
   updateSession(session.id, (current) => {
@@ -2036,6 +2041,7 @@ function appendMessageToSession(type, author, body, options = {}) {
       ...current,
       title,
       subject: options.subject || current.subject || "",
+      projectId: String(options.projectId || current.projectId || "").trim(),
       preview: stripHtml(body).slice(0, 120) || current.preview,
       updatedAt: now,
       messages
@@ -2063,7 +2069,7 @@ function restoreSession(sessionId) {
   renderSessionList();
 }
 
-function startFreshSession() {
+function startFreshSession(options = {}) {
   attachments = [];
   if (fileInput) fileInput.value = "";
   renderAttachments();
@@ -2071,7 +2077,11 @@ function startFreshSession() {
     resetConversationView();
     return;
   }
-  createSession("", subjectSelect?.value || "");
+  createSession("", subjectSelect?.value || "", {
+    projectId: options.projectId || "",
+    title: options.title || "",
+    preview: options.preview || ""
+  });
   resetConversationView();
   renderSessionList();
 }

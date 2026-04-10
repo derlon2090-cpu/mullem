@@ -209,6 +209,7 @@ body.theme-dark .student-mini-card strong {
 
 body.theme-dark .student-project-card,
 body.theme-dark .student-api-session-card,
+body.theme-dark .student-project-conversation-card,
 body.theme-dark .student-guest-note,
 body.theme-dark .student-project-empty,
 body.theme-dark .auth-security-note,
@@ -224,6 +225,8 @@ body.theme-dark .info-chip-group {
 
 body.theme-dark .student-project-card span,
 body.theme-dark .student-project-card small,
+body.theme-dark .student-project-conversation-card span,
+body.theme-dark .student-project-conversation-card small,
 body.theme-dark .student-api-session-card span,
 body.theme-dark .student-section-copy,
 body.theme-dark .student-guest-note,
@@ -4452,8 +4455,29 @@ body.theme-dark .admin-status-banner[data-state="error"] {
   gap: 12px;
 }
 
+.student-project-chat-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+
+.student-project-chat-head h4 {
+  margin: 0;
+  color: var(--brand-strong);
+  font-size: 1.08rem;
+}
+
+.student-project-conversations {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 12px;
+}
+
 .student-project-card,
-.student-api-session-card {
+.student-api-session-card,
+.student-project-conversation-card {
   width: 100%;
   display: grid;
   gap: 6px;
@@ -4469,26 +4493,31 @@ body.theme-dark .admin-status-banner[data-state="error"] {
 }
 
 .student-project-card:hover,
-.student-api-session-card:hover {
+.student-api-session-card:hover,
+.student-project-conversation-card:hover {
   transform: translateY(-1px);
   border-color: rgba(22, 163, 74, 0.26);
   box-shadow: 0 12px 26px rgba(12, 54, 32, 0.08);
 }
 
-.student-project-card.is-active {
+.student-project-card.is-active,
+.student-project-conversation-card.is-active {
   border-color: rgba(22, 163, 74, 0.38);
   background: linear-gradient(180deg, rgba(236, 253, 245, 0.98), rgba(255, 255, 255, 0.96));
 }
 
 .student-project-card strong,
-.student-api-session-card strong {
+.student-api-session-card strong,
+.student-project-conversation-card strong {
   color: var(--brand-strong);
   font-size: 1rem;
 }
 
 .student-project-card span,
 .student-project-card small,
-.student-api-session-card span {
+.student-api-session-card span,
+.student-project-conversation-card span,
+.student-project-conversation-card small {
   color: var(--muted);
   line-height: 1.75;
 }
@@ -4801,7 +4830,8 @@ body.theme-dark .admin-status-banner[data-state="error"] {
   .student-filters-grid,
   .student-project-form,
   .student-project-toolbar,
-  .student-project-list {
+  .student-project-list,
+  .student-project-conversations {
     grid-template-columns: 1fr;
   }
 

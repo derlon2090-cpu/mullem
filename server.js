@@ -1044,6 +1044,7 @@ async function getOrCreateConversation(payload) {
       id: String(payload.conversation_id || "").trim() || crypto.randomUUID(),
       conversation_id: String(payload.conversation_id || "").trim() || undefined,
       guest_session_id: String(payload.guest_session_id || "").trim() || undefined,
+      user_id: payload.user_id ? Number(payload.user_id) : undefined,
       project_id: payload.project_id ? Number(payload.project_id) : undefined,
       subject: String(payload.subject || "").trim() || null,
       stage: String(payload.stage || "").trim() || null,
@@ -1378,6 +1379,50 @@ async function handleStudentConversations(req, res) {
     success: true,
     data: {
       items: items.map(buildConversationSummary)
+    }
+  });
+}
+
+async function handleCreateStudentConversation(req, res) {
+  const auth = await requireAuthenticatedUser(req);
+  const payload = await parseJsonBody(req);
+  const requestedProjectId = sanitizeOptionalText(payload.project_id, MAX_METADATA_LENGTH);
+
+  let project = null;
+  if (requestedProjectId && isDatabaseReady() && typeof databaseClient?.findProjectById === "function") {
+    project = await databaseClient.findProjectById(requestedProjectId, auth.user.id);
+    if (!project) {
+      throw createHttpError(404, "Project not found.");
+    }
+  }
+
+  const grade = sanitizeOptionalText(payload.grade || project?.grade || auth.user.grade, MAX_METADATA_LENGTH);
+  const stage = sanitizeOptionalText(
+    payload.stage || project?.stage || auth.user.stage || inferStageFromGrade(grade),
+    MAX_METADATA_LENGTH
+  );
+  const subject = sanitizeOptionalText(payload.subject || project?.subject || auth.user.subject, MAX_METADATA_LENGTH);
+  const term = sanitizeOptionalText(payload.term || project?.term, MAX_METADATA_LENGTH);
+  const title = sanitizeOptionalText(payload.title, 180)
+    || sanitizeOptionalText(project?.title, 180)
+    || "محادثة جديدة";
+
+  const conversation = await getOrCreateConversation({
+    conversation_id: crypto.randomUUID(),
+    user_id: auth.user.id,
+    project_id: project?.id || (requestedProjectId || null),
+    subject,
+    stage,
+    grade,
+    term,
+    message: title
+  });
+
+  sendJson(req, res, 201, {
+    success: true,
+    data: {
+      conversation: buildConversationSummary(conversation),
+      project: project ? buildProjectSummary(project) : null
     }
   });
 }
@@ -2029,6 +2074,11 @@ async function routeRequest(req, res) {
 
   if (req.method === "GET" && requestPath === "/api/student/conversations") {
     await handleStudentConversations(req, res);
+    return;
+  }
+
+  if (req.method === "POST" && requestPath === "/api/student/conversations") {
+    await handleCreateStudentConversation(req, res);
     return;
   }
 

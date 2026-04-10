@@ -691,6 +691,13 @@
     return request(`/student/conversations${query.toString() ? `?${query.toString()}` : ""}`);
   }
 
+  async function createStudentConversation(payload) {
+    return request("/student/conversations", {
+      method: "POST",
+      body: payload
+    });
+  }
+
   async function getAdminStats() {
     return request("/admin/stats");
   }
@@ -818,6 +825,7 @@
     createStudentProject,
     updateStudentProject,
     getStudentConversations,
+    createStudentConversation,
     getAdminStats,
     getAdminPackages,
     getAdminUsers,

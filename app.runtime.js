@@ -61,6 +61,8 @@
   const createProjectButton = document.querySelector("[data-create-project]");
   const projectContextNote = document.querySelector("[data-project-note]");
   const projectListNode = document.querySelector("[data-project-list]");
+  const projectNewChatButton = document.querySelector("[data-project-new-chat]");
+  const projectConversationsNode = document.querySelector("[data-project-conversations]");
 
   if (!form || !messageList || !promptInput) return;
 
@@ -68,7 +70,8 @@
     pendingSolveConfirmation: null,
     lastAcademicRequest: null,
     packages: [],
-    projects: []
+    projects: [],
+    projectConversations: []
   };
 
   const runtimeMemoryKeys = {
@@ -2983,6 +2986,39 @@
     return Array.isArray(runtimeState.projects) ? runtimeState.projects : [];
   }
 
+  function normalizeRuntimeProjectConversation(conversation) {
+    if (!conversation?.id) return null;
+    return {
+      id: String(conversation.id),
+      projectId: String(conversation.project_id || conversation.projectId || "").trim(),
+      title: String(conversation.title || "محادثة جديدة").trim() || "محادثة جديدة",
+      subject: String(conversation.subject || "").trim(),
+      grade: String(conversation.grade || "").trim(),
+      term: String(conversation.term || "").trim(),
+      status: String(conversation.status || "active").trim(),
+      lastMessageAt: conversation.last_message_at || conversation.lastMessageAt || conversation.updated_at || conversation.updatedAt || conversation.created_at || conversation.createdAt || "",
+      createdAt: conversation.created_at || conversation.createdAt || "",
+      updatedAt: conversation.updated_at || conversation.updatedAt || ""
+    };
+  }
+
+  function getRuntimeProjectConversationList() {
+    return Array.isArray(runtimeState.projectConversations) ? runtimeState.projectConversations : [];
+  }
+
+  function getRuntimeLocalSessionIdByConversationId(conversationId) {
+    const normalizedConversationId = String(conversationId || "").trim();
+    if (!normalizedConversationId) return "";
+    const map = getRuntimeApiConversationMap();
+    const match = Object.entries(map).find(([, savedConversationId]) => String(savedConversationId || "").trim() === normalizedConversationId);
+    const localSessionId = match?.[0] || "";
+    if (!localSessionId) return "";
+    if (typeof chatSessions !== "undefined" && Array.isArray(chatSessions)) {
+      return chatSessions.some((session) => String(session.id) === localSessionId) ? localSessionId : "";
+    }
+    return localSessionId;
+  }
+
   function getSelectedRuntimeProjectId() {
     const selected = projectSelect?.value || loadRuntimeStore(runtimeProjectSelectionKey, "") || "";
     return String(selected || "").trim();
@@ -2990,12 +3026,15 @@
 
   function setSelectedRuntimeProjectId(projectId) {
     const normalizedProjectId = String(projectId || "").trim();
+    if (getSelectedRuntimeProjectId() !== normalizedProjectId) {
+      runtimeState.projectConversations = [];
+    }
     saveRuntimeStore(runtimeProjectSelectionKey, normalizedProjectId);
     if (projectSelect && projectSelect.value !== normalizedProjectId) {
       projectSelect.value = normalizedProjectId;
     }
     syncRuntimeProjectCardState();
-    updateRuntimeProjectContextNote(typeof getActiveUser === "function" ? getActiveUser() : null);
+    updateRuntimeProjectContextNote(getRuntimeActiveUser());
   }
 
   function formatRuntimeProjectDate(dateValue) {
@@ -3025,11 +3064,11 @@
 
     if (selectedProject) {
       const lessonLabel = selectedProject.lesson || selectedProject.subject || "هذا المشروع";
-      projectContextNote.textContent = `المحادثة الحالية مرتبطة الآن بمشروع "${selectedProject.title}"، وسيظهر فيها كل ما يخص ${lessonLabel} عند الرجوع لاحقًا.`;
+      projectContextNote.textContent = `المشروع "${selectedProject.title}" جاهز الآن مثل ملف مستقل، ويمكنك إنشاء عدة محادثات داخله لكل جزء يخص ${lessonLabel}.`;
       return;
     }
 
-    projectContextNote.textContent = "مشروعاتك تُحفظ داخل حسابك. اربط كل محادثة بالمادة أو الدرس الذي تريد الرجوع إليه لاحقًا.";
+    projectContextNote.textContent = "أنشئ مشروعًا أولًا، ثم افتح داخله محادثات متعددة لكل درس أو فكرة تريد الرجوع إليها لاحقًا.";
   }
 
   function syncRuntimeProjectCardState() {
@@ -3085,6 +3124,52 @@
 
     syncRuntimeProjectCardState();
     updateRuntimeProjectContextNote(activeUser);
+    renderRuntimeProjectConversations(activeUser);
+  }
+
+  function renderRuntimeProjectConversations(activeUser) {
+    if (!projectConversationsNode) return;
+
+    const selectedProjectId = getSelectedRuntimeProjectId();
+    const selectedProject = getRuntimeProjectList().find((project) => String(project.id) === selectedProjectId) || null;
+    const items = getRuntimeProjectConversationList();
+    const currentConversationId = getRuntimeApiConversationId();
+
+    if (projectNewChatButton) {
+      projectNewChatButton.disabled = !activeUser || !selectedProjectId;
+    }
+
+    if (!activeUser) {
+      projectConversationsNode.innerHTML = '<div class="student-project-empty">سجّل دخولك لتظهر لك دردشات المشروعات المحفوظة داخل حسابك.</div>';
+      return;
+    }
+
+    if (!selectedProject) {
+      projectConversationsNode.innerHTML = '<div class="student-project-empty">اختر مشروعًا أولًا ثم أنشئ داخله محادثات مستقلة.</div>';
+      return;
+    }
+
+    if (!items.length) {
+      projectConversationsNode.innerHTML = `<div class="student-project-empty">لا توجد دردشات داخل مشروع "${escapeRuntimeHtml(selectedProject.title)}" بعد. ابدأ أول محادثة داخله الآن.</div>`;
+      return;
+    }
+
+    projectConversationsNode.innerHTML = items.map((conversation) => {
+      const meta = [
+        conversation.subject || selectedProject.subject || "",
+        conversation.grade || selectedProject.grade || ""
+      ].filter(Boolean).join(" • ");
+      const lastActivity = conversation.lastMessageAt
+        ? `آخر نشاط ${formatRuntimeProjectDate(conversation.lastMessageAt)}`
+        : "محادثة جديدة";
+      return `
+        <button class="student-project-conversation-card${String(conversation.id) === String(currentConversationId || "") ? " is-active" : ""}" type="button" data-project-conversation="${escapeRuntimeHtml(conversation.id)}">
+          <strong>${escapeRuntimeHtml(conversation.title)}</strong>
+          <span>${escapeRuntimeHtml(meta || "محادثة محفوظة داخل هذا المشروع")}</span>
+          <small>${escapeRuntimeHtml(lastActivity)}</small>
+        </button>
+      `;
+    }).join("");
   }
 
   function upsertRuntimeProject(project) {
@@ -3094,7 +3179,7 @@
       normalizedProject,
       ...getRuntimeProjectList().filter((item) => String(item.id) !== String(normalizedProject.id))
     ];
-    renderRuntimeProjects(typeof getActiveUser === "function" ? getActiveUser() : null);
+    renderRuntimeProjects(getRuntimeActiveUser());
     return normalizedProject;
   }
 
@@ -3102,6 +3187,7 @@
     const activeUser = getRuntimeActiveUser();
     if (!activeUser) {
       runtimeState.projects = [];
+      runtimeState.projectConversations = [];
       renderRuntimeProjects(null);
       return;
     }
@@ -3124,6 +3210,192 @@
     }
 
     renderRuntimeProjects(activeUser);
+    await fetchRuntimeProjectConversations(getSelectedRuntimeProjectId());
+  }
+
+  async function fetchRuntimeProjectConversations(projectId = getSelectedRuntimeProjectId()) {
+    const activeUser = getRuntimeActiveUser();
+    if (!activeUser || !projectId) {
+      runtimeState.projectConversations = [];
+      renderRuntimeProjectConversations(activeUser);
+      return;
+    }
+
+    const apiClient = getRuntimeApiClient();
+    if (!apiClient || typeof apiClient.getStudentConversations !== "function") {
+      runtimeState.projectConversations = [];
+      renderRuntimeProjectConversations(activeUser);
+      return;
+    }
+
+    try {
+      const result = await apiClient.getStudentConversations({
+        project_id: projectId,
+        limit: 50
+      });
+      runtimeState.projectConversations = Array.isArray(result?.data?.items)
+        ? result.data.items.map(normalizeRuntimeProjectConversation).filter(Boolean)
+        : [];
+    } catch (_) {
+      runtimeState.projectConversations = [];
+    }
+
+    renderRuntimeProjectConversations(activeUser);
+  }
+
+  function syncRuntimeLocalSessionWithConversation(conversation, messages = []) {
+    if (!conversation?.id) return null;
+
+    const previewSource = [...(Array.isArray(messages) ? messages : [])]
+      .reverse()
+      .find((item) => String(item?.text || "").trim())?.text
+      || conversation.title
+      || "ابدأ أول رسالة في هذه المحادثة.";
+    const createdAt = new Date(conversation.created_at || conversation.createdAt || Date.now()).getTime();
+    const updatedAt = new Date(conversation.updated_at || conversation.updatedAt || conversation.last_message_at || Date.now()).getTime();
+    const normalizedMessages = Array.isArray(messages)
+      ? messages.map((message, index) => ({
+          id: `api_msg_${conversation.id}_${index}`,
+          type: message.role === "assistant" ? "assistant" : "user",
+          author: message.role === "assistant" ? "ملم يحل" : "أنت",
+          body: String(message.text || "").trim(),
+          createdAt: new Date(message.created_at || Date.now()).getTime(),
+          enableTools: message.role === "assistant",
+          sources: [],
+          metadata: undefined
+        }))
+      : [];
+
+    let localSessionId = getRuntimeLocalSessionIdByConversationId(conversation.id);
+    if (!localSessionId && typeof createSession === "function") {
+      const session = createSession("", conversation.subject || "", {
+        title: String(conversation.title || "محادثة جديدة").trim() || "محادثة جديدة",
+        preview: stripHtml(previewSource).slice(0, 120) || "ابدأ أول رسالة في هذه المحادثة.",
+        subject: conversation.subject || "",
+        projectId: conversation.project_id || conversation.projectId || "",
+        apiConversationId: conversation.id,
+        createdAt,
+        updatedAt,
+        messages: normalizedMessages
+      });
+      localSessionId = session?.id || "";
+    } else if (localSessionId && typeof updateSession === "function") {
+      updateSession(localSessionId, (current) => ({
+        ...current,
+        title: String(conversation.title || current.title || "محادثة جديدة").trim() || "محادثة جديدة",
+        preview: stripHtml(previewSource).slice(0, 120) || current.preview || "ابدأ أول رسالة في هذه المحادثة.",
+        subject: conversation.subject || current.subject || "",
+        projectId: String(conversation.project_id || conversation.projectId || current.projectId || "").trim(),
+        apiConversationId: String(conversation.id),
+        createdAt,
+        updatedAt,
+        messages: normalizedMessages
+      }));
+    }
+
+    if (!localSessionId) return null;
+
+    const map = getRuntimeApiConversationMap();
+    map[localSessionId] = String(conversation.id);
+    saveRuntimeApiConversationMap(map);
+    return localSessionId;
+  }
+
+  async function openRuntimeProjectConversation(conversationId) {
+    const normalizedConversationId = String(conversationId || "").trim();
+    if (!normalizedConversationId) return;
+
+    const apiClient = getRuntimeApiClient();
+    if (!apiClient || typeof apiClient.getChatSession !== "function") {
+      return;
+    }
+
+    if (projectContextNote) {
+      projectContextNote.textContent = "جارٍ فتح دردشة المشروع...";
+    }
+
+    try {
+      const result = await apiClient.getChatSession(normalizedConversationId);
+      if (!result.ok || !result.data?.conversation) {
+        throw new Error(result.message || "تعذر تحميل دردشة المشروع الآن.");
+      }
+
+      const conversation = normalizeRuntimeProjectConversation(result.data.conversation);
+      if (conversation?.projectId) {
+        setSelectedRuntimeProjectId(conversation.projectId);
+      }
+      const localSessionId = syncRuntimeLocalSessionWithConversation(conversation, result.data.messages || []);
+      if (localSessionId && typeof restoreSession === "function") {
+        restoreSession(localSessionId);
+      }
+
+      if (projectContextNote && conversation) {
+        projectContextNote.textContent = `تم فتح دردشة "${conversation.title}" داخل المشروع.`;
+      }
+      await fetchRuntimeProjectConversations(conversation?.projectId || getSelectedRuntimeProjectId());
+    } catch (error) {
+      if (projectContextNote) {
+        projectContextNote.textContent = String(error?.message || "تعذر فتح هذه الدردشة الآن.");
+      }
+    }
+  }
+
+  async function handleRuntimeCreateProjectChat() {
+    const activeUser = getRuntimeActiveUser();
+    const selectedProjectId = getSelectedRuntimeProjectId();
+    const selectedProject = getRuntimeProjectList().find((project) => String(project.id) === selectedProjectId) || null;
+
+    if (!activeUser) {
+      window.location.href = "login.html";
+      return;
+    }
+
+    if (!selectedProjectId || !selectedProject) {
+      if (projectContextNote) {
+        projectContextNote.textContent = "اختر مشروعًا أولًا حتى تنشئ داخله محادثة جديدة.";
+      }
+      return;
+    }
+
+    const apiClient = getRuntimeApiClient();
+    if (!apiClient || typeof apiClient.createStudentConversation !== "function") {
+      if (projectContextNote) {
+        projectContextNote.textContent = "تعذر الوصول إلى خدمة دردشات المشروع الآن. حاول مرة أخرى بعد قليل.";
+      }
+      return;
+    }
+
+    const originalLabel = projectNewChatButton?.textContent || "محادثة جديدة داخل المشروع";
+    if (projectNewChatButton) {
+      projectNewChatButton.disabled = true;
+      projectNewChatButton.textContent = "جارٍ الإنشاء...";
+    }
+
+    try {
+      const result = await apiClient.createStudentConversation({
+        project_id: selectedProjectId,
+        title: `${selectedProject.title} - محادثة جديدة`,
+        subject: selectedProject.subject || subjectSelect?.value || "",
+        grade: selectedProject.grade || gradeSelect?.value || "",
+        stage: selectedProject.stage || inferRuntimeStageLabel(selectedProject.grade || gradeSelect?.value || ""),
+        term: selectedProject.term || termSelect?.value || ""
+      });
+
+      if (!result.ok || !result.data?.conversation) {
+        throw new Error(result.message || "تعذر إنشاء محادثة جديدة داخل المشروع.");
+      }
+
+      await openRuntimeProjectConversation(result.data.conversation.id);
+    } catch (error) {
+      if (projectContextNote) {
+        projectContextNote.textContent = String(error?.message || "تعذر إنشاء محادثة جديدة داخل المشروع.");
+      }
+    } finally {
+      if (projectNewChatButton) {
+        projectNewChatButton.disabled = !activeUser || !selectedProjectId;
+        projectNewChatButton.textContent = originalLabel;
+      }
+    }
   }
 
   async function handleRuntimeCreateProject() {
@@ -3263,17 +3535,18 @@
   }
 
   function runtimeStartFreshSession() {
+    const selectedProjectId = getSelectedRuntimeProjectId();
     clearRuntimeAttachments();
     runtimeState.pendingSolveConfirmation = null;
     if (promptInput) {
       promptInput.value = "";
       autoGrow(promptInput);
     }
-    const hasActiveUser = typeof getActiveUser === "function" && Boolean(getActiveUser());
+    const hasActiveUser = Boolean(getRuntimeActiveUser());
     if (!hasActiveUser) {
       clearGuestWorkspace();
     } else if (typeof startFreshSession === "function") {
-      startFreshSession();
+      startFreshSession({ projectId: selectedProjectId });
     } else if (typeof resetConversationView === "function") {
       resetConversationView();
     } else if (messageList) {
@@ -3435,6 +3708,7 @@
     if (typeof resetConversationView === "function") resetConversationView();
     if (messageList) messageList.innerHTML = "";
     runtimeState.projects = [];
+    runtimeState.projectConversations = [];
   }
 
   function isUserNearBottom() {
@@ -4043,7 +4317,10 @@
 
   function appendSessionMessage(role, author, body, options = {}) {
     if (typeof appendMessageToSession === "function") {
-      appendMessageToSession(role, author, body, options);
+      appendMessageToSession(role, author, body, {
+        ...options,
+        projectId: options.projectId || getSelectedRuntimeProjectId()
+      });
     }
   }
 
@@ -4351,7 +4628,7 @@
   }
 
   function buildRuntimeApiChatPayload(question, route) {
-    const activeUser = typeof getActiveUser === "function" ? getActiveUser() : null;
+    const activeUser = getRuntimeActiveUser();
     const guestSessionId = !activeUser ? getRuntimeGuestSessionId() : undefined;
     const grade = gradeSelect?.value || activeUser?.grade || "";
     const selectedProjectId = getSelectedRuntimeProjectId();
@@ -4388,6 +4665,7 @@
         setSelectedRuntimeProjectId(savedProject.id);
       }
     }
+    await fetchRuntimeProjectConversations(getSelectedRuntimeProjectId());
 
     return {
       content: String(result.data.assistant_message.body || "").trim(),
@@ -5662,14 +5940,25 @@
   gradeSelect?.addEventListener("change", syncStudentDashboardHeader);
   projectSelect?.addEventListener("change", () => {
     setSelectedRuntimeProjectId(projectSelect.value || "");
+    fetchRuntimeProjectConversations(projectSelect.value || "");
   });
   projectListNode?.addEventListener("click", (event) => {
     const projectCard = event.target.closest("[data-project-card]");
     if (!projectCard) return;
-    setSelectedRuntimeProjectId(projectCard.getAttribute("data-project-card") || "");
+    const projectId = projectCard.getAttribute("data-project-card") || "";
+    setSelectedRuntimeProjectId(projectId);
+    fetchRuntimeProjectConversations(projectId);
+  });
+  projectConversationsNode?.addEventListener("click", (event) => {
+    const conversationCard = event.target.closest("[data-project-conversation]");
+    if (!conversationCard) return;
+    openRuntimeProjectConversation(conversationCard.getAttribute("data-project-conversation") || "");
   });
   createProjectButton?.addEventListener("click", () => {
     handleRuntimeCreateProject();
+  });
+  projectNewChatButton?.addEventListener("click", () => {
+    handleRuntimeCreateProjectChat();
   });
   function submitHeroExample() {
     if (!form || !promptInput) return;
@@ -5891,6 +6180,13 @@
     }
 
     setRuntimeApiConversationId(result.data.conversation_id);
+    if (result.data.project) {
+      const savedProject = upsertRuntimeProject(result.data.project);
+      if (savedProject?.id) {
+        setSelectedRuntimeProjectId(savedProject.id);
+      }
+    }
+    await fetchRuntimeProjectConversations(getSelectedRuntimeProjectId());
 
     return {
       content: String(result.data.assistant_message.body || "").trim(),

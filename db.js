@@ -606,6 +606,68 @@ function createDatabaseClient(rawConfig = {}) {
         ON conversations (user_id)
       `);
     }
+
+    const [foreignKeyRows] = await pool.execute(
+      `
+        SELECT CONSTRAINT_NAME, REFERENCED_TABLE_NAME
+        FROM information_schema.KEY_COLUMN_USAGE
+        WHERE TABLE_SCHEMA = ?
+          AND TABLE_NAME = 'conversations'
+          AND COLUMN_NAME = 'user_id'
+          AND REFERENCED_TABLE_NAME IS NOT NULL
+      `,
+      [config.database]
+    );
+
+    for (const row of foreignKeyRows) {
+      const constraintName = String(row?.CONSTRAINT_NAME || "").trim();
+      const referencedTableName = String(row?.REFERENCED_TABLE_NAME || "").trim();
+      if (!constraintName || referencedTableName === "app_users") continue;
+      await pool.query(`
+        ALTER TABLE conversations
+        DROP FOREIGN KEY \`${constraintName}\`
+      `);
+    }
+
+    const [validUserRows] = await pool.execute(
+      `
+        SELECT c.id
+        FROM conversations c
+        LEFT JOIN app_users u ON u.id = c.user_id
+        WHERE c.user_id IS NOT NULL AND u.id IS NULL
+        LIMIT 1
+      `
+    );
+
+    if (Array.isArray(validUserRows) && validUserRows.length) {
+      await pool.query(`
+        UPDATE conversations c
+        LEFT JOIN app_users u ON u.id = c.user_id
+        SET c.user_id = NULL
+        WHERE c.user_id IS NOT NULL AND u.id IS NULL
+      `);
+    }
+
+    const [appUserFkRows] = await pool.execute(
+      `
+        SELECT COUNT(*) AS total
+        FROM information_schema.KEY_COLUMN_USAGE
+        WHERE TABLE_SCHEMA = ?
+          AND TABLE_NAME = 'conversations'
+          AND COLUMN_NAME = 'user_id'
+          AND REFERENCED_TABLE_NAME = 'app_users'
+      `,
+      [config.database]
+    );
+
+    if (!Number(appUserFkRows?.[0]?.total || 0)) {
+      await pool.query(`
+        ALTER TABLE conversations
+        ADD CONSTRAINT fk_conversations_user
+        FOREIGN KEY (user_id) REFERENCES app_users(id)
+        ON DELETE SET NULL
+      `);
+    }
   }
 
   async function ensureConversationProjectColumn() {
