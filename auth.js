@@ -48,6 +48,14 @@ const adminCredentials = {
 };
 
 try {
+  window.mullemApiClient?.restorePersistentAuthFromCookies?.();
+  window.mullemApiClient?.syncLegacySessionUser?.();
+  window.mullemApiClient?.persistLegacyAuthState?.();
+} catch (_) {
+  // Ignore cookie restoration issues during auth bootstrap.
+}
+
+try {
   const activeAdminSession = localStorage.getItem(storageKeys.adminSession);
   const activeUserId = localStorage.getItem(storageKeys.currentUser);
   if (activeAdminSession === "1") {
@@ -65,6 +73,14 @@ function getApiClient() {
   return window.mullemApiClient && typeof window.mullemApiClient.request === "function"
     ? window.mullemApiClient
     : null;
+}
+
+function persistClientAuthState() {
+  try {
+    window.mullemApiClient?.persistLegacyAuthState?.();
+  } catch (_) {
+    // Ignore persistence issues on restricted browsers.
+  }
 }
 
 function inferStageFromGrade(grade) {
@@ -112,6 +128,7 @@ function completeStudentApiLogin(user, message) {
   const normalizedUser = upsertApiUserLocally(user);
   localStorage.removeItem(storageKeys.adminSession);
   localStorage.setItem(storageKeys.currentUser, normalizedUser.id);
+  persistClientAuthState();
   ensureUserWorkspace(normalizedUser.id);
   clearPendingAuth();
   setState(message || `أهلًا ${normalizedUser.name}، تم تسجيل الدخول بنجاح عبر الخادم.`);
@@ -121,6 +138,7 @@ function completeStudentApiLogin(user, message) {
 function completeAdminApiLogin(message) {
   localStorage.setItem(storageKeys.adminSession, "1");
   localStorage.removeItem(storageKeys.currentUser);
+  persistClientAuthState();
   clearPendingAuth();
   setState(message || "تم تسجيل دخول الأدمن بنجاح عبر الخادم.");
   window.location.href = "admin.html";
@@ -134,6 +152,7 @@ function handleLocalLoginFallback(email, password) {
   if (email === adminCredentials.email && password === adminCredentials.password) {
     localStorage.setItem(storageKeys.adminSession, "1");
     localStorage.removeItem(storageKeys.currentUser);
+    persistClientAuthState();
     setState("تم تسجيل دخول الأدمن بنجاح. سيتم تحويلك الآن.");
     window.location.href = "admin.html";
     return;
@@ -530,6 +549,7 @@ loginForm?.addEventListener("submit", (event) => {
   if (email === adminCredentials.email && password === adminCredentials.password) {
     localStorage.setItem(storageKeys.adminSession, "1");
     localStorage.removeItem(storageKeys.currentUser);
+    persistClientAuthState();
     setState("تم تسجيل دخول الأدمن بنجاح. سيتم تحويلك الآن.");
     window.location.href = "admin.html";
     return;
@@ -734,6 +754,7 @@ verifyForm?.addEventListener("submit", (event) => {
     saveUsers(users);
     localStorage.removeItem(storageKeys.adminSession);
     localStorage.setItem(storageKeys.currentUser, newUser.id);
+    persistClientAuthState();
     ensureUserWorkspace(newUser.id);
     clearPendingAuth();
     setState(`تم إنشاء الحساب بنجاح يا ${newUser.name}.`);
@@ -758,6 +779,7 @@ verifyForm?.addEventListener("submit", (event) => {
 
   localStorage.removeItem(storageKeys.adminSession);
   localStorage.setItem(storageKeys.currentUser, user.id);
+  persistClientAuthState();
   ensureUserWorkspace(user.id);
   clearPendingAuth();
   setState(`أهلًا ${user.name}، تم تسجيل الدخول بنجاح.`);

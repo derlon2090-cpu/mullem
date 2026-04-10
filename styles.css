@@ -4248,7 +4248,10 @@ body.theme-dark .admin-status-banner[data-state="error"] {
   width: 100%;
   display: grid;
   gap: 6px;
+  appearance: none;
   text-align: right;
+  font: inherit;
+  cursor: pointer;
   padding: 16px;
   border-radius: 20px;
   border: 1px solid rgba(34, 197, 94, 0.14);
