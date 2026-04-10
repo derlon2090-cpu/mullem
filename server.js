@@ -752,14 +752,16 @@ async function initializeDatabaseLayer() {
     await ensureDefaultUsers();
     databaseState = databaseClient.getState();
   } catch (error) {
-    databaseClient = null;
+    console.error(`[mullem] primary database init warning: ${String(error?.message || error)}`);
+    const { createFallbackDatabaseClient } = require("./fallback-db");
+    databaseClient = createFallbackDatabaseClient();
+    await databaseClient.initialize();
+    await ensureDefaultUsers();
     databaseState = {
-      configured: Boolean(DB_HOST && DB_DATABASE && DB_USERNAME),
-      connected: false,
-      host: DB_HOST,
-      port: DB_PORT,
-      database: DB_DATABASE,
-      message: String(error?.message || "Failed to initialize MySQL.")
+      ...databaseClient.getState(),
+      host: DB_HOST || "fallback",
+      port: DB_PORT || 0,
+      database: DB_DATABASE || "fallback"
     };
   }
 }
