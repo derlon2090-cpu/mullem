@@ -3357,6 +3357,45 @@ if (isAdminLoggedIn()) {
 })();
 
 (() => {
+  async function forceUnifiedAdminLogout() {
+    const apiClient = getAdminApiClient();
+    if (apiClient && typeof apiClient.performLogout === "function") {
+      await apiClient.performLogout("index.html");
+      return;
+    }
+
+    try {
+      apiClient?.clearSession?.();
+    } catch (_) {
+      // Ignore cleanup issues and continue with local fallback.
+    }
+
+    try {
+      localStorage.removeItem(adminSessionKey);
+      localStorage.removeItem("mlm_current_user");
+      localStorage.removeItem("mlm_pending_auth");
+    } catch (_) {
+      // Ignore storage cleanup issues.
+    }
+
+    if (adminEmailInput) adminEmailInput.value = "";
+    if (adminPasswordInput) adminPasswordInput.value = "";
+    if (adminLoginState) adminLoginState.textContent = "تم تسجيل الخروج.";
+    updateAdminView();
+    window.location.href = "index.html";
+  }
+
+  document.addEventListener("click", async (event) => {
+    const logoutButton = event.target.closest("[data-admin-logout]");
+    if (!logoutButton) return;
+    event.preventDefault();
+    event.stopPropagation();
+    event.stopImmediatePropagation();
+    await forceUnifiedAdminLogout();
+  }, true);
+})();
+
+(() => {
   const adminActiveTabStorageKey = "mlm_admin_active_tab";
   const adminTabLinks = Array.from(document.querySelectorAll("[data-admin-tab-link]"));
   const adminTabPanels = Array.from(document.querySelectorAll("[data-admin-tab-panel]"));

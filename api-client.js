@@ -4,14 +4,16 @@
   const storageKeys = {
     token: "mlm_api_token",
     user: "mlm_api_user",
-    baseUrl: "mlm_api_base_url"
+    baseUrl: "mlm_api_base_url",
+    logoutMarker: "mlm_auth_logged_out"
   };
 
   const cookieKeys = {
     token: "mlm_auth_token",
     user: "mlm_auth_user",
     currentUser: "mlm_auth_current_user",
-    adminSession: "mlm_auth_admin_session"
+    adminSession: "mlm_auth_admin_session",
+    logoutMarker: "mlm_auth_logged_out"
   };
 
   function loadJson(key, fallback) {
@@ -219,6 +221,15 @@
 
   function restorePersistentAuthFromCookies() {
     try {
+      const logoutMarker = localStorage.getItem(storageKeys.logoutMarker) || getCookie(cookieKeys.logoutMarker);
+      if (logoutMarker === "1") {
+        deleteCookie(cookieKeys.token);
+        deleteCookie(cookieKeys.user);
+        deleteCookie(cookieKeys.currentUser);
+        deleteCookie(cookieKeys.adminSession);
+        return;
+      }
+
       const cookieToken = getCookie(cookieKeys.token);
       const cookieUser = getCookie(cookieKeys.user);
       const cookieCurrentUser = getCookie(cookieKeys.currentUser);
@@ -401,6 +412,11 @@
       } else {
         deleteCookie(cookieKeys.adminSession);
       }
+
+      if (token || currentUser || adminSession === "1") {
+        localStorage.removeItem(storageKeys.logoutMarker);
+        deleteCookie(cookieKeys.logoutMarker);
+      }
     } catch (_) {
       // Ignore cookie persistence issues.
     }
@@ -417,6 +433,8 @@
 
     localStorage.setItem(storageKeys.token, token);
     saveJson(storageKeys.user, user);
+    localStorage.removeItem(storageKeys.logoutMarker);
+    deleteCookie(cookieKeys.logoutMarker);
     syncLegacySessionUser();
     persistLegacyAuthState();
   }
@@ -736,6 +754,13 @@
   }
 
   async function performLogout(redirectTo = "index.html") {
+    try {
+      localStorage.setItem(storageKeys.logoutMarker, "1");
+      setCookie(cookieKeys.logoutMarker, "1", 2);
+    } catch (_) {
+      // Ignore logout marker issues and continue cleanup.
+    }
+
     if (hasToken()) {
       try {
         await logout();
@@ -750,6 +775,7 @@
       localStorage.removeItem("mlm_current_user");
       localStorage.removeItem("mlm_admin_session");
       localStorage.removeItem("mlm_resume_prompt");
+      localStorage.removeItem("mlm_pending_auth");
     } catch (_) {
       // Ignore cleanup issues.
     }
