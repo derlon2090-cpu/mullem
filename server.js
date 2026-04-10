@@ -2,6 +2,7 @@ const http = require("http");
 const fs = require("fs");
 const path = require("path");
 const crypto = require("crypto");
+const { execSync } = require("child_process");
 
 const ROOT_DIR = __dirname;
 loadEnvFile(path.join(ROOT_DIR, ".env"));
@@ -77,6 +78,30 @@ let databaseState = {
   database: DB_DATABASE,
   message: "MySQL has not been initialized yet."
 };
+
+function ensureMysql2RuntimeDependency() {
+  try {
+    require.resolve("mysql2/promise");
+    return true;
+  } catch (_) {
+    // Continue to installation attempt below.
+  }
+
+  try {
+    console.warn("[mullem] mysql2 is missing. Attempting runtime install...");
+    execSync("npm install mysql2 --no-save", {
+      stdio: "inherit",
+      env: process.env
+    });
+    require.resolve("mysql2/promise");
+    console.warn("[mullem] mysql2 installed successfully at runtime.");
+    return true;
+  } catch (error) {
+    console.error("[mullem] mysql2 runtime installation failed.");
+    console.error(String(error?.message || error));
+    return false;
+  }
+}
 
 function loadEnvFile(filePath) {
   if (!fs.existsSync(filePath)) return;
@@ -675,6 +700,9 @@ async function requireAdminUser(req) {
 
 async function initializeDatabaseLayer() {
   try {
+    if (!ensureMysql2RuntimeDependency()) {
+      throw new Error("MySQL runtime dependency is unavailable.");
+    }
     const { createDatabaseClient } = require("./db");
     databaseClient = createDatabaseClient({
       host: DB_HOST,
