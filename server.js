@@ -73,7 +73,7 @@ const DEFAULT_ADMIN_PASSWORD = String(process.env.DEFAULT_ADMIN_PASSWORD || "Mul
 const DEFAULT_ADMIN_NAME = String(process.env.DEFAULT_ADMIN_NAME || "مدير المنصة").trim();
 const DEFAULT_STUDENT_EMAIL = String(process.env.DEFAULT_STUDENT_EMAIL || "student@mullem.sa").trim().toLowerCase();
 const DEFAULT_STUDENT_PASSWORD = String(process.env.DEFAULT_STUDENT_PASSWORD || "Student@2026").trim();
-const DEFAULT_STUDENT_NAME = String(process.env.DEFAULT_STUDENT_NAME || "طالب تجريبي").trim();
+const DEFAULT_STUDENT_NAME = String(process.env.DEFAULT_STUDENT_NAME || "طالب").trim();
 const GUEST_MESSAGE_LIMIT = Math.max(1, Number(process.env.GUEST_MESSAGE_LIMIT || 5));
 const TEXT_MESSAGE_XP_REWARD = Math.max(1, Number(process.env.TEXT_MESSAGE_XP_REWARD || 10));
 const IMAGE_MESSAGE_XP_REWARD = Math.max(TEXT_MESSAGE_XP_REWARD, Number(process.env.IMAGE_MESSAGE_XP_REWARD || 15));
@@ -679,7 +679,7 @@ async function ensureDefaultUsers() {
     xp: 100,
     motivation_score: 0,
     status: "active",
-    activity: "حساب طالب تجريبي"
+    activity: "حساب طالب جديد"
   });
 }
 

@@ -478,7 +478,7 @@ function getUsers() {
   return loadJson(storageKeys.users, [
     {
       id: "student-demo-1",
-      name: "طالب تجريبي",
+      name: "طالب",
       email: "student@mullem.sa",
       role: "Student",
       package: "مجاني محدود",

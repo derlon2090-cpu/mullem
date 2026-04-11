@@ -38,7 +38,7 @@ class DatabaseSeeder extends Seeder
         User::query()->updateOrCreate(
             ['email' => 'student@mullem.sa'],
             [
-                'name' => 'طالب تجريبي',
+                'name' => 'طالب',
                 'password' => Hash::make('Student@2026'),
                 'role' => 'student',
                 'stage' => 'ثانوي',
@@ -48,7 +48,7 @@ class DatabaseSeeder extends Seeder
                 'xp' => 100,
                 'streak_days' => 0,
                 'status' => 'active',
-                'activity' => 'حساب الطالب التجريبي',
+                'activity' => 'حساب طالب جديد',
                 'achievements' => [],
                 'profile_meta' => [],
             ]
