@@ -246,7 +246,7 @@ function loadUsers() {
   return [
     {
       id: "student-demo-1",
-      name: "طالب تجريبي",
+      name: "طالب",
       email: "student@mullem.sa",
       password: "Student@2026",
       role: "Student",
@@ -621,7 +621,7 @@ forgotEmailForm?.addEventListener("submit", (event) => {
   saveResetRequest({ email, code, verified: false });
   if (forgotEmailForm) forgotEmailForm.hidden = true;
   if (codeForm) codeForm.hidden = false;
-  setState(`تم إنشاء كود التحقق: ${code} — هذه نسخة تجريبية داخل الموقع.`);
+  setState(`تم إنشاء رمز التحقق: ${code} — استخدمه لإكمال العملية الآن.`);
 });
 
 codeForm?.addEventListener("submit", (event) => {
