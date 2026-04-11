@@ -120,8 +120,9 @@ function normalizeApiUserForLocal(user) {
   };
 }
 
-function upsertApiUserLocally(user) {
+function upsertApiUserLocally(user, passwordOverride = "") {
   const normalizedUser = normalizeApiUserForLocal(user);
+  if (passwordOverride) normalizedUser.password = passwordOverride;
   const nextUsers = [
     normalizedUser,
     ...loadUsers().filter((entry) => String(entry.id) !== String(normalizedUser.id))
@@ -130,8 +131,8 @@ function upsertApiUserLocally(user) {
   return normalizedUser;
 }
 
-function completeStudentApiLogin(user, message) {
-  const normalizedUser = upsertApiUserLocally(user);
+function completeStudentApiLogin(user, message, passwordOverride = "") {
+  const normalizedUser = upsertApiUserLocally(user, passwordOverride);
   localStorage.removeItem(storageKeys.adminSession);
   localStorage.setItem(storageKeys.currentUser, normalizedUser.id);
   persistClientAuthState();
@@ -198,7 +199,9 @@ function handleLocalRegisterFallback(name, email, password, grade) {
 
   const users = loadUsers();
   if (users.some((entry) => entry.email.toLowerCase() === email)) {
-    setState("هذا البريد مسجل مسبقًا.");
+    const message = "الحساب موجود من قبل، يلزم تسجيل الدخول لدخول الحساب.";
+    setInlineError(registerError, message);
+    setState(message);
     return;
   }
 
@@ -499,13 +502,26 @@ loginForm?.addEventListener("submit", async (event) => {
 
     completeStudentApiLogin(
       apiResult.data.user,
-      `أهلًا ${apiResult.data.user.name || ""}، تم تسجيل الدخول بنجاح.`
+      `أهلًا ${apiResult.data.user.name || ""}، تم تسجيل الدخول بنجاح.`,
+      password
     );
     return;
   }
 
   const loginMessage = apiResult.message || "تعذر تسجيل الدخول. تحقق من البيانات ثم حاول مرة أخرى.";
   if (/invalid email or password/i.test(loginMessage) || /كلمة المرور/i.test(loginMessage)) {
+    const localUser = loadUsers().find((entry) => entry.email.toLowerCase() === email && entry.password === password);
+    if (localUser) {
+      localStorage.removeItem(storageKeys.adminSession);
+      startAuthVerification({
+        flow: "login",
+        userId: localUser.id,
+        name: localUser.name,
+        email: localUser.email,
+        code: generateVerificationCode()
+      });
+      return;
+    }
     setInlineError(loginError, "كلمة المرور غير صحيحة.");
     setFieldError(loginPassword, true);
   } else {
@@ -564,12 +580,19 @@ registerForm?.addEventListener("submit", async (event) => {
   if (apiResult.ok && apiResult.data?.user) {
     completeStudentApiLogin(
       apiResult.data.user,
-      `تم إنشاء الحساب بنجاح يا ${apiResult.data.user.name || name}.`
+      `تم إنشاء الحساب بنجاح يا ${apiResult.data.user.name || name}.`,
+      password
     );
     return;
   }
 
   const registerMessage = apiResult.message || "تعذر إنشاء الحساب الآن. تحقق من البيانات ثم حاول مرة أخرى.";
+  if (/already registered|مسجل مسبق/i.test(registerMessage)) {
+    const message = "الحساب موجود من قبل، يلزم تسجيل الدخول لدخول الحساب.";
+    setInlineError(registerError, message);
+    setState(message);
+    return;
+  }
   if (/password/i.test(registerMessage) || /كلمة المرور/i.test(registerMessage)) {
     setInlineError(registerError, "تحقق من كلمة المرور مرة أخرى.");
     setFieldError(registerPassword, true);
