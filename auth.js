@@ -473,8 +473,7 @@ loginForm?.addEventListener("submit", async (event) => {
   }
 
   if (!apiClient) {
-    setInlineError(loginError, "تعذر الاتصال بالخادم الآن. حاول مرة أخرى بعد قليل.");
-    setState("تعذر الاتصال بالخادم الآن. حاول مرة أخرى بعد قليل.");
+    handleLocalLoginFallback(email, password);
     return;
   }
 
@@ -485,8 +484,7 @@ loginForm?.addEventListener("submit", async (event) => {
   });
 
   if (shouldFallbackToLocalAuth(apiResult)) {
-    setInlineError(loginError, "الخادم غير متاح الآن. حاول مرة أخرى بعد قليل.");
-    setState("الخادم غير متاح الآن. حاول مرة أخرى بعد قليل.");
+    handleLocalLoginFallback(email, password);
     return;
   }
 
@@ -541,8 +539,7 @@ registerForm?.addEventListener("submit", async (event) => {
   }
 
   if (!apiClient) {
-    setInlineError(registerError, "تعذر الاتصال بالخادم الآن. حاول مرة أخرى بعد قليل.");
-    setState("تعذر الاتصال بالخادم الآن. حاول مرة أخرى بعد قليل.");
+    handleLocalRegisterFallback(name, email, password, grade);
     return;
   }
 
@@ -557,8 +554,7 @@ registerForm?.addEventListener("submit", async (event) => {
   });
 
   if (shouldFallbackToLocalAuth(apiResult)) {
-    setInlineError(registerError, "الخادم غير متاح الآن. حاول مرة أخرى بعد قليل.");
-    setState("الخادم غير متاح الآن. حاول مرة أخرى بعد قليل.");
+    handleLocalRegisterFallback(name, email, password, grade);
     return;
   }
 
