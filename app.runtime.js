@@ -82,7 +82,7 @@
   };
   const runtimeProjectSelectionKey = "mlm_runtime_selected_project";
 
-  const GUEST_MESSAGE_LIMIT = 5;
+  const LOGIN_REQUIRED_DAILY_XP = 5;
   const fallbackRuntimePackages = [
     {
       key: "pro",
@@ -2844,30 +2844,30 @@
 
   function renderRuntimeStudentPlan(activeUser) {
     const isPaid = isPaidRuntimePackage(activeUser);
-    const planName = activeUser ? (activeUser.package || "الخطة المجانية") : "تجربة الضيف";
+    const planName = activeUser ? (activeUser.package || "الخطة المجانية") : "تسجيل مطلوب";
     const planStatus = activeUser
       ? (isPaid
           ? "باقتك فعالة الآن، ويتجدد رصيدها يوميًا طوال مدة الاشتراك."
           : "أنت الآن على الخطة المجانية. فعّل باقة شهرية لفتح رصيد يومي أكبر وتجربة أغنى.")
-      : `يمكنك تجربة الشات الآن مع ${GUEST_MESSAGE_LIMIT} رسائل يوميًا قبل الحاجة إلى تسجيل الدخول.`;
-    const badgeText = activeUser ? (isPaid ? "باقة فعالة" : "مجانية") : "ضيف";
+      : `الشات مغلق حتى تسجّل دخولك. بعد الدخول يتجدد لك ${LOGIN_REQUIRED_DAILY_XP} XP يوميًا على الخطة المجانية.`;
+    const badgeText = activeUser ? (isPaid ? "باقة فعالة" : "مجانية") : "مغلق";
     const badgeClass = activeUser
       ? (isPaid ? "student-plan-badge is-paid" : "student-plan-badge is-free")
       : "student-plan-badge is-guest";
-    const primaryMetric = activeUser ? (isPaid ? `${Number(activeUser.packageDailyXp || 0)} XP` : "مجانية") : `${GUEST_MESSAGE_LIMIT} رسائل`;
+    const primaryMetric = activeUser ? (isPaid ? `${Number(activeUser.packageDailyXp || 0)} XP` : "مجانية") : `${LOGIN_REQUIRED_DAILY_XP} XP`;
     const secondaryMetric = activeUser
       ? (isPaid
           ? (Number.isFinite(Number(activeUser.packageDaysRemaining))
               ? `${Math.max(0, Number(activeUser.packageDaysRemaining))} يوم`
               : formatRuntimePlanDate(activeUser.packageExpiresAt))
           : "ترقية مفتوحة")
-      : "يتجدد يوميًا";
-    const tertiaryMetric = activeUser ? `${Number(activeUser.xp || 0)} XP` : "100 XP بعد التسجيل";
+      : "بعد تسجيل الدخول";
+    const tertiaryMetric = activeUser ? `${Number(activeUser.xp || 0)} XP` : "يفتح بعد الدخول";
     const planCopy = activeUser
       ? (isPaid
           ? `خطتك الحالية مناسبة إذا كنت تراجع ${activeUser.grade || "دروسك"} يوميًا وتريد أن يبقى رصيدك متجددًا حتى ${formatRuntimePlanDate(activeUser.packageExpiresAt)}.`
           : "فعّل باقتك لفتح عدد أكبر من الأسئلة اليومية، وتنظيم أفضل للمشروعات، وتجربة أكثر راحة داخل الشات.")
-      : "استعرض الباقات من داخل اللوحة نفسها، ثم سجّل دخولك عندما تريد تفعيل خطة شهرية وحفظ التقدم مدى الحياة.";
+      : "استعرض الباقات الآن، ثم سجّل دخولك لفتح الشات وحفظ التقدم والمشروعات داخل حسابك.";
     const benefits = isPaid
       ? (Array.isArray(activeUser?.packageBenefits) && activeUser.packageBenefits.length
           ? activeUser.packageBenefits
@@ -2883,15 +2883,15 @@
               "ترقية مرنة إلى باقات شهرية"
             ]
           : [
-              "5 رسائل يوميًا قبل إنشاء الحساب",
-              "عرض الباقات كاملة قبل الاشتراك",
-              "100 XP بداية الحساب بعد التسجيل"
+              `الشات يفتح بعد تسجيل الدخول مع ${LOGIN_REQUIRED_DAILY_XP} XP يوميًا`,
+              "عرض الباقات متاح للجميع قبل الاشتراك",
+              "100 XP بداية للحساب بعد التسجيل"
             ]);
     const upsellCopy = activeUser
       ? (isPaid
           ? "هذه هي الخطط المتاحة إذا أردت الترقية لاحقًا أو مقارنة مزايا الباقات الشهرية."
           : "أنت الآن على الخطة المجانية. اختر الباقة المناسبة عندما تحتاج رصيدًا يوميًا أكبر داخل نفس اللوحة.")
-      : "استعرض الباقات الآن، ثم فعّل ما يناسبك بعد الدخول إلى الحساب بدون أي لخبطة في التجربة.";
+      : "استعرض الباقات الآن، ثم سجّل دخولك لفتح الشات والبدء بالخطة المجانية أو أي باقة شهرية.";
 
     setRuntimeNodeText(planNameNodes, planName);
     setRuntimeNodeText(planStatusNodes, planStatus);
@@ -2917,6 +2917,36 @@
     }
 
     renderRuntimePackagePreviewCards(activeUser);
+
+    if (!activeUser) {
+      setRuntimeNodeText(planNameNodes, "تسجيل مطلوب");
+      setRuntimeNodeText(planStatusNodes, `الشات مغلق حتى تسجّل دخولك. بعد الدخول يتجدد لك ${LOGIN_REQUIRED_DAILY_XP} XP يوميًا على الخطة المجانية، ويمكنك بعدها الترقية لأي باقة شهرية.`);
+      setRuntimeNodeText(planPrimaryMetricNodes, `${LOGIN_REQUIRED_DAILY_XP} XP يوميًا`);
+      setRuntimeNodeText(planSecondaryMetricNodes, "بعد تسجيل الدخول");
+      setRuntimeNodeText(planTertiaryMetricNodes, "الشات مقفل للضيف");
+      setRuntimeNodeText(planCopyNodes, "استعرض الباقات الآن، ثم سجّل دخولك لفتح الشات وحفظ تقدمك ومشروعاتك داخل الحساب.");
+      setRuntimeNodeText(planUpsellCopyNodes, "استعرض الباقات الآن، ثم سجّل دخولك لتفتح الشات وتبدأ بخطتك المجانية أو تفعّل أي باقة شهرية تناسبك.");
+      setRuntimeNodeHtml(
+        planBenefitsNodes,
+        [
+          "فتح الشات يبدأ مباشرة بعد تسجيل الدخول",
+          `${LOGIN_REQUIRED_DAILY_XP} XP تتجدد يوميًا على الخطة المجانية`,
+          "يمكنك الترقية لاحقًا لأي باقة شهرية من داخل اللوحة"
+        ].map((benefit) => `<span class="student-plan-benefit">${escapeRuntimeHtml(benefit)}</span>`).join("")
+      );
+      planBadgeNodes.forEach((node) => {
+        node.className = "student-plan-badge is-guest";
+        node.textContent = "مغلق";
+      });
+      if (planPrimaryLink) {
+        planPrimaryLink.href = "login.html";
+        planPrimaryLink.textContent = "أنشئ حسابًا";
+      }
+      if (planSecondaryLink) {
+        planSecondaryLink.href = "subscriptions.html";
+        planSecondaryLink.textContent = "قارن الباقات";
+      }
+    }
   }
 
   function renderRuntimeProgressOverview(activeUser) {
@@ -3058,7 +3088,7 @@
     const selectedProject = getRuntimeProjectList().find((project) => String(project.id) === selectedProjectId) || null;
 
     if (!activeUser) {
-      projectContextNote.textContent = "المشروعات الكاملة وحفظ المحادثات داخل الحساب يظهران بعد تسجيل الدخول، ويمكنك الآن تجربة الشات مباشرة.";
+      projectContextNote.textContent = "المشروعات وحفظ المحادثات تفتح بعد تسجيل الدخول، وعندها يبدأ لك رصيد مجاني يتجدد يوميًا.";
       return;
     }
 
@@ -3124,6 +3154,9 @@
 
     syncRuntimeProjectCardState();
     updateRuntimeProjectContextNote(activeUser);
+    if (!activeUser && projectContextNote) {
+      projectContextNote.textContent = "المشروعات الكاملة وحفظ المحادثات تظهر بعد تسجيل الدخول، والشات نفسه يُفتح بعد الدخول مباشرة.";
+    }
     renderRuntimeProjectConversations(activeUser);
   }
 
@@ -3501,7 +3534,7 @@
     if (projectContextNote) {
       projectContextNote.textContent = activeUser
         ? "مشروعاتك تُحفظ داخل حسابك. اربط كل محادثة بالمادة أو الدرس الذي تريد الرجوع إليه لاحقًا."
-        : "المشروعات الكاملة وحفظ المحادثات يظهران بعد تسجيل الدخول، ويمكنك الآن تجربة الشات مباشرة.";
+        : "المشروعات الكاملة وحفظ المحادثات تفتح بعد تسجيل الدخول مع رصيد يومي مجاني.";
     }
 
     if (usageSummaryNodes.length) {
@@ -3509,13 +3542,25 @@
         ? (isPaid
             ? `باقتك ${activeUser.package || "الحالية"} فعالة، ورصيدك الحالي ${Number(activeUser.xp || 0)} XP.`
             : `أنت الآن على الخطة المجانية، ومعك ${Number(activeUser.xp || 0)} XP داخل الحساب.`)
-        : `التجربة الحالية تمنحك ${GUEST_MESSAGE_LIMIT} رسائل يوميًا قبل الحاجة إلى إنشاء حساب.`;
+        : `الشات مغلق حاليًا للضيف. سجّل دخولك ليبدأ لك ${LOGIN_REQUIRED_DAILY_XP} XP يوميًا على الخطة المجانية.`;
       setRuntimeNodeText(usageSummaryNodes, usageSummary);
     }
 
     renderRuntimeStudentPlan(activeUser);
     renderRuntimeProgressOverview(activeUser);
     renderRuntimeProjects(activeUser);
+
+    if (!activeUser) {
+      if (dashboardCopyNode) {
+        dashboardCopyNode.textContent = "سجّل دخولك أولًا لفتح الشات، ثم احفظ محادثاتك ومشروعاتك وتقدمك داخل الحساب.";
+      }
+      if (projectContextNote) {
+        projectContextNote.textContent = "المشروعات الكاملة وحفظ المحادثات تظهر بعد تسجيل الدخول، والشات نفسه يُفتح بعد الدخول مباشرة.";
+      }
+      if (usageSummaryNodes.length) {
+        setRuntimeNodeText(usageSummaryNodes, `سجّل دخولك لفتح الشات. على الخطة المجانية يتجدد لك ${LOGIN_REQUIRED_DAILY_XP} XP يوميًا داخل الحساب.`);
+      }
+    }
   }
 
   function bindPromptPlaceholderButtons() {
@@ -3675,7 +3720,12 @@
       const lessonLabel = lessonInput?.value?.trim() || "الدرس غير محدد";
       selectionSummary.textContent = isLogged
         ? `${gradeLabel} · ${termLabel} · ${lessonLabel}`
-        : `الوضع الضيف · ${GUEST_MESSAGE_LIMIT} رسائل يوميًا.`;
+        : `سجّل الدخول لفتح الشات · ${LOGIN_REQUIRED_DAILY_XP} XP تتجدد يوميًا.`;
+    }
+    syncRuntimeChatAccess(activeUser);
+
+    if (!isLogged && selectionSummary) {
+      selectionSummary.textContent = `سجّل الدخول لفتح الشات · ${LOGIN_REQUIRED_DAILY_XP} XP تتجدد يوميًا.`;
     }
   }
 
@@ -4547,6 +4597,103 @@
     return typeof getActiveUser === "function" ? getActiveUser() : null;
   }
 
+  function getRuntimeLoginRequiredCopy() {
+    return `الشات متاح بعد تسجيل الدخول فقط. بعد الدخول يتجدد لك ${LOGIN_REQUIRED_DAILY_XP} XP يوميًا على الخطة المجانية.`;
+  }
+
+  function rememberRuntimeResumePrompt(value) {
+    const prompt = String(value || "").trim();
+    if (!prompt) return;
+    try {
+      localStorage.setItem("mlm_resume_prompt", prompt);
+    } catch (_) {
+      // Ignore storage issues and keep login flow usable.
+    }
+  }
+
+  function createRuntimeLockNote(container, attributeName) {
+    if (!container) return null;
+    let note = container.querySelector(`[${attributeName}]`);
+    if (!note) {
+      note = document.createElement("div");
+      note.className = "chat-lock-note";
+      note.setAttribute(attributeName, "");
+      container.appendChild(note);
+    }
+    return note;
+  }
+
+  function redirectRuntimeToLogin(prefill = "") {
+    rememberRuntimeResumePrompt(prefill);
+    window.location.href = "login.html";
+  }
+
+  function syncRuntimeChatAccess(activeUser) {
+    const isLogged = Boolean(activeUser);
+    const lockHtml = `${getRuntimeLoginRequiredCopy()} <a class="top-link" href="login.html">سجّل دخولك الآن</a>.`;
+    const composerArea = form?.closest(".composer-area");
+    const heroAsk = heroPromptInput?.closest(".premium-core-ask");
+    const sendButton = form?.querySelector(".send-btn");
+    const plusButton = form?.querySelector(".plus-btn");
+    const heroSubmitButton = document.querySelector("[data-hero-submit]");
+
+    [promptInput, heroPromptInput].forEach((input) => {
+      if (!input) return;
+      if (!input.dataset.defaultPlaceholder) {
+        input.dataset.defaultPlaceholder = input.getAttribute("placeholder") || "";
+      }
+      input.disabled = !isLogged;
+      input.classList.toggle("is-locked", !isLogged);
+      if (!isLogged) {
+        input.value = "";
+        input.setAttribute("placeholder", getRuntimeLoginRequiredCopy());
+      } else {
+        input.setAttribute("placeholder", input.dataset.defaultPlaceholder);
+      }
+    });
+
+    [sendButton, plusButton].forEach((button) => {
+      if (!button) return;
+      button.disabled = !isLogged;
+      button.classList.toggle("is-locked", !isLogged);
+      if (!isLogged) {
+        button.setAttribute("title", "يتطلب تسجيل الدخول");
+      } else {
+        button.removeAttribute("title");
+      }
+    });
+
+    if (form) {
+      form.classList.toggle("is-locked", !isLogged);
+    }
+    if (composerArea) {
+      composerArea.classList.toggle("is-locked", !isLogged);
+      const composerNote = createRuntimeLockNote(composerArea, "data-chat-lock-note");
+      if (composerNote) {
+        composerNote.innerHTML = lockHtml;
+        composerNote.hidden = isLogged;
+      }
+    }
+
+    if (heroAsk) {
+      const heroNote = createRuntimeLockNote(heroAsk, "data-hero-lock-note");
+      if (heroNote) {
+        heroNote.innerHTML = lockHtml;
+        heroNote.hidden = isLogged;
+      }
+    }
+
+    if (heroSubmitButton) {
+      const labelNode = heroSubmitButton.querySelector("span:last-child");
+      if (labelNode) {
+        if (!labelNode.dataset.defaultLabel) {
+          labelNode.dataset.defaultLabel = labelNode.textContent || "";
+        }
+        labelNode.textContent = isLogged ? labelNode.dataset.defaultLabel : "سجّل الدخول";
+      }
+    }
+  }
+
   function resolveRuntimeSolveEndpoint() {
     const apiClient = getRuntimeApiClient();
     if (apiClient && typeof apiClient.buildApiUrl === "function") {
@@ -5083,6 +5230,15 @@
     const attachments = Array.from(fileInput?.files || []);
     const hasAttachments = attachments.length > 0;
     if (!question && !hasAttachments) return;
+    if (typeof isLoggedIn === "function" && !isLoggedIn()) {
+      rememberRuntimeResumePrompt(question);
+      addMessage(
+        "assistant",
+        "ملم يحل",
+        formatSimpleReply(`${getRuntimeLoginRequiredCopy()} <a class="top-link" href="login.html">سجّل دخولك من هنا</a>.`)
+      );
+      return;
+    }
     if (hasBlockedVideo(attachments)) {
       addMessage("assistant", "ظ…ظ„ظ… ظٹط­ظ„", formatSimpleReply("رفع الفيديو غير متاح في المنصة حاليًا. يمكنك رفع صورة أو ملف دراسي فقط بعد تسجيل الدخول."));
       clearRuntimeAttachments();
@@ -5984,6 +6140,10 @@
 
   function submitPresetPrompt(prompt, subject = "", options = {}) {
     if (!form || !promptInput) return;
+    if (typeof isLoggedIn === "function" && !isLoggedIn()) {
+      redirectRuntimeToLogin(prompt);
+      return;
+    }
     const preparePrompt = () => {
       clearRuntimeAttachments();
       promptInput.value = prompt;
@@ -6014,15 +6174,27 @@
     if (!form || !promptInput) return;
     const heroValue = (heroPromptInput?.value || "").trim();
     if (heroValue) {
+      if (typeof isLoggedIn === "function" && !isLoggedIn()) {
+        redirectRuntimeToLogin(heroValue);
+        return;
+      }
       submitPresetPrompt(heroValue, "", { scrollToChat: true, autoSubmit: true });
       return;
     }
     const promptValue = (promptInput?.value || "").trim();
     if (promptValue) {
+      if (typeof isLoggedIn === "function" && !isLoggedIn()) {
+        redirectRuntimeToLogin(promptValue);
+        return;
+      }
       scrollToChatSection();
       window.setTimeout(() => {
         form.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
       }, 80);
+      return;
+    }
+    if (typeof isLoggedIn === "function" && !isLoggedIn()) {
+      redirectRuntimeToLogin("ابدأ بشرح أساسيات هذا الدرس ثم أعطني مثالًا محلولًا.");
       return;
     }
     scrollToChatSection();

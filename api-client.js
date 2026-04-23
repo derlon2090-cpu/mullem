@@ -106,6 +106,9 @@
       if (message.includes("Invalid value: 'input_text'")) {
         return "تعذر الوصول إلى خدمة الشات الآن. أعد المحاولة بعد قليل.";
       }
+      if (/authentication is required to use chat/i.test(message)) {
+        return "الشات متاح بعد تسجيل الدخول فقط. سجّل دخولك لفتح المحادثة داخل حسابك.";
+      }
       if (/authentication is required/i.test(message)) {
         return "انتهت جلسة تسجيل الدخول أو لم يتم التحقق منها. سجّل دخولك مرة أخرى للمتابعة.";
       }

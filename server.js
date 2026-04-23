@@ -74,7 +74,6 @@ const DEFAULT_ADMIN_NAME = String(process.env.DEFAULT_ADMIN_NAME || "مدير ا
 const DEFAULT_STUDENT_EMAIL = String(process.env.DEFAULT_STUDENT_EMAIL || "student@mullem.sa").trim().toLowerCase();
 const DEFAULT_STUDENT_PASSWORD = String(process.env.DEFAULT_STUDENT_PASSWORD || "Student@2026").trim();
 const DEFAULT_STUDENT_NAME = String(process.env.DEFAULT_STUDENT_NAME || "طالب").trim();
-const GUEST_MESSAGE_LIMIT = Math.max(1, Number(process.env.GUEST_MESSAGE_LIMIT || 5));
 const TEXT_MESSAGE_XP_REWARD = Math.max(1, Number(process.env.TEXT_MESSAGE_XP_REWARD || 10));
 const IMAGE_MESSAGE_XP_REWARD = Math.max(TEXT_MESSAGE_XP_REWARD, Number(process.env.IMAGE_MESSAGE_XP_REWARD || 15));
 const DAILY_LOGIN_XP_REWARD = Math.max(0, Number(process.env.DAILY_LOGIN_XP_REWARD || 5));
@@ -1363,23 +1362,15 @@ async function handleGuestStatus(req, res) {
     throw createHttpError(422, "guest_session_id is required.");
   }
 
-  let usage = { messages_count: 0, remaining_messages: GUEST_MESSAGE_LIMIT };
-  if (isDatabaseReady()) {
-    const usageRow = await databaseClient.getGuestUsage(guestSessionId);
-    const count = Number(usageRow?.messages_count || 0);
-    usage = {
-      messages_count: count,
-      remaining_messages: Math.max(0, GUEST_MESSAGE_LIMIT - count)
-    };
-  }
-
   sendJson(req, res, 200, {
     success: true,
     data: {
       guest_session_id: guestSessionId,
-      limit: GUEST_MESSAGE_LIMIT,
-      used_messages: usage.messages_count,
-      remaining_messages: usage.remaining_messages
+      limit: 0,
+      used_messages: 0,
+      remaining_messages: 0,
+      locked: true,
+      message: "Authentication is required to use chat."
     }
   });
 }
@@ -1852,17 +1843,8 @@ async function handleChatSend(req, res) {
   const auth = await getAuthContext(req);
   const activeUser = auth?.user ? await syncUserDailyProgress(auth.user, "بدأ جلسة شات جديدة") : null;
 
-  if (!activeUser && !guestSessionId) {
-    throw createHttpError(422, "guest_session_id is required for guest chat.");
-  }
-
-  let guestUsage = null;
-  if (!activeUser && isDatabaseReady()) {
-    guestUsage = await databaseClient.getGuestUsage(guestSessionId);
-    const usedMessages = Number(guestUsage?.messages_count || 0);
-    if (usedMessages >= GUEST_MESSAGE_LIMIT) {
-      throw createHttpError(403, "Guest message limit reached. Please sign in to continue.");
-    }
+  if (!activeUser) {
+    throw createHttpError(401, "Authentication is required to use chat.");
   }
 
   let project = null;
@@ -1912,8 +1894,6 @@ async function handleChatSend(req, res) {
       rewardAmount,
       hasAttachment ? "أرسل رسالة مع صورة/ملف" : "أرسل رسالة نصية"
     );
-  } else if (!activeUser && isDatabaseReady()) {
-    guestUsage = await databaseClient.incrementGuestUsage(guestSessionId, 1);
   }
 
   sendJson(req, res, 200, {
@@ -1929,11 +1909,7 @@ async function handleChatSend(req, res) {
         xp_earned: hasAttachment ? IMAGE_MESSAGE_XP_REWARD : TEXT_MESSAGE_XP_REWARD
       } : null,
       user: rewardedUser ? buildApiUser(rewardedUser) : null,
-      guest: !activeUser ? {
-        limit: GUEST_MESSAGE_LIMIT,
-        used_messages: Number(guestUsage?.messages_count || 0),
-        remaining_messages: Math.max(0, GUEST_MESSAGE_LIMIT - Number(guestUsage?.messages_count || 0))
-      } : null
+      guest: null
     }
   });
 }

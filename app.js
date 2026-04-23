@@ -334,6 +334,8 @@ const usageCosts = {
   image: 15
 };
 
+const LOGIN_REQUIRED_DAILY_XP = 5;
+
 const subjectKeywordMap = {
   الرياضيات: ["رياضيات", "احسب", "مساحة", "محيط", "معادلة", "دائرة", "مثلث", "كسور", "جبر", "هندسة", "تفاضل"],
   العلوم: ["علوم", "نبات", "حيوان", "ماء", "حرارة", "طاقة", "خلية", "تبخر"],
@@ -673,7 +675,7 @@ function syncUserStreakOnVisit() {
 
 function spendPoints(amount, reason) {
   const activeUser = getActiveUser();
-  if (!activeUser) return { ok: true, guest: true };
+  if (!activeUser) return { ok: false, guest: true, locked: true, remaining: 0 };
   if ((activeUser.xp ?? 0) < amount) {
     return { ok: false, guest: false, remaining: activeUser.xp ?? 0 };
   }
@@ -992,7 +994,7 @@ function createCasualResponse(message) {
 }
 
 function createHelpResponse() {
-  return "ابدأ باختيار الصف والمادة، ثم اكتب سؤالك. يمكنك استخدام الشات النصي مباشرة حتى كزائر، أما رفع الصور وتحليلها فيتطلب تسجيل الدخول. وإذا كان السؤال اختيارات أو صح وخطأ فسأحلله وأحدد الجواب الصحيح مباشرة.";
+  return `ابدأ باختيار الصف والمادة، ثم سجّل دخولك لفتح الشات. بعد الدخول يبدأ لك ${LOGIN_REQUIRED_DAILY_XP} XP يوميًا على الخطة المجانية، ويمكنك بعدها كتابة السؤال أو رفع صورة أو ملف.`;
 }
 
 function createClarificationResponse(message, intent) {
@@ -1206,7 +1208,7 @@ function renderWelcomeMessage() {
         <section class="answer-section answer-section-wide">
           <h4>كيف أقدر أساعدك اليوم؟</h4>
           <p>أنا مساعد أكاديمي للمنهج السعودي. أفهم السؤال أو الصورة أولًا، وأتحقق من المادة والصف قبل الإجابة، ثم أختار نوع الرد المناسب: حل أو شرح أو اختبار أو توليد أسئلة.</p>
-          <p class="logic-note">يمكنك استخدام الشات النصي مباشرة كزائر. أما الصور وتحليلها فتتطلب تسجيل الدخول.</p>
+          <p class="logic-note">الشات يفتح بعد تسجيل الدخول فقط، وبعدها يبدأ لك رصيد يومي مجاني على حسابك.</p>
         </section>
       </div>
     `
@@ -2295,7 +2297,7 @@ function openImageUpload() {
     addMessage(
       "assistant",
       "ملم يحل",
-      formatSimpleReply('يمكنك استخدام الشات النصي مباشرة، لكن رفع الصور وتحليلها يتطلب تسجيل الدخول أولًا. <a class="top-link" href="login.html">سجّل دخولك من هنا</a>.')
+      formatSimpleReply(`الشات متاح بعد تسجيل الدخول فقط. بعد الدخول يتجدد لك ${LOGIN_REQUIRED_DAILY_XP} XP يوميًا على الخطة المجانية. <a class="top-link" href="login.html">سجّل دخولك من هنا</a>.`)
     );
     return;
   }
@@ -2309,7 +2311,7 @@ function openGenericUpload() {
     addMessage(
       "assistant",
       "ملم يحل",
-      formatSimpleReply('رفع الملفات والصور متاح بعد تسجيل الدخول فقط. يمكنك الآن كتابة سؤالك نصيًا، أو <a class="top-link" href="login.html">تسجيل الدخول</a> لتفعيل المرفقات.')
+      formatSimpleReply(`الشات والمرفقات متاحة بعد تسجيل الدخول فقط. بعد الدخول يتجدد لك ${LOGIN_REQUIRED_DAILY_XP} XP يوميًا على الخطة المجانية. <a class="top-link" href="login.html">تسجيل الدخول</a> لفتح المحادثة.`)
     );
     return;
   }
@@ -2349,6 +2351,19 @@ async function handleSubmit(event) {
   const question = promptInput?.value.trim() || "";
   const hasAttachments = attachments.length > 0;
   if (!question && !hasAttachments) return;
+  if (!isLoggedIn()) {
+    try {
+      if (question) localStorage.setItem(storageKeys.resumePrompt, question);
+    } catch (_) {
+      // Ignore storage issues and keep the login path usable.
+    }
+    addMessage(
+      "assistant",
+      "ملم يحل",
+      formatSimpleReply(`الشات متاح بعد تسجيل الدخول فقط. بعد الدخول يتجدد لك ${LOGIN_REQUIRED_DAILY_XP} XP يوميًا على الخطة المجانية. <a class="top-link" href="login.html">سجّل دخولك من هنا</a>.`)
+    );
+    return;
+  }
 
   const activeUser = getActiveUser();
   const route = request_router({

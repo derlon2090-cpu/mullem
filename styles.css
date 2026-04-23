@@ -134,6 +134,7 @@ body.theme-dark .answer-section,
 body.theme-dark .practice-cta,
 body.theme-dark .clarify-card,
 body.theme-dark .smart-note,
+body.theme-dark .chat-lock-note,
 body.theme-dark .chat-trust-note {
   background: rgba(20, 31, 24, 0.98);
   border-color: rgba(255, 255, 255, 0.1);
@@ -2555,6 +2556,40 @@ a.memory-item {
   color: color-mix(in srgb, var(--muted) 82%, transparent);
   font-size: 0.84rem;
   line-height: 1.8;
+}
+
+.chat-lock-note {
+  margin-top: 12px;
+  padding: 14px 16px;
+  border-radius: 18px;
+  border: 1px solid rgba(34, 197, 94, 0.16);
+  background: linear-gradient(180deg, rgba(247, 252, 248, 0.98), rgba(255, 255, 255, 0.96));
+  color: var(--muted);
+  line-height: 1.9;
+  font-size: 0.93rem;
+}
+
+.chat-lock-note a {
+  font-weight: 700;
+}
+
+.composer.is-locked {
+  border-style: dashed;
+}
+
+.prompt-input.is-locked,
+.premium-core-textarea.is-locked,
+.prompt-input:disabled,
+.premium-core-textarea:disabled {
+  color: var(--muted);
+  cursor: not-allowed;
+}
+
+.send-btn.is-locked,
+.plus-btn.is-locked {
+  opacity: 0.55;
+  cursor: not-allowed;
+  transform: none;
 }
 
 .helper-toolbar {
