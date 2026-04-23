@@ -572,6 +572,214 @@
         font-size: 2.2rem;
       }
     }
+
+    .auth-v2-page {
+      padding: 16px;
+      gap: 14px;
+    }
+
+    .auth-v2-topbar {
+      gap: 12px;
+      max-width: 960px;
+    }
+
+    .auth-v2-brand {
+      padding: 10px 14px;
+    }
+
+    .auth-v2-brand-mark {
+      width: 42px;
+      height: 42px;
+      border-radius: 14px;
+    }
+
+    .auth-v2-brand-mark img {
+      width: 24px;
+      height: 24px;
+    }
+
+    .auth-v2-brand-copy strong {
+      font-size: 1rem;
+    }
+
+    .auth-v2-brand-copy small {
+      font-size: 0.78rem;
+    }
+
+    .auth-v2-back {
+      padding: 10px 15px;
+    }
+
+    .auth-v2-stage {
+      align-content: start;
+      padding-bottom: 12px;
+    }
+
+    .auth-v2-card {
+      padding: 22px 22px 18px;
+    }
+
+    .auth-v2-card::before {
+      width: 132px;
+      height: 132px;
+    }
+
+    .auth-v2-card-head {
+      margin-bottom: 14px;
+    }
+
+    .auth-v2-badge {
+      padding: 8px 12px;
+      margin-bottom: 10px;
+    }
+
+    .auth-v2-logo {
+      width: 58px;
+      height: 58px;
+      margin: 0 auto 12px;
+      border-radius: 18px;
+    }
+
+    .auth-v2-logo img {
+      width: 34px;
+      height: 34px;
+    }
+
+    .auth-v2-card h1 {
+      font-size: clamp(1.72rem, 4vw, 2.45rem);
+    }
+
+    .auth-v2-card p.auth-v2-lead {
+      margin-top: 8px;
+      font-size: 0.96rem;
+      line-height: 1.65;
+    }
+
+    .auth-v2-strip {
+      gap: 8px;
+      margin-top: 12px;
+    }
+
+    .auth-v2-strip span {
+      padding: 8px 10px;
+      font-size: 0.78rem;
+    }
+
+    .auth-v2-tabs {
+      margin-bottom: 14px;
+      padding: 6px;
+    }
+
+    .auth-v2-tab {
+      padding: 12px 14px;
+      font-size: 0.97rem;
+    }
+
+    .auth-v2-intro {
+      margin-bottom: 12px;
+    }
+
+    .auth-v2-intro strong {
+      font-size: 1rem;
+      margin-bottom: 4px;
+    }
+
+    .auth-v2-intro span,
+    .auth-v2-verify-copy,
+    .auth-v2-state {
+      font-size: 0.9rem;
+      line-height: 1.65;
+    }
+
+    .auth-v2-form {
+      gap: 12px;
+    }
+
+    .auth-v2-field-group {
+      gap: 6px;
+    }
+
+    .auth-v2-label {
+      font-size: 0.92rem;
+    }
+
+    .auth-v2-input,
+    .auth-v2-select {
+      min-height: 54px;
+      border-radius: 16px;
+    }
+
+    .password-toggle {
+      min-width: 54px;
+      height: 36px;
+    }
+
+    .auth-v2-hint {
+      font-size: 0.86rem;
+    }
+
+    .primary-btn,
+    .secondary-btn {
+      min-height: 54px;
+      font-size: 1rem;
+    }
+
+    .auth-v2-divider {
+      margin: 12px 0;
+    }
+
+    .auth-v2-note,
+    .auth-v2-status,
+    .auth-v2-verify-note {
+      padding: 12px 14px;
+      line-height: 1.65;
+      font-size: 0.88rem;
+    }
+
+    .auth-v2-note,
+    .auth-v2-status {
+      margin-top: 12px;
+    }
+
+    .auth-v2-footer {
+      margin-top: 12px;
+      font-size: 0.89rem;
+    }
+
+    @media (max-width: 720px) {
+      .auth-v2-page {
+        padding: 12px;
+        gap: 10px;
+      }
+
+      .auth-v2-topbar {
+        flex-direction: row;
+        align-items: center;
+      }
+
+      .auth-v2-brand-copy small,
+      .auth-v2-logo,
+      .auth-v2-strip,
+      .auth-v2-status {
+        display: none;
+      }
+
+      .auth-v2-card {
+        padding: 18px 16px 16px;
+        border-radius: 24px;
+      }
+
+      .auth-v2-card h1 {
+        font-size: 1.62rem;
+      }
+
+      .auth-v2-card p.auth-v2-lead,
+      .auth-v2-intro span,
+      .auth-v2-note {
+        font-size: 0.84rem;
+        line-height: 1.55;
+      }
+    }
   </style>
 </head>
 <body class="auth-page-v2">
@@ -598,7 +806,7 @@
             <img src="favicon.svg" alt="">
           </div>
           <h1 id="authHeroTitle">مرحبًا بعودتك</h1>
-          <p class="auth-v2-lead" id="authHeroSubtitle">سجّل دخولك لمتابعة رحلة التعلم من نفس المكان، مع واجهة هادئة وواضحة تحفظ تركيز الطالب.</p>
+          <p class="auth-v2-lead" id="authHeroSubtitle">سجّل دخولك وابدأ مباشرة من نفس المكان بهدوء ووضوح.</p>
 
           <div class="auth-v2-strip" aria-hidden="true">
             <span>يحفظ التقدّم</span>
@@ -616,7 +824,7 @@
           <section class="auth-v2-panel" data-auth-panel="login">
             <div class="auth-v2-intro">
               <strong>ادخل إلى حسابك وابدأ مباشرة</strong>
-              <span>كل ما تحتاجه هنا: بريدك، كلمة المرور، ثم دخول واضح وسريع بدون ازدحام بصري.</span>
+              <span>بريدك وكلمة المرور فقط، ثم تبدأ مباشرة.</span>
             </div>
 
             <form class="auth-v2-form" data-auth-login-form>
@@ -655,7 +863,7 @@
           <section class="auth-v2-panel" data-auth-panel="register" hidden>
             <div class="auth-v2-intro">
               <strong>ابدأ حسابك الجديد بثلاث خطوات واضحة</strong>
-              <span>اكتب اسمك، بريدك، وصفك الدراسي، ثم ابدأ رحلتك التعليمية بثقة داخل نفس الواجهة.</span>
+              <span>أدخل بياناتك الأساسية ثم ابدأ بسرعة.</span>
             </div>
 
             <form class="auth-v2-form" data-auth-register-form>
@@ -706,7 +914,7 @@
               <button class="primary-btn" type="submit" data-register-submit>إنشاء الحساب</button>
             </form>
 
-            <div class="auth-v2-note">عند إنشاء الحساب، نحافظ على رحلة بسيطة وواضحة: بيانات قليلة، واجهة مطمئنة، وتقدّم محفوظ داخل حساب الطالب.</div>
+            <div class="auth-v2-note">حساب سريع، بيانات قليلة، وتقدّم محفوظ داخل لوحة الطالب.</div>
 
             <p class="auth-v2-footer">لديك حساب بالفعل؟ <button class="auth-link-btn" type="button" data-auth-open="login">العودة إلى تسجيل الدخول</button></p>
           </section>
@@ -714,7 +922,7 @@
           <section class="auth-v2-panel" data-auth-panel="verify" hidden>
             <div class="auth-v2-intro">
               <strong>أدخل رمز التحقق</strong>
-              <span class="auth-v2-verify-copy" data-auth-verify-copy>اكتب الرمز المكوّن من 6 أرقام لإكمال الدخول إلى حسابك.</span>
+              <span class="auth-v2-verify-copy" data-auth-verify-copy>اكتب الرمز المكوّن من 6 أرقام لإكمال الدخول.</span>
             </div>
 
             <form class="auth-v2-form" data-auth-verify-form>
@@ -737,7 +945,7 @@
           <section class="auth-v2-panel" data-auth-panel="forgot" hidden>
             <div class="auth-v2-intro">
               <strong>استعادة كلمة المرور</strong>
-              <span>أدخل بريدك الإلكتروني، ثم كود التحقق، وبعدها حدّث كلمة المرور بخطوات واضحة ومتسلسلة.</span>
+              <span>أدخل البريد، ثم الكود، ثم كلمة المرور الجديدة.</span>
             </div>
 
             <div class="auth-v2-actions">
@@ -792,7 +1000,7 @@
           </section>
         </div>
 
-        <div class="auth-v2-status" data-auth-state>واجهة دخول مركزة تحافظ على الوضوح، وتبقي إنشاء الحساب واستعادة كلمة المرور ضمن نفس التدفق بدون تشويش.</div>
+        <div class="auth-v2-status" data-auth-state>واجهة دخول مختصرة وواضحة تجمع تسجيل الدخول وإنشاء الحساب والاستعادة في مكان واحد.</div>
       </div>
     </section>
   </main>
@@ -808,19 +1016,19 @@
       const panelCopy = {
         login: {
           title: "مرحبًا بعودتك",
-          subtitle: "سجّل دخولك لمتابعة رحلة التعلم من نفس المكان، مع واجهة هادئة وواضحة تحفظ تركيز الطالب."
+          subtitle: "سجّل دخولك وابدأ مباشرة من نفس المكان بهدوء ووضوح."
         },
         register: {
           title: "ابدأ حسابك الجديد",
-          subtitle: "أنشئ حسابًا مرتبًا وسريعًا وابدأ رحلتك التعليمية بثقة داخل واجهة واحدة نظيفة."
+          subtitle: "أنشئ حسابًا سريعًا وابدأ رحلتك التعليمية داخل واجهة واحدة واضحة."
         },
         verify: {
           title: "تحقق ثم أكمل",
-          subtitle: "خطوة قصيرة لإتمام الدخول أو إنشاء الحساب بدون تعقيد أو ازدحام بصري."
+          subtitle: "خطوة قصيرة لإتمام الدخول أو إنشاء الحساب."
         },
         forgot: {
           title: "استعادة كلمة المرور",
-          subtitle: "استعد وصولك إلى الحساب بخطوات متدرجة وواضحة داخل نفس البطاقة."
+          subtitle: "استعد وصولك إلى الحساب بخطوات قصيرة وواضحة."
         }
       };
 
