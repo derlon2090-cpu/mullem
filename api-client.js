@@ -4,7 +4,16 @@
   const storageKeys = {
     token: "mlm_api_token",
     user: "mlm_api_user",
-    baseUrl: "mlm_api_base_url"
+    baseUrl: "mlm_api_base_url",
+    logoutMarker: "mlm_auth_logged_out"
+  };
+
+  const cookieKeys = {
+    token: "mlm_auth_token",
+    user: "mlm_auth_user",
+    currentUser: "mlm_auth_current_user",
+    adminSession: "mlm_auth_admin_session",
+    logoutMarker: "mlm_auth_logged_out"
   };
 
   function loadJson(key, fallback) {
@@ -22,6 +31,50 @@
     } catch (_) {
       // Ignore storage failures and keep the app usable.
     }
+  }
+
+  function setCookie(name, value, days = 30) {
+    try {
+      const maxAge = Math.max(1, Math.round(Number(days) || 30)) * 24 * 60 * 60;
+      document.cookie = `${encodeURIComponent(name)}=${encodeURIComponent(String(value || ""))}; path=/; max-age=${maxAge}; SameSite=Lax`;
+    } catch (_) {
+      // Ignore cookie failures and keep the app usable.
+    }
+  }
+
+  function getCookie(name) {
+    try {
+      const encodedName = `${encodeURIComponent(name)}=`;
+      const match = String(document.cookie || "")
+        .split("; ")
+        .find((item) => item.startsWith(encodedName));
+      return match ? decodeURIComponent(match.slice(encodedName.length)) : "";
+    } catch (_) {
+      return "";
+    }
+  }
+
+  function deleteCookie(name) {
+    try {
+      document.cookie = `${encodeURIComponent(name)}=; path=/; max-age=0; SameSite=Lax`;
+    } catch (_) {
+      // Ignore cookie cleanup issues.
+    }
+  }
+
+  function normalizeCookieUser(user) {
+    if (!user || typeof user !== "object") return null;
+    return {
+      id: user.id ?? null,
+      name: user.name || "",
+      email: user.email || "",
+      role: user.role || "student",
+      stage: user.stage || "",
+      grade: user.grade || "",
+      subject: user.subject || "",
+      package: user.package || "",
+      xp: Number.isFinite(Number(user.xp)) ? Number(user.xp) : 0
+    };
   }
 
   function sanitizeBaseUrl(value) {
@@ -52,6 +105,18 @@
       const message = value.trim();
       if (message.includes("Invalid value: 'input_text'")) {
         return "تعذر الوصول إلى خدمة الشات الآن. أعد المحاولة بعد قليل.";
+      }
+      if (/authentication is required/i.test(message)) {
+        return "انتهت جلسة تسجيل الدخول أو لم يتم التحقق منها. سجّل دخولك مرة أخرى للمتابعة.";
+      }
+      if (/admin access is required/i.test(message)) {
+        return "هذه العملية متاحة لحساب الأدمن فقط.";
+      }
+      if (/the page could not be found/i.test(message)) {
+        return "تعذر الوصول إلى الخدمة المطلوبة الآن. حدّث الصفحة أو أعد المحاولة بعد قليل.";
+      }
+      if (/static hosting detected/i.test(message)) {
+        return "تعذر الوصول إلى خادم الموقع الآن. حدّث الصفحة أو أعد المحاولة بعد قليل.";
       }
       return message;
     }
@@ -130,6 +195,25 @@
     return `/api${cleanPath}`;
   }
 
+  function isSameOriginBase(baseUrl) {
+    const normalized = sanitizeBaseUrl(baseUrl);
+    if (!normalized) return true;
+
+    try {
+      const target = new URL(normalized, window.location.href);
+      return target.origin === window.location.origin;
+    } catch (_) {
+      return true;
+    }
+  }
+
+  function shouldTrySameOriginFallback() {
+    const baseUrl = resolveBaseUrl();
+    if (!baseUrl) return true;
+    if (isLocalHost()) return true;
+    return isSameOriginBase(baseUrl);
+  }
+
   function buildApiCandidates(path) {
     const cleanPath = `/${String(path || "").replace(/^\/+/, "")}`;
     const baseUrl = resolveBaseUrl();
@@ -147,7 +231,7 @@
       }
     }
 
-    if (!baseUrl || !isLocalHost()) {
+    if (shouldTrySameOriginFallback()) {
       candidates.push(buildSameOriginApiUrl(cleanPath));
     }
 
@@ -166,8 +250,90 @@
     return loadJson(storageKeys.user, null);
   }
 
+  function restorePersistentAuthFromCookies() {
+    try {
+      const logoutMarker = localStorage.getItem(storageKeys.logoutMarker) || getCookie(cookieKeys.logoutMarker);
+      if (logoutMarker === "1") {
+        deleteCookie(cookieKeys.token);
+        deleteCookie(cookieKeys.user);
+        deleteCookie(cookieKeys.currentUser);
+        deleteCookie(cookieKeys.adminSession);
+        return;
+      }
+
+      const cookieToken = getCookie(cookieKeys.token);
+      const cookieUser = getCookie(cookieKeys.user);
+      const cookieCurrentUser = getCookie(cookieKeys.currentUser);
+      const cookieAdminSession = getCookie(cookieKeys.adminSession);
+
+      if (cookieToken && !localStorage.getItem(storageKeys.token)) {
+        localStorage.setItem(storageKeys.token, cookieToken);
+      }
+
+      if (cookieUser && !localStorage.getItem(storageKeys.user)) {
+        try {
+          const parsedUser = JSON.parse(cookieUser);
+          saveJson(storageKeys.user, parsedUser);
+        } catch (_) {
+          // Ignore invalid cookie payloads.
+        }
+      }
+
+      if (cookieCurrentUser && !localStorage.getItem("mlm_current_user")) {
+        localStorage.setItem("mlm_current_user", cookieCurrentUser);
+      }
+
+      if (cookieAdminSession && !localStorage.getItem("mlm_admin_session")) {
+        localStorage.setItem("mlm_admin_session", cookieAdminSession);
+      }
+    } catch (_) {
+      // Ignore restore failures.
+    }
+  }
+
   function hasToken() {
     return Boolean(getToken());
+  }
+
+  function isAuthenticatedStudent() {
+    const sessionUser = getSessionUser();
+    if (hasToken() && sessionUser && String(sessionUser.role || "").toLowerCase() !== "admin") {
+      return true;
+    }
+
+    try {
+      const currentUser = localStorage.getItem("mlm_current_user");
+      const isAdmin = localStorage.getItem("mlm_admin_session") === "1";
+      return Boolean(currentUser) && !isAdmin;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  function isPublicLandingPage() {
+    const path = String(window.location?.pathname || "").toLowerCase();
+    return !path || path.endsWith("/") || path.endsWith("/index.html");
+  }
+
+  function redirectAuthenticatedUserFromLanding() {
+    if (!isAuthenticatedStudent() || !isPublicLandingPage()) return;
+
+    const search = String(window.location?.search || "");
+    const hash = String(window.location?.hash || "");
+    if (search.includes("public=1") || hash === "#public") return;
+
+    window.location.replace("student.html");
+  }
+
+  function upgradeHomeLinksForAuthenticatedUser() {
+    if (!isAuthenticatedStudent()) return;
+
+    document
+      .querySelectorAll('a[href="index.html"], a[href="./index.html"], a[href="/index.html"], a[href="#home"]')
+      .forEach((link) => {
+        if (link.hasAttribute("data-public-home")) return;
+        link.setAttribute("href", "student.html");
+      });
   }
 
   function normalizeLegacyUser(user, existingUser = null) {
@@ -239,6 +405,54 @@
     localStorage.setItem("mlm_current_user", String(mergedUser.id));
   }
 
+  function persistLegacyAuthState() {
+    try {
+      const currentUser = localStorage.getItem("mlm_current_user") || "";
+      const adminSession = localStorage.getItem("mlm_admin_session") || "";
+      const token = localStorage.getItem(storageKeys.token) || "";
+      const sessionUser = getSessionUser();
+
+      if (token) {
+        setCookie(cookieKeys.token, token, 45);
+      } else {
+        deleteCookie(cookieKeys.token);
+      }
+
+      if (sessionUser) {
+        setCookie(cookieKeys.user, JSON.stringify(normalizeCookieUser(sessionUser)), 45);
+      } else {
+        const legacyUsers = loadJson("mlm_users", []);
+        const legacyUser = currentUser
+          ? legacyUsers.find((user) => String(user.id) === String(currentUser))
+          : null;
+        if (legacyUser) {
+          setCookie(cookieKeys.user, JSON.stringify(normalizeCookieUser(legacyUser)), 45);
+        } else {
+          deleteCookie(cookieKeys.user);
+        }
+      }
+
+      if (currentUser) {
+        setCookie(cookieKeys.currentUser, currentUser, 45);
+      } else {
+        deleteCookie(cookieKeys.currentUser);
+      }
+
+      if (adminSession === "1") {
+        setCookie(cookieKeys.adminSession, "1", 45);
+      } else {
+        deleteCookie(cookieKeys.adminSession);
+      }
+
+      if (token || currentUser || adminSession === "1") {
+        localStorage.removeItem(storageKeys.logoutMarker);
+        deleteCookie(cookieKeys.logoutMarker);
+      }
+    } catch (_) {
+      // Ignore cookie persistence issues.
+    }
+  }
+
   function setSession(session) {
     const token = String(session?.token || "").trim();
     const user = session?.user || null;
@@ -250,16 +464,45 @@
 
     localStorage.setItem(storageKeys.token, token);
     saveJson(storageKeys.user, user);
+    localStorage.removeItem(storageKeys.logoutMarker);
+    deleteCookie(cookieKeys.logoutMarker);
     syncLegacySessionUser();
+    persistLegacyAuthState();
   }
 
   function clearSession() {
     try {
       localStorage.removeItem(storageKeys.token);
       localStorage.removeItem(storageKeys.user);
+      localStorage.removeItem("mlm_current_user");
+      localStorage.removeItem("mlm_admin_session");
     } catch (_) {
       // Ignore cleanup issues.
     }
+    deleteCookie(cookieKeys.token);
+    deleteCookie(cookieKeys.user);
+    deleteCookie(cookieKeys.currentUser);
+    deleteCookie(cookieKeys.adminSession);
+  }
+
+  function shouldRedirectAfterAuthFailure() {
+    const path = String(window.location?.pathname || "").toLowerCase();
+    return ["student.html", "admin.html", "profile.html"].some((page) => path.endsWith(`/${page}`) || path.endsWith(page));
+  }
+
+  function redirectToLoginAfterAuthFailure() {
+    if (!shouldRedirectAfterAuthFailure()) return;
+
+    try {
+      if (window.__mullemAuthRedirectScheduled) return;
+      window.__mullemAuthRedirectScheduled = true;
+    } catch (_) {
+      // Ignore guard assignment issues.
+    }
+
+    window.setTimeout(() => {
+      window.location.href = "login.html";
+    }, 250);
   }
 
   async function parseResponsePayload(response) {
@@ -362,6 +605,11 @@
           networkError: false
         };
 
+        if ((response.status === 401 || response.status === 403) && hasToken()) {
+          clearSession();
+          redirectToLoginAfterAuthFailure();
+        }
+
         if (result.ok) {
           if (url.startsWith("http://127.0.0.1:8010") || url.startsWith("http://localhost:8010")) {
             setBaseUrl(url.replace(/\/api\/.*$/i, ""));
@@ -433,30 +681,6 @@
     return result;
   }
 
-  async function importLegacyUsers(users = []) {
-    return request("/auth/import-legacy", {
-      method: "POST",
-      body: { users },
-      skipAuth: true
-    });
-  }
-
-  async function requestPasswordReset(payload) {
-    return request("/auth/password/forgot", {
-      method: "POST",
-      body: payload,
-      skipAuth: true
-    });
-  }
-
-  async function resetPassword(payload) {
-    return request("/auth/password/reset", {
-      method: "POST",
-      body: payload,
-      skipAuth: true
-    });
-  }
-
   async function logout() {
     const result = await request("/auth/logout", {
       method: "POST"
@@ -525,6 +749,13 @@
     return request(`/student/conversations${query.toString() ? `?${query.toString()}` : ""}`);
   }
 
+  async function createStudentConversation(payload) {
+    return request("/student/conversations", {
+      method: "POST",
+      body: payload
+    });
+  }
+
   async function getAdminStats() {
     return request("/admin/stats");
   }
@@ -588,6 +819,13 @@
   }
 
   async function performLogout(redirectTo = "index.html") {
+    try {
+      localStorage.setItem(storageKeys.logoutMarker, "1");
+      setCookie(cookieKeys.logoutMarker, "1", 2);
+    } catch (_) {
+      // Ignore logout marker issues and continue cleanup.
+    }
+
     if (hasToken()) {
       try {
         await logout();
@@ -602,6 +840,7 @@
       localStorage.removeItem("mlm_current_user");
       localStorage.removeItem("mlm_admin_session");
       localStorage.removeItem("mlm_resume_prompt");
+      localStorage.removeItem("mlm_pending_auth");
     } catch (_) {
       // Ignore cleanup issues.
     }
@@ -619,7 +858,11 @@
     performLogout(redirectTarget);
   });
 
+  restorePersistentAuthFromCookies();
   syncLegacySessionUser();
+  persistLegacyAuthState();
+  redirectAuthenticatedUserFromLanding();
+  upgradeHomeLinksForAuthenticatedUser();
 
   window.mullemApiClient = {
     storageKeys,
@@ -631,9 +874,6 @@
     buildApiCandidates,
     login,
     register,
-    importLegacyUsers,
-    requestPasswordReset,
-    resetPassword,
     logout,
     me,
     getPackages,
@@ -643,6 +883,7 @@
     createStudentProject,
     updateStudentProject,
     getStudentConversations,
+    createStudentConversation,
     getAdminStats,
     getAdminPackages,
     getAdminUsers,
@@ -655,11 +896,16 @@
     getChatSession,
     getToken,
     hasToken,
+    isAuthenticatedStudent,
     getSessionUser,
     setSession,
     clearSession,
     syncLegacySessionUser,
-    performLogout
+    restorePersistentAuthFromCookies,
+    persistLegacyAuthState,
+    performLogout,
+    redirectAuthenticatedUserFromLanding,
+    upgradeHomeLinksForAuthenticatedUser
   };
 })();
 

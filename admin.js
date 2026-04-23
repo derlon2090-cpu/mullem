@@ -110,8 +110,16 @@ function shouldFallbackToLocalAdmin(result) {
 }
 
 function handleLocalAdminLogin(email, password) {
+  if (email === adminCredentials.email && password === adminCredentials.password) {
+    localStorage.setItem(adminSessionKey, "1");
+    if (adminLoginState) adminLoginState.textContent = "تم تسجيل دخول الأدمن بنجاح.";
+    updateAdminView();
+    refreshAdminData();
+    return;
+  }
+
   if (adminLoginState) {
-    adminLoginState.textContent = "الخادم غير متاح الآن، لذلك لا يمكن دخول الأدمن بدون قاعدة البيانات.";
+    adminLoginState.textContent = "بيانات دخول الأدمن غير صحيحة. تأكد من البريد وكلمة المرور.";
   }
 }
 
@@ -145,7 +153,7 @@ function getUsers() {
     : [
         {
           id: "student-demo-1",
-          name: "طالب تجريبي",
+          name: "طالب",
           email: "student@mullem.sa",
           role: "Student",
           package: "مجاني محدود",
@@ -697,58 +705,11 @@ function updateUserRecord(userId, updater) {
   return users[index];
 }
 
-function upsertAdminUserSnapshot(user) {
-  const normalizedUser = normalizeUser(user, 0);
-  const nextUsers = [
-    normalizedUser,
-    ...getUsers().filter((entry) => String(entry.id) !== String(normalizedUser.id))
-  ];
-  saveUsers(nextUsers);
-  refreshAdminData();
-  return normalizedUser;
-}
-
-async function persistAdminUserUpdate(userId, apiPayload, fallbackUpdater) {
-  const apiClient = getAdminApiClient();
-
-  if (apiClient && typeof apiClient.updateAdminUser === "function" && apiClient.hasToken() && isAdminLoggedIn()) {
-    try {
-      const result = await apiClient.updateAdminUser(userId, apiPayload);
-      if (result.ok && result.data?.user) {
-        return { ok: true, user: upsertAdminUserSnapshot(result.data.user), source: "api" };
-      }
-
-      if (!shouldFallbackToLocalAdmin(result)) {
-        return {
-          ok: false,
-          message: result?.message || "تعذر حفظ بيانات المستخدم في الخادم."
-        };
-      }
-    } catch (_) {
-      // Keep the local fallback when the API write is unavailable.
-    }
-  }
-
-  const updated = updateUserRecord(userId, fallbackUpdater);
-  if (!updated) {
-    return {
-      ok: false,
-      message: "تعذر العثور على المستخدم المطلوب."
-    };
-  }
-
-  return {
-    ok: true,
-    user: updated,
-    source: "local"
-  };
-}
-
 function isValidEmail(email) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
 }
 
-async function editUserRecord(userId) {
+function editUserRecord(userId) {
   const user = getUsers().find((entry) => entry.id === userId);
   if (!user) return;
 
@@ -788,7 +749,7 @@ async function editUserRecord(userId) {
     return;
   }
 
-  const nextPayload = {
+  updateUserRecord(userId, () => ({
     name: name.trim() || user.name,
     email: normalizedEmail || user.email,
     grade: grade.trim(),
@@ -798,18 +759,12 @@ async function editUserRecord(userId) {
     xp,
     status: status.trim() || "نشط",
     activity: "تم تعديل الحساب من لوحة الأدمن"
-  };
-
-  const result = await persistAdminUserUpdate(userId, nextPayload, () => nextPayload);
-  if (!result.ok) {
-    window.alert(result.message || "تعذر تحديث بيانات المستخدم.");
-    return;
-  }
+  }));
 
   window.alert("تم تحديث بيانات المستخدم.");
 }
 
-async function toggleBanUser(userId) {
+function toggleBanUser(userId) {
   const user = getUsers().find((entry) => entry.id === userId);
   if (!user) return;
 
@@ -822,21 +777,15 @@ async function toggleBanUser(userId) {
 
   if (!confirmed) return;
 
-  const nextPayload = {
+  updateUserRecord(userId, () => ({
     status: willBan ? "محظور" : "نشط",
     activity: willBan ? "تم حظر الحساب من لوحة الأدمن" : "تم فك الحظر عن الحساب من لوحة الأدمن"
-  };
-
-  const result = await persistAdminUserUpdate(userId, nextPayload, () => nextPayload);
-  if (!result.ok) {
-    window.alert(result.message || "تعذر تحديث حالة المستخدم.");
-    return;
-  }
+  }));
 
   window.alert(willBan ? "تم حظر الحساب." : "تم فك الحظر عن الحساب.");
 }
 
-async function editUserPoints(userId) {
+function editUserPoints(userId) {
   const user = getUsers().find((entry) => entry.id === userId);
   if (!user) return;
 
@@ -849,17 +798,10 @@ async function editUserPoints(userId) {
     return;
   }
 
-  const nextPayload = {
+  updateUserRecord(userId, () => ({
     xp,
     activity: "تم تعديل النقاط من لوحة الأدمن"
-  };
-
-  const result = await persistAdminUserUpdate(userId, nextPayload, () => nextPayload);
-
-  if (!result.ok) {
-    window.alert(result.message || "تعذر تحديث نقاط المستخدم.");
-    return;
-  }
+  }));
 
   window.alert("تم تحديث النقاط بنجاح.");
 }
@@ -1559,6 +1501,33 @@ adminLogoutButton?.addEventListener("click", async (event) => {
   updateAdminView();
   window.location.href = "login.html";
 }, { capture: true });
+
+adminLoginForm?.addEventListener("submit", (event) => {
+  event.preventDefault();
+  const email = (adminEmailInput?.value || "").trim().toLowerCase();
+  const password = adminPasswordInput?.value || "";
+
+  if (email === adminCredentials.email && password === adminCredentials.password) {
+    localStorage.setItem(adminSessionKey, "1");
+    if (adminLoginState) adminLoginState.textContent = "تم تسجيل دخول الأدمن بنجاح.";
+    updateAdminView();
+    refreshAdminData();
+    return;
+  }
+
+  if (adminLoginState) {
+    adminLoginState.textContent = "بيانات دخول الأدمن غير صحيحة. تأكد من البريد وكلمة المرور.";
+  }
+});
+
+adminLogoutButton?.addEventListener("click", () => {
+  localStorage.removeItem(adminSessionKey);
+  if (adminEmailInput) adminEmailInput.value = "";
+  if (adminPasswordInput) adminPasswordInput.value = "";
+  if (adminLoginState) adminLoginState.textContent = "تم تسجيل الخروج.";
+  updateAdminView();
+  window.location.href = "login.html";
+});
 
 function renderStats() {
   if (!adminStatsRoot) return;
@@ -3384,5 +3353,560 @@ if (isAdminLoggedIn()) {
 
   if (isAdminLoggedIn()) {
     syncAdminSnapshotFromApi();
+  }
+})();
+
+(() => {
+  async function forceUnifiedAdminLogout() {
+    const apiClient = getAdminApiClient();
+    if (apiClient && typeof apiClient.performLogout === "function") {
+      await apiClient.performLogout("index.html");
+      return;
+    }
+
+    try {
+      apiClient?.clearSession?.();
+    } catch (_) {
+      // Ignore cleanup issues and continue with local fallback.
+    }
+
+    try {
+      localStorage.removeItem(adminSessionKey);
+      localStorage.removeItem("mlm_current_user");
+      localStorage.removeItem("mlm_pending_auth");
+    } catch (_) {
+      // Ignore storage cleanup issues.
+    }
+
+    if (adminEmailInput) adminEmailInput.value = "";
+    if (adminPasswordInput) adminPasswordInput.value = "";
+    if (adminLoginState) adminLoginState.textContent = "تم تسجيل الخروج.";
+    updateAdminView();
+    window.location.href = "index.html";
+  }
+
+  document.addEventListener("click", async (event) => {
+    const logoutButton = event.target.closest("[data-admin-logout]");
+    if (!logoutButton) return;
+    event.preventDefault();
+    event.stopPropagation();
+    event.stopImmediatePropagation();
+    await forceUnifiedAdminLogout();
+  }, true);
+})();
+
+(() => {
+  const adminActiveTabStorageKey = "mlm_admin_active_tab";
+  const adminTabLinks = Array.from(document.querySelectorAll("[data-admin-tab-link]"));
+  const adminTabPanels = Array.from(document.querySelectorAll("[data-admin-tab-panel]"));
+  const adminTabSwitchers = Array.from(document.querySelectorAll("[data-admin-switch-tab]"));
+  const adminUserSearchInput = document.querySelector("[data-admin-user-search]");
+  const adminUserPackageFilter = document.querySelector("[data-admin-user-package-filter]");
+  const adminUserStatusFilter = document.querySelector("[data-admin-user-status-filter]");
+
+  function escapeAdminRuntimeHtml(value) {
+    if (typeof escapeAdminHtmlEnhanced === "function") {
+      return escapeAdminHtmlEnhanced(value);
+    }
+    return String(value ?? "")
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&#39;");
+  }
+
+  function normalizeAdminRoleLabel(value) {
+    return String(value || "").trim().toLowerCase().includes("admin") ? "أدمن مساعد" : "طالب";
+  }
+
+  function isAdminRole(value) {
+    return String(value || "").trim().toLowerCase().includes("admin");
+  }
+
+  function normalizeAdminStatusValue(value) {
+    const normalized = String(value || "").trim().toLowerCase();
+    if (!normalized) return "active";
+    if (normalized.includes("محظور") || normalized.includes("banned") || normalized === "ban") return "banned";
+    if (normalized.includes("موقوف") || normalized.includes("suspend")) return "suspended";
+    return "active";
+  }
+
+  function formatAdminStatusLabel(value) {
+    const normalized = normalizeAdminStatusValue(value);
+    if (normalized === "banned") return "محظور";
+    if (normalized === "suspended") return "موقوف";
+    return "نشط";
+  }
+
+  function formatAdminDate(value) {
+    if (!value) return "غير محدد";
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return "غير محدد";
+    return new Intl.DateTimeFormat("ar-SA", {
+      year: "numeric",
+      month: "short",
+      day: "numeric"
+    }).format(date);
+  }
+
+  function getUserPackageName(user) {
+    return String(
+      user.package ||
+      user.packageName ||
+      user.package_name ||
+      "المجانية"
+    ).trim() || "المجانية";
+  }
+
+  function getUserPackageDailyXp(user) {
+    const value = Number(user.packageDailyXp ?? user.package_daily_xp ?? 0);
+    return Number.isFinite(value) ? value : 0;
+  }
+
+  function getUserPackageRemainingDays(user) {
+    const value = Number(user.packageDaysRemaining ?? user.package_days_remaining ?? 0);
+    return Number.isFinite(value) ? value : 0;
+  }
+
+  function getUserPackageStartedAt(user) {
+    return user.packageStartedAt || user.package_started_at || null;
+  }
+
+  function getUserPackageExpiresAt(user) {
+    return user.packageExpiresAt || user.package_expires_at || null;
+  }
+
+  function buildAdminUserSubscriptionText(user) {
+    const packageName = getUserPackageName(user);
+    const dailyXp = getUserPackageDailyXp(user);
+    const expiresAt = getUserPackageExpiresAt(user);
+    const daysRemaining = getUserPackageRemainingDays(user);
+    const bits = [packageName];
+    if (dailyXp > 0) bits.push(`${dailyXp} XP يوميًا`);
+    if (expiresAt) bits.push(`تنتهي ${formatAdminDate(expiresAt)}`);
+    if (daysRemaining > 0) bits.push(`المتبقي ${daysRemaining} يوم`);
+    return bits.join(" • ");
+  }
+
+  function getAdminUsersCollection() {
+    return typeof getUsers === "function" ? getUsers() : [];
+  }
+
+  function syncAdminUserFilterOptions() {
+    if (!adminUserPackageFilter) return;
+    const packages = Array.from(new Set(getAdminUsersCollection().map((user) => getUserPackageName(user)).filter(Boolean)));
+    const currentValue = adminUserPackageFilter.value;
+    adminUserPackageFilter.innerHTML = `
+      <option value="">كل الباقات</option>
+      ${packages.map((packageName) => `
+        <option value="${escapeAdminRuntimeHtml(packageName)}">${escapeAdminRuntimeHtml(packageName)}</option>
+      `).join("")}
+    `;
+    if (packages.includes(currentValue)) {
+      adminUserPackageFilter.value = currentValue;
+    }
+  }
+
+  function getFilteredAdminUsers() {
+    const term = String(adminUserSearchInput?.value || "").trim().toLowerCase();
+    const packageFilter = String(adminUserPackageFilter?.value || "").trim();
+    const statusFilter = String(adminUserStatusFilter?.value || "").trim().toLowerCase();
+
+    return getAdminUsersCollection().filter((user) => {
+      const haystack = [
+        user.name,
+        user.email,
+        user.grade,
+        user.subject,
+        getUserPackageName(user),
+        normalizeAdminRoleLabel(user.role)
+      ]
+        .join(" ")
+        .toLowerCase();
+      if (term && !haystack.includes(term)) return false;
+      if (packageFilter && getUserPackageName(user) !== packageFilter) return false;
+      if (statusFilter && normalizeAdminStatusValue(user.status) !== statusFilter) return false;
+      return true;
+    });
+  }
+
+  async function persistAdminUserUpdate(userId, payload, localFallbackFactory) {
+    const apiClient = window.mullemApiClient && typeof window.mullemApiClient.updateAdminUser === "function"
+      ? window.mullemApiClient
+      : null;
+
+    if (apiClient && typeof apiClient.hasToken === "function" && apiClient.hasToken()) {
+      const result = await apiClient.updateAdminUser(userId, payload);
+      if (!result.ok) {
+        return {
+          ok: false,
+          message: result.message || "تعذر حفظ التعديلات على الخادم."
+        };
+      }
+      if (typeof refreshAdminData === "function") {
+        refreshAdminData();
+      }
+      return {
+        ok: true,
+        user: result.data?.user || null
+      };
+    }
+
+    if (typeof updateUserRecord === "function") {
+      const updated = updateUserRecord(userId, (current) => {
+        if (typeof localFallbackFactory === "function") {
+          const nextValue = localFallbackFactory(current);
+          return nextValue || null;
+        }
+        return payload;
+      });
+      if (updated) {
+        if (typeof refreshAdminData === "function") {
+          refreshAdminData();
+        }
+        return { ok: true, user: updated };
+      }
+    }
+
+    return {
+      ok: false,
+      message: "تعذر تحديث المستخدم من لوحة الأدمن."
+    };
+  }
+
+  window.persistAdminUserUpdate = persistAdminUserUpdate;
+
+  function renderOperationalUsersTable() {
+    if (!usersTableRoot) return;
+
+    syncAdminUserFilterOptions();
+    const users = getFilteredAdminUsers();
+
+    if (!users.length) {
+      usersTableRoot.innerHTML = `
+        <div class="admin-empty-state">
+          <strong>لا توجد حسابات مطابقة الآن</strong>
+          <span>غيّر البحث أو الفلاتر لرؤية الحسابات والباقات الحالية.</span>
+        </div>
+      `;
+      return;
+    }
+
+    usersTableRoot.innerHTML = `
+      <div class="admin-inline-note">
+        بطاقة كل مستخدم أصبحت مركز تشغيل مباشر: تعديل الباقة، تعديل الرصيد، التحكم في الحالة، إعادة تعيين الاستخدام، وفتح سجل النشاط.
+      </div>
+      <div class="admin-user-cards">
+        ${users.map((user) => `
+          <article class="admin-user-manage-card" data-admin-user-card="${escapeAdminRuntimeHtml(user.id)}">
+            <div class="admin-user-manage-head">
+              <div class="admin-user-primary">
+                <strong>${escapeAdminRuntimeHtml(user.name || "بدون اسم")}</strong>
+                <span>${escapeAdminRuntimeHtml(user.email || "بدون بريد إلكتروني")}</span>
+                <small>${escapeAdminRuntimeHtml(user.grade || "بدون صف")}${user.subject ? ` • ${escapeAdminRuntimeHtml(user.subject)}` : ""}</small>
+              </div>
+              <span class="admin-status-chip is-${escapeAdminRuntimeHtml(normalizeAdminStatusValue(user.status))}">
+                ${escapeAdminRuntimeHtml(formatAdminStatusLabel(user.status))}
+              </span>
+            </div>
+
+            <div class="admin-user-meta">
+              <span class="admin-meta-chip">${escapeAdminRuntimeHtml(normalizeAdminRoleLabel(user.role))}</span>
+              <span class="admin-meta-chip">${escapeAdminRuntimeHtml(getUserPackageName(user))}</span>
+              <span class="admin-meta-chip">${escapeAdminRuntimeHtml(String(user.xp ?? 0))} XP</span>
+              <span class="admin-meta-chip">${escapeAdminRuntimeHtml(String(user.streakDays ?? user.streak_days ?? 0))} أيام نشاط</span>
+            </div>
+
+            <div class="admin-user-package-box">
+              <strong>الاشتراك الحالي</strong>
+              <span>${escapeAdminRuntimeHtml(buildAdminUserSubscriptionText(user))}</span>
+              <small>بدأ: ${escapeAdminRuntimeHtml(formatAdminDate(getUserPackageStartedAt(user)))} • آخر نشاط: ${escapeAdminRuntimeHtml(formatAdminDate(user.lastActiveDate || user.last_active_date || null))}</small>
+            </div>
+
+            <div class="admin-user-actions">
+              <button type="button" class="mini-btn" data-admin-edit="${escapeAdminRuntimeHtml(user.id)}">تعديل الباقة والبيانات</button>
+              <button type="button" class="mini-btn admin-action-points" data-admin-points="${escapeAdminRuntimeHtml(user.id)}">تعديل الرصيد</button>
+              <button type="button" class="mini-btn" data-admin-toggle-status="${escapeAdminRuntimeHtml(user.id)}">
+                ${normalizeAdminStatusValue(user.status) === "active" ? "إيقاف الحساب" : "تفعيل الحساب"}
+              </button>
+              <button type="button" class="mini-btn" data-admin-toggle-role="${escapeAdminRuntimeHtml(user.id)}">
+                ${isAdminRole(user.role) ? "إرجاعه كطالب" : "ترقية إلى أدمن مساعد"}
+              </button>
+              <button type="button" class="mini-btn" data-admin-reset-usage="${escapeAdminRuntimeHtml(user.id)}">إعادة تعيين الاستخدام</button>
+              <button type="button" class="mini-btn" data-admin-show-activity="${escapeAdminRuntimeHtml(user.id)}">فتح سجل النشاط</button>
+            </div>
+          </article>
+        `).join("")}
+      </div>
+    `;
+  }
+
+  function renderOperationalSubscribersOverview() {
+    if (!subscribersListRoot) return;
+
+    const users = getAdminUsersCollection();
+    const groups = users.reduce((result, user) => {
+      const packageName = getUserPackageName(user);
+      if (!result[packageName]) result[packageName] = [];
+      result[packageName].push(user);
+      return result;
+    }, {});
+
+    const packageNames = Object.keys(groups);
+    if (!packageNames.length) {
+      subscribersListRoot.innerHTML = `
+        <div class="admin-empty-state">
+          <strong>لا توجد اشتراكات بعد</strong>
+          <span>ستظهر الاشتراكات الحالية هنا عند وجود مستخدمين داخل الباقات.</span>
+        </div>
+      `;
+      return;
+    }
+
+    subscribersListRoot.innerHTML = `
+      <div class="admin-subscriber-groups">
+        ${packageNames.map((packageName) => {
+          const members = groups[packageName];
+          return `
+            <article class="admin-subscriber-card">
+              <div class="admin-user-manage-head">
+                <div class="admin-user-primary">
+                  <strong>${escapeAdminRuntimeHtml(packageName)}</strong>
+                  <span>${escapeAdminRuntimeHtml(String(members.length))} مستخدم</span>
+                </div>
+                <span class="admin-meta-chip">${escapeAdminRuntimeHtml(String(members.reduce((total, item) => total + Number(item.xp || 0), 0)))} XP</span>
+              </div>
+              <div class="admin-subscriber-members">
+                ${members.slice(0, 6).map((member) => `
+                  <div class="admin-subscriber-member">
+                    <strong>${escapeAdminRuntimeHtml(member.name || "بدون اسم")}</strong>
+                    <span>${escapeAdminRuntimeHtml(formatAdminStatusLabel(member.status))} • ${escapeAdminRuntimeHtml(String(member.xp ?? 0))} XP</span>
+                  </div>
+                `).join("")}
+              </div>
+            </article>
+          `;
+        }).join("")}
+      </div>
+    `;
+  }
+
+  function showAdminUserActivity(userId) {
+    const user = getAdminUsersCollection().find((entry) => String(entry.id) === String(userId));
+    if (!user) return;
+    window.alert(
+      [
+        `المستخدم: ${user.name || "بدون اسم"}`,
+        `البريد: ${user.email || "غير متوفر"}`,
+        `الدور: ${normalizeAdminRoleLabel(user.role)}`,
+        `الباقة: ${getUserPackageName(user)}`,
+        `تاريخ البداية: ${formatAdminDate(getUserPackageStartedAt(user))}`,
+        `تاريخ الانتهاء: ${formatAdminDate(getUserPackageExpiresAt(user))}`,
+        `آخر نشاط: ${formatAdminDate(user.lastActiveDate || user.last_active_date || null)}`,
+        `أيام النشاط: ${Number(user.streakDays ?? user.streak_days ?? 0)}`,
+        `الحماس: ${Number(user.motivationScore ?? user.motivation_score ?? 0)}`,
+        `النشاط الأخير: ${String(user.activity || "لا يوجد سجل نشاط واضح").trim()}`
+      ].join("\n")
+    );
+  }
+
+  async function toggleAdminUserStatus(userId) {
+    const user = getAdminUsersCollection().find((entry) => String(entry.id) === String(userId));
+    if (!user) return;
+    const currentStatus = normalizeAdminStatusValue(user.status);
+    const nextStatus = currentStatus === "active" ? "suspended" : "active";
+    const confirmed = window.confirm(
+      nextStatus === "active"
+        ? `هل تريد تفعيل حساب ${user.name}؟`
+        : `هل تريد إيقاف حساب ${user.name}؟`
+    );
+    if (!confirmed) return;
+
+    await persistAdminUserUpdate(
+      userId,
+      {
+        status: nextStatus,
+        activity: nextStatus === "active"
+          ? "تمت إعادة تفعيل الحساب من لوحة الأدمن"
+          : "تم إيقاف الحساب من لوحة الأدمن"
+      },
+      () => ({
+        status: nextStatus,
+        activity: nextStatus === "active"
+          ? "تمت إعادة تفعيل الحساب من لوحة الأدمن"
+          : "تم إيقاف الحساب من لوحة الأدمن"
+      })
+    );
+  }
+
+  async function toggleAdminUserRole(userId) {
+    const user = getAdminUsersCollection().find((entry) => String(entry.id) === String(userId));
+    if (!user) return;
+    const nextRole = isAdminRole(user.role) ? "student" : "admin";
+    const confirmed = window.confirm(
+      nextRole === "admin"
+        ? `هل تريد ترقية ${user.name} إلى أدمن مساعد؟`
+        : `هل تريد إعادة ${user.name} كطالب؟`
+    );
+    if (!confirmed) return;
+
+    await persistAdminUserUpdate(
+      userId,
+      {
+        role: nextRole,
+        activity: nextRole === "admin"
+          ? "تمت ترقية الحساب إلى أدمن مساعد"
+          : "تمت إعادة الحساب إلى طالب"
+      },
+      () => ({
+        role: nextRole,
+        activity: nextRole === "admin"
+          ? "تمت ترقية الحساب إلى أدمن مساعد"
+          : "تمت إعادة الحساب إلى طالب"
+      })
+    );
+  }
+
+  async function resetAdminUserUsage(userId) {
+    const user = getAdminUsersCollection().find((entry) => String(entry.id) === String(userId));
+    if (!user) return;
+    const confirmed = window.confirm(`هل تريد إعادة تعيين الاستخدام اليومي للمستخدم ${user.name}؟`);
+    if (!confirmed) return;
+
+    await persistAdminUserUpdate(
+      userId,
+      {
+        streak_days: 0,
+        motivation_score: 0,
+        last_active_date: null,
+        achievements: [],
+        activity: "تمت إعادة تعيين الاستخدام من لوحة الأدمن"
+      },
+      () => ({
+        streakDays: 0,
+        streak_days: 0,
+        motivationScore: 0,
+        motivation_score: 0,
+        lastActiveDate: null,
+        last_active_date: null,
+        achievements: [],
+        activity: "تمت إعادة تعيين الاستخدام من لوحة الأدمن"
+      })
+    );
+  }
+
+  function resolveRequestedAdminTab() {
+    const hash = String(window.location.hash || "").replace(/^#/, "").trim().toLowerCase();
+    const saved = loadJson(adminActiveTabStorageKey, "users");
+    const map = {
+      "admin-users": "users",
+      "users": "users",
+      "admin-packages": "packages",
+      "packages": "packages",
+      "admin-reports": "reports",
+      "reports": "reports",
+      "admin-settings": "settings",
+      "settings": "settings",
+      "admin-coverage": "settings",
+      "admin-questions": "settings",
+      "admin-overview": "users"
+    };
+    return map[hash] || saved || "users";
+  }
+
+  function setActiveAdminTab(tabName) {
+    const safeTab = ["users", "packages", "reports", "settings"].includes(tabName) ? tabName : "users";
+    saveJson(adminActiveTabStorageKey, safeTab);
+
+    adminTabLinks.forEach((link) => {
+      const isActive = link.getAttribute("data-admin-tab-link") === safeTab;
+      link.classList.toggle("is-active", isActive);
+      link.setAttribute("aria-pressed", isActive ? "true" : "false");
+    });
+
+    adminTabPanels.forEach((panel) => {
+      const isActive = panel.getAttribute("data-admin-tab-panel") === safeTab;
+      panel.hidden = !isActive;
+      panel.classList.toggle("is-active", isActive);
+    });
+
+    if (window.history && typeof window.history.replaceState === "function") {
+      window.history.replaceState(null, "", `${window.location.pathname}#admin-${safeTab}`);
+    }
+  }
+
+  adminTabLinks.forEach((link) => {
+    link.addEventListener("click", () => {
+      setActiveAdminTab(link.getAttribute("data-admin-tab-link") || "users");
+    });
+  });
+
+  adminTabSwitchers.forEach((button) => {
+    button.addEventListener("click", () => {
+      setActiveAdminTab(button.getAttribute("data-admin-switch-tab") || "users");
+    });
+  });
+
+  adminUserSearchInput?.addEventListener("input", () => renderUsersTable());
+  adminUserPackageFilter?.addEventListener("change", () => renderUsersTable());
+  adminUserStatusFilter?.addEventListener("change", () => renderUsersTable());
+
+  usersTableRoot?.addEventListener("click", async (event) => {
+    const editButton = event.target.closest("[data-admin-edit]");
+    if (editButton) {
+      window.editUserRecord?.(editButton.getAttribute("data-admin-edit"));
+      return;
+    }
+
+    const pointsButton = event.target.closest("[data-admin-points]");
+    if (pointsButton) {
+      editUserPoints(pointsButton.getAttribute("data-admin-points"));
+      return;
+    }
+
+    const toggleStatusButton = event.target.closest("[data-admin-toggle-status]");
+    if (toggleStatusButton) {
+      await toggleAdminUserStatus(toggleStatusButton.getAttribute("data-admin-toggle-status"));
+      return;
+    }
+
+    const toggleRoleButton = event.target.closest("[data-admin-toggle-role]");
+    if (toggleRoleButton) {
+      await toggleAdminUserRole(toggleRoleButton.getAttribute("data-admin-toggle-role"));
+      return;
+    }
+
+    const resetUsageButton = event.target.closest("[data-admin-reset-usage]");
+    if (resetUsageButton) {
+      await resetAdminUserUsage(resetUsageButton.getAttribute("data-admin-reset-usage"));
+      return;
+    }
+
+    const activityButton = event.target.closest("[data-admin-show-activity]");
+    if (activityButton) {
+      showAdminUserActivity(activityButton.getAttribute("data-admin-show-activity"));
+    }
+  });
+
+  const originalRefreshAdminDataDashboard = refreshAdminData;
+  refreshAdminData = function refreshAdminDataWithOperationalLayout() {
+    originalRefreshAdminDataDashboard();
+    syncAdminUserFilterOptions();
+    setActiveAdminTab(resolveRequestedAdminTab());
+  };
+
+  renderUsersTable = function renderUsersTableOperational() {
+    renderOperationalUsersTable();
+  };
+
+  renderSubscribersOverview = function renderSubscribersOverviewOperational() {
+    renderOperationalSubscribersOverview();
+  };
+
+  if (isAdminLoggedIn()) {
+    refreshAdminData();
+  } else {
+    setActiveAdminTab(resolveRequestedAdminTab());
   }
 })();

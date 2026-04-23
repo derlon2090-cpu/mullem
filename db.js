@@ -135,30 +135,6 @@ function hydrateUserRow(row) {
   };
 }
 
-function normalizeLegacyFrameworkUserRow(row) {
-  if (!row) return null;
-  return {
-    id: Number(row.id || 0),
-    name: String(row.name || "").trim(),
-    email: String(row.email || "").trim().toLowerCase(),
-    password_hash: String(row.password || "").trim(),
-    role: String(row.role || "student").trim().toLowerCase() || "student",
-    stage: String(row.stage || "").trim() || null,
-    grade: String(row.grade || "").trim() || null,
-    subject: String(row.subject || "").trim() || null,
-    package_name: String(row.package || row.package_name || "").trim() || null,
-    xp: Number(row.xp || 0),
-    streak_days: Number(row.streak_days || 0),
-    motivation_score: Number(row.motivation_score || 0),
-    last_active_date: row.last_active_date || null,
-    achievements: normalizeAchievements(row.achievements),
-    status: String(row.status || "active").trim().toLowerCase() || "active",
-    activity: String(row.activity || "").trim() || null,
-    created_at: row.created_at || null,
-    updated_at: row.updated_at || null
-  };
-}
-
 function buildUserUpdateStatement(changes = {}) {
   const mappings = {
     name: "name",
@@ -267,7 +243,6 @@ const DEFAULT_PACKAGE_CATALOG = [
 function createDatabaseClient(rawConfig = {}) {
   const config = normalizeConfig(rawConfig);
   let pool = null;
-  const tableAvailability = new Map();
   const state = {
     configured: Boolean(config.host && config.database && config.user),
     connected: false,
@@ -459,42 +434,6 @@ function createDatabaseClient(rawConfig = {}) {
           ON DELETE CASCADE
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
     `);
-
-    await ensurePasswordResetTokensTable();
-  }
-
-  async function hasTable(tableName) {
-    const safeTableName = String(tableName || "").trim();
-    if (!safeTableName) return false;
-
-    if (tableAvailability.has(safeTableName)) {
-      return tableAvailability.get(safeTableName);
-    }
-
-    const [rows] = await pool.execute(
-      `
-        SELECT COUNT(*) AS total
-        FROM information_schema.TABLES
-        WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ?
-      `,
-      [config.database, safeTableName]
-    );
-
-    const exists = Boolean(Number(rows?.[0]?.total || 0));
-    tableAvailability.set(safeTableName, exists);
-    return exists;
-  }
-
-  async function ensurePasswordResetTokensTable() {
-    await pool.query(`
-      CREATE TABLE IF NOT EXISTS password_reset_tokens (
-        email VARCHAR(190) NOT NULL PRIMARY KEY,
-        token VARCHAR(255) NOT NULL,
-        created_at DATETIME NULL
-      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
-    `);
-
-    tableAvailability.set("password_reset_tokens", true);
   }
 
   async function ensureUserMotivationColumn() {
@@ -665,6 +604,68 @@ function createDatabaseClient(rawConfig = {}) {
       await pool.query(`
         CREATE INDEX idx_conversations_user_id
         ON conversations (user_id)
+      `);
+    }
+
+    const [foreignKeyRows] = await pool.execute(
+      `
+        SELECT CONSTRAINT_NAME, REFERENCED_TABLE_NAME
+        FROM information_schema.KEY_COLUMN_USAGE
+        WHERE TABLE_SCHEMA = ?
+          AND TABLE_NAME = 'conversations'
+          AND COLUMN_NAME = 'user_id'
+          AND REFERENCED_TABLE_NAME IS NOT NULL
+      `,
+      [config.database]
+    );
+
+    for (const row of foreignKeyRows) {
+      const constraintName = String(row?.CONSTRAINT_NAME || "").trim();
+      const referencedTableName = String(row?.REFERENCED_TABLE_NAME || "").trim();
+      if (!constraintName || referencedTableName === "app_users") continue;
+      await pool.query(`
+        ALTER TABLE conversations
+        DROP FOREIGN KEY \`${constraintName}\`
+      `);
+    }
+
+    const [validUserRows] = await pool.execute(
+      `
+        SELECT c.id
+        FROM conversations c
+        LEFT JOIN app_users u ON u.id = c.user_id
+        WHERE c.user_id IS NOT NULL AND u.id IS NULL
+        LIMIT 1
+      `
+    );
+
+    if (Array.isArray(validUserRows) && validUserRows.length) {
+      await pool.query(`
+        UPDATE conversations c
+        LEFT JOIN app_users u ON u.id = c.user_id
+        SET c.user_id = NULL
+        WHERE c.user_id IS NOT NULL AND u.id IS NULL
+      `);
+    }
+
+    const [appUserFkRows] = await pool.execute(
+      `
+        SELECT COUNT(*) AS total
+        FROM information_schema.KEY_COLUMN_USAGE
+        WHERE TABLE_SCHEMA = ?
+          AND TABLE_NAME = 'conversations'
+          AND COLUMN_NAME = 'user_id'
+          AND REFERENCED_TABLE_NAME = 'app_users'
+      `,
+      [config.database]
+    );
+
+    if (!Number(appUserFkRows?.[0]?.total || 0)) {
+      await pool.query(`
+        ALTER TABLE conversations
+        ADD CONSTRAINT fk_conversations_user
+        FOREIGN KEY (user_id) REFERENCES app_users(id)
+        ON DELETE SET NULL
       `);
     }
   }
@@ -972,6 +973,54 @@ function createDatabaseClient(rawConfig = {}) {
     return rows;
   }
 
+  async function listUserMemoryCandidates(userId, options = {}) {
+    const safeLimit = Math.max(1, Math.min(Number(options.limit || 36), 80));
+    const params = [Number(userId)];
+    let whereClause = "WHERE c.user_id = ?";
+
+    if (options.exclude_conversation_id) {
+      whereClause += " AND c.id <> ?";
+      params.push(String(options.exclude_conversation_id));
+    }
+
+    const [rows] = await pool.execute(
+      `
+        SELECT
+          m.role,
+          m.body,
+          m.source,
+          m.created_at,
+          c.id AS conversation_id,
+          c.title,
+          c.subject,
+          c.stage,
+          c.grade,
+          c.term,
+          c.project_id
+        FROM messages m
+        INNER JOIN conversations c ON c.id = m.conversation_id
+        ${whereClause}
+        ORDER BY m.created_at DESC, m.id DESC
+        LIMIT ${safeLimit}
+      `,
+      params
+    );
+
+    return rows.map((row) => ({
+      role: row.role,
+      text: row.body,
+      source: row.source,
+      created_at: row.created_at,
+      conversation_id: row.conversation_id,
+      title: row.title || null,
+      subject: row.subject || null,
+      stage: row.stage || null,
+      grade: row.grade || null,
+      term: row.term || null,
+      project_id: row.project_id != null ? Number(row.project_id) : null
+    }));
+  }
+
   async function findPackageById(packageId) {
     const [rows] = await pool.execute(
       "SELECT * FROM app_packages WHERE id = ? LIMIT 1",
@@ -1148,19 +1197,6 @@ function createDatabaseClient(rawConfig = {}) {
       [Number(userId)]
     );
     return hydrateUserRow(rows[0] || null);
-  }
-
-  async function findLegacyFrameworkUserByEmail(email) {
-    if (!(await hasTable("users"))) {
-      return null;
-    }
-
-    const [rows] = await pool.execute(
-      "SELECT * FROM users WHERE LOWER(email) = ? LIMIT 1",
-      [String(email || "").trim().toLowerCase()]
-    );
-
-    return normalizeLegacyFrameworkUserRow(rows[0] || null);
   }
 
   async function createUser(payload = {}) {
@@ -1365,48 +1401,6 @@ function createDatabaseClient(rawConfig = {}) {
     await pool.execute(
       "DELETE FROM app_api_tokens WHERE token_hash = ?",
       [String(tokenHash || "").trim()]
-    );
-  }
-
-  async function savePasswordResetToken(email, token) {
-    await ensurePasswordResetTokensTable();
-
-    await pool.execute(
-      `
-        INSERT INTO password_reset_tokens (email, token, created_at)
-        VALUES (?, ?, CURRENT_TIMESTAMP)
-        ON DUPLICATE KEY UPDATE
-          token = VALUES(token),
-          created_at = VALUES(created_at)
-      `,
-      [
-        String(email || "").trim().toLowerCase(),
-        String(token || "").trim()
-      ]
-    );
-  }
-
-  async function findPasswordResetToken(email) {
-    if (!(await hasTable("password_reset_tokens"))) {
-      return null;
-    }
-
-    const [rows] = await pool.execute(
-      "SELECT email, token, created_at FROM password_reset_tokens WHERE email = ? LIMIT 1",
-      [String(email || "").trim().toLowerCase()]
-    );
-
-    return rows[0] || null;
-  }
-
-  async function deletePasswordResetToken(email) {
-    if (!(await hasTable("password_reset_tokens"))) {
-      return;
-    }
-
-    await pool.execute(
-      "DELETE FROM password_reset_tokens WHERE email = ?",
-      [String(email || "").trim().toLowerCase()]
     );
   }
 
@@ -1666,6 +1660,7 @@ function createDatabaseClient(rawConfig = {}) {
     listMessages,
     listRecentConversations,
     listUserConversations,
+    listUserMemoryCandidates,
     findPackageById,
     findDefaultPackage,
     findPackageByKeyOrName,
@@ -1673,7 +1668,6 @@ function createDatabaseClient(rawConfig = {}) {
     updatePackage,
     findUserByEmail,
     findUserById,
-    findLegacyFrameworkUserByEmail,
     createUser,
     ensureUserByEmail,
     updateUser,
@@ -1682,9 +1676,6 @@ function createDatabaseClient(rawConfig = {}) {
     findUserByTokenHash,
     touchApiToken,
     revokeApiToken,
-    savePasswordResetToken,
-    findPasswordResetToken,
-    deletePasswordResetToken,
     findProjectById,
     listProjects,
     createProject,

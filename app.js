@@ -324,10 +324,9 @@ const questionBankItems = [
 ];
 
 const packagePlans = [
-  { name: "التمهيدية", points: 0, price: "0 ريال", note: "للبداية داخل المنصة حتى يفعّل الأدمن الباقة المناسبة" },
-  { name: "برو", points: 200, price: "30 ريال", note: "200 XP يوميًا للمذاكرة اليومية والأسئلة السريعة" },
-  { name: "برو بلس", points: 500, price: "60 ريال", note: "500 XP يوميًا للمراجعة المستمرة وحفظ المشاريع" },
-  { name: "برو ماكس", points: 1000, price: "100 ريال", note: "1000 XP يوميًا للاستخدام المكثف والشروحات الكاملة" }
+  { name: "الباقة المجانية", points: 100, price: "0 ريال", note: "للبداية وتجربة الشات النصي" },
+  { name: "باقة الطالب", points: 300, price: "19 ريال", note: "أسئلة أكثر وتحليل صور أكثر" },
+  { name: "باقة المتقدم", points: 700, price: "39 ريال", note: "مناسبة للمراجعات الكثيفة والاختبارات" }
 ];
 
 const usageCosts = {
@@ -479,7 +478,7 @@ function getUsers() {
   return loadJson(storageKeys.users, [
     {
       id: "student-demo-1",
-      name: "طالب تجريبي",
+      name: "طالب",
       email: "student@mullem.sa",
       role: "Student",
       package: "مجاني محدود",
@@ -488,10 +487,47 @@ function getUsers() {
   ]);
 }
 
+function getSessionBackedUser() {
+  try {
+    const apiClient = window.mullemApiClient;
+    if (!apiClient || typeof apiClient.getSessionUser !== "function") return null;
+
+    const sessionUser = apiClient.getSessionUser();
+    if (!sessionUser?.id || String(sessionUser.role || "").toLowerCase() === "admin") {
+      return null;
+    }
+
+    const normalizedId = String(sessionUser.id).trim();
+    if (!normalizedId) return null;
+
+    const users = getUsers();
+    const existingUser = users.find((user) => String(user.id) === normalizedId) || null;
+    const mergedUser = {
+      ...(existingUser || {}),
+      ...sessionUser,
+      id: normalizedId,
+      role: existingUser?.role || (String(sessionUser.role || "").toLowerCase() === "admin" ? "Admin" : "Student")
+    };
+
+    const nextUsers = [
+      mergedUser,
+      ...users.filter((user) => String(user.id) !== normalizedId)
+    ];
+
+    saveJson(storageKeys.users, nextUsers);
+    localStorage.setItem(storageKeys.currentUser, normalizedId);
+    return mergedUser;
+  } catch (_) {
+    return null;
+  }
+}
+
 function getActiveUser() {
   const users = getUsers();
-  const currentId = localStorage.getItem(storageKeys.currentUser);
-  return users.find((user) => user.id === currentId) || null;
+  const currentId = String(localStorage.getItem(storageKeys.currentUser) || "").trim();
+  const localUser = users.find((user) => String(user.id) === currentId) || null;
+  if (localUser) return localUser;
+  return getSessionBackedUser();
 }
 
 function createEmptyAnalytics() {
@@ -1024,8 +1060,67 @@ function createClarificationResponse(message, intent) {
   };
 }
 
+function escapeReplyHtml(value) {
+  return String(value || "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
+function normalizeSimpleReplyText(value) {
+  return String(value || "")
+    .replace(/\r\n?/g, "\n")
+    .replace(/\*\*(.*?)\*\*/g, "$1")
+    .replace(/__(.*?)__/g, "$1")
+    .replace(/`([^`]+)`/g, "$1")
+    .replace(/^\s*#{1,6}\s*/gm, "")
+    .replace(/:\s*[-•]\s+/g, ":\n- ")
+    .replace(/\n[ \t]+/g, "\n")
+    .replace(/[ \t]+\n/g, "\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .replace(/\*{2,}/g, "")
+    .trim();
+}
+
+function renderSimpleReplyBody(text) {
+  const normalized = normalizeSimpleReplyText(text);
+  if (!normalized) {
+    return "<p>تعذر تجهيز الرد الحالي.</p>";
+  }
+
+  const lines = normalized
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean);
+
+  const parts = [];
+  let listItems = [];
+
+  function flushList() {
+    if (!listItems.length) return;
+    parts.push(`<ul>${listItems.map((item) => `<li>${escapeReplyHtml(item)}</li>`).join("")}</ul>`);
+    listItems = [];
+  }
+
+  lines.forEach((line) => {
+    const bulletMatch = line.match(/^(?:[-•]\s+|\d+[.)]\s+)(.+)$/);
+    if (bulletMatch) {
+      listItems.push(bulletMatch[1].trim());
+      return;
+    }
+
+    flushList();
+    parts.push(`<p>${escapeReplyHtml(line)}</p>`);
+  });
+
+  flushList();
+  return parts.join("");
+}
+
 function formatSimpleReply(text) {
-  return `<div class="simple-reply"><p>${text}</p></div>`;
+  return `<div class="simple-reply">${renderSimpleReplyBody(text)}</div>`;
 }
 
 function formatClarificationReply(payload) {
@@ -1879,17 +1974,20 @@ function getActiveSession() {
   return chatSessions.find((session) => session.id === activeSessionId) || null;
 }
 
-function createSession(question = "", subject = "") {
+function createSession(question = "", subject = "", options = {}) {
   const now = Date.now();
+  const normalizedProjectId = String(options.projectId || "").trim();
   const session = {
     id: `session_${now}_${Math.random().toString(36).slice(2, 8)}`,
-    title: createSessionTitle(question, subject),
-    preview: stripHtml(question) || "ابدأ أول رسالة في هذه المحادثة.",
-    subject: subject || "",
-    createdAt: now,
-    updatedAt: now,
-    pinned: false,
-    messages: []
+    title: String(options.title || createSessionTitle(question, subject)).trim() || "محادثة جديدة",
+    preview: String(options.preview || stripHtml(question) || "ابدأ أول رسالة في هذه المحادثة.").trim(),
+    subject: String(options.subject || subject || "").trim(),
+    projectId: normalizedProjectId || "",
+    apiConversationId: String(options.apiConversationId || "").trim() || "",
+    createdAt: Number(options.createdAt || now),
+    updatedAt: Number(options.updatedAt || options.createdAt || now),
+    pinned: Boolean(options.pinned),
+    messages: Array.isArray(options.messages) ? options.messages : []
   };
   chatSessions.unshift(session);
   chatSessions = sortSessions(chatSessions);
@@ -1899,11 +1997,11 @@ function createSession(question = "", subject = "") {
   return session;
 }
 
-function ensureActiveSession(question = "", subject = "") {
+function ensureActiveSession(question = "", subject = "", options = {}) {
   if (!isLoggedIn()) return null;
   let session = getActiveSession();
   if (!session) {
-    session = createSession(question, subject);
+    session = createSession(question, subject, options);
   }
   return session;
 }
@@ -1922,7 +2020,9 @@ function updateSession(sessionId, updater) {
 
 function appendMessageToSession(type, author, body, options = {}) {
   if (!isLoggedIn()) return;
-  const session = ensureActiveSession(options.sessionTitle || body, options.subject || "");
+  const session = ensureActiveSession(options.sessionTitle || body, options.subject || "", {
+    projectId: options.projectId || ""
+  });
   if (!session) return;
   const now = Date.now();
   updateSession(session.id, (current) => {
@@ -1941,6 +2041,7 @@ function appendMessageToSession(type, author, body, options = {}) {
       ...current,
       title,
       subject: options.subject || current.subject || "",
+      projectId: String(options.projectId || current.projectId || "").trim(),
       preview: stripHtml(body).slice(0, 120) || current.preview,
       updatedAt: now,
       messages
@@ -1968,7 +2069,7 @@ function restoreSession(sessionId) {
   renderSessionList();
 }
 
-function startFreshSession() {
+function startFreshSession(options = {}) {
   attachments = [];
   if (fileInput) fileInput.value = "";
   renderAttachments();
@@ -1976,7 +2077,11 @@ function startFreshSession() {
     resetConversationView();
     return;
   }
-  createSession("", subjectSelect?.value || "");
+  createSession("", subjectSelect?.value || "", {
+    projectId: options.projectId || "",
+    title: options.title || "",
+    preview: options.preview || ""
+  });
   resetConversationView();
   renderSessionList();
 }

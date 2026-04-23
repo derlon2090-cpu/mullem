@@ -2,12 +2,39 @@ const http = require("http");
 const fs = require("fs");
 const path = require("path");
 const crypto = require("crypto");
-const { spawnSync } = require("child_process");
+const { execSync } = require("child_process");
 
 const ROOT_DIR = __dirname;
 loadEnvFile(path.join(ROOT_DIR, ".env"));
 const PORT = Number(process.env.PORT || 3000);
-const PHP_BINARY = fs.existsSync(path.join(ROOT_DIR, "php.exe")) ? path.join(ROOT_DIR, "php.exe") : "php";
+const IS_CLOUD_RUNTIME = Boolean(
+  process.env.RENDER ||
+  process.env.RENDER_EXTERNAL_URL ||
+  process.env.RENDER_SERVICE_ID ||
+  process.env.RAILWAY_ENVIRONMENT ||
+  process.env.RAILWAY_PROJECT_ID ||
+  process.env.VERCEL
+);
+
+function readEnvValue(keys, fallback = "") {
+  const list = Array.isArray(keys) ? keys : [keys];
+  for (const key of list) {
+    const value = String(process.env[key] || "").trim();
+    if (value) return value;
+  }
+  return String(fallback || "").trim();
+}
+
+function readEnvNumber(keys, fallback) {
+  const list = Array.isArray(keys) ? keys : [keys];
+  for (const key of list) {
+    const raw = String(process.env[key] || "").trim();
+    if (!raw) continue;
+    const parsed = Number(raw);
+    if (Number.isFinite(parsed)) return parsed;
+  }
+  return Number(fallback);
+}
 
 const OPENAI_API_KEY = String(process.env.OPENAI_API_KEY || "").trim();
 const OPENAI_MODEL = String(process.env.OPENAI_MODEL || "gpt-5.4-mini").trim();
@@ -24,11 +51,20 @@ const RATE_LIMIT_CHAT_MAX = Math.max(1, Number(process.env.RATE_LIMIT_CHAT_MAX |
 const RATE_LIMIT_SOLVE_MAX = Math.max(1, Number(process.env.RATE_LIMIT_SOLVE_MAX || 20));
 const RATE_LIMIT_GENERAL_MAX = Math.max(1, Number(process.env.RATE_LIMIT_GENERAL_MAX || 60));
 const CORS_ALLOWED_ORIGINS = String(process.env.CORS_ALLOWED_ORIGINS || "*").trim();
-const DB_HOST = String(process.env.DB_HOST || "127.0.0.1").trim();
-const DB_PORT = Number(process.env.DB_PORT || 3306);
-const DB_DATABASE = String(process.env.DB_DATABASE || "mullem").trim();
-const DB_USERNAME = String(process.env.DB_USERNAME || process.env.DB_USER || "root").trim();
-const DB_PASSWORD = String(process.env.DB_PASSWORD || "").trim();
+const DB_HOST = readEnvValue(
+  ["DB_HOST", "MYSQLHOST", "MY_SQL_HOST", "DATABASE_HOST"],
+  IS_CLOUD_RUNTIME ? "" : "127.0.0.1"
+);
+const DB_PORT = readEnvNumber(["DB_PORT", "MYSQLPORT", "DATABASE_PORT"], 3306);
+const DB_DATABASE = readEnvValue(
+  ["DB_DATABASE", "MYSQLDATABASE", "DATABASE_NAME"],
+  IS_CLOUD_RUNTIME ? "" : "mullem"
+);
+const DB_USERNAME = readEnvValue(
+  ["DB_USERNAME", "DB_USER", "MYSQLUSER", "DATABASE_USER"],
+  IS_CLOUD_RUNTIME ? "" : "root"
+);
+const DB_PASSWORD = readEnvValue(["DB_PASSWORD", "MYSQLPASSWORD", "DATABASE_PASSWORD"], "");
 const MAX_NAME_LENGTH = Math.max(20, Number(process.env.MAX_NAME_LENGTH || 160));
 const MIN_PASSWORD_LENGTH = Math.max(6, Number(process.env.MIN_PASSWORD_LENGTH || 6));
 const PASSWORD_HASH_ITERATIONS = Math.max(60000, Number(process.env.PASSWORD_HASH_ITERATIONS || 120000));
@@ -37,14 +73,22 @@ const DEFAULT_ADMIN_PASSWORD = String(process.env.DEFAULT_ADMIN_PASSWORD || "Mul
 const DEFAULT_ADMIN_NAME = String(process.env.DEFAULT_ADMIN_NAME || "مدير المنصة").trim();
 const DEFAULT_STUDENT_EMAIL = String(process.env.DEFAULT_STUDENT_EMAIL || "student@mullem.sa").trim().toLowerCase();
 const DEFAULT_STUDENT_PASSWORD = String(process.env.DEFAULT_STUDENT_PASSWORD || "Student@2026").trim();
-const DEFAULT_STUDENT_NAME = String(process.env.DEFAULT_STUDENT_NAME || "طالب تجريبي").trim();
+const DEFAULT_STUDENT_NAME = String(process.env.DEFAULT_STUDENT_NAME || "طالب").trim();
 const GUEST_MESSAGE_LIMIT = Math.max(1, Number(process.env.GUEST_MESSAGE_LIMIT || 5));
 const TEXT_MESSAGE_XP_REWARD = Math.max(1, Number(process.env.TEXT_MESSAGE_XP_REWARD || 10));
 const IMAGE_MESSAGE_XP_REWARD = Math.max(TEXT_MESSAGE_XP_REWARD, Number(process.env.IMAGE_MESSAGE_XP_REWARD || 15));
 const DAILY_LOGIN_XP_REWARD = Math.max(0, Number(process.env.DAILY_LOGIN_XP_REWARD || 5));
 const DAILY_MOTIVATION_BONUS = Math.max(1, Number(process.env.DAILY_MOTIVATION_BONUS || 5));
-const PASSWORD_RESET_CODE_TTL_MS = Math.max(60_000, Number(process.env.PASSWORD_RESET_CODE_TTL_MS || 15 * 60_000));
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const ACCOUNT_MEMORY_LIMIT = Math.max(1, Math.min(Number(process.env.ACCOUNT_MEMORY_LIMIT || 5), 8));
+const ACCOUNT_MEMORY_CANDIDATES = Math.max(ACCOUNT_MEMORY_LIMIT, Math.min(Number(process.env.ACCOUNT_MEMORY_CANDIDATES || 28), 60));
+const MEMORY_STOP_WORDS = new Set([
+  "هذا", "هذه", "ذلك", "تلك", "هناك", "هنا", "الذي", "التي", "الى", "إلى", "على", "من", "عن", "في", "مع",
+  "ثم", "او", "أو", "كما", "بعد", "قبل", "لقد", "كان", "كانت", "يكون", "يمكن", "عندي", "عندك", "عنده",
+  "لدي", "عندي", "انا", "أنا", "انت", "أنت", "هو", "هي", "هم", "نحن", "لك", "له", "لها", "ما", "ماذا",
+  "كيف", "متى", "أين", "ليش", "لماذا", "هل", "تم", "إذا", "اذا", "the", "and", "for", "from", "with",
+  "that", "this", "what", "when", "where", "your", "have", "about"
+]);
 
 const MIME_TYPES = {
   ".html": "text/html; charset=utf-8",
@@ -71,6 +115,30 @@ let databaseState = {
   database: DB_DATABASE,
   message: "MySQL has not been initialized yet."
 };
+
+function ensureMysql2RuntimeDependency() {
+  try {
+    require.resolve("mysql2/promise");
+    return true;
+  } catch (_) {
+    // Continue to installation attempt below.
+  }
+
+  try {
+    console.warn("[mullem] mysql2 is missing. Attempting runtime install...");
+    execSync("npm install mysql2 --no-save", {
+      stdio: "inherit",
+      env: process.env
+    });
+    require.resolve("mysql2/promise");
+    console.warn("[mullem] mysql2 installed successfully at runtime.");
+    return true;
+  } catch (error) {
+    console.error("[mullem] mysql2 runtime installation failed.");
+    console.error(String(error?.message || error));
+    return false;
+  }
+}
 
 function loadEnvFile(filePath) {
   if (!fs.existsSync(filePath)) return;
@@ -192,8 +260,46 @@ function createHttpError(statusCode, message) {
   return error;
 }
 
+function getPublicDatabaseMessage(featureLabel = "هذه الميزة") {
+  return `${String(featureLabel || "هذه الميزة").trim()} غير متاح مؤقتًا. حاول مرة أخرى بعد قليل.`;
+}
+
+function buildPublicDatabaseState() {
+  return {
+    configured: Boolean(databaseState?.configured),
+    connected: Boolean(databaseState?.connected),
+    host: databaseState?.host || DB_HOST,
+    port: databaseState?.port || DB_PORT,
+    database: databaseState?.database || DB_DATABASE,
+    message: databaseState?.connected
+      ? String(databaseState?.message || "MySQL connected successfully.")
+      : getPublicDatabaseMessage("حفظ البيانات")
+  };
+}
+
+function ensureDatabaseFeatureAvailable(featureLabel) {
+  if (!isDatabaseReady()) {
+    throw createHttpError(503, getPublicDatabaseMessage(featureLabel));
+  }
+}
+
 function sanitizeOptionalText(value, maxLength = MAX_METADATA_LENGTH) {
   return String(value || "").trim().slice(0, maxLength);
+}
+
+function sanitizeModelDisplayText(value) {
+  return String(value || "")
+    .replace(/\r\n?/g, "\n")
+    .replace(/\*\*(.*?)\*\*/g, "$1")
+    .replace(/__(.*?)__/g, "$1")
+    .replace(/`([^`]+)`/g, "$1")
+    .replace(/^\s*#{1,6}\s*/gm, "")
+    .replace(/:\s*[-•]\s+/g, ":\n- ")
+    .replace(/\n[ \t]+/g, "\n")
+    .replace(/[ \t]+\n/g, "\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .replace(/\*{2,}/g, "")
+    .trim();
 }
 
 function requireTextField(value, fieldName, maxLength) {
@@ -469,44 +575,13 @@ function hashPassword(password, salt = crypto.randomBytes(16).toString("hex")) {
   return `pbkdf2$${PASSWORD_HASH_ITERATIONS}$${salt}$${derived}`;
 }
 
-function verifyPhpPasswordHash(password, storedHash) {
-  const result = spawnSync(
-    PHP_BINARY,
-    [
-      "-n",
-      "-r",
-      "$hash = $argv[1] ?? ''; $password = $argv[2] ?? ''; exit(password_verify($password, $hash) ? 0 : 1);",
-      String(storedHash || ""),
-      String(password || "")
-    ],
-    {
-      encoding: "utf8",
-      windowsHide: true
-    }
-  );
-
-  if (result.error) {
-    return null;
-  }
-
-  return result.status === 0;
-}
-
-function checkPassword(password, storedHash) {
+function verifyPassword(password, storedHash) {
   const raw = String(storedHash || "").trim();
-  if (!raw) return { matched: false, unsupported: false };
-
-  if (/^\$2[aby]\$/i.test(raw) || /^\$argon2/i.test(raw)) {
-    const matched = verifyPhpPasswordHash(password, raw);
-    if (matched === null) {
-      return { matched: false, unsupported: true };
-    }
-    return { matched, unsupported: false };
-  }
+  if (!raw) return false;
 
   const parts = raw.split("$");
   if (parts.length !== 4 || parts[0] !== "pbkdf2") {
-    return { matched: false, unsupported: false };
+    return false;
   }
 
   const iterations = Number(parts[1]);
@@ -520,133 +595,9 @@ function checkPassword(password, storedHash) {
   const expectedBuffer = Buffer.from(expectedHex, "hex");
   const actualBuffer = Buffer.from(actualHex, "hex");
   if (expectedBuffer.length !== actualBuffer.length) {
-    return { matched: false, unsupported: false };
+    return false;
   }
-  return {
-    matched: crypto.timingSafeEqual(expectedBuffer, actualBuffer),
-    unsupported: false
-  };
-}
-
-function verifyPassword(password, storedHash) {
-  return checkPassword(password, storedHash).matched;
-}
-
-function generateNumericCode(length = 6) {
-  const safeLength = Math.max(4, Math.min(Number(length) || 6, 10));
-  const min = 10 ** (safeLength - 1);
-  const max = (10 ** safeLength) - 1;
-  return String(Math.floor(min + Math.random() * (max - min + 1)));
-}
-
-function isResetCodeExpired(createdAt) {
-  const createdAtDate = createdAt ? new Date(createdAt) : null;
-  if (!createdAtDate || Number.isNaN(createdAtDate.getTime())) {
-    return true;
-  }
-
-  return (Date.now() - createdAtDate.getTime()) > PASSWORD_RESET_CODE_TTL_MS;
-}
-
-function buildPrimaryUserPayloadFromLegacy(legacyUser, overrides = {}) {
-  const achievements = Array.isArray(overrides.achievements)
-    ? overrides.achievements
-    : Array.isArray(legacyUser?.achievements)
-      ? legacyUser.achievements
-      : [];
-
-  return {
-    name: String(overrides.name ?? legacyUser?.name ?? "").trim(),
-    email: normalizeEmail(overrides.email ?? legacyUser?.email ?? ""),
-    password_hash: String(overrides.password_hash ?? legacyUser?.password_hash ?? "").trim(),
-    role: normalizeUserRole(overrides.role ?? legacyUser?.role ?? "student"),
-    stage: sanitizeOptionalText(overrides.stage ?? legacyUser?.stage, MAX_METADATA_LENGTH) || null,
-    grade: sanitizeOptionalText(overrides.grade ?? legacyUser?.grade, MAX_METADATA_LENGTH) || null,
-    subject: sanitizeOptionalText(overrides.subject ?? legacyUser?.subject, MAX_METADATA_LENGTH) || null,
-    package_key: sanitizeOptionalText(overrides.package_key ?? legacyUser?.package_key, 80) || null,
-    package_name: sanitizeOptionalText(overrides.package_name ?? legacyUser?.package_name ?? legacyUser?.package, 150) || null,
-    xp: Number.isFinite(Number(overrides.xp ?? legacyUser?.xp)) ? Number(overrides.xp ?? legacyUser?.xp) : 100,
-    streak_days: Number.isFinite(Number(overrides.streak_days ?? legacyUser?.streak_days)) ? Number(overrides.streak_days ?? legacyUser?.streak_days) : 0,
-    motivation_score: Number.isFinite(Number(overrides.motivation_score ?? legacyUser?.motivation_score))
-      ? Number(overrides.motivation_score ?? legacyUser?.motivation_score)
-      : 0,
-    last_active_date: overrides.last_active_date ?? legacyUser?.last_active_date ?? null,
-    achievements,
-    status: normalizeUserStatus(overrides.status ?? legacyUser?.status ?? "active"),
-    activity: sanitizeOptionalText(overrides.activity ?? legacyUser?.activity, 255) || null
-  };
-}
-
-async function ensurePrimaryUserForEmail(email) {
-  const primaryUser = await databaseClient.findUserByEmail(email);
-  if (primaryUser) {
-    return primaryUser;
-  }
-
-  const legacyUser = await databaseClient.findLegacyFrameworkUserByEmail(email);
-  if (!legacyUser?.password_hash) {
-    return null;
-  }
-
-  return databaseClient.createUser(
-    buildPrimaryUserPayloadFromLegacy(legacyUser, {
-      password_hash: legacyUser.password_hash
-    })
-  );
-}
-
-async function resolveUserForLogin(email, password) {
-  const primaryUser = await databaseClient.findUserByEmail(email);
-  if (primaryUser) {
-    const primaryPassword = checkPassword(password, primaryUser.password_hash);
-    if (primaryPassword.matched) {
-      return { user: primaryUser, migrationRequired: false };
-    }
-
-    if (primaryPassword.unsupported) {
-      return { user: null, migrationRequired: true };
-    }
-  }
-
-  const legacyUser = await databaseClient.findLegacyFrameworkUserByEmail(email);
-  if (!legacyUser?.password_hash) {
-    return { user: null, migrationRequired: false };
-  }
-
-  const legacyPassword = checkPassword(password, legacyUser.password_hash);
-  if (legacyPassword.unsupported) {
-    return { user: null, migrationRequired: true };
-  }
-
-  if (!legacyPassword.matched) {
-    return { user: null, migrationRequired: false };
-  }
-
-  if (primaryUser) {
-    return {
-      user: await databaseClient.updateUser(primaryUser.id, {
-        password_hash: hashPassword(password),
-        name: primaryUser.name || legacyUser.name,
-        role: primaryUser.role || legacyUser.role,
-        stage: primaryUser.stage || legacyUser.stage,
-        grade: primaryUser.grade || legacyUser.grade,
-        subject: primaryUser.subject || legacyUser.subject,
-        package_name: primaryUser.package_name || legacyUser.package_name,
-        status: primaryUser.status || legacyUser.status,
-        activity: legacyUser.activity || primaryUser.activity
-      }),
-      migrationRequired: false
-    };
-  }
-
-  return {
-    user: await databaseClient.createUser(
-      buildPrimaryUserPayloadFromLegacy(legacyUser, {
-        password_hash: hashPassword(password)
-      })
-    ),
-    migrationRequired: false
-  };
+  return crypto.timingSafeEqual(expectedBuffer, actualBuffer);
 }
 
 function hashApiToken(token) {
@@ -728,7 +679,7 @@ async function ensureDefaultUsers() {
     xp: 100,
     motivation_score: 0,
     status: "active",
-    activity: "حساب طالب تجريبي"
+    activity: "حساب طالب جديد"
   });
 }
 
@@ -786,6 +737,9 @@ async function requireAdminUser(req) {
 
 async function initializeDatabaseLayer() {
   try {
+    if (!ensureMysql2RuntimeDependency()) {
+      throw new Error("MySQL runtime dependency is unavailable.");
+    }
     const { createDatabaseClient } = require("./db");
     databaseClient = createDatabaseClient({
       host: DB_HOST,
@@ -798,14 +752,16 @@ async function initializeDatabaseLayer() {
     await ensureDefaultUsers();
     databaseState = databaseClient.getState();
   } catch (error) {
-    databaseClient = null;
+    console.error(`[mullem] primary database init warning: ${String(error?.message || error)}`);
+    const { createFallbackDatabaseClient } = require("./fallback-db");
+    databaseClient = createFallbackDatabaseClient();
+    await databaseClient.initialize();
+    await ensureDefaultUsers();
     databaseState = {
-      configured: Boolean(DB_HOST && DB_DATABASE && DB_USERNAME),
-      connected: false,
-      host: DB_HOST,
-      port: DB_PORT,
-      database: DB_DATABASE,
-      message: String(error?.message || "Failed to initialize MySQL.")
+      ...databaseClient.getState(),
+      host: DB_HOST || "fallback",
+      port: DB_PORT || 0,
+      database: DB_DATABASE || "fallback"
     };
   }
 }
@@ -883,7 +839,9 @@ function buildChatSystemPrompt(meta) {
     "أجب بالعربية الواضحة والمباشرة.",
     "قدّم الجواب النهائي أولًا ثم شرحًا مختصرًا عند الحاجة.",
     "إذا كان السؤال أكاديميًا فحلّه بدقة، وإذا كان طلب بحث فاعرضه بشكل منظم وواضح.",
-    "لا تذكر أي تفاصيل داخلية عن النظام أو المسارات أو الـ API."
+    "لا تذكر أي تفاصيل داخلية عن النظام أو المسارات أو الـ API.",
+    "لا تستخدم markdown مثل ** أو __ أو # أو ``` في الرد.",
+    "رتب الرد في فقرات قصيرة أو نقاط نظيفة فقط عند الحاجة."
   ];
 
   if (meta?.subject) contextLines.push(`المادة المرجحة: ${meta.subject}`);
@@ -900,7 +858,10 @@ function buildAudienceAwareChatPrompt(meta) {
     "أجب بالعربية الواضحة والمباشرة.",
     "ابدأ بالجواب المفيد مباشرة ثم أضف شرحًا قصيرًا ومنظمًا عند الحاجة.",
     "لا تذكر أي تفاصيل داخلية عن النظام أو الـ API.",
-    "حافظ على أسلوب مناسب لعمر الطالب ومستواه الدراسي."
+    "لا تستخدم markdown مثل ** أو __ أو # أو ``` في الرد.",
+    "إذا احتجت تعدادًا فاكتب كل نقطة في سطر مستقل بشكل نظيف ومباشر.",
+    "حافظ على أسلوب مناسب لعمر الطالب ومستواه الدراسي.",
+    "إذا وصلتك معلومات سابقة من حساب المستخدم فاستخدمها فقط عندما تكون مرتبطة بالسؤال الحالي."
   ];
 
   const stage = String(meta?.stage || inferStageFromGrade(meta?.grade) || "").trim();
@@ -925,10 +886,118 @@ function buildAudienceAwareChatPrompt(meta) {
   return contextLines.join("\n");
 }
 
+function normalizeMemoryText(value) {
+  return String(value || "")
+    .replace(/\s+/g, " ")
+    .replace(/[^\p{L}\p{N}\s]/gu, " ")
+    .trim()
+    .toLowerCase();
+}
+
+function extractMemoryTerms(value) {
+  const normalized = normalizeMemoryText(value);
+  if (!normalized) return [];
+  const unique = [];
+  for (const part of normalized.split(" ")) {
+    const token = part.trim();
+    if (!token || token.length < 3 || MEMORY_STOP_WORDS.has(token)) continue;
+    if (!unique.includes(token)) unique.push(token);
+    if (unique.length >= 8) break;
+  }
+  return unique;
+}
+
+function shortenMemorySnippet(value, maxLength = 180) {
+  const normalized = String(value || "").replace(/\s+/g, " ").trim();
+  if (!normalized) return "";
+  return normalized.length > maxLength ? `${normalized.slice(0, maxLength - 1).trim()}…` : normalized;
+}
+
+function scoreMemoryCandidate(candidate, terms = [], query = "", index = 0, currentProjectId = null) {
+  const sourceText = [
+    candidate?.text,
+    candidate?.title,
+    candidate?.subject,
+    candidate?.grade,
+    candidate?.term
+  ]
+    .filter(Boolean)
+    .join(" ");
+  const haystack = normalizeMemoryText(sourceText);
+  const recallIntent = /سابق|قبل|تذكر|ذك[ّ]?ر|قلت|ذكرنا|رجع|استرجع|المرة الماضية|المحادثة السابقة|مشروعي|مشروع/i.test(String(query || ""));
+  let score = Math.max(0, 12 - index);
+
+  if (candidate?.role === "user") score += 3;
+  if (currentProjectId && Number(candidate?.project_id || 0) === Number(currentProjectId)) score += 5;
+
+  for (const term of terms) {
+    if (haystack.includes(term)) score += 4;
+  }
+
+  if (recallIntent) score += 2;
+  if (!terms.length && !recallIntent) score = 0;
+
+  return score;
+}
+
+function buildAccountMemoryNote(snippets = []) {
+  if (!Array.isArray(snippets) || !snippets.length) return "";
+  const lines = snippets.map((item, index) => {
+    const label = item.role === "assistant" ? "من رد سابق للمساعد" : "من كلام المستخدم سابقًا";
+    const meta = [item.subject, item.grade, item.term].filter(Boolean).join(" • ");
+    const snippet = shortenMemorySnippet(item.text, 170);
+    return `${index + 1}. ${label}${meta ? ` [${meta}]` : ""}: ${snippet}`;
+  });
+
+  return [
+    "هذه ملاحظات مختصرة من سجل الحساب. استخدمها فقط إذا كانت مرتبطة بالسؤال الحالي، ولا تذكرها إذا لم تكن مفيدة:",
+    ...lines
+  ].join("\n");
+}
+
+async function getAccountMemoryMessages(payload = {}) {
+  if (!isDatabaseReady() || !payload.user_id || !databaseClient?.listUserMemoryCandidates) {
+    return [];
+  }
+
+  const candidates = await databaseClient.listUserMemoryCandidates(payload.user_id, {
+    exclude_conversation_id: payload.conversation_id || null,
+    limit: ACCOUNT_MEMORY_CANDIDATES
+  });
+
+  if (!Array.isArray(candidates) || !candidates.length) {
+    return [];
+  }
+
+  const terms = extractMemoryTerms(payload.message || "");
+  const ranked = candidates
+    .map((item, index) => ({
+      item,
+      score: scoreMemoryCandidate(item, terms, payload.message || "", index, payload.project_id || null)
+    }))
+    .filter((entry) => entry.score > 0)
+    .sort((a, b) => b.score - a.score)
+    .slice(0, ACCOUNT_MEMORY_LIMIT)
+    .map((entry) => entry.item);
+
+  const memoryNote = buildAccountMemoryNote(ranked);
+  if (!memoryNote) return [];
+
+  return [
+    {
+      role: "system",
+      content: memoryNote
+    }
+  ];
+}
+
 function buildSolveSystemPrompt(payload) {
   return [
     "أنت محرك حل أسئلة تعليمية عربي لمنصة ملم.",
     "أعد JSON فقط بدون markdown أو أي نص زائد.",
+    "لا تستخدم markdown داخل answer أو explanation أو display_text.",
+    "ممنوع استخدام ** أو __ أو # أو ``` أو القوائم العشوائية داخل display_text.",
+    "اكتب display_text كنص عربي مرتب ونظيف يصلح للعرض مباشرة للمستخدم.",
     "اختر question_type من هذه القيم فقط: multiple_choice, true_false, fill_blank, matching, direct_math, definition, compound, general.",
     "إذا كان السؤال بحثًا أو شرحًا عامًا فاجعل question_type = general أو definition حسب الأنسب.",
     "answer يجب أن يكون الجواب النهائي.",
@@ -950,9 +1019,9 @@ function buildSolveSystemPrompt(payload) {
 function normalizeSolvePayload(question, modelOutput) {
   const parsed = modelOutput && typeof modelOutput === "object" ? modelOutput : {};
   const questionType = normalizeQuestionType(parsed.question_type);
-  const answer = String(parsed.answer || parsed.final_answer || parsed.display_text || "").trim();
-  const explanation = String(parsed.explanation || "").trim();
-  const displayText = String(parsed.display_text || answer || explanation || "").trim();
+  const answer = sanitizeModelDisplayText(parsed.answer || parsed.final_answer || parsed.display_text || "");
+  const explanation = sanitizeModelDisplayText(parsed.explanation || "");
+  const displayText = sanitizeModelDisplayText(parsed.display_text || answer || explanation || "");
   const confidenceValue = Number(parsed.confidence);
   const confidence = Number.isFinite(confidenceValue)
     ? Math.max(0, Math.min(1, confidenceValue))
@@ -1065,6 +1134,7 @@ async function getOrCreateConversation(payload) {
       id: String(payload.conversation_id || "").trim() || crypto.randomUUID(),
       conversation_id: String(payload.conversation_id || "").trim() || undefined,
       guest_session_id: String(payload.guest_session_id || "").trim() || undefined,
+      user_id: payload.user_id ? Number(payload.user_id) : undefined,
       project_id: payload.project_id ? Number(payload.project_id) : undefined,
       subject: String(payload.subject || "").trim() || null,
       stage: String(payload.stage || "").trim() || null,
@@ -1160,9 +1230,8 @@ async function handleRegister(req, res) {
   }
 
   const existing = await databaseClient.findUserByEmail(email);
-  const legacyExisting = existing ? null : await databaseClient.findLegacyFrameworkUserByEmail(email);
-  if (existing || legacyExisting) {
-    throw createHttpError(422, "هذا البريد مسجل بالفعل.");
+  if (existing) {
+    throw createHttpError(422, "This email is already registered.");
   }
 
   const user = await databaseClient.createUser({
@@ -1197,14 +1266,9 @@ async function handleLogin(req, res) {
   const password = requirePassword(payload.password);
   const deviceName = sanitizeOptionalText(payload.device_name || payload.deviceName, MAX_METADATA_LENGTH) || "mullem-web";
 
-  const loginResolution = await resolveUserForLogin(email, password);
-  if (loginResolution.migrationRequired) {
-    throw createHttpError(409, "هذا الحساب محفوظ في النظام القديم. استخدم استعادة كلمة المرور مرة واحدة لتفعيله على النظام الجديد.");
-  }
-
-  const user = loginResolution.user;
-  if (!user) {
-    throw createHttpError(401, "البريد الإلكتروني أو كلمة المرور غير صحيحة.");
+  const user = await databaseClient.findUserByEmail(email);
+  if (!user || !verifyPassword(password, user.password_hash)) {
+    throw createHttpError(401, "Invalid email or password.");
   }
 
   const normalizedStatus = normalizeUserStatus(user.status);
@@ -1225,127 +1289,6 @@ async function handleLogin(req, res) {
       token,
       user: buildApiUser(updatedUser || user)
     }
-  });
-}
-
-async function handleImportLegacyUsers(req, res) {
-  requireDatabaseConnection();
-  const payload = await parseJsonBody(req);
-  const users = Array.isArray(payload?.users) ? payload.users.slice(0, 10) : [];
-  const importedUsers = [];
-  const skipped = [];
-
-  for (const item of users) {
-    try {
-      const email = requireEmail(item?.email);
-      const password = requirePassword(item?.password);
-      const existing = await databaseClient.findUserByEmail(email);
-      if (existing) {
-        skipped.push({ email, reason: "exists" });
-        continue;
-      }
-
-      const legacyFrameworkUser = await databaseClient.findLegacyFrameworkUserByEmail(email);
-      const created = await databaseClient.createUser(
-        buildPrimaryUserPayloadFromLegacy(legacyFrameworkUser || {}, {
-          name: sanitizeOptionalText(item?.name, MAX_NAME_LENGTH) || legacyFrameworkUser?.name || email.split("@")[0],
-          email,
-          password_hash: hashPassword(password),
-          role: item?.role ?? legacyFrameworkUser?.role ?? "student",
-          stage: item?.stage ?? legacyFrameworkUser?.stage ?? inferStageFromGrade(item?.grade),
-          grade: item?.grade ?? legacyFrameworkUser?.grade ?? null,
-          subject: item?.subject ?? legacyFrameworkUser?.subject ?? null,
-          package_key: item?.packageKey ?? legacyFrameworkUser?.package_key ?? "starter",
-          package_name: item?.package ?? item?.package_name ?? legacyFrameworkUser?.package_name ?? "التمهيدية",
-          xp: item?.xp ?? legacyFrameworkUser?.xp ?? 100,
-          streak_days: item?.streakDays ?? item?.streak_days ?? legacyFrameworkUser?.streak_days ?? 0,
-          motivation_score: item?.motivationScore ?? item?.motivation_score ?? legacyFrameworkUser?.motivation_score ?? 0,
-          last_active_date: item?.lastActiveDate ?? item?.last_active_date ?? legacyFrameworkUser?.last_active_date ?? null,
-          achievements: item?.achievements ?? legacyFrameworkUser?.achievements ?? [],
-          status: item?.status ?? legacyFrameworkUser?.status ?? "active",
-          activity: item?.activity ?? legacyFrameworkUser?.activity ?? "تمت مزامنة الحساب القديم مع قاعدة البيانات"
-        })
-      );
-
-      importedUsers.push(buildApiUser(created));
-    } catch (error) {
-      skipped.push({
-        email: normalizeEmail(item?.email),
-        reason: String(error?.message || "invalid")
-      });
-    }
-  }
-
-  sendJson(req, res, 200, {
-    success: true,
-    data: {
-      imported_count: importedUsers.length,
-      items: importedUsers,
-      skipped
-    }
-  });
-}
-
-async function handlePasswordForgot(req, res) {
-  requireDatabaseConnection();
-  const payload = await parseJsonBody(req);
-  const email = requireEmail(payload.email);
-  const user = await ensurePrimaryUserForEmail(email);
-
-  if (!user) {
-    throw createHttpError(404, "لا يوجد حساب مرتبط بهذا البريد الإلكتروني.");
-  }
-
-  const resetCode = generateNumericCode(6);
-  await databaseClient.savePasswordResetToken(email, resetCode);
-
-  sendJson(req, res, 200, {
-    success: true,
-    message: "تم تجهيز رمز استعادة كلمة المرور.",
-    data: {
-      email,
-      reset_code: resetCode,
-      expires_in_ms: PASSWORD_RESET_CODE_TTL_MS
-    }
-  });
-}
-
-async function handlePasswordReset(req, res) {
-  requireDatabaseConnection();
-  const payload = await parseJsonBody(req);
-  const email = requireEmail(payload.email);
-  const code = requireTextField(payload.code, "code", 12);
-  const password = requirePassword(payload.password);
-  const passwordConfirmation = String(payload.password_confirmation || payload.passwordConfirmation || "");
-
-  if (passwordConfirmation && passwordConfirmation !== password) {
-    throw createHttpError(422, "تأكيد كلمة المرور غير مطابق.");
-  }
-
-  const user = await ensurePrimaryUserForEmail(email);
-  if (!user) {
-    throw createHttpError(404, "لا يوجد حساب مرتبط بهذا البريد الإلكتروني.");
-  }
-
-  const tokenRecord = await databaseClient.findPasswordResetToken(email);
-  if (!tokenRecord || String(tokenRecord.token || "").trim() !== code) {
-    throw createHttpError(422, "رمز التحقق غير صحيح.");
-  }
-
-  if (isResetCodeExpired(tokenRecord.created_at)) {
-    await databaseClient.deletePasswordResetToken(email);
-    throw createHttpError(422, "انتهت صلاحية رمز التحقق. اطلب رمزًا جديدًا.");
-  }
-
-  await databaseClient.updateUser(user.id, {
-    password_hash: hashPassword(password),
-    activity: "تم تحديث كلمة المرور عبر الاستعادة"
-  });
-  await databaseClient.deletePasswordResetToken(email);
-
-  sendJson(req, res, 200, {
-    success: true,
-    message: "تم تحديث كلمة المرور بنجاح."
   });
 }
 
@@ -1374,6 +1317,7 @@ async function handleLogout(req, res) {
 
 async function handleStudentDashboard(req, res) {
   const auth = await requireAuthenticatedUser(req);
+  ensureDatabaseFeatureAvailable("لوحة الطالب");
   const syncedUser = await syncUserDailyProgress(auth.user, "زار لوحة الطالب");
   const dashboard = await databaseClient.getStudentDashboard((syncedUser || auth.user).id);
   if (!dashboard) {
@@ -1442,6 +1386,7 @@ async function handleGuestStatus(req, res) {
 
 async function handleStudentProjects(req, res) {
   const auth = await requireAuthenticatedUser(req);
+  ensureDatabaseFeatureAvailable("حفظ المشروعات");
   const url = new URL(req.url, `http://${req.headers.host || "127.0.0.1"}`);
   const includeArchived = url.searchParams.get("include_archived") === "1";
   const limit = Math.max(1, Math.min(Number(url.searchParams.get("limit") || 50), 200));
@@ -1460,6 +1405,7 @@ async function handleStudentProjects(req, res) {
 
 async function handleCreateStudentProject(req, res) {
   const auth = await requireAuthenticatedUser(req);
+  ensureDatabaseFeatureAvailable("إنشاء المشروعات");
   const payload = await parseJsonBody(req);
   const grade = sanitizeOptionalText(payload.grade || auth.user.grade, MAX_METADATA_LENGTH);
   const stage = sanitizeOptionalText(payload.stage || auth.user.stage || inferStageFromGrade(grade), MAX_METADATA_LENGTH);
@@ -1485,6 +1431,7 @@ async function handleCreateStudentProject(req, res) {
 
 async function handleUpdateStudentProject(req, res, projectId) {
   const auth = await requireAuthenticatedUser(req);
+  ensureDatabaseFeatureAvailable("تعديل المشروعات");
   const payload = await parseJsonBody(req);
   const changes = {};
 
@@ -1514,6 +1461,7 @@ async function handleUpdateStudentProject(req, res, projectId) {
 
 async function handleStudentConversations(req, res) {
   const auth = await requireAuthenticatedUser(req);
+  ensureDatabaseFeatureAvailable("دردشات المشروعات");
   const url = new URL(req.url, `http://${req.headers.host || "127.0.0.1"}`);
   const limit = Math.max(1, Math.min(Number(url.searchParams.get("limit") || 20), 100));
   const projectId = sanitizeOptionalText(url.searchParams.get("project_id"), MAX_METADATA_LENGTH);
@@ -1526,6 +1474,51 @@ async function handleStudentConversations(req, res) {
     success: true,
     data: {
       items: items.map(buildConversationSummary)
+    }
+  });
+}
+
+async function handleCreateStudentConversation(req, res) {
+  const auth = await requireAuthenticatedUser(req);
+  ensureDatabaseFeatureAvailable("إنشاء دردشة داخل المشروع");
+  const payload = await parseJsonBody(req);
+  const requestedProjectId = sanitizeOptionalText(payload.project_id, MAX_METADATA_LENGTH);
+
+  let project = null;
+  if (requestedProjectId && isDatabaseReady() && typeof databaseClient?.findProjectById === "function") {
+    project = await databaseClient.findProjectById(requestedProjectId, auth.user.id);
+    if (!project) {
+      throw createHttpError(404, "Project not found.");
+    }
+  }
+
+  const grade = sanitizeOptionalText(payload.grade || project?.grade || auth.user.grade, MAX_METADATA_LENGTH);
+  const stage = sanitizeOptionalText(
+    payload.stage || project?.stage || auth.user.stage || inferStageFromGrade(grade),
+    MAX_METADATA_LENGTH
+  );
+  const subject = sanitizeOptionalText(payload.subject || project?.subject || auth.user.subject, MAX_METADATA_LENGTH);
+  const term = sanitizeOptionalText(payload.term || project?.term, MAX_METADATA_LENGTH);
+  const title = sanitizeOptionalText(payload.title, 180)
+    || sanitizeOptionalText(project?.title, 180)
+    || "محادثة جديدة";
+
+  const conversation = await getOrCreateConversation({
+    conversation_id: crypto.randomUUID(),
+    user_id: auth.user.id,
+    project_id: project?.id || (requestedProjectId || null),
+    subject,
+    stage,
+    grade,
+    term,
+    message: title
+  });
+
+  sendJson(req, res, 201, {
+    success: true,
+    data: {
+      conversation: buildConversationSummary(conversation),
+      project: project ? buildProjectSummary(project) : null
     }
   });
 }
@@ -1764,6 +1757,31 @@ async function handleAdminUpdateUser(req, res, userId) {
     changes.xp = Math.round(xp);
   }
 
+  if ("streak_days" in payload) {
+    const streakDays = Number(payload.streak_days);
+    if (!Number.isFinite(streakDays) || streakDays < 0) {
+      throw createHttpError(422, "streak_days must be a non-negative number.");
+    }
+    changes.streak_days = Math.round(streakDays);
+  }
+
+  if ("motivation_score" in payload) {
+    const motivationScore = Number(payload.motivation_score);
+    if (!Number.isFinite(motivationScore) || motivationScore < 0) {
+      throw createHttpError(422, "motivation_score must be a non-negative number.");
+    }
+    changes.motivation_score = Math.round(motivationScore);
+  }
+
+  if ("last_active_date" in payload) {
+    const lastActiveDate = sanitizeOptionalText(payload.last_active_date, 32) || null;
+    changes.last_active_date = lastActiveDate;
+  }
+
+  if ("achievements" in payload) {
+    changes.achievements = Array.isArray(payload.achievements) ? payload.achievements : [];
+  }
+
   if ("status" in payload) {
     changes.status = normalizeUserStatus(payload.status);
   }
@@ -1791,6 +1809,17 @@ async function buildChatMessages(conversation, payload) {
       content: systemPrompt
     }
   ];
+  const accountMemoryMessages = await getAccountMemoryMessages({
+    user_id: payload.user_id,
+    conversation_id: conversation?.id || payload.conversation_id || null,
+    project_id: payload.project_id || null,
+    message: payload.message || ""
+  });
+
+  for (const memoryMessage of accountMemoryMessages) {
+    if (!memoryMessage?.content) continue;
+    messages.push(memoryMessage);
+  }
 
   for (const item of history) {
     if (!item?.role || !item?.text) continue;
@@ -1860,6 +1889,8 @@ async function handleChatSend(req, res) {
     input: buildResponsesInput(await buildChatMessages(conversation, {
       ...payload,
       message,
+      user_id: activeUser?.id || null,
+      project_id: project?.id || null,
       subject: subject || project?.subject || activeUser?.subject || "",
       stage,
       grade: grade || project?.grade || activeUser?.grade || "",
@@ -1868,9 +1899,10 @@ async function handleChatSend(req, res) {
       projectTitle: project?.title || ""
     }))
   });
+  const assistantText = sanitizeModelDisplayText(result.text);
 
   await persistConversationMessage(conversation, "user", message, "web");
-  await persistConversationMessage(conversation, "assistant", result.text, "openai");
+  await persistConversationMessage(conversation, "assistant", assistantText, "openai");
 
   let rewardedUser = activeUser || null;
   if (activeUser && isDatabaseReady()) {
@@ -1890,7 +1922,7 @@ async function handleChatSend(req, res) {
       conversation_id: conversation.id,
       project: project ? buildProjectSummary(project) : null,
       assistant_message: {
-        body: result.text,
+        body: assistantText,
         source: "openai"
       },
       rewards: activeUser ? {
@@ -1925,11 +1957,12 @@ async function handleSolveQuestion(req, res) {
     })
   });
 
-  const parsed = extractJsonObject(result.text);
+  const cleanedSolveText = sanitizeModelDisplayText(result.text);
+  const parsed = extractJsonObject(cleanedSolveText);
   const normalized = normalizeSolvePayload(question, parsed || {
-    answer: result.text,
+    answer: cleanedSolveText,
     explanation: "",
-    display_text: result.text,
+    display_text: cleanedSolveText,
     question_type: "general",
     confidence: 0.72
   });
@@ -2063,7 +2096,7 @@ async function routeRequest(req, res) {
       provider: "openai",
       ai_configured: Boolean(OPENAI_API_KEY),
       model: OPENAI_MODEL,
-      db: databaseState,
+      db: buildPublicDatabaseState(),
       limits: {
         max_body_bytes: MAX_BODY_BYTES,
         max_message_length: MAX_MESSAGE_LENGTH,
@@ -2096,21 +2129,6 @@ async function routeRequest(req, res) {
 
   if (req.method === "POST" && requestPath === "/api/auth/login") {
     await handleLogin(req, res);
-    return;
-  }
-
-  if (req.method === "POST" && requestPath === "/api/auth/import-legacy") {
-    await handleImportLegacyUsers(req, res);
-    return;
-  }
-
-  if (req.method === "POST" && requestPath === "/api/auth/password/forgot") {
-    await handlePasswordForgot(req, res);
-    return;
-  }
-
-  if (req.method === "POST" && requestPath === "/api/auth/password/reset") {
-    await handlePasswordReset(req, res);
     return;
   }
 
@@ -2152,6 +2170,11 @@ async function routeRequest(req, res) {
 
   if (req.method === "GET" && requestPath === "/api/student/conversations") {
     await handleStudentConversations(req, res);
+    return;
+  }
+
+  if (req.method === "POST" && requestPath === "/api/student/conversations") {
+    await handleCreateStudentConversation(req, res);
     return;
   }
 

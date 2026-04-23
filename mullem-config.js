@@ -42,7 +42,6 @@
   const isStaticHost = STATIC_HOST_SUFFIXES.some((suffix) => host.endsWith(suffix));
   const fallbackBase = isLocalHost(host) ? "" : DEFAULT_BACKEND_URL;
   const presetBase = sanitizeBaseUrl(window.MULLEM_API_BASE || fallbackBase);
-  const presetGoogleOAuthUrl = sanitizeBaseUrl(window.MULLEM_GOOGLE_OAUTH_URL || "");
 
   const resolvedBase = queryBase || presetBase || metaBase || storedBase || "";
   const deploymentMode = resolvedBase
@@ -54,18 +53,15 @@
   }
 
   window.MULLEM_API_BASE = resolvedBase;
-  window.MULLEM_GOOGLE_OAUTH_URL = presetGoogleOAuthUrl;
   window.MULLEM_RUNTIME_INFO = {
     deploymentMode,
     isStaticHost,
     backendConfigured: Boolean(resolvedBase),
     backendUrl: resolvedBase || null,
-    googleOAuthConfigured: Boolean(presetGoogleOAuthUrl),
     notes: [
       "If the site is deployed locally, leave MULLEM_API_BASE empty.",
       "In production, the frontend will default to the Render backend unless another API base is provided.",
-      "You can temporarily override the backend from the URL using ?api=https://your-backend-domain.com.",
-      "Set MULLEM_GOOGLE_OAUTH_URL only when the Google sign-in redirect is fully configured."
+      "You can temporarily override the backend from the URL using ?api=https://your-backend-domain.com."
     ]
   };
 })();
