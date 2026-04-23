@@ -2,10 +2,12 @@ const http = require("http");
 const fs = require("fs");
 const path = require("path");
 const crypto = require("crypto");
+const { spawnSync } = require("child_process");
 
 const ROOT_DIR = __dirname;
 loadEnvFile(path.join(ROOT_DIR, ".env"));
 const PORT = Number(process.env.PORT || 3000);
+const PHP_BINARY = fs.existsSync(path.join(ROOT_DIR, "php.exe")) ? path.join(ROOT_DIR, "php.exe") : "php";
 
 const OPENAI_API_KEY = String(process.env.OPENAI_API_KEY || "").trim();
 const OPENAI_MODEL = String(process.env.OPENAI_MODEL || "gpt-5.4-mini").trim();
@@ -41,6 +43,7 @@ const TEXT_MESSAGE_XP_REWARD = Math.max(1, Number(process.env.TEXT_MESSAGE_XP_RE
 const IMAGE_MESSAGE_XP_REWARD = Math.max(TEXT_MESSAGE_XP_REWARD, Number(process.env.IMAGE_MESSAGE_XP_REWARD || 15));
 const DAILY_LOGIN_XP_REWARD = Math.max(0, Number(process.env.DAILY_LOGIN_XP_REWARD || 5));
 const DAILY_MOTIVATION_BONUS = Math.max(1, Number(process.env.DAILY_MOTIVATION_BONUS || 5));
+const PASSWORD_RESET_CODE_TTL_MS = Math.max(60_000, Number(process.env.PASSWORD_RESET_CODE_TTL_MS || 15 * 60_000));
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 const MIME_TYPES = {
@@ -466,13 +469,44 @@ function hashPassword(password, salt = crypto.randomBytes(16).toString("hex")) {
   return `pbkdf2$${PASSWORD_HASH_ITERATIONS}$${salt}$${derived}`;
 }
 
-function verifyPassword(password, storedHash) {
+function verifyPhpPasswordHash(password, storedHash) {
+  const result = spawnSync(
+    PHP_BINARY,
+    [
+      "-n",
+      "-r",
+      "$hash = $argv[1] ?? ''; $password = $argv[2] ?? ''; exit(password_verify($password, $hash) ? 0 : 1);",
+      String(storedHash || ""),
+      String(password || "")
+    ],
+    {
+      encoding: "utf8",
+      windowsHide: true
+    }
+  );
+
+  if (result.error) {
+    return null;
+  }
+
+  return result.status === 0;
+}
+
+function checkPassword(password, storedHash) {
   const raw = String(storedHash || "").trim();
-  if (!raw) return false;
+  if (!raw) return { matched: false, unsupported: false };
+
+  if (/^\$2[aby]\$/i.test(raw) || /^\$argon2/i.test(raw)) {
+    const matched = verifyPhpPasswordHash(password, raw);
+    if (matched === null) {
+      return { matched: false, unsupported: true };
+    }
+    return { matched, unsupported: false };
+  }
 
   const parts = raw.split("$");
   if (parts.length !== 4 || parts[0] !== "pbkdf2") {
-    return false;
+    return { matched: false, unsupported: false };
   }
 
   const iterations = Number(parts[1]);
@@ -486,9 +520,133 @@ function verifyPassword(password, storedHash) {
   const expectedBuffer = Buffer.from(expectedHex, "hex");
   const actualBuffer = Buffer.from(actualHex, "hex");
   if (expectedBuffer.length !== actualBuffer.length) {
-    return false;
+    return { matched: false, unsupported: false };
   }
-  return crypto.timingSafeEqual(expectedBuffer, actualBuffer);
+  return {
+    matched: crypto.timingSafeEqual(expectedBuffer, actualBuffer),
+    unsupported: false
+  };
+}
+
+function verifyPassword(password, storedHash) {
+  return checkPassword(password, storedHash).matched;
+}
+
+function generateNumericCode(length = 6) {
+  const safeLength = Math.max(4, Math.min(Number(length) || 6, 10));
+  const min = 10 ** (safeLength - 1);
+  const max = (10 ** safeLength) - 1;
+  return String(Math.floor(min + Math.random() * (max - min + 1)));
+}
+
+function isResetCodeExpired(createdAt) {
+  const createdAtDate = createdAt ? new Date(createdAt) : null;
+  if (!createdAtDate || Number.isNaN(createdAtDate.getTime())) {
+    return true;
+  }
+
+  return (Date.now() - createdAtDate.getTime()) > PASSWORD_RESET_CODE_TTL_MS;
+}
+
+function buildPrimaryUserPayloadFromLegacy(legacyUser, overrides = {}) {
+  const achievements = Array.isArray(overrides.achievements)
+    ? overrides.achievements
+    : Array.isArray(legacyUser?.achievements)
+      ? legacyUser.achievements
+      : [];
+
+  return {
+    name: String(overrides.name ?? legacyUser?.name ?? "").trim(),
+    email: normalizeEmail(overrides.email ?? legacyUser?.email ?? ""),
+    password_hash: String(overrides.password_hash ?? legacyUser?.password_hash ?? "").trim(),
+    role: normalizeUserRole(overrides.role ?? legacyUser?.role ?? "student"),
+    stage: sanitizeOptionalText(overrides.stage ?? legacyUser?.stage, MAX_METADATA_LENGTH) || null,
+    grade: sanitizeOptionalText(overrides.grade ?? legacyUser?.grade, MAX_METADATA_LENGTH) || null,
+    subject: sanitizeOptionalText(overrides.subject ?? legacyUser?.subject, MAX_METADATA_LENGTH) || null,
+    package_key: sanitizeOptionalText(overrides.package_key ?? legacyUser?.package_key, 80) || null,
+    package_name: sanitizeOptionalText(overrides.package_name ?? legacyUser?.package_name ?? legacyUser?.package, 150) || null,
+    xp: Number.isFinite(Number(overrides.xp ?? legacyUser?.xp)) ? Number(overrides.xp ?? legacyUser?.xp) : 100,
+    streak_days: Number.isFinite(Number(overrides.streak_days ?? legacyUser?.streak_days)) ? Number(overrides.streak_days ?? legacyUser?.streak_days) : 0,
+    motivation_score: Number.isFinite(Number(overrides.motivation_score ?? legacyUser?.motivation_score))
+      ? Number(overrides.motivation_score ?? legacyUser?.motivation_score)
+      : 0,
+    last_active_date: overrides.last_active_date ?? legacyUser?.last_active_date ?? null,
+    achievements,
+    status: normalizeUserStatus(overrides.status ?? legacyUser?.status ?? "active"),
+    activity: sanitizeOptionalText(overrides.activity ?? legacyUser?.activity, 255) || null
+  };
+}
+
+async function ensurePrimaryUserForEmail(email) {
+  const primaryUser = await databaseClient.findUserByEmail(email);
+  if (primaryUser) {
+    return primaryUser;
+  }
+
+  const legacyUser = await databaseClient.findLegacyFrameworkUserByEmail(email);
+  if (!legacyUser?.password_hash) {
+    return null;
+  }
+
+  return databaseClient.createUser(
+    buildPrimaryUserPayloadFromLegacy(legacyUser, {
+      password_hash: legacyUser.password_hash
+    })
+  );
+}
+
+async function resolveUserForLogin(email, password) {
+  const primaryUser = await databaseClient.findUserByEmail(email);
+  if (primaryUser) {
+    const primaryPassword = checkPassword(password, primaryUser.password_hash);
+    if (primaryPassword.matched) {
+      return { user: primaryUser, migrationRequired: false };
+    }
+
+    if (primaryPassword.unsupported) {
+      return { user: null, migrationRequired: true };
+    }
+  }
+
+  const legacyUser = await databaseClient.findLegacyFrameworkUserByEmail(email);
+  if (!legacyUser?.password_hash) {
+    return { user: null, migrationRequired: false };
+  }
+
+  const legacyPassword = checkPassword(password, legacyUser.password_hash);
+  if (legacyPassword.unsupported) {
+    return { user: null, migrationRequired: true };
+  }
+
+  if (!legacyPassword.matched) {
+    return { user: null, migrationRequired: false };
+  }
+
+  if (primaryUser) {
+    return {
+      user: await databaseClient.updateUser(primaryUser.id, {
+        password_hash: hashPassword(password),
+        name: primaryUser.name || legacyUser.name,
+        role: primaryUser.role || legacyUser.role,
+        stage: primaryUser.stage || legacyUser.stage,
+        grade: primaryUser.grade || legacyUser.grade,
+        subject: primaryUser.subject || legacyUser.subject,
+        package_name: primaryUser.package_name || legacyUser.package_name,
+        status: primaryUser.status || legacyUser.status,
+        activity: legacyUser.activity || primaryUser.activity
+      }),
+      migrationRequired: false
+    };
+  }
+
+  return {
+    user: await databaseClient.createUser(
+      buildPrimaryUserPayloadFromLegacy(legacyUser, {
+        password_hash: hashPassword(password)
+      })
+    ),
+    migrationRequired: false
+  };
 }
 
 function hashApiToken(token) {
@@ -1002,8 +1160,9 @@ async function handleRegister(req, res) {
   }
 
   const existing = await databaseClient.findUserByEmail(email);
-  if (existing) {
-    throw createHttpError(422, "This email is already registered.");
+  const legacyExisting = existing ? null : await databaseClient.findLegacyFrameworkUserByEmail(email);
+  if (existing || legacyExisting) {
+    throw createHttpError(422, "هذا البريد مسجل بالفعل.");
   }
 
   const user = await databaseClient.createUser({
@@ -1038,9 +1197,14 @@ async function handleLogin(req, res) {
   const password = requirePassword(payload.password);
   const deviceName = sanitizeOptionalText(payload.device_name || payload.deviceName, MAX_METADATA_LENGTH) || "mullem-web";
 
-  const user = await databaseClient.findUserByEmail(email);
-  if (!user || !verifyPassword(password, user.password_hash)) {
-    throw createHttpError(401, "Invalid email or password.");
+  const loginResolution = await resolveUserForLogin(email, password);
+  if (loginResolution.migrationRequired) {
+    throw createHttpError(409, "هذا الحساب محفوظ في النظام القديم. استخدم استعادة كلمة المرور مرة واحدة لتفعيله على النظام الجديد.");
+  }
+
+  const user = loginResolution.user;
+  if (!user) {
+    throw createHttpError(401, "البريد الإلكتروني أو كلمة المرور غير صحيحة.");
   }
 
   const normalizedStatus = normalizeUserStatus(user.status);
@@ -1061,6 +1225,127 @@ async function handleLogin(req, res) {
       token,
       user: buildApiUser(updatedUser || user)
     }
+  });
+}
+
+async function handleImportLegacyUsers(req, res) {
+  requireDatabaseConnection();
+  const payload = await parseJsonBody(req);
+  const users = Array.isArray(payload?.users) ? payload.users.slice(0, 10) : [];
+  const importedUsers = [];
+  const skipped = [];
+
+  for (const item of users) {
+    try {
+      const email = requireEmail(item?.email);
+      const password = requirePassword(item?.password);
+      const existing = await databaseClient.findUserByEmail(email);
+      if (existing) {
+        skipped.push({ email, reason: "exists" });
+        continue;
+      }
+
+      const legacyFrameworkUser = await databaseClient.findLegacyFrameworkUserByEmail(email);
+      const created = await databaseClient.createUser(
+        buildPrimaryUserPayloadFromLegacy(legacyFrameworkUser || {}, {
+          name: sanitizeOptionalText(item?.name, MAX_NAME_LENGTH) || legacyFrameworkUser?.name || email.split("@")[0],
+          email,
+          password_hash: hashPassword(password),
+          role: item?.role ?? legacyFrameworkUser?.role ?? "student",
+          stage: item?.stage ?? legacyFrameworkUser?.stage ?? inferStageFromGrade(item?.grade),
+          grade: item?.grade ?? legacyFrameworkUser?.grade ?? null,
+          subject: item?.subject ?? legacyFrameworkUser?.subject ?? null,
+          package_key: item?.packageKey ?? legacyFrameworkUser?.package_key ?? "starter",
+          package_name: item?.package ?? item?.package_name ?? legacyFrameworkUser?.package_name ?? "التمهيدية",
+          xp: item?.xp ?? legacyFrameworkUser?.xp ?? 100,
+          streak_days: item?.streakDays ?? item?.streak_days ?? legacyFrameworkUser?.streak_days ?? 0,
+          motivation_score: item?.motivationScore ?? item?.motivation_score ?? legacyFrameworkUser?.motivation_score ?? 0,
+          last_active_date: item?.lastActiveDate ?? item?.last_active_date ?? legacyFrameworkUser?.last_active_date ?? null,
+          achievements: item?.achievements ?? legacyFrameworkUser?.achievements ?? [],
+          status: item?.status ?? legacyFrameworkUser?.status ?? "active",
+          activity: item?.activity ?? legacyFrameworkUser?.activity ?? "تمت مزامنة الحساب القديم مع قاعدة البيانات"
+        })
+      );
+
+      importedUsers.push(buildApiUser(created));
+    } catch (error) {
+      skipped.push({
+        email: normalizeEmail(item?.email),
+        reason: String(error?.message || "invalid")
+      });
+    }
+  }
+
+  sendJson(req, res, 200, {
+    success: true,
+    data: {
+      imported_count: importedUsers.length,
+      items: importedUsers,
+      skipped
+    }
+  });
+}
+
+async function handlePasswordForgot(req, res) {
+  requireDatabaseConnection();
+  const payload = await parseJsonBody(req);
+  const email = requireEmail(payload.email);
+  const user = await ensurePrimaryUserForEmail(email);
+
+  if (!user) {
+    throw createHttpError(404, "لا يوجد حساب مرتبط بهذا البريد الإلكتروني.");
+  }
+
+  const resetCode = generateNumericCode(6);
+  await databaseClient.savePasswordResetToken(email, resetCode);
+
+  sendJson(req, res, 200, {
+    success: true,
+    message: "تم تجهيز رمز استعادة كلمة المرور.",
+    data: {
+      email,
+      reset_code: resetCode,
+      expires_in_ms: PASSWORD_RESET_CODE_TTL_MS
+    }
+  });
+}
+
+async function handlePasswordReset(req, res) {
+  requireDatabaseConnection();
+  const payload = await parseJsonBody(req);
+  const email = requireEmail(payload.email);
+  const code = requireTextField(payload.code, "code", 12);
+  const password = requirePassword(payload.password);
+  const passwordConfirmation = String(payload.password_confirmation || payload.passwordConfirmation || "");
+
+  if (passwordConfirmation && passwordConfirmation !== password) {
+    throw createHttpError(422, "تأكيد كلمة المرور غير مطابق.");
+  }
+
+  const user = await ensurePrimaryUserForEmail(email);
+  if (!user) {
+    throw createHttpError(404, "لا يوجد حساب مرتبط بهذا البريد الإلكتروني.");
+  }
+
+  const tokenRecord = await databaseClient.findPasswordResetToken(email);
+  if (!tokenRecord || String(tokenRecord.token || "").trim() !== code) {
+    throw createHttpError(422, "رمز التحقق غير صحيح.");
+  }
+
+  if (isResetCodeExpired(tokenRecord.created_at)) {
+    await databaseClient.deletePasswordResetToken(email);
+    throw createHttpError(422, "انتهت صلاحية رمز التحقق. اطلب رمزًا جديدًا.");
+  }
+
+  await databaseClient.updateUser(user.id, {
+    password_hash: hashPassword(password),
+    activity: "تم تحديث كلمة المرور عبر الاستعادة"
+  });
+  await databaseClient.deletePasswordResetToken(email);
+
+  sendJson(req, res, 200, {
+    success: true,
+    message: "تم تحديث كلمة المرور بنجاح."
   });
 }
 
@@ -1811,6 +2096,21 @@ async function routeRequest(req, res) {
 
   if (req.method === "POST" && requestPath === "/api/auth/login") {
     await handleLogin(req, res);
+    return;
+  }
+
+  if (req.method === "POST" && requestPath === "/api/auth/import-legacy") {
+    await handleImportLegacyUsers(req, res);
+    return;
+  }
+
+  if (req.method === "POST" && requestPath === "/api/auth/password/forgot") {
+    await handlePasswordForgot(req, res);
+    return;
+  }
+
+  if (req.method === "POST" && requestPath === "/api/auth/password/reset") {
+    await handlePasswordReset(req, res);
     return;
   }
 

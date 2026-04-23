@@ -433,6 +433,30 @@
     return result;
   }
 
+  async function importLegacyUsers(users = []) {
+    return request("/auth/import-legacy", {
+      method: "POST",
+      body: { users },
+      skipAuth: true
+    });
+  }
+
+  async function requestPasswordReset(payload) {
+    return request("/auth/password/forgot", {
+      method: "POST",
+      body: payload,
+      skipAuth: true
+    });
+  }
+
+  async function resetPassword(payload) {
+    return request("/auth/password/reset", {
+      method: "POST",
+      body: payload,
+      skipAuth: true
+    });
+  }
+
   async function logout() {
     const result = await request("/auth/logout", {
       method: "POST"
@@ -607,6 +631,9 @@
     buildApiCandidates,
     login,
     register,
+    importLegacyUsers,
+    requestPasswordReset,
+    resetPassword,
     logout,
     me,
     getPackages,

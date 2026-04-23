@@ -110,16 +110,8 @@ function shouldFallbackToLocalAdmin(result) {
 }
 
 function handleLocalAdminLogin(email, password) {
-  if (email === adminCredentials.email && password === adminCredentials.password) {
-    localStorage.setItem(adminSessionKey, "1");
-    if (adminLoginState) adminLoginState.textContent = "تم تسجيل دخول الأدمن بنجاح.";
-    updateAdminView();
-    refreshAdminData();
-    return;
-  }
-
   if (adminLoginState) {
-    adminLoginState.textContent = "بيانات دخول الأدمن غير صحيحة. تأكد من البريد وكلمة المرور.";
+    adminLoginState.textContent = "الخادم غير متاح الآن، لذلك لا يمكن دخول الأدمن بدون قاعدة البيانات.";
   }
 }
 
@@ -705,11 +697,58 @@ function updateUserRecord(userId, updater) {
   return users[index];
 }
 
+function upsertAdminUserSnapshot(user) {
+  const normalizedUser = normalizeUser(user, 0);
+  const nextUsers = [
+    normalizedUser,
+    ...getUsers().filter((entry) => String(entry.id) !== String(normalizedUser.id))
+  ];
+  saveUsers(nextUsers);
+  refreshAdminData();
+  return normalizedUser;
+}
+
+async function persistAdminUserUpdate(userId, apiPayload, fallbackUpdater) {
+  const apiClient = getAdminApiClient();
+
+  if (apiClient && typeof apiClient.updateAdminUser === "function" && apiClient.hasToken() && isAdminLoggedIn()) {
+    try {
+      const result = await apiClient.updateAdminUser(userId, apiPayload);
+      if (result.ok && result.data?.user) {
+        return { ok: true, user: upsertAdminUserSnapshot(result.data.user), source: "api" };
+      }
+
+      if (!shouldFallbackToLocalAdmin(result)) {
+        return {
+          ok: false,
+          message: result?.message || "تعذر حفظ بيانات المستخدم في الخادم."
+        };
+      }
+    } catch (_) {
+      // Keep the local fallback when the API write is unavailable.
+    }
+  }
+
+  const updated = updateUserRecord(userId, fallbackUpdater);
+  if (!updated) {
+    return {
+      ok: false,
+      message: "تعذر العثور على المستخدم المطلوب."
+    };
+  }
+
+  return {
+    ok: true,
+    user: updated,
+    source: "local"
+  };
+}
+
 function isValidEmail(email) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
 }
 
-function editUserRecord(userId) {
+async function editUserRecord(userId) {
   const user = getUsers().find((entry) => entry.id === userId);
   if (!user) return;
 
@@ -749,7 +788,7 @@ function editUserRecord(userId) {
     return;
   }
 
-  updateUserRecord(userId, () => ({
+  const nextPayload = {
     name: name.trim() || user.name,
     email: normalizedEmail || user.email,
     grade: grade.trim(),
@@ -759,12 +798,18 @@ function editUserRecord(userId) {
     xp,
     status: status.trim() || "نشط",
     activity: "تم تعديل الحساب من لوحة الأدمن"
-  }));
+  };
+
+  const result = await persistAdminUserUpdate(userId, nextPayload, () => nextPayload);
+  if (!result.ok) {
+    window.alert(result.message || "تعذر تحديث بيانات المستخدم.");
+    return;
+  }
 
   window.alert("تم تحديث بيانات المستخدم.");
 }
 
-function toggleBanUser(userId) {
+async function toggleBanUser(userId) {
   const user = getUsers().find((entry) => entry.id === userId);
   if (!user) return;
 
@@ -777,15 +822,21 @@ function toggleBanUser(userId) {
 
   if (!confirmed) return;
 
-  updateUserRecord(userId, () => ({
+  const nextPayload = {
     status: willBan ? "محظور" : "نشط",
     activity: willBan ? "تم حظر الحساب من لوحة الأدمن" : "تم فك الحظر عن الحساب من لوحة الأدمن"
-  }));
+  };
+
+  const result = await persistAdminUserUpdate(userId, nextPayload, () => nextPayload);
+  if (!result.ok) {
+    window.alert(result.message || "تعذر تحديث حالة المستخدم.");
+    return;
+  }
 
   window.alert(willBan ? "تم حظر الحساب." : "تم فك الحظر عن الحساب.");
 }
 
-function editUserPoints(userId) {
+async function editUserPoints(userId) {
   const user = getUsers().find((entry) => entry.id === userId);
   if (!user) return;
 
@@ -798,10 +849,17 @@ function editUserPoints(userId) {
     return;
   }
 
-  updateUserRecord(userId, () => ({
+  const nextPayload = {
     xp,
     activity: "تم تعديل النقاط من لوحة الأدمن"
-  }));
+  };
+
+  const result = await persistAdminUserUpdate(userId, nextPayload, () => nextPayload);
+
+  if (!result.ok) {
+    window.alert(result.message || "تعذر تحديث نقاط المستخدم.");
+    return;
+  }
 
   window.alert("تم تحديث النقاط بنجاح.");
 }
@@ -1501,33 +1559,6 @@ adminLogoutButton?.addEventListener("click", async (event) => {
   updateAdminView();
   window.location.href = "login.html";
 }, { capture: true });
-
-adminLoginForm?.addEventListener("submit", (event) => {
-  event.preventDefault();
-  const email = (adminEmailInput?.value || "").trim().toLowerCase();
-  const password = adminPasswordInput?.value || "";
-
-  if (email === adminCredentials.email && password === adminCredentials.password) {
-    localStorage.setItem(adminSessionKey, "1");
-    if (adminLoginState) adminLoginState.textContent = "تم تسجيل دخول الأدمن بنجاح.";
-    updateAdminView();
-    refreshAdminData();
-    return;
-  }
-
-  if (adminLoginState) {
-    adminLoginState.textContent = "بيانات دخول الأدمن غير صحيحة. تأكد من البريد وكلمة المرور.";
-  }
-});
-
-adminLogoutButton?.addEventListener("click", () => {
-  localStorage.removeItem(adminSessionKey);
-  if (adminEmailInput) adminEmailInput.value = "";
-  if (adminPasswordInput) adminPasswordInput.value = "";
-  if (adminLoginState) adminLoginState.textContent = "تم تسجيل الخروج.";
-  updateAdminView();
-  window.location.href = "login.html";
-});
 
 function renderStats() {
   if (!adminStatsRoot) return;

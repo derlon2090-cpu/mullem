@@ -34,12 +34,38 @@
   const dashboardCopyNode = document.querySelector("[data-dashboard-copy]");
   const achievementsNode = document.querySelector("[data-achievements]");
   const placeholderButtons = document.querySelectorAll("[data-chat-placeholder]");
+  const usageSummaryNodes = document.querySelectorAll("[data-usage-summary]");
+  const projectContextNote = document.querySelector("[data-project-note]");
+  const planNameNodes = document.querySelectorAll("[data-plan-name]");
+  const planStatusNodes = document.querySelectorAll("[data-plan-status]");
+  const planBadgeNodes = document.querySelectorAll("[data-plan-badge]");
+  const planPrimaryMetricNodes = document.querySelectorAll("[data-plan-metric-primary]");
+  const planSecondaryMetricNodes = document.querySelectorAll("[data-plan-metric-secondary]");
+  const planTertiaryMetricNodes = document.querySelectorAll("[data-plan-metric-tertiary]");
+  const planCopyNodes = document.querySelectorAll("[data-plan-copy]");
+  const planBenefitsNodes = document.querySelectorAll("[data-plan-benefits]");
+  const planPrimaryLink = document.querySelector("[data-plan-primary-link]");
+  const planSecondaryLink = document.querySelector("[data-plan-secondary-link]");
+  const planUpsellCopyNodes = document.querySelectorAll("[data-plan-upsell-copy]");
+  const packagePreviewList = document.querySelector("[data-package-preview-list]");
+  const projectSelect = document.querySelector("[data-project-select]");
+  const projectListNode = document.querySelector("[data-project-list]");
+  const projectTitleInput = document.querySelector("[data-project-title]");
+  const projectLessonInput = document.querySelector("[data-project-lesson]");
+  const projectDescriptionInput = document.querySelector("[data-project-description]");
+  const createProjectButton = document.querySelector("[data-create-project]");
 
   if (!form || !messageList || !promptInput) return;
 
   const runtimeState = {
     pendingSolveConfirmation: null,
-    lastAcademicRequest: null
+    lastAcademicRequest: null,
+    guestUsage: null,
+    stats: null,
+    packages: [],
+    projects: [],
+    projectMap: {},
+    selectedProjectId: ""
   };
 
   const runtimeMemoryKeys = {
@@ -49,6 +75,7 @@
     intentErrors: "mlm_runtime_intent_errors"
   };
 
+  const GUEST_MESSAGE_LIMIT = 5;
   const blockedVideoExtensions = /\.(mp4|mov|avi|mkv|webm|m4v)$/i;
   const foundationCatalog = {
     "الفيزياء": {
@@ -208,6 +235,477 @@
       localStorage.setItem(getRuntimeScopedKey(baseKey), JSON.stringify(value));
     } catch (_) {
       // ignore storage issues
+    }
+  }
+
+  function syncRuntimeUserSnapshot(user) {
+    if (!user || typeof updateUserRecord !== "function") return null;
+    const nextUser = updateUserRecord({
+      ...user,
+      role: user.role || "Student",
+      package: user.package || "API Connected",
+      status: user.status || "نشط",
+      achievements: Array.isArray(user.achievements) ? user.achievements : [],
+      streakDays: Number.isFinite(Number(user.streakDays)) ? Number(user.streakDays) : 0,
+      motivationScore: Number.isFinite(Number(user.motivationScore)) ? Number(user.motivationScore) : 0,
+      xp: Number.isFinite(Number(user.xp)) ? Number(user.xp) : 0,
+      lastActiveDate: user.lastActiveDate || ""
+    });
+    if (typeof updateXpBalance === "function") updateXpBalance();
+    return nextUser;
+  }
+
+  function getSelectedProjectId() {
+    return String(projectSelect?.value || runtimeState.selectedProjectId || "").trim();
+  }
+
+  function setNodeText(nodes, value) {
+    (Array.isArray(nodes) ? nodes : Array.from(nodes || [])).forEach((node) => {
+      node.textContent = value;
+    });
+  }
+
+  function setNodeHtml(nodes, value) {
+    (Array.isArray(nodes) ? nodes : Array.from(nodes || [])).forEach((node) => {
+      node.innerHTML = value;
+    });
+  }
+
+  function escapeRuntimeHtml(value) {
+    return String(value ?? "")
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&#39;");
+  }
+
+  function formatRuntimeDate(value) {
+    if (!value) return "غير محدد";
+    const parsed = new Date(value);
+    if (Number.isNaN(parsed.getTime())) return "غير محدد";
+    return parsed.toLocaleDateString("ar-SA", {
+      year: "numeric",
+      month: "short",
+      day: "numeric"
+    });
+  }
+
+  function isPaidStudentPackage(user) {
+    if (!user) return false;
+    const packageKey = String(user.packageKey || "").trim().toLowerCase();
+    const paidByKey = packageKey && !["starter", "free", "guest", "basic_free"].includes(packageKey);
+    return paidByKey || Number(user.packageDailyXp || 0) > 0;
+  }
+
+  function formatPackagePreviewPrice(value) {
+    const amount = Number(value || 0);
+    return amount > 0 ? `${amount} ريال / شهر` : "مجانية";
+  }
+
+  function formatPackageBenefits(benefits, fallback = []) {
+    const list = Array.isArray(benefits) ? benefits.filter(Boolean) : [];
+    return list.length ? list : fallback;
+  }
+
+  function renderPackagePreviewCards() {
+    if (!packagePreviewList) return;
+    const activeUser = typeof getActiveUser === "function" ? getActiveUser() : null;
+    const activePackageKey = String(activeUser?.packageKey || "").trim().toLowerCase();
+    const activePackageName = String(activeUser?.package || "").trim();
+    const items = Array.isArray(runtimeState.packages)
+      ? runtimeState.packages.filter((item) => Number(item.daily_xp || 0) > 0).slice(0, 3)
+      : [];
+
+    if (!items.length) {
+      packagePreviewList.innerHTML = '<div class="student-package-empty">ستظهر هنا الباقات المناسبة مباشرة بعد تحميلها من الخادم.</div>';
+      return;
+    }
+
+    packagePreviewList.innerHTML = items.map((item, index) => {
+      const key = String(item.key || "").trim().toLowerCase();
+      const name = String(item.name || "باقة").trim();
+      const isCurrent = Boolean(activeUser) && (
+        (activePackageKey && key && activePackageKey === key) ||
+        (activePackageName && activePackageName === name)
+      );
+      const benefits = formatPackageBenefits(item.benefits, [
+        "تجديد يومي للرصيد داخل المنصة",
+        "تجربة أسرع في الشات والمشروعات",
+        "متابعة واضحة داخل لوحة الطالب"
+      ]);
+      const tags = [
+        index === 1 ? '<span class="student-package-tag">الأكثر طلبًا</span>' : '',
+        isCurrent ? '<span class="student-package-tag">خطة مفعلة</span>' : ''
+      ].filter(Boolean).join("");
+      const ctaLabel = isCurrent
+        ? "خطة مفعلة"
+        : (activeUser ? "اشترك الآن" : "سجّل لتفعيلها");
+      const ctaHref = activeUser ? "subscriptions.html" : "login.html";
+      return `
+        <article class="student-package-preview-card ${index === 1 ? "is-featured" : ""} ${isCurrent ? "is-active" : ""}">
+          <div class="student-package-preview-top">
+            <strong>${escapeRuntimeHtml(name)}</strong>
+            <span class="student-package-preview-price">${escapeRuntimeHtml(formatPackagePreviewPrice(item.price_sar))}</span>
+          </div>
+          <div class="student-package-preview-tags">${tags}</div>
+          <div class="student-package-preview-meta">
+            <span>${escapeRuntimeHtml(String(item.daily_xp || 0))} XP يوميًا</span>
+            <span>${escapeRuntimeHtml(String(item.duration_days || 0))} يومًا</span>
+          </div>
+          <p class="student-package-summary">${escapeRuntimeHtml(item.summary || "باقة شهرية تمنحك رصيدًا يوميًا وتجربة أوسع داخل لوحة الطالب.")}</p>
+          <ul class="student-package-benefits">
+            ${benefits.slice(0, 3).map((benefit) => `<li>${escapeRuntimeHtml(benefit)}</li>`).join("")}
+          </ul>
+          <div class="student-package-preview-actions">
+            <a class="${isCurrent ? "secondary-btn" : "primary-btn"}" href="${ctaHref}">${escapeRuntimeHtml(ctaLabel)}</a>
+          </div>
+        </article>
+      `;
+    }).join("");
+  }
+
+  function renderStudentPlanCard(user = null) {
+    const activeUser = user || (typeof getActiveUser === "function" ? getActiveUser() : null);
+    const paidPlan = isPaidStudentPackage(activeUser);
+    const guestRemaining = Number(runtimeState.guestUsage?.remaining_messages ?? GUEST_MESSAGE_LIMIT);
+    const benefits = paidPlan
+      ? formatPackageBenefits(activeUser?.packageBenefits, [
+          "يتجدد الرصيد تلقائيًا كل يوم طوال مدة الباقة",
+          "محادثاتك ومشروعاتك محفوظة داخل حسابك",
+          "مناسب للدروس المتكررة وحل الأسئلة اليومية"
+        ])
+      : (activeUser
+          ? [
+              "ابدأ بالخطة المجانية ثم فعّل باقتك عند الحاجة",
+              "حفظ المشروعات والمحادثات داخل الحساب",
+              "ترقية مرنة إلى باقات شهرية داخل المنصة"
+            ]
+          : [
+              "5 رسائل يوميًا قبل إنشاء الحساب",
+              "عرض الباقات كاملة قبل الاشتراك",
+              "100 XP بداية الحساب بعد التسجيل"
+            ]);
+
+    const planName = activeUser
+      ? (activeUser.package || "الخطة المجانية")
+      : "تجربة الضيف";
+    const planStatus = activeUser
+      ? (paidPlan
+          ? "باقتك فعالة الآن، ويتجدد رصيدها يوميًا طوال مدة الاشتراك."
+          : "أنت الآن على الخطة المجانية. فعّل باقة شهرية لفتح رصيد يومي أكبر وتجربة أغنى.")
+      : `يمكنك تجربة الشات الآن مع ${guestRemaining} رسائل يوميًا قبل الحاجة إلى تسجيل الدخول.`;
+    const badgeText = activeUser
+      ? (paidPlan ? "باقة فعالة" : "مجانية")
+      : "ضيف";
+    const badgeClass = activeUser
+      ? (paidPlan ? "student-plan-badge is-paid" : "student-plan-badge is-free")
+      : "student-plan-badge is-guest";
+    const primaryMetric = activeUser
+      ? (paidPlan ? `${Number(activeUser.packageDailyXp || 0)} XP` : "مجانية")
+      : `${guestRemaining} رسائل`;
+    const secondaryMetric = activeUser
+      ? (paidPlan
+          ? (Number.isFinite(Number(activeUser.packageDaysRemaining))
+              ? `${Math.max(0, Number(activeUser.packageDaysRemaining))} يوم`
+              : formatRuntimeDate(activeUser.packageExpiresAt))
+          : "ترقية مفتوحة")
+      : "يتجدد يوميًا";
+    const tertiaryMetric = activeUser
+      ? `${Number(activeUser.xp || 0)} XP`
+      : "100 XP بعد التسجيل";
+    const planCopy = activeUser
+      ? (paidPlan
+          ? `خطتك الحالية مناسبة إذا كنت تراجع ${activeUser.grade || "دروسك"} يوميًا وتريد أن يبقى رصيدك متجددًا حتى ${formatRuntimeDate(activeUser.packageExpiresAt)}.`
+          : "فعّل باقتك لفتح عدد أكبر من الأسئلة اليومية، وتنظيم أفضل للمشروعات، وتجربة أكثر راحة داخل الشات.")
+      : "استعرض الباقات من داخل اللوحة نفسها، ثم سجّل دخولك عندما تريد تفعيل خطة شهرية وحفظ التقدم مدى الحياة.";
+    const upsellCopy = activeUser
+      ? (paidPlan
+          ? "هذه هي الخطط المتاحة إذا أردت الترقية لاحقًا أو مقارنة مزايا الباقات الشهرية."
+          : "أنت الآن على الخطة المجانية. اختر الباقة المناسبة عندما تحتاج رصيدًا يوميًا أكبر داخل نفس اللوحة.")
+      : "استعرض الباقات الآن، ثم فعّل ما يناسبك بعد الدخول إلى الحساب بدون أي لخبطة في التجربة.";
+
+    setNodeText(planNameNodes, planName);
+    setNodeText(planStatusNodes, planStatus);
+    setNodeText(planPrimaryMetricNodes, primaryMetric);
+    setNodeText(planSecondaryMetricNodes, secondaryMetric);
+    setNodeText(planTertiaryMetricNodes, tertiaryMetric);
+    setNodeText(planCopyNodes, planCopy);
+    setNodeText(planUpsellCopyNodes, upsellCopy);
+
+    planBadgeNodes.forEach((node) => {
+      node.className = badgeClass;
+      node.textContent = badgeText;
+    });
+
+    setNodeHtml(planBenefitsNodes, benefits.slice(0, 3).map((benefit) => `
+      <span class="student-plan-benefit">${escapeRuntimeHtml(benefit)}</span>
+    `).join(""));
+
+    if (planPrimaryLink) {
+      planPrimaryLink.href = activeUser ? "subscriptions.html" : "login.html";
+      planPrimaryLink.textContent = activeUser
+        ? (paidPlan ? "إدارة الباقة" : "ترقية الباقة")
+        : "أنشئ حسابًا";
+    }
+
+    if (planSecondaryLink) {
+      planSecondaryLink.href = activeUser ? "subscriptions.html" : "subscriptions.html";
+      planSecondaryLink.textContent = activeUser
+        ? "مقارنة الباقات"
+        : "قارن الباقات";
+    }
+
+    renderPackagePreviewCards();
+  }
+
+  function renderGuestStatus(payload = null) {
+    runtimeState.guestUsage = payload || runtimeState.guestUsage;
+    const activeUser = typeof getActiveUser === "function" ? getActiveUser() : null;
+
+    if (activeUser) {
+      setNodeText(usageSummaryNodes, isPaidStudentPackage(activeUser)
+        ? `باقتك فعالة حتى ${formatRuntimeDate(activeUser.packageExpiresAt)} ويتجدد رصيدها يوميًا.`
+        : "أنت الآن على الخطة المجانية. فعّل باقتك عندما تحتاج رصيدًا يوميًا أكبر.");
+      if (projectContextNote) {
+        projectContextNote.textContent = "مشروعاتك محفوظة داخل حسابك. اربط كل محادثة بالمادة أو الدرس الذي تريد الرجوع إليه لاحقًا.";
+      }
+      renderStudentPlanCard(activeUser);
+      return;
+    }
+
+    const remaining = Number(runtimeState.guestUsage?.remaining_messages ?? GUEST_MESSAGE_LIMIT);
+    const used = Number(runtimeState.guestUsage?.used_messages ?? 0);
+    const text = remaining > 0
+      ? `بقي لك ${remaining} من ${GUEST_MESSAGE_LIMIT} رسائل كضيف. سجّل الدخول لحفظ التقدم بدون حد مؤقت.`
+      : "وصلت إلى حد الضيف المجاني. سجّل الدخول لمتابعة الشات وحفظ تقدمك.";
+    setNodeText(usageSummaryNodes, text);
+    if (projectContextNote) {
+      projectContextNote.textContent = used > 0
+        ? `استهلكت ${used} رسالة حتى الآن كضيف. سجّل دخولك لتفعيل حفظ المشروعات والمحادثات.`
+        : "المشروعات الكاملة وحفظ المحادثات يظهران بعد تسجيل الدخول، ويمكنك الآن تجربة الشات مباشرة.";
+    }
+    renderStudentPlanCard(null);
+  }
+
+  function renderProjectList(items = []) {
+    runtimeState.projects = Array.isArray(items) ? items : [];
+    runtimeState.projectMap = Object.fromEntries(runtimeState.projects.map((project) => [String(project.id), project]));
+
+    if (projectSelect) {
+      const previousValue = getSelectedProjectId();
+      const options = [
+        '<option value="">بدون مشروع محفوظ</option>',
+        ...runtimeState.projects.map((project) => `<option value="${String(project.id)}">${project.title}</option>`)
+      ];
+      projectSelect.innerHTML = options.join("");
+      projectSelect.value = runtimeState.projectMap[previousValue] ? previousValue : "";
+      runtimeState.selectedProjectId = projectSelect.value;
+    }
+
+    if (projectListNode) {
+      if (!runtimeState.projects.length) {
+        projectListNode.innerHTML = '<div class="student-project-empty">أنشئ مشروعًا إذا أردت حفظ محادثات مادة أو درس معين في مكان مستقل.</div>';
+      } else {
+        projectListNode.innerHTML = runtimeState.projects.map((project) => {
+          const meta = [project.subject, project.grade, project.lesson].filter(Boolean).join(" · ");
+          const isActive = String(project.id) === getSelectedProjectId();
+          return `
+            <button class="student-project-card ${isActive ? "is-active" : ""}" type="button" data-project-pick="${String(project.id)}">
+              <strong>${project.title}</strong>
+              <span>${meta || "مشروع عام"}</span>
+              <small>${Number(project.conversationsCount || 0)} محادثة محفوظة</small>
+            </button>
+          `;
+        }).join("");
+      }
+    }
+
+    applyUserStudyContext();
+  }
+
+  function renderRuntimeConversationList(items = []) {
+    const sessionListNode = document.querySelector("[data-session-list]");
+    if (!sessionListNode) return;
+
+    if (!Array.isArray(items) || !items.length) {
+      sessionListNode.innerHTML = '<div class="student-project-empty">ستظهر هنا المحادثات المحفوظة المرتبطة بحسابك أو مشروعك المختار.</div>';
+      return;
+    }
+
+    sessionListNode.innerHTML = items.map((item) => {
+      const meta = [item.subject, item.grade, item.term].filter(Boolean).join(" · ");
+      const project = runtimeState.projectMap[item.project_id] || null;
+      const projectText = project?.title ? ` · ${project.title}` : "";
+      return `
+        <button class="session-card student-api-session-card" type="button" data-open-api-conversation="${String(item.id)}">
+          <strong>${item.title || item.subject || "محادثة محفوظة"}</strong>
+          <span>${meta || "سجل محفوظ"}${projectText}</span>
+        </button>
+      `;
+    }).join("");
+  }
+
+  async function loadRuntimeGuestStatus() {
+    const activeUser = typeof getActiveUser === "function" ? getActiveUser() : null;
+    if (activeUser) {
+      renderGuestStatus(null);
+      renderPackagePreviewCards();
+      return;
+    }
+    const apiClient = getRuntimeApiClient();
+    if (!apiClient || typeof apiClient.getGuestStatus !== "function") {
+      renderGuestStatus(null);
+      return;
+    }
+    try {
+      const result = await apiClient.getGuestStatus(getRuntimeGuestSessionId());
+      if (result.ok && result.data) {
+        renderGuestStatus(result.data);
+      } else {
+        renderGuestStatus(null);
+      }
+    } catch (_) {
+      renderGuestStatus(null);
+    }
+    syncStudentDashboardHeader();
+  }
+
+  async function loadRuntimePackages() {
+    const apiClient = getRuntimeApiClient();
+    if (!apiClient || typeof apiClient.getPackages !== "function") {
+      renderStudentPlanCard();
+      return;
+    }
+    try {
+      const result = await apiClient.getPackages();
+      if (result.ok && result.data) {
+        runtimeState.packages = Array.isArray(result.data.items) ? result.data.items : [];
+        if (result.data.user) syncRuntimeUserSnapshot(result.data.user);
+      }
+    } catch (_) {
+      // Keep previously rendered package preview state.
+    }
+    renderStudentPlanCard();
+  }
+
+  async function loadRuntimeStudentDashboard() {
+    const apiClient = getRuntimeApiClient();
+    if (!apiClient || !apiClient.hasToken() || typeof apiClient.getStudentDashboard !== "function") return;
+    try {
+      const result = await apiClient.getStudentDashboard();
+      if (!result.ok || !result.data) return;
+      if (result.data.user) syncRuntimeUserSnapshot(result.data.user);
+      runtimeState.stats = result.data.stats || null;
+      renderProjectList(result.data.projects || []);
+      renderRuntimeConversationList(result.data.recent_conversations || []);
+      renderGuestStatus(null);
+      syncStudentDashboardHeader();
+    } catch (_) {
+      // keep local snapshot if dashboard sync fails
+    }
+  }
+
+  async function loadRuntimeProjectConversations(projectId = "") {
+    const apiClient = getRuntimeApiClient();
+    if (!apiClient || !apiClient.hasToken() || typeof apiClient.getStudentConversations !== "function") return;
+    try {
+      const result = await apiClient.getStudentConversations({
+        project_id: projectId || undefined,
+        limit: 20
+      });
+      if (!result.ok) return;
+      renderRuntimeConversationList(result.data?.items || []);
+    } catch (_) {
+      // Ignore conversation refresh failures during runtime mode.
+    }
+  }
+
+  async function loadRuntimeApiConversation(conversationId) {
+    const apiClient = getRuntimeApiClient();
+    if (!apiClient || typeof apiClient.getChatSession !== "function" || !conversationId) return;
+
+    try {
+      const result = await apiClient.getChatSession(conversationId);
+      if (!result.ok || !result.data?.conversation) return;
+
+      const conversation = result.data.conversation;
+      const messages = Array.isArray(result.data.messages) ? result.data.messages : [];
+
+      if (messageList) {
+        messageList.innerHTML = "";
+      }
+
+      setRuntimeApiConversationId(conversation.id || conversationId);
+
+      if (conversation.grade && gradeSelect) gradeSelect.value = conversation.grade;
+      if (conversation.subject && subjectSelect) subjectSelect.value = conversation.subject;
+      if (conversation.term && termSelect) termSelect.value = conversation.term;
+      if (projectSelect) {
+        projectSelect.value = conversation.project_id ? String(conversation.project_id) : "";
+        runtimeState.selectedProjectId = projectSelect.value;
+      }
+
+      messages.forEach((item) => {
+        const role = String(item.role || "").toLowerCase() === "assistant" ? "assistant" : "user";
+        const text = String(item.text || item.body || "").trim();
+        if (!text) return;
+        addMessage(
+          role,
+          role === "assistant" ? "ملم يحل" : "أنت",
+          role === "assistant" ? formatSimpleReply(text) : text,
+          { enableTools: role === "assistant", sources: [] }
+        );
+      });
+
+      applyUserStudyContext();
+      syncStudentDashboardHeader();
+      scrollToChatSection();
+    } catch (_) {
+      // Ignore open conversation failures.
+    }
+  }
+
+  async function handleRuntimeCreateProject() {
+    const apiClient = getRuntimeApiClient();
+    if (!apiClient || !apiClient.hasToken() || typeof apiClient.createStudentProject !== "function") {
+      window.alert("تسجيل الدخول مطلوب لإنشاء مشروع وحفظ محادثاته.");
+      return;
+    }
+
+    const title = String(projectTitleInput?.value || "").trim();
+    if (!title) {
+      window.alert("اكتب اسم المشروع أولًا.");
+      return;
+    }
+
+    try {
+      const activeUser = typeof getActiveUser === "function" ? getActiveUser() : null;
+      const result = await apiClient.createStudentProject({
+        title,
+        subject: subjectSelect?.value || activeUser?.subject || "",
+        grade: gradeSelect?.value || activeUser?.grade || "",
+        stage: inferRuntimeStageLabel(gradeSelect?.value || activeUser?.grade || ""),
+        term: termSelect?.value || "",
+        lesson: String(projectLessonInput?.value || lessonInput?.value || "").trim(),
+        description: String(projectDescriptionInput?.value || "").trim()
+      });
+
+      if (!result.ok || !result.data?.project) {
+        window.alert(result.message || "تعذر إنشاء المشروع الآن.");
+        return;
+      }
+
+      renderProjectList([result.data.project, ...runtimeState.projects.filter((item) => String(item.id) !== String(result.data.project.id))]);
+      runtimeState.selectedProjectId = String(result.data.project.id);
+      if (projectSelect) projectSelect.value = runtimeState.selectedProjectId;
+      if (projectTitleInput) projectTitleInput.value = "";
+      if (projectLessonInput) projectLessonInput.value = "";
+      if (projectDescriptionInput) projectDescriptionInput.value = "";
+      applyUserStudyContext();
+      loadRuntimeProjectConversations(runtimeState.selectedProjectId);
+    } catch (_) {
+      window.alert("تعذر إنشاء المشروع الآن.");
     }
   }
 
@@ -2645,11 +3143,34 @@
       : ['<span class="student-achievement-chip student-achievement-chip-muted">ستظهر إنجازاتك هنا بعد أول عدة أسئلة.</span>'];
   }
 
+  function syncProjectAccessState(activeUser) {
+    const disabled = !activeUser;
+    [projectSelect, projectTitleInput, projectLessonInput, projectDescriptionInput, createProjectButton].forEach((node) => {
+      if (!node) return;
+      node.disabled = disabled;
+    });
+
+    if (projectTitleInput) {
+      projectTitleInput.placeholder = disabled ? "سجّل دخولك أولًا لإنشاء مشروع محفوظ" : "اسم المشروع";
+    }
+    if (projectLessonInput) {
+      projectLessonInput.placeholder = disabled ? "يتاح بعد تسجيل الدخول" : "الدرس أو الوحدة";
+    }
+    if (projectDescriptionInput) {
+      projectDescriptionInput.placeholder = disabled
+        ? "حفظ المشروعات والمحادثات مدى الحياة يبدأ بعد تسجيل الدخول."
+        : "وصف مختصر للمشروع أو الهدف منه";
+    }
+  }
+
   function syncStudentDashboardHeader() {
     const activeUser = typeof getActiveUser === "function" ? getActiveUser() : null;
     const gradeLabel = activeUser?.grade || gradeSelect?.value || "هذا الصف";
     const displayName = activeUser?.name || "صديق ملم";
     const streakDays = activeUser?.streakDays || 0;
+    const motivationScore = Number(activeUser?.motivationScore || 0);
+    const guestRemaining = Number(runtimeState.guestUsage?.remaining_messages || 5);
+    const stats = runtimeState.stats || {};
 
     studentNameNodes.forEach((node) => {
       node.textContent = displayName;
@@ -2660,13 +3181,24 @@
 
     if (dashboardCopyNode) {
       dashboardCopyNode.textContent = activeUser
-        ? `جاهز اليوم لمراجعة ${gradeLabel} بسرعة وبخطوات واضحة. ابدأ بسؤالك وسيتولى ملم الباقي.`
-        : "ابدأ مباشرة كضيف في الشات النصي، وسجّل دخولك عندما تريد حفظ التقدم وتحليل الصور.";
+        ? `جاهز اليوم لمراجعة ${gradeLabel} بسرعة وبخطوات واضحة. حماسك الحالي ${motivationScore} ونقاطك تزيد مع كل رسالة جديدة.`
+        : `ابدأ مباشرة كضيف في الشات النصي. لديك ${guestRemaining} رسائل متبقية قبل الحاجة إلى تسجيل الدخول لحفظ التقدم والمشروعات.`;
     }
 
     if (achievementsNode) {
       achievementsNode.innerHTML = getAchievementChips(activeUser).join("");
     }
+
+    if (!activeUser) {
+      setNodeText(usageSummaryNodes, `التجربة الحالية تمنحك ${guestRemaining} رسائل يوميًا قبل الحاجة إلى إنشاء حساب.`);
+    } else if (isPaidStudentPackage(activeUser)) {
+      setNodeText(usageSummaryNodes, `باقتك ${activeUser.package || "الحالية"} فعالة، ولديك ${Number(activeUser.xp || 0)} XP مع ${Number(stats.projects_count || 0)} مشروع محفوظ.`);
+    } else {
+      setNodeText(usageSummaryNodes, `أنت الآن على الخطة المجانية، ومعك ${Number(activeUser.xp || 0)} XP و${Number(stats.conversations_count || 0)} محادثة محفوظة.`);
+    }
+
+    syncProjectAccessState(activeUser);
+    renderStudentPlanCard(activeUser);
   }
 
   function bindPromptPlaceholderButtons() {
@@ -2750,6 +3282,7 @@
   function applyUserStudyContext() {
     const activeUser = typeof getActiveUser === "function" ? getActiveUser() : null;
     const isLogged = Boolean(activeUser);
+    const selectedProject = runtimeState.projectMap[getSelectedProjectId()] || null;
     document.body.classList.toggle("user-logged-in", isLogged);
     document.body.classList.toggle("guest-mode", !isLogged);
 
@@ -2796,13 +3329,19 @@
       }
     });
 
+    [projectSelect, projectTitleInput, projectLessonInput, projectDescriptionInput, createProjectButton].forEach((element) => {
+      if (!element) return;
+      element.disabled = !isLogged;
+    });
+
     if (selectionSummary) {
       const gradeLabel = activeUser?.grade || gradeSelect?.value || "";
       const termLabel = termSelect?.value || "";
-      const lessonLabel = lessonInput?.value?.trim() || "الدرس غير محدد";
+      const lessonLabel = lessonInput?.value?.trim() || selectedProject?.lesson || "الدرس غير محدد";
+      const projectLabel = selectedProject?.title ? `المشروع: ${selectedProject.title}` : "";
       selectionSummary.textContent = isLogged
-        ? `${gradeLabel} · ${termLabel} · ${lessonLabel}`
-        : "ابدأ أول محادثة لك الآن.";
+        ? [gradeLabel, termLabel, projectLabel || lessonLabel].filter(Boolean).join(" · ")
+        : `الوضع الضيف · ${Math.max(0, Number(runtimeState.guestUsage?.remaining_messages || 5))} رسائل متبقية`;
     }
   }
 
@@ -3736,27 +4275,32 @@
     saveRuntimeApiConversationMap(map);
   }
 
-  function buildRuntimeApiChatPayload(question, route) {
+  function buildRuntimeApiChatPayload(question, route, attachmentCount = 0) {
     const activeUser = typeof getActiveUser === "function" ? getActiveUser() : null;
     const guestSessionId = !activeUser ? getRuntimeGuestSessionId() : undefined;
     const grade = gradeSelect?.value || activeUser?.grade || "";
+    const selectedProject = runtimeState.projectMap[getSelectedProjectId()] || null;
     return {
       conversation_id: getRuntimeApiConversationId() || undefined,
       guest_session_id: guestSessionId,
       message: question,
-      subject: route?.detected_subject || subjectSelect?.value || "",
-      stage: inferRuntimeStageLabel(grade),
+      subject: route?.detected_subject || subjectSelect?.value || selectedProject?.subject || activeUser?.subject || "",
+      stage: inferRuntimeStageLabel(grade) || selectedProject?.stage || activeUser?.stage || "",
       grade,
-      term: termSelect?.value || "",
+      term: termSelect?.value || selectedProject?.term || "",
+      lesson: String(lessonInput?.value || projectLessonInput?.value || selectedProject?.lesson || "").trim(),
+      project_id: getSelectedProjectId() || undefined,
+      has_attachment: attachmentCount > 0,
+      attachment_count: attachmentCount > 0 ? attachmentCount : undefined,
       stream: false
     };
   }
 
-  async function fetchRuntimeApiChat(question, route) {
+  async function fetchRuntimeApiChat(question, route, attachmentCount = 0) {
     const apiClient = getRuntimeApiClient();
     if (!apiClient) return null;
 
-    const result = await apiClient.sendChat(buildRuntimeApiChatPayload(question, route));
+    const result = await apiClient.sendChat(buildRuntimeApiChatPayload(question, route, attachmentCount));
     if (!result.ok || !result.data?.assistant_message?.body) {
       return result?.serverUnavailable ? null : {
         content: "",
@@ -3765,11 +4309,20 @@
     }
 
     setRuntimeApiConversationId(result.data.conversation_id);
+    if (result.data.user) syncRuntimeUserSnapshot(result.data.user);
+    if (result.data.guest) renderGuestStatus(result.data.guest);
+    if (result.data.project && projectSelect) {
+      runtimeState.selectedProjectId = String(result.data.project.id || "");
+      projectSelect.value = runtimeState.selectedProjectId;
+    }
 
     return {
       content: String(result.data.assistant_message.body || "").trim(),
       conversationId: result.data.conversation_id || null,
-      provider: result.data.assistant_message?.source || "openai"
+      provider: result.data.assistant_message?.source || "openai",
+      user: result.data.user || null,
+      guest: result.data.guest || null,
+      project: result.data.project || null
     };
   }
 
@@ -5034,7 +5587,18 @@
   enhanceRuntimeChatUi();
   applyReadableRuntimeLabels();
   bindPromptPlaceholderButtons();
+  loadRuntimeGuestStatus();
+  loadRuntimePackages();
+  loadRuntimeStudentDashboard();
   gradeSelect?.addEventListener("change", syncStudentDashboardHeader);
+  termSelect?.addEventListener("change", applyUserStudyContext);
+  lessonInput?.addEventListener("input", applyUserStudyContext);
+  projectSelect?.addEventListener("change", () => {
+    runtimeState.selectedProjectId = String(projectSelect.value || "").trim();
+    applyUserStudyContext();
+    loadRuntimeProjectConversations(runtimeState.selectedProjectId);
+  });
+  createProjectButton?.addEventListener("click", handleRuntimeCreateProject);
   function submitHeroExample() {
     if (!form || !promptInput) return;
     submitPresetPrompt("احسب محيط دائرة نصف قطرها 7", "الرياضيات", { scrollToChat: true });
@@ -5151,10 +5715,31 @@
     }
 
     const heroExampleButton = event.target.closest("[data-hero-example]");
-    if (!heroExampleButton) return;
-    event.preventDefault();
-    event.stopImmediatePropagation();
-    submitHeroExample();
+    if (heroExampleButton) {
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      submitHeroExample();
+      return;
+    }
+
+    const pickProjectButton = event.target.closest("[data-project-pick]");
+    if (pickProjectButton) {
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      runtimeState.selectedProjectId = String(pickProjectButton.getAttribute("data-project-pick") || "").trim();
+      if (projectSelect) projectSelect.value = runtimeState.selectedProjectId;
+      applyUserStudyContext();
+      loadRuntimeProjectConversations(runtimeState.selectedProjectId);
+      return;
+    }
+
+    const openApiConversationButton = event.target.closest("[data-open-api-conversation]");
+    if (openApiConversationButton) {
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      loadRuntimeApiConversation(openApiConversationButton.getAttribute("data-open-api-conversation"));
+      return;
+    }
   }, true);
   logoutTriggers.forEach((button) => {
     button.addEventListener("click", (event) => {
@@ -5174,7 +5759,7 @@
     });
   }, true);
   syncRuntimeScrollButton();
-  fetchRuntimeApiChat = async function patchedFetchRuntimeApiChat(question, route) {
+  fetchRuntimeApiChat = async function patchedFetchRuntimeApiChat(question, route, attachmentCount = 0) {
     const apiClient = getRuntimeApiClient();
     if (!apiClient) {
       return {
@@ -5184,7 +5769,7 @@
       };
     }
 
-    const result = await apiClient.sendChat(buildRuntimeApiChatPayload(question, route));
+    const result = await apiClient.sendChat(buildRuntimeApiChatPayload(question, route, attachmentCount));
     if (!result.ok || !result.data?.assistant_message?.body) {
       let failureMessage = result?.message || "";
 
@@ -5208,21 +5793,32 @@
       return {
         content: "",
         failed: true,
-        errorType: result?.status === 401 || result?.status === 403
-          ? "unauthorized"
-          : result?.serverUnavailable
-            ? "server_unavailable"
-            : "request_failed",
+        errorType: /guest message limit reached/i.test(failureMessage)
+          ? "guest_limit"
+          : result?.status === 401 || result?.status === 403
+            ? "unauthorized"
+            : result?.serverUnavailable
+              ? "server_unavailable"
+              : "request_failed",
         message: failureMessage
       };
     }
 
     setRuntimeApiConversationId(result.data.conversation_id);
+    if (result.data.user) syncRuntimeUserSnapshot(result.data.user);
+    if (result.data.guest) renderGuestStatus(result.data.guest);
+    if (result.data.project && projectSelect) {
+      runtimeState.selectedProjectId = String(result.data.project.id || "");
+      projectSelect.value = runtimeState.selectedProjectId;
+    }
 
     return {
       content: String(result.data.assistant_message.body || "").trim(),
       conversationId: result.data.conversation_id || null,
       provider: result.data.assistant_message?.source || "openai",
+      user: result.data.user || null,
+      guest: result.data.guest || null,
+      project: result.data.project || null,
       failed: false
     };
   };
@@ -5247,7 +5843,9 @@
 
     let message = "تعذر الوصول إلى خدمة الشات الآن. أعد المحاولة بعد قليل.";
 
-    if (/quota|billing details|exceeded your current quota|insufficient_quota/i.test(readableDetails)) {
+    if (reason === "guest_limit" || /guest message limit reached/i.test(readableDetails)) {
+      message = "استخدمت الحد المتاح للضيف وهو 5 رسائل. سجّل دخولك الآن حتى تستمر المحادثة وتحفظ تقدمك ومشروعاتك.";
+    } else if (/quota|billing details|exceeded your current quota|insufficient_quota/i.test(readableDetails)) {
       message = "الشات مربوط فعلًا مع OpenAI، لكن الطلب مرفوض الآن لأن حصة الحساب أو الفوترة غير كافية (`429 quota exceeded`). فعّل Billing أو استخدم مفتاحًا عليه رصيد ثم أعد المحاولة.";
     } else if (reason === "missing_auth" || reason === "unauthorized") {
       message = "الخادم طلب تسجيل الدخول قبل إكمال هذه المحادثة. إذا كان الشات عندكم يفترض أن يعمل للزائر، فالمشكلة من حماية endpoint في Laravel وليست من السؤال نفسه.";
@@ -5299,9 +5897,9 @@
     };
   }
 
-  buildAcademicResponseWithBackend = async function patchedBuildAcademicResponseWithBackend(question, route, analysis, reasoning, decision) {
+  buildAcademicResponseWithBackend = async function patchedBuildAcademicResponseWithBackend(question, route, analysis, reasoning, decision, attachmentCount = 0) {
     const resolvedQuestion = question || route?.extracted_text || "";
-    const apiReply = await fetchRuntimeApiChat(resolvedQuestion, route);
+    const apiReply = await fetchRuntimeApiChat(resolvedQuestion, route, attachmentCount);
 
     if (apiReply?.content) {
       return buildRuntimeApiResponse(
@@ -5370,24 +5968,21 @@
 
     const pendingNode = addMessage("assistant", "ملم يحل", createLoadingCopy(), { pending: true });
 
-    let responseForLog = null;
-    if (hasAttachments) {
-      responseForLog = buildRuntimeApiUnavailableResponse(question, route, "attachment_not_supported");
-    } else {
-      responseForLog = await buildAcademicResponseWithBackend(
-        question || route.extracted_text || "",
-        route,
-        {
-          questionType: route?.question_type || "",
-          subject: route?.detected_subject || subjectSelect?.value || ""
-        },
-        {},
-        { action: "answer", confidence: 1 }
-      );
-    }
+    const effectiveQuestion = question || `لدي مرفق دراسي وأحتاج الحل أو الشرح. أسماء المرفقات: ${attachments.map((item) => item.name).join("، ")}`;
+    const responseForLog = await buildAcademicResponseWithBackend(
+      effectiveQuestion || route.extracted_text || "",
+      route,
+      {
+        questionType: route?.question_type || "",
+        subject: route?.detected_subject || subjectSelect?.value || ""
+      },
+      {},
+      { action: "answer", confidence: 1 },
+      hasAttachments ? attachments.length : 0
+    );
 
     const body = finalRuntimeSafetyGate(
-      question || route.extracted_text || "",
+      effectiveQuestion || route.extracted_text || "",
       "solve",
       responseForLog?.preRenderedBody || (responseForLog ? formatAssistantSections(responseForLog) : "") || formatSimpleReply("تعذر تجهيز الرد حاليًا.")
     ).replacement;
@@ -5407,6 +6002,11 @@
 
     if (typeof renderSessionList === "function") renderSessionList();
     syncStudentDashboardHeader();
+    if (typeof getActiveUser === "function" && getActiveUser()) {
+      loadRuntimeProjectConversations(getSelectedProjectId());
+    } else {
+      loadRuntimeGuestStatus();
+    }
   };
 
   renderRuntimeAttachments();
