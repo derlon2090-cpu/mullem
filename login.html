@@ -785,6 +785,212 @@
         line-height: 1.55;
       }
     }
+
+    body.auth-page-v2 {
+      background:
+        radial-gradient(circle at 14% 14%, rgba(34, 197, 94, 0.1), transparent 20%),
+        radial-gradient(circle at 86% 12%, rgba(16, 185, 129, 0.08), transparent 18%),
+        linear-gradient(160deg, #f7fcf8 0%, #eef8f1 52%, #fcfffc 100%);
+    }
+
+    body.auth-page-v2::before {
+      width: 220px;
+      height: 220px;
+      top: 8%;
+      right: 8%;
+      background: rgba(34, 197, 94, 0.08);
+    }
+
+    body.auth-page-v2::after {
+      width: 240px;
+      height: 240px;
+      left: 6%;
+      bottom: 8%;
+      background: rgba(52, 211, 153, 0.07);
+    }
+
+    .auth-v2-page {
+      padding: 16px 14px;
+      gap: 12px;
+      max-width: 920px;
+    }
+
+    .auth-v2-topbar {
+      gap: 10px;
+      max-width: 920px;
+    }
+
+    .auth-v2-brand {
+      padding: 10px 14px;
+    }
+
+    .auth-v2-back {
+      padding: 10px 15px;
+    }
+
+    .auth-v2-stage {
+      padding-bottom: 10px;
+    }
+
+    .auth-v2-card {
+      width: min(100%, 500px);
+      padding: 20px 20px 18px;
+      border-radius: 30px;
+    }
+
+    .auth-v2-card::before {
+      width: 120px;
+      height: 120px;
+      background: radial-gradient(circle, rgba(34, 197, 94, 0.08), transparent 72%);
+    }
+
+    .auth-v2-card-head {
+      margin-bottom: 12px;
+    }
+
+    .auth-v2-badge {
+      padding: 8px 12px;
+      margin-bottom: 10px;
+    }
+
+    .auth-v2-logo {
+      width: 54px;
+      height: 54px;
+      margin-bottom: 10px;
+      border-radius: 18px;
+    }
+
+    .auth-v2-logo img {
+      width: 32px;
+      height: 32px;
+    }
+
+    .auth-v2-card h1 {
+      font-size: clamp(1.68rem, 3.8vw, 2.3rem);
+    }
+
+    .auth-v2-card p.auth-v2-lead {
+      margin-top: 8px;
+      font-size: 0.94rem;
+      line-height: 1.6;
+    }
+
+    .auth-v2-strip {
+      display: none !important;
+    }
+
+    .auth-v2-tabs {
+      margin-bottom: 14px;
+      padding: 6px;
+    }
+
+    .auth-v2-tab {
+      padding: 12px 14px;
+      font-size: 0.96rem;
+    }
+
+    .auth-v2-intro {
+      margin-bottom: 12px;
+    }
+
+    .auth-v2-intro strong {
+      font-size: 0.98rem;
+      margin-bottom: 4px;
+    }
+
+    .auth-v2-intro span,
+    .auth-v2-verify-copy,
+    .auth-v2-state {
+      font-size: 0.89rem;
+      line-height: 1.6;
+    }
+
+    .auth-v2-form {
+      gap: 12px;
+    }
+
+    .auth-v2-field-group {
+      gap: 6px;
+    }
+
+    .auth-v2-label {
+      font-size: 0.91rem;
+    }
+
+    .auth-v2-input,
+    .auth-v2-select {
+      min-height: 52px;
+      border-radius: 16px;
+    }
+
+    .password-toggle {
+      min-width: 52px;
+      height: 35px;
+    }
+
+    .auth-v2-hint {
+      font-size: 0.84rem;
+    }
+
+    .primary-btn,
+    .secondary-btn {
+      min-height: 52px;
+      font-size: 0.98rem;
+    }
+
+    .auth-v2-divider {
+      margin: 10px 0;
+    }
+
+    .auth-v2-note,
+    .auth-v2-status,
+    .auth-v2-verify-note {
+      padding: 11px 13px;
+      font-size: 0.87rem;
+      line-height: 1.6;
+    }
+
+    .auth-v2-note,
+    .auth-v2-status,
+    .auth-v2-footer {
+      margin-top: 10px;
+    }
+
+    .auth-v2-footer {
+      font-size: 0.88rem;
+    }
+
+    @media (max-width: 720px) {
+      .auth-v2-page {
+        padding: 12px 10px;
+      }
+
+      .auth-v2-topbar {
+        gap: 8px;
+      }
+
+      .auth-v2-brand-copy small,
+      .auth-v2-logo,
+      .auth-v2-status {
+        display: none;
+      }
+
+      .auth-v2-card {
+        padding: 18px 16px 16px;
+        border-radius: 24px;
+      }
+
+      .auth-v2-card h1 {
+        font-size: 1.6rem;
+      }
+
+      .auth-v2-card p.auth-v2-lead,
+      .auth-v2-intro span,
+      .auth-v2-note {
+        font-size: 0.83rem;
+        line-height: 1.5;
+      }
+    }
   </style>
 </head>
 <body class="auth-page-v2">
@@ -813,11 +1019,6 @@
           <h1 id="authHeroTitle">مرحبًا بعودتك</h1>
           <p class="auth-v2-lead" id="authHeroSubtitle">سجّل دخولك وابدأ مباشرة من نفس المكان بهدوء ووضوح.</p>
 
-          <div class="auth-v2-strip" aria-hidden="true">
-            <span>يحفظ التقدّم</span>
-            <span>متوافق مع الجوال</span>
-            <span>دخول منظّم</span>
-          </div>
         </div>
 
         <div class="auth-v2-tabs" role="tablist" aria-label="اختيار نوع النموذج">
