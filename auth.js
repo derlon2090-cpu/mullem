@@ -59,7 +59,8 @@ try {
   // Ignore storage access issues on auth bootstrap.
 }
 
-const googleAuthUrl = "https://accounts.google.com/v3/signin/accountchooser?client_id=310079877066-matp293bddarf3hnstcd4t86qcbn6st5.apps.googleusercontent.com&code_challenge=ukLxkUvQSTdXKMpvgFaNecXJL-OMuKYappJshQR2cPg&code_challenge_method=S256&redirect_uri=https%3A%2F%2Ffor-test.runasp.net%2Fsignin-google&response_type=code&scope=openid+profile+email&state=CfDJ8NrJmZRANOhNtI69Ce945adjwp7Isi5KvuQ686lo2OZSc7mi2ByPR9OIRUGFCuoM0GKoPmtPGFeYGfqDlBagKlGcJ1qUvEJLEiOmU25DbgjkOLah1Z0Gzft4zMYpXuZbV7x-msInU3yFey9MJaxAMUAeAnWauRWh82A4agHZRMixBPlcwn7n2OmqIf7kbkYoqwzLJwY53VCVu006sObab8ZFSSumssGv5MQvUZ9ycO4hYoD-5FZ3QoUtNBUcQ25_xpGRb1mhIHkLQo_zU3Ii8JZEPW3fzcbVPFxf_2JSCIuXpPBqZg9-i5y5ro6tQkPyDi28QA_OLXPIDyC7DM_2y8fdfp9j2XgMXckXIparQ2r3sTsuMVuM88hpQRMA-a8WZfnpGDTQ1GV65DFerR3mwzc&dsh=S1310616813%3A1774886189779982&o2v=2&service=lso&flowName=GeneralOAuthFlow&opparams=%253F&continue=https%3A%2F%2Faccounts.google.com%2Fsignin%2Foauth%2Fconsent%3Fauthuser%3Dunknown%26part%3DAJi8hANR2Ua5iZYW7V082zIowf-wy4291zvcivR3wVqEgNKV3AkS1VKhcamB2Ng3oYEDZ_XL4t2TtqFwiphRc9VlyZTXH4wPR6p2lRn0013lTgGpw4enahAV4RZ1d_zFZXsYHMTjSbFhQ67BNaN18tC_LuuNDkJl4QwCM4B3S0ez-xp6GtXe7hinveaGp4F27-DzParuNym9MRD3zsyqBciJdhf27YD4n5hDPTIDI5HW9LONlhZFhcttI9iKBB2upFy8oPTUZsdLy5WVvKUXliwTdMv1cfF3K9t5UNMYfTfql2yEqLXKM6QrZxUoTlgPYLWSaSQTtzAr-K8Adp39VHLFj3272eszFop82qR-1Kqfj5LD-WIrMvQCmcNnWmW_rvhtoc1NApna6nAW2f2WfPHM_N3fvWovjFPFvo3r61QSgw_R8yC0Pwf8yskjUkoJTTD5qcAlTTobhwQCZjU3aw1jB8ONQ8K2OQ%26flowName%3DGeneralOAuthFlow%26as%3DS1310616813%253A1774886189779982%26client_id%3D310079877066-matp293bddarf3hnstcd4t86qcbn6st5.apps.googleusercontent.com%26requestPath%3D%252Fsignin%252Foauth%252Fconsent%23&app_domain=https%3A%2F%2Ffor-test.runasp.net";
+const googleAuthUrl = String(window.MULLEM_GOOGLE_OAUTH_URL || "").trim();
+const googleUnavailableMessage = "تسجيل Google غير متاح الآن. تواصل مع الدعم لتفعيل الربط.";
 
 function getApiClient() {
   return window.mullemApiClient && typeof window.mullemApiClient.request === "function"
@@ -76,14 +77,14 @@ function inferStageFromGrade(grade) {
   return "";
 }
 
-function normalizeApiUserForLocal(user) {
+function normalizeApiUserForLocal(user, passwordOverride = "") {
   const existing = loadUsers().find((entry) => String(entry.id) === String(user?.id));
   return {
     ...(existing || {}),
     id: String(user?.id ?? existing?.id ?? `student-${Date.now()}`),
     name: user?.name || existing?.name || "",
     email: String(user?.email || existing?.email || "").toLowerCase(),
-    password: existing?.password || "",
+    password: passwordOverride || existing?.password || "",
     role: String(user?.role || existing?.role || "student").toLowerCase() === "admin" ? "Admin" : "Student",
     stage: user?.stage || existing?.stage || inferStageFromGrade(user?.grade || existing?.grade || ""),
     grade: user?.grade || existing?.grade || "",
@@ -98,8 +99,8 @@ function normalizeApiUserForLocal(user) {
   };
 }
 
-function upsertApiUserLocally(user) {
-  const normalizedUser = normalizeApiUserForLocal(user);
+function upsertApiUserLocally(user, passwordOverride = "") {
+  const normalizedUser = normalizeApiUserForLocal(user, passwordOverride);
   const nextUsers = [
     normalizedUser,
     ...loadUsers().filter((entry) => String(entry.id) !== String(normalizedUser.id))
@@ -108,8 +109,11 @@ function upsertApiUserLocally(user) {
   return normalizedUser;
 }
 
-function completeStudentApiLogin(user, message) {
-  const normalizedUser = upsertApiUserLocally(user);
+function completeStudentApiLogin(user, message, passwordOverride = "") {
+  const normalizedUser = upsertApiUserLocally(
+    user,
+    inferPasswordOverrideForUser(user, passwordOverride)
+  );
   localStorage.removeItem(storageKeys.adminSession);
   localStorage.setItem(storageKeys.currentUser, normalizedUser.id);
   ensureUserWorkspace(normalizedUser.id);
@@ -138,6 +142,24 @@ function findLocalUserByEmailAndPassword(email, password) {
   const user = findLocalUserByEmail(email);
   if (!user || user.password !== password) return null;
   return user;
+}
+
+function inferPasswordOverrideForUser(user, passwordOverride = "") {
+  if (passwordOverride) return passwordOverride;
+  const normalizedEmail = normalizeEmail(user?.email);
+  if (!normalizedEmail) return "";
+
+  const loginEmailValue = normalizeEmail(loginEmail?.value);
+  if (loginEmailValue && loginEmailValue === normalizedEmail) {
+    return loginPassword?.value || "";
+  }
+
+  const registerEmailValue = normalizeEmail(registerEmail?.value);
+  if (registerEmailValue && registerEmailValue === normalizedEmail) {
+    return registerPassword?.value || "";
+  }
+
+  return "";
 }
 
 async function importLegacyUserToApi(apiClient, user) {
@@ -200,7 +222,7 @@ function loadUsers() {
   return [
     {
       id: "student-demo-1",
-      name: "طالب تجريبي",
+      name: "طالب",
       email: "student@mullem.sa",
       password: "Student@2026",
       role: "Student",
@@ -519,6 +541,12 @@ registerForm?.addEventListener("submit", async (event) => {
     }
   }
 
+  if (!apiResult.ok && /already registered|already exists|duplicate/i.test(apiResult.message || "")) {
+    setState("الحساب موجود من قبل، يلزم تسجيل الدخول لدخول الحساب.");
+    openAuthMode("login");
+    return;
+  }
+
   event.preventDefault();
   event.stopImmediatePropagation();
 
@@ -684,7 +712,7 @@ verifyForm?.addEventListener("submit", (event) => {
     const users = loadUsers();
     if (users.some((entry) => entry.email.toLowerCase() === request.email.toLowerCase())) {
       clearPendingAuth();
-      setState("هذا البريد مسجل مسبقًا.");
+      setState("الحساب موجود من قبل، يلزم تسجيل الدخول لدخول الحساب.");
       openAuthMode("login");
       return;
     }
@@ -725,6 +753,10 @@ verifyForm?.addEventListener("submit", (event) => {
 });
 
 googleButton?.addEventListener("click", () => {
+  if (!googleAuthUrl) {
+    setState(googleUnavailableMessage);
+    return;
+  }
   window.location.href = googleAuthUrl;
 });
 

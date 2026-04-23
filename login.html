@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta name="theme-color" content="#5d6cff">
+  <meta name="theme-color" content="#22c55e">
   <script>
     if ("scrollRestoration" in history) history.scrollRestoration = "manual";
     if (location.hash === "#chat") history.replaceState(null, "", location.pathname + location.search);
@@ -16,20 +16,20 @@
   <link rel="stylesheet" href="styles.css?v=20260409-8">
   <style>
     :root {
-      --auth-bg-1: #f3f5ff;
-      --auth-bg-2: #eef2ff;
-      --auth-bg-3: #fbfcff;
+      --auth-bg-1: #f4fbf6;
+      --auth-bg-2: #edf8f0;
+      --auth-bg-3: #fbfefb;
       --auth-card: rgba(255, 255, 255, 0.86);
       --auth-card-border: rgba(255, 255, 255, 0.72);
-      --auth-text: #162033;
-      --auth-muted: #67728a;
-      --auth-line: rgba(22, 32, 51, 0.1);
+      --auth-text: #163321;
+      --auth-muted: #5e7565;
+      --auth-line: rgba(22, 51, 33, 0.1);
       --auth-input: rgba(255, 255, 255, 0.82);
-      --auth-primary: #5d6cff;
-      --auth-primary-2: #4655ef;
-      --auth-primary-soft: rgba(93, 108, 255, 0.1);
-      --auth-shadow-lg: 0 26px 70px rgba(51, 68, 133, 0.16);
-      --auth-shadow-md: 0 18px 40px rgba(67, 83, 155, 0.14);
+      --auth-primary: #22c55e;
+      --auth-primary-2: #15803d;
+      --auth-primary-soft: rgba(34, 197, 94, 0.1);
+      --auth-shadow-lg: 0 26px 70px rgba(21, 128, 61, 0.16);
+      --auth-shadow-md: 0 18px 40px rgba(21, 128, 61, 0.14);
       --auth-radius-xl: 34px;
       --auth-radius-lg: 22px;
       --auth-radius-md: 18px;
@@ -42,8 +42,8 @@
       font-family: "Cairo", sans-serif;
       color: var(--auth-text);
       background:
-        radial-gradient(circle at 18% 18%, rgba(93, 108, 255, 0.18), transparent 24%),
-        radial-gradient(circle at 82% 14%, rgba(67, 210, 255, 0.16), transparent 22%),
+        radial-gradient(circle at 18% 18%, rgba(34, 197, 94, 0.18), transparent 24%),
+        radial-gradient(circle at 82% 14%, rgba(16, 185, 129, 0.16), transparent 22%),
         radial-gradient(circle at 50% 75%, rgba(255, 255, 255, 0.68), transparent 34%),
         linear-gradient(145deg, var(--auth-bg-1), var(--auth-bg-2) 52%, var(--auth-bg-3));
       overflow-x: hidden;
@@ -64,7 +64,7 @@
       height: 320px;
       top: 6%;
       right: 6%;
-      background: rgba(124, 103, 255, 0.16);
+      background: rgba(34, 197, 94, 0.16);
     }
 
     body.auth-page-v2::after {
@@ -72,7 +72,7 @@
       height: 360px;
       left: 4%;
       bottom: 6%;
-      background: rgba(86, 203, 255, 0.14);
+      background: rgba(52, 211, 153, 0.14);
     }
 
     .auth-v2-page {
@@ -109,7 +109,7 @@
       border-radius: 999px;
       background: rgba(255, 255, 255, 0.64);
       border: 1px solid rgba(255, 255, 255, 0.72);
-      box-shadow: 0 10px 30px rgba(44, 61, 122, 0.08);
+      box-shadow: 0 10px 30px rgba(21, 128, 61, 0.08);
       backdrop-filter: blur(18px);
     }
 
@@ -120,7 +120,7 @@
       display: inline-grid;
       place-items: center;
       background: linear-gradient(180deg, rgba(255, 255, 255, 0.94), rgba(237, 242, 255, 0.88));
-      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.95), 0 10px 24px rgba(88, 105, 178, 0.16);
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.95), 0 10px 24px rgba(21, 128, 61, 0.16);
     }
 
     .auth-v2-brand-mark img {
@@ -149,16 +149,16 @@
       border-radius: 999px;
       background: rgba(255, 255, 255, 0.64);
       border: 1px solid rgba(255, 255, 255, 0.72);
-      box-shadow: 0 10px 24px rgba(44, 61, 122, 0.08);
+      box-shadow: 0 10px 24px rgba(21, 128, 61, 0.08);
       font-weight: 800;
-      color: #41506b;
+      color: #28543a;
       transition: transform var(--auth-transition), box-shadow var(--auth-transition);
       backdrop-filter: blur(16px);
     }
 
     .auth-v2-back:hover {
       transform: translateY(-1px);
-      box-shadow: 0 14px 28px rgba(44, 61, 122, 0.12);
+      box-shadow: 0 14px 28px rgba(21, 128, 61, 0.12);
     }
 
     .auth-v2-stage {
@@ -185,7 +185,7 @@
       inset: 0 auto auto 0;
       width: 180px;
       height: 180px;
-      background: radial-gradient(circle, rgba(93, 108, 255, 0.14), transparent 70%);
+      background: radial-gradient(circle, rgba(34, 197, 94, 0.14), transparent 70%);
       pointer-events: none;
     }
 
@@ -217,7 +217,7 @@
       display: grid;
       place-items: center;
       background: linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(232, 239, 255, 0.92));
-      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.98), 0 18px 32px rgba(83, 101, 184, 0.18);
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.98), 0 18px 32px rgba(21, 128, 61, 0.18);
     }
 
     .auth-v2-logo img {
@@ -251,7 +251,7 @@
       padding: 10px 12px;
       background: rgba(255, 255, 255, 0.56);
       border: 1px solid rgba(22, 32, 51, 0.06);
-      color: #51607c;
+      color: #49624f;
       font-size: 0.83rem;
       font-weight: 700;
       text-align: center;
@@ -264,7 +264,7 @@
       margin-bottom: 22px;
       padding: 8px;
       border-radius: 20px;
-      background: rgba(93, 108, 255, 0.08);
+      background: rgba(34, 197, 94, 0.08);
     }
 
     .auth-v2-tab {
@@ -371,8 +371,8 @@
     .auth-v2-input:focus,
     .auth-v2-select:focus {
       background: #fff;
-      border-color: rgba(93, 108, 255, 0.34);
-      box-shadow: 0 0 0 4px rgba(93, 108, 255, 0.1);
+      border-color: rgba(34, 197, 94, 0.34);
+      box-shadow: 0 0 0 4px rgba(34, 197, 94, 0.1);
     }
 
     .auth-v2-icon {
@@ -391,7 +391,7 @@
       top: 50%;
       transform: translateY(-50%);
       border: 0;
-      background: rgba(93, 108, 255, 0.09);
+      background: rgba(34, 197, 94, 0.09);
       color: var(--auth-primary-2);
       min-width: 58px;
       height: 40px;
@@ -404,7 +404,7 @@
     }
 
     .password-toggle:hover {
-      background: rgba(93, 108, 255, 0.14);
+      background: rgba(34, 197, 94, 0.14);
     }
 
     .auth-v2-meta {
@@ -493,9 +493,9 @@
       margin-top: 16px;
       padding: 16px 18px;
       border-radius: 18px;
-      background: rgba(93, 108, 255, 0.08);
-      border: 1px solid rgba(93, 108, 255, 0.12);
-      color: #4e5b83;
+      background: rgba(34, 197, 94, 0.08);
+      border: 1px solid rgba(34, 197, 94, 0.12);
+      color: #49624f;
       line-height: 1.8;
       font-size: 0.94rem;
     }
