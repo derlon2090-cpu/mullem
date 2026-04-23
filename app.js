@@ -484,7 +484,7 @@ function getUsers() {
       email: "student@mullem.sa",
       role: "Student",
       package: "مجاني محدود",
-      xp: 100
+      xp: 50
     }
   ]);
 }

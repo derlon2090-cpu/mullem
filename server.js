@@ -675,7 +675,7 @@ async function ensureDefaultUsers() {
     grade: "الثاني الثانوي",
     subject: "الرياضيات",
     package_name: "مجاني محدود",
-    xp: 100,
+    xp: 50,
     motivation_score: 0,
     status: "active",
     activity: "حساب طالب جديد"
@@ -1242,7 +1242,7 @@ async function handleRegister(req, res) {
     stage,
     grade,
     package_name: "مجاني محدود",
-    xp: 100,
+    xp: 50,
     status: "active",
     activity: "أنشأ حسابًا جديدًا"
   });

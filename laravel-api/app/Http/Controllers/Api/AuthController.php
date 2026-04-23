@@ -30,7 +30,7 @@ class AuthController extends Controller
             'phone' => $request->input('phone'),
             'subject' => 'الرياضيات',
             'package' => 'API Connected',
-            'xp' => 100,
+            'xp' => 50,
             'streak_days' => 0,
             'status' => 'active',
             'activity' => 'أنشأ حسابًا جديدًا',

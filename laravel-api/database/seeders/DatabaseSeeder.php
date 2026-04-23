@@ -45,7 +45,7 @@ class DatabaseSeeder extends Seeder
                 'grade' => 'الثاني الثانوي',
                 'subject' => 'الرياضيات',
                 'package' => 'مجاني محدود',
-                'xp' => 100,
+                'xp' => 50,
                 'streak_days' => 0,
                 'status' => 'active',
                 'activity' => 'حساب طالب جديد',

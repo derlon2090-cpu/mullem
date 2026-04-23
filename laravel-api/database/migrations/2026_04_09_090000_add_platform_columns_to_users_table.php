@@ -29,7 +29,7 @@ return new class extends Migration
                 $table->string('package', 120)->default('API Connected')->after('subject');
             }
             if (! Schema::hasColumn('users', 'xp')) {
-                $table->unsignedInteger('xp')->default(100)->after('package');
+                $table->unsignedInteger('xp')->default(50)->after('package');
             }
             if (! Schema::hasColumn('users', 'streak_days')) {
                 $table->unsignedInteger('streak_days')->default(0)->after('xp');
