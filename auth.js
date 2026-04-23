@@ -271,7 +271,10 @@ function saveUsers(users) {
 }
 
 function setState(text) {
-  if (authState) authState.textContent = text;
+  if (!authState) return;
+  const message = String(text || "").trim();
+  authState.hidden = !message;
+  authState.textContent = message;
 }
 
 function setFieldError(field, hasError) {
@@ -315,7 +318,7 @@ function openAuthMode(mode) {
   if (mode === "register") {
     clearPendingAuth();
     if (verifyNote) verifyNote.hidden = true;
-    setState("أنشئ حسابك ثم أدخل رمز التحقق لإكمال الدخول إلى المنصة.");
+    setState("");
     registerName?.focus();
     return;
   }
@@ -323,13 +326,13 @@ function openAuthMode(mode) {
     clearPendingAuth();
     if (verifyNote) verifyNote.hidden = true;
     resetForgotFlow();
-    setState("أدخل بريدك الإلكتروني لبدء استعادة كلمة المرور.");
+    setState("");
     forgotEmail?.focus();
     return;
   }
   clearPendingAuth();
   if (verifyNote) verifyNote.hidden = true;
-  setState("أدخل بياناتك ثم أكمل التحقق للوصول إلى المنصة.");
+  setState("");
   loginEmail?.focus();
 }
 

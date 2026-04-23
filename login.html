@@ -576,6 +576,11 @@
     .auth-v2-page {
       padding: 16px;
       gap: 14px;
+      width: min(100%, 960px);
+      min-height: calc(100vh - 24px);
+      max-height: calc(100vh - 24px);
+      margin: 0 auto;
+      overflow: hidden;
     }
 
     .auth-v2-topbar {
@@ -612,11 +617,25 @@
 
     .auth-v2-stage {
       align-content: start;
+      min-height: 0;
       padding-bottom: 12px;
     }
 
     .auth-v2-card {
       padding: 22px 22px 18px;
+      max-height: 100%;
+      overflow-y: auto;
+      overscroll-behavior: contain;
+      scrollbar-width: thin;
+    }
+
+    .auth-v2-card::-webkit-scrollbar {
+      width: 8px;
+    }
+
+    .auth-v2-card::-webkit-scrollbar-thumb {
+      background: rgba(34, 197, 94, 0.2);
+      border-radius: 999px;
     }
 
     .auth-v2-card::before {
@@ -750,6 +769,8 @@
       .auth-v2-page {
         padding: 12px;
         gap: 10px;
+        min-height: calc(100vh - 20px);
+        max-height: calc(100vh - 20px);
       }
 
       .auth-v2-topbar {
@@ -1000,7 +1021,7 @@
           </section>
         </div>
 
-        <div class="auth-v2-status" data-auth-state>واجهة دخول مختصرة وواضحة تجمع تسجيل الدخول وإنشاء الحساب والاستعادة في مكان واحد.</div>
+        <div class="auth-v2-status" data-auth-state hidden></div>
       </div>
     </section>
   </main>
