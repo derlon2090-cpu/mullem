@@ -13,7 +13,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800;900&display=swap" rel="stylesheet">
   <link rel="icon" type="image/svg+xml" href="favicon.svg">
-  <link rel="stylesheet" href="styles.css?v=20260410-6">
+  <link rel="stylesheet" href="styles.css?v=20260409-9">
 </head>
 <body>
   <div class="shell">
@@ -31,26 +31,7 @@
       <div class="topbar-actions">
         <div class="top-status">
           <div class="top-chip" data-status>الشات جاهز</div>
-          <button class="theme-toggle" type="button" data-theme-toggle aria-label="تبديل الوضع الداكن">
-            <span class="theme-toggle-track" aria-hidden="true">
-              <span class="theme-toggle-thumb">
-                <svg class="theme-toggle-icon theme-toggle-sun" viewBox="0 0 24 24" aria-hidden="true">
-                  <circle cx="12" cy="12" r="4"></circle>
-                  <line x1="12" y1="2" x2="12" y2="4.5"></line>
-                  <line x1="12" y1="19.5" x2="12" y2="22"></line>
-                  <line x1="2" y1="12" x2="4.5" y2="12"></line>
-                  <line x1="19.5" y1="12" x2="22" y2="12"></line>
-                  <line x1="4.6" y1="4.6" x2="6.4" y2="6.4"></line>
-                  <line x1="17.6" y1="17.6" x2="19.4" y2="19.4"></line>
-                  <line x1="17.6" y1="6.4" x2="19.4" y2="4.6"></line>
-                  <line x1="4.6" y1="19.4" x2="6.4" y2="17.6"></line>
-                </svg>
-                <svg class="theme-toggle-icon theme-toggle-moon" viewBox="0 0 24 24" aria-hidden="true">
-                  <path d="M20 14.5A8.5 8.5 0 1 1 9.5 4a7 7 0 1 0 10.5 10.5Z"></path>
-                </svg>
-              </span>
-            </span>
-          </button>
+          <button class="theme-toggle" type="button" data-theme-toggle aria-label="تبديل الوضع الداكن">◐</button>
         </div>
         <div class="top-cta">
           <a class="secondary-btn top-cta-link" href="index.html">الرئيسية</a>
@@ -76,15 +57,11 @@
 
         <div class="student-hero-side">
           <div class="student-streak-pill">🔥 <span data-streak-days>0</span> أيام متتالية</div>
-          <button class="primary-btn" type="button" data-new-session>
-            <span class="btn-icon" aria-hidden="true">+</span>
-            <span>ابدأ سؤالًا جديدًا</span>
-          </button>
+          <button class="primary-btn" type="button" data-new-session>ابدأ سؤالًا جديدًا</button>
         </div>
       </section>
 
-      <div class="student-dashboard">
-      <section class="student-plan-grid student-area-plan">
+      <section class="student-plan-grid">
         <article class="student-plan-card student-plan-card-primary">
           <div class="student-section-head">
             <div>
@@ -140,7 +117,7 @@
         </article>
       </section>
 
-      <section class="student-summary-strip student-area-summary">
+      <section class="student-summary-strip">
         <article class="student-mini-card">
           <strong>XP المتبقي</strong>
           <span><span data-xp-balance>0</span> نقطة</span>
@@ -155,30 +132,7 @@
         </article>
       </section>
 
-      <section class="student-progress-grid student-area-progress" aria-label="لوحة الإنجازات">
-        <article class="student-progress-card">
-          <span class="student-progress-label">عدد الأسئلة</span>
-          <strong data-progress-questions>0</strong>
-          <p>إجمالي الأسئلة التعليمية التي أنجزتها داخل حسابك حتى الآن.</p>
-        </article>
-        <article class="student-progress-card">
-          <span class="student-progress-label">أفضل مادة</span>
-          <strong data-progress-best-subject>—</strong>
-          <p data-progress-best-subject-copy>ستظهر المادة الأكثر استخدامًا بعد أول عدة أسئلة.</p>
-        </article>
-        <article class="student-progress-card student-progress-card-accent">
-          <div class="student-progress-head">
-            <span class="student-progress-label">تقدمك</span>
-            <strong data-progress-level>0%</strong>
-          </div>
-          <div class="student-progress-bar">
-            <span class="student-progress-bar-fill" data-progress-bar-fill style="width: 0%"></span>
-          </div>
-          <p data-progress-level-copy>ابدأ أول سؤال ليظهر مستوى تقدمك الحالي.</p>
-        </article>
-      </section>
-
-      <section class="student-quick-grid student-area-quick">
+      <section class="student-quick-grid">
         <button class="student-quick-card" type="button" data-starter-prompt="احسب محيط دائرة نصف قطرها 7" data-starter-subject="الرياضيات" data-chat-placeholder="اكتب مسألة من المنهج السعودي...">
           <strong>🧮 حل سؤال</strong>
           <span>ابدأ مباشرة بحل مسألة واضحة وخطوات مرتبة.</span>
@@ -197,83 +151,10 @@
         </button>
       </section>
 
-      <section class="student-section-card student-projects-panel student-area-projects">
-        <div class="student-section-head">
-          <div>
-            <h3>المشروعات</h3>
-            <p class="student-section-copy">احفظ محادثات مادة أو درس داخل مشروع مستقل إذا أردت الرجوع لها لاحقًا من نفس اللوحة.</p>
-          </div>
-          <span class="student-projects-badge">اختياري</span>
-        </div>
-
-        <div class="student-project-toolbar">
-          <label class="student-project-picker">
-            <span>اختر مشروعًا</span>
-            <select class="field" data-project-select>
-              <option value="">بدون مشروع محفوظ</option>
-            </select>
-          </label>
-          <div class="student-guest-note" data-project-note>جارٍ تجهيز حالة المشروعات حسب حسابك الحالي...</div>
-        </div>
-
-        <div class="student-project-form">
-          <input class="field" type="text" placeholder="اسم المشروع" data-project-title>
-          <input class="field" type="text" placeholder="الدرس أو الوحدة" data-project-lesson>
-          <textarea class="field student-project-description" rows="3" placeholder="وصف مختصر للمشروع أو الهدف منه" data-project-description></textarea>
-          <button class="primary-btn" type="button" data-create-project>إنشاء مشروع جديد</button>
-        </div>
-
-        <div class="student-project-list" data-project-list>
-          <div class="student-project-empty">أنشئ مشروعًا إذا أردت حفظ محادثات مادة أو درس معين في مكان مستقل.</div>
-        </div>
-
-        <div class="student-project-chat-head">
-          <div>
-            <h4>دردشات المشروع</h4>
-            <p class="student-section-copy">أنشئ محادثات متعددة داخل نفس المشروع وتنقّل بينها بسهولة.</p>
-          </div>
-          <button class="secondary-btn" type="button" data-project-new-chat>محادثة جديدة داخل المشروع</button>
-        </div>
-
-        <div class="student-project-conversations" data-project-conversations>
-          <div class="student-project-empty">اختر مشروعًا أولًا لتظهر دردشاته هنا.</div>
-        </div>
-      </section>
-
-      <section class="student-section-card student-precision-card student-area-precision" aria-label="طريقة الحل">
-        <div class="student-section-head student-precision-head">
-          <div>
-            <h3>طريقة الحل</h3>
-            <p class="student-section-copy">السريع يجيب مباشرة، والدقيق يفتح الصف والمادة والترم عند الحاجة فقط.</p>
-          </div>
-          <span class="student-projects-badge">اختياري</span>
-        </div>
-
-        <div class="chat-ai-status student-precision-status" aria-live="polite">
-          <div class="chat-ai-status-main">
-            <span class="chat-ai-status-pulse"></span>
-            <strong>جاري التفكير...</strong>
-          </div>
-          <div class="chat-ai-status-typing" aria-hidden="true">
-            <span></span>
-            <span></span>
-            <span></span>
-          </div>
-          <span class="chat-ai-status-copy">المنصة تجهز ردًا سريعًا أو شرحًا أدق بحسب اختيارك.</span>
-        </div>
-
-        <div class="solve-mode-row student-solve-mode-row" aria-label="وضع الحل">
-          <button class="solve-mode-btn active" type="button" data-solve-mode="quick">
-            <strong>سريع</strong>
-            <span>إجابة مباشرة إذا كان السؤال واضحًا</span>
-          </button>
-          <button class="solve-mode-btn" type="button" data-solve-mode="structured">
-            <strong>دقيق</strong>
-            <span>يراعي الصف والمادة والترم</span>
-          </button>
-        </div>
-
-        <div class="selectors selectors-hero student-precision-selectors">
+      <details class="student-settings-card">
+        <summary>تخصيص الجواب بدقة أعلى</summary>
+        <p>يمكنك تعديل الصف أو المادة أو الفصل إن أردت جوابًا أدق، أو تركها لملم ليستنتج المطلوب تلقائيًا.</p>
+        <div class="student-filters-grid selectors">
           <select class="field" data-grade>
             <option>الأول الابتدائي</option>
             <option>الثاني الابتدائي</option>
@@ -303,10 +184,40 @@
             <option selected>الفصل الدراسي الأول</option>
             <option>الفصل الدراسي الثاني</option>
           </select>
-          <input type="hidden" data-lesson value="">
+          <input class="field" data-lesson type="text" placeholder="اسم الدرس اختياري">
+        </div>
+      </details>
+
+      <section class="student-section-card student-projects-panel">
+        <div class="student-section-head">
+          <div>
+            <h3>المشروعات</h3>
+            <p class="student-section-copy">احفظ محادثات مادة أو درس داخل مشروع مستقل إذا أردت الرجوع لها لاحقًا من نفس اللوحة.</p>
+          </div>
+          <span class="student-projects-badge">اختياري</span>
+        </div>
+
+        <div class="student-project-toolbar">
+          <label class="student-project-picker">
+            <span>اربط هذه المحادثة بمشروع</span>
+            <select class="field" data-project-select>
+              <option value="">بدون مشروع محفوظ</option>
+            </select>
+          </label>
+          <div class="student-guest-note" data-project-note>جارٍ تجهيز حالة المشروعات حسب حسابك الحالي...</div>
+        </div>
+
+        <div class="student-project-form">
+          <input class="field" type="text" placeholder="اسم المشروع" data-project-title>
+          <input class="field" type="text" placeholder="الدرس أو الوحدة" data-project-lesson>
+          <textarea class="field student-project-description" rows="3" placeholder="وصف مختصر للمشروع أو الهدف منه" data-project-description></textarea>
+          <button class="primary-btn" type="button" data-create-project>إنشاء مشروع جديد</button>
+        </div>
+
+        <div class="student-project-list" data-project-list>
+          <div class="student-project-empty">أنشئ مشروعًا إذا أردت حفظ محادثات مادة أو درس معين في مكان مستقل.</div>
         </div>
       </section>
-      </div>
 
       <section class="chat-shell student-chat-shell" id="chat">
         <div class="chat-top student-chat-top">
@@ -383,7 +294,7 @@
         <select data-runtime>
           <option selected>vLLM Runtime</option>
           <option>Ollama Runtime</option>
-          <option>وضع افتراضي داخل الواجهة</option>
+          <option>وضع تجريبي داخل الواجهة</option>
         </select>
         <select data-training-mode>
           <option selected>Prompt + RAG</option>
@@ -398,9 +309,9 @@
 
   <button class="scroll-top-btn" type="button" data-scroll-top aria-label="التنقل بين أعلى الصفحة وأسفلها">↑</button>
   <script src="guest-preinit.js?v=20260408-5"></script>
-  <script src="mullem-config.js?v=20260410-1"></script>
-  <script src="api-client.js?v=20260410-9"></script>
-  <script src="app.js?v=20260410-4"></script>
-  <script src="app.runtime.js?v=20260410-10"></script>
+  <script src="mullem-config.js?v=20260409-5"></script>
+  <script src="api-client.js?v=20260409-7"></script>
+  <script src="app.js?v=20260409-2"></script>
+  <script src="app.runtime.js?v=20260409-5"></script>
 </body>
 </html>

@@ -7,11 +7,11 @@
     "node": ">=20"
   },
   "scripts": {
-    "start": "node render-ensure-runtime.js && node server.js",
+    "start": "node server.js",
     "dev": "node server.js",
     "test:backend": "node backend-smoke-test.js",
     "render:build": "npm ci && node render-build-check.js",
-    "render:start": "node render-ensure-runtime.js && node server.js"
+    "render:start": "node server.js"
   },
   "dependencies": {
     "mysql2": "^3.20.0"

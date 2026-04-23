@@ -20,10 +20,7 @@ const confirmPassword = document.querySelector("[data-auth-confirm-password]");
 const verifyCodeInput = document.querySelector("[data-auth-verify-code]");
 const verifyCopy = document.querySelector("[data-auth-verify-copy]");
 const verifyNote = document.querySelector("[data-auth-verify-note]");
-const loginError = document.querySelector("[data-auth-login-error]");
-const registerError = document.querySelector("[data-auth-register-error]");
 const googleButton = document.querySelector("[data-auth-google]");
-const googleError = document.querySelector("[data-auth-google-error]");
 const forgotButton = document.querySelector("[data-auth-forgot]");
 const backButton = document.querySelector("[data-auth-back]");
 const scrollTopButton = document.querySelector("[data-scroll-top]");
@@ -51,14 +48,6 @@ const adminCredentials = {
 };
 
 try {
-  window.mullemApiClient?.restorePersistentAuthFromCookies?.();
-  window.mullemApiClient?.syncLegacySessionUser?.();
-  window.mullemApiClient?.persistLegacyAuthState?.();
-} catch (_) {
-  // Ignore cookie restoration issues during auth bootstrap.
-}
-
-try {
   const activeAdminSession = localStorage.getItem(storageKeys.adminSession);
   const activeUserId = localStorage.getItem(storageKeys.currentUser);
   if (activeAdminSession === "1") {
@@ -70,23 +59,13 @@ try {
   // Ignore storage access issues on auth bootstrap.
 }
 
-function getGoogleAuthUrl() {
-  const configured = String(window.MULLEM_GOOGLE_OAUTH_URL || "").trim();
-  return configured || "";
-}
+const googleAuthUrl = String(window.MULLEM_GOOGLE_OAUTH_URL || "").trim();
+const googleUnavailableMessage = "تسجيل Google غير متاح الآن. تواصل مع الدعم لتفعيل الربط.";
 
 function getApiClient() {
   return window.mullemApiClient && typeof window.mullemApiClient.request === "function"
     ? window.mullemApiClient
     : null;
-}
-
-function persistClientAuthState() {
-  try {
-    window.mullemApiClient?.persistLegacyAuthState?.();
-  } catch (_) {
-    // Ignore persistence issues on restricted browsers.
-  }
 }
 
 function inferStageFromGrade(grade) {
@@ -98,14 +77,14 @@ function inferStageFromGrade(grade) {
   return "";
 }
 
-function normalizeApiUserForLocal(user) {
+function normalizeApiUserForLocal(user, passwordOverride = "") {
   const existing = loadUsers().find((entry) => String(entry.id) === String(user?.id));
   return {
     ...(existing || {}),
     id: String(user?.id ?? existing?.id ?? `student-${Date.now()}`),
     name: user?.name || existing?.name || "",
     email: String(user?.email || existing?.email || "").toLowerCase(),
-    password: existing?.password || "",
+    password: passwordOverride || existing?.password || "",
     role: String(user?.role || existing?.role || "student").toLowerCase() === "admin" ? "Admin" : "Student",
     stage: user?.stage || existing?.stage || inferStageFromGrade(user?.grade || existing?.grade || ""),
     grade: user?.grade || existing?.grade || "",
@@ -121,8 +100,7 @@ function normalizeApiUserForLocal(user) {
 }
 
 function upsertApiUserLocally(user, passwordOverride = "") {
-  const normalizedUser = normalizeApiUserForLocal(user);
-  if (passwordOverride) normalizedUser.password = passwordOverride;
+  const normalizedUser = normalizeApiUserForLocal(user, passwordOverride);
   const nextUsers = [
     normalizedUser,
     ...loadUsers().filter((entry) => String(entry.id) !== String(normalizedUser.id))
@@ -132,10 +110,12 @@ function upsertApiUserLocally(user, passwordOverride = "") {
 }
 
 function completeStudentApiLogin(user, message, passwordOverride = "") {
-  const normalizedUser = upsertApiUserLocally(user, passwordOverride);
+  const normalizedUser = upsertApiUserLocally(
+    user,
+    inferPasswordOverrideForUser(user, passwordOverride)
+  );
   localStorage.removeItem(storageKeys.adminSession);
   localStorage.setItem(storageKeys.currentUser, normalizedUser.id);
-  persistClientAuthState();
   ensureUserWorkspace(normalizedUser.id);
   clearPendingAuth();
   setState(message || `أهلًا ${normalizedUser.name}، تم تسجيل الدخول بنجاح عبر الخادم.`);
@@ -145,7 +125,6 @@ function completeStudentApiLogin(user, message, passwordOverride = "") {
 function completeAdminApiLogin(message) {
   localStorage.setItem(storageKeys.adminSession, "1");
   localStorage.removeItem(storageKeys.currentUser);
-  persistClientAuthState();
   clearPendingAuth();
   setState(message || "تم تسجيل دخول الأدمن بنجاح عبر الخادم.");
   window.location.href = "admin.html";
@@ -155,79 +134,73 @@ function shouldFallbackToLocalAuth(result) {
   return !result || result.serverUnavailable;
 }
 
+function findLocalUserByEmail(email) {
+  return loadUsers().find((entry) => entry.email.toLowerCase() === String(email || "").trim().toLowerCase()) || null;
+}
+
+function findLocalUserByEmailAndPassword(email, password) {
+  const user = findLocalUserByEmail(email);
+  if (!user || user.password !== password) return null;
+  return user;
+}
+
+function inferPasswordOverrideForUser(user, passwordOverride = "") {
+  if (passwordOverride) return passwordOverride;
+  const normalizedEmail = normalizeEmail(user?.email);
+  if (!normalizedEmail) return "";
+
+  const loginEmailValue = normalizeEmail(loginEmail?.value);
+  if (loginEmailValue && loginEmailValue === normalizedEmail) {
+    return loginPassword?.value || "";
+  }
+
+  const registerEmailValue = normalizeEmail(registerEmail?.value);
+  if (registerEmailValue && registerEmailValue === normalizedEmail) {
+    return registerPassword?.value || "";
+  }
+
+  return "";
+}
+
+async function importLegacyUserToApi(apiClient, user) {
+  if (!apiClient || typeof apiClient.importLegacyUsers !== "function" || !user?.email || !user?.password) {
+    return { ok: false };
+  }
+
+  return apiClient.importLegacyUsers([
+    {
+      name: user.name,
+      email: user.email,
+      password: user.password,
+      role: user.role,
+      stage: user.stage,
+      grade: user.grade,
+      subject: user.subject,
+      package: user.package,
+      packageKey: user.packageKey,
+      xp: user.xp,
+      streakDays: user.streakDays,
+      motivationScore: user.motivationScore,
+      lastActiveDate: user.lastActiveDate,
+      achievements: user.achievements,
+      status: user.status,
+      activity: user.activity
+    }
+  ]);
+}
+
 function handleLocalLoginFallback(email, password) {
-  if (email === adminCredentials.email && password === adminCredentials.password) {
-    localStorage.setItem(storageKeys.adminSession, "1");
-    localStorage.removeItem(storageKeys.currentUser);
-    persistClientAuthState();
-    setState("تم تسجيل دخول الأدمن بنجاح. سيتم تحويلك الآن.");
-    window.location.href = "admin.html";
+  const matchingLocalUser = findLocalUserByEmailAndPassword(email, password);
+  if (matchingLocalUser) {
+    setState("الحساب موجود محليًا فقط حاليًا. أعد المحاولة بعد عودة الخادم ليتم ترحيله إلى قاعدة البيانات.");
     return;
   }
 
-  const userByEmail = loadUsers().find((entry) => entry.email.toLowerCase() === email);
-  if (!userByEmail) {
-    setState("البريد الإلكتروني غير مسجل في المنصة.");
-    return;
-  }
-
-  if (userByEmail.password !== password) {
-    setState("كلمة المرور غير صحيحة.");
-    return;
-  }
-
-  if (userByEmail.status === "محظور") {
-    setState("هذا الحساب محظور حاليًا. تواصل مع إدارة المنصة إذا كنت ترى أن هذا الإجراء غير صحيح.");
-    return;
-  }
-
-  localStorage.removeItem(storageKeys.adminSession);
-  startAuthVerification({
-    flow: "login",
-    userId: userByEmail.id,
-    name: userByEmail.name,
-    email: userByEmail.email,
-    code: generateVerificationCode()
-  });
+  setState("الخادم غير متاح الآن، لذلك لا يمكن تسجيل الدخول قبل الاتصال بقاعدة البيانات.");
 }
 
 function handleLocalRegisterFallback(name, email, password, grade) {
-  if (password.length < 6) {
-    setState("كلمة المرور يجب أن تكون 6 أحرف أو أكثر.");
-    return;
-  }
-
-  const users = loadUsers();
-  if (users.some((entry) => entry.email.toLowerCase() === email)) {
-    const message = "الحساب موجود من قبل، يلزم تسجيل الدخول لدخول الحساب.";
-    setInlineError(registerError, message);
-    setState(message);
-    return;
-  }
-
-  localStorage.removeItem(storageKeys.adminSession);
-  startAuthVerification({
-    flow: "register",
-    code: generateVerificationCode(),
-    name,
-    email,
-    user: {
-      id: `student-${Date.now()}`,
-      name,
-      email,
-      password,
-      role: "Student",
-      grade,
-      subject: "الرياضيات",
-      package: "مجاني محدود",
-      xp: 100,
-      streakDays: 0,
-      lastActiveDate: "",
-      achievements: [],
-      status: "نشط",
-      activity: "أنشأ حسابًا جديدًا"
-    }
-  });
+  setState("الخادم غير متاح الآن، لذلك لا يمكن إنشاء الحساب إلا بعد الاتصال بقاعدة البيانات.");
 }
 
 function loadJson(key, fallback) {
@@ -272,29 +245,6 @@ function saveUsers(users) {
 
 function setState(text) {
   if (authState) authState.textContent = text;
-}
-
-function setFieldError(field, hasError) {
-  if (!field) return;
-  field.classList.toggle("is-error", Boolean(hasError));
-}
-
-function setInlineError(target, message) {
-  if (!target) return;
-  if (!message) {
-    target.hidden = true;
-    target.textContent = "";
-    return;
-  }
-  target.hidden = false;
-  target.textContent = message;
-}
-
-function resetInlineErrors() {
-  setInlineError(loginError, "");
-  setInlineError(registerError, "");
-  setFieldError(loginPassword, false);
-  setFieldError(registerPassword, false);
 }
 
 function setActivePanel(mode) {
@@ -460,7 +410,6 @@ bindPasswordToggles();
 loginForm?.addEventListener("submit", async (event) => {
   event.preventDefault();
   event.stopImmediatePropagation();
-  resetInlineErrors();
   const email = (loginEmail?.value || "").trim().toLowerCase();
   const password = loginPassword?.value || "";
   const apiClient = getApiClient();
@@ -480,7 +429,7 @@ loginForm?.addEventListener("submit", async (event) => {
     return;
   }
 
-  const apiResult = await apiClient.login({
+  let apiResult = await apiClient.login({
     email,
     password,
     device_name: "mullem-web"
@@ -488,6 +437,27 @@ loginForm?.addEventListener("submit", async (event) => {
 
   if (shouldFallbackToLocalAuth(apiResult)) {
     handleLocalLoginFallback(email, password);
+    return;
+  }
+
+  if (!apiResult.ok && /invalid email or password|البريد الإلكتروني أو كلمة المرور غير صحيحة/i.test(apiResult.message || "")) {
+    const matchingLocalUser = findLocalUserByEmailAndPassword(email, password);
+    if (matchingLocalUser) {
+      const importResult = await importLegacyUserToApi(apiClient, matchingLocalUser);
+      if (importResult?.ok) {
+        apiResult = await apiClient.login({
+          email,
+          password,
+          device_name: "mullem-web"
+        });
+      }
+    }
+  }
+
+  if (!apiResult.ok && /النظام القديم|legacy/i.test(apiResult.message || "")) {
+    if (forgotEmail) forgotEmail.value = email;
+    openAuthMode("forgot");
+    setState(apiResult.message);
     return;
   }
 
@@ -502,38 +472,17 @@ loginForm?.addEventListener("submit", async (event) => {
 
     completeStudentApiLogin(
       apiResult.data.user,
-      `أهلًا ${apiResult.data.user.name || ""}، تم تسجيل الدخول بنجاح.`,
-      password
+      `أهلًا ${apiResult.data.user.name || ""}، تم تسجيل الدخول بنجاح.`
     );
     return;
   }
 
-  const loginMessage = apiResult.message || "تعذر تسجيل الدخول. تحقق من البيانات ثم حاول مرة أخرى.";
-  if (/invalid email or password/i.test(loginMessage) || /كلمة المرور/i.test(loginMessage)) {
-    const localUser = loadUsers().find((entry) => entry.email.toLowerCase() === email && entry.password === password);
-    if (localUser) {
-      localStorage.removeItem(storageKeys.adminSession);
-      startAuthVerification({
-        flow: "login",
-        userId: localUser.id,
-        name: localUser.name,
-        email: localUser.email,
-        code: generateVerificationCode()
-      });
-      return;
-    }
-    setInlineError(loginError, "كلمة المرور غير صحيحة.");
-    setFieldError(loginPassword, true);
-  } else {
-    setInlineError(loginError, loginMessage);
-  }
-  setState(loginMessage);
+  setState(apiResult.message || "تعذر تسجيل الدخول. تحقق من البيانات ثم حاول مرة أخرى.");
 }, { capture: true });
 
 registerForm?.addEventListener("submit", async (event) => {
   event.preventDefault();
   event.stopImmediatePropagation();
-  resetInlineErrors();
   const name = (registerName?.value || "").trim();
   const email = (registerEmail?.value || "").trim().toLowerCase();
   const password = registerPassword?.value || "";
@@ -542,10 +491,6 @@ registerForm?.addEventListener("submit", async (event) => {
 
   if (!name || !email || !password) {
     setState("أكمل جميع الحقول أولًا.");
-    if (!password) {
-      setInlineError(registerError, "اكتب كلمة مرور صالحة أولًا.");
-      setFieldError(registerPassword, true);
-    }
     return;
   }
 
@@ -559,7 +504,7 @@ registerForm?.addEventListener("submit", async (event) => {
     return;
   }
 
-  const apiResult = await apiClient.register({
+  let apiResult = await apiClient.register({
     name,
     email,
     password,
@@ -574,43 +519,47 @@ registerForm?.addEventListener("submit", async (event) => {
     return;
   }
 
+  if (!apiResult.ok && /هذا البريد مسجل بالفعل|already registered/i.test(apiResult.message || "")) {
+    const matchingLocalUser = findLocalUserByEmailAndPassword(email, password);
+    if (matchingLocalUser) {
+      const importResult = await importLegacyUserToApi(apiClient, matchingLocalUser);
+      if (importResult?.ok) {
+        const retryLogin = await apiClient.login({
+          email,
+          password,
+          device_name: "mullem-web"
+        });
+
+        if (retryLogin.ok && retryLogin.data?.user) {
+          completeStudentApiLogin(
+            retryLogin.data.user,
+            `تمت مزامنة الحساب القديم بنجاح يا ${retryLogin.data.user.name || name}.`
+          );
+          return;
+        }
+      }
+    }
+  }
+
+  if (!apiResult.ok && /already registered|already exists|duplicate/i.test(apiResult.message || "")) {
+    setState("الحساب موجود من قبل، يلزم تسجيل الدخول لدخول الحساب.");
+    openAuthMode("login");
+    return;
+  }
+
   event.preventDefault();
   event.stopImmediatePropagation();
 
   if (apiResult.ok && apiResult.data?.user) {
     completeStudentApiLogin(
       apiResult.data.user,
-      `تم إنشاء الحساب بنجاح يا ${apiResult.data.user.name || name}.`,
-      password
+      `تم إنشاء الحساب بنجاح يا ${apiResult.data.user.name || name}.`
     );
     return;
   }
 
-  const registerMessage = apiResult.message || "تعذر إنشاء الحساب الآن. تحقق من البيانات ثم حاول مرة أخرى.";
-  if (/already registered|مسجل مسبق/i.test(registerMessage)) {
-    const message = "الحساب موجود من قبل، يلزم تسجيل الدخول لدخول الحساب.";
-    setInlineError(registerError, message);
-    setState(message);
-    return;
-  }
-  if (/password/i.test(registerMessage) || /كلمة المرور/i.test(registerMessage)) {
-    setInlineError(registerError, "تحقق من كلمة المرور مرة أخرى.");
-    setFieldError(registerPassword, true);
-  } else {
-    setInlineError(registerError, registerMessage);
-  }
-  setState(registerMessage);
+  setState(apiResult.message || "تعذر إنشاء الحساب الآن. تحقق من البيانات ثم حاول مرة أخرى.");
 }, { capture: true });
-
-loginPassword?.addEventListener("input", () => {
-  setInlineError(loginError, "");
-  setFieldError(loginPassword, false);
-});
-
-registerPassword?.addEventListener("input", () => {
-  setInlineError(registerError, "");
-  setFieldError(registerPassword, false);
-});
 
 forgotButton?.addEventListener("click", () => {
   openAuthMode("forgot");
@@ -620,10 +569,10 @@ backButton?.addEventListener("click", () => {
   openAuthMode("login");
 });
 
-forgotEmailForm?.addEventListener("submit", (event) => {
+forgotEmailForm?.addEventListener("submit", async (event) => {
   event.preventDefault();
   const email = (forgotEmail?.value || "").trim().toLowerCase();
-  const user = loadUsers().find((entry) => entry.email.toLowerCase() === email);
+  const apiClient = getApiClient();
 
   if (!email) {
     setState("أدخل بريدك الإلكتروني أولًا.");
@@ -635,16 +584,46 @@ forgotEmailForm?.addEventListener("submit", (event) => {
     return;
   }
 
-  if (!user) {
-    setState("لا يوجد حساب مرتبط بهذا البريد.");
+  if (!apiClient || typeof apiClient.requestPasswordReset !== "function") {
+    setState("الخادم غير متاح الآن، لذلك لا يمكن استعادة كلمة المرور.");
     return;
   }
 
-  const code = generateResetCode();
+  const result = await apiClient.requestPasswordReset({ email });
+  if (!result.ok) {
+    const localUser = findLocalUserByEmail(email);
+    if (localUser?.password) {
+      const importResult = await importLegacyUserToApi(apiClient, localUser);
+      if (importResult?.ok) {
+        const retryResult = await apiClient.requestPasswordReset({ email });
+        if (retryResult.ok) {
+          const retryCode = String(retryResult.data?.reset_code || "");
+          saveResetRequest({ email, code: retryCode, verified: false });
+          if (forgotEmailForm) forgotEmailForm.hidden = true;
+          if (codeForm) codeForm.hidden = false;
+          setState(
+            retryCode
+              ? `تم تجهيز رمز التحقق: ${retryCode} - هذه النسخة التجريبية تعرض الرمز داخل الموقع.`
+              : "تم إرسال رمز التحقق إلى بريدك الإلكتروني."
+          );
+          return;
+        }
+      }
+    }
+
+    setState(result.message || "تعذر إرسال رمز استعادة كلمة المرور.");
+    return;
+  }
+
+  const code = String(result.data?.reset_code || "");
   saveResetRequest({ email, code, verified: false });
   if (forgotEmailForm) forgotEmailForm.hidden = true;
   if (codeForm) codeForm.hidden = false;
-  setState(`تم إنشاء رمز التحقق: ${code} — استخدمه لإكمال العملية الآن.`);
+  setState(
+    code
+      ? `تم تجهيز رمز التحقق: ${code} - هذه النسخة التجريبية تعرض الرمز داخل الموقع.`
+      : "تم إرسال رمز التحقق إلى بريدك الإلكتروني."
+  );
 });
 
 codeForm?.addEventListener("submit", (event) => {
@@ -666,9 +645,10 @@ codeForm?.addEventListener("submit", (event) => {
   setState("تم التحقق من الكود. اكتب كلمة المرور الجديدة الآن.");
 });
 
-resetForm?.addEventListener("submit", (event) => {
+resetForm?.addEventListener("submit", async (event) => {
   event.preventDefault();
   const request = loadResetRequest();
+  const apiClient = getApiClient();
   if (!request?.verified) {
     setState("أكمل التحقق أولًا.");
     return;
@@ -684,6 +664,23 @@ resetForm?.addEventListener("submit", (event) => {
     return;
   }
 
+  if (!apiClient || typeof apiClient.resetPassword !== "function") {
+    setState("الخادم غير متاح الآن، لذلك لا يمكن تحديث كلمة المرور.");
+    return;
+  }
+
+  const result = await apiClient.resetPassword({
+    email: request.email,
+    code: request.code,
+    password: newPassword.value,
+    password_confirmation: confirmPassword.value
+  });
+
+  if (!result.ok) {
+    setState(result.message || "تعذر تحديث كلمة المرور الآن.");
+    return;
+  }
+
   const users = loadUsers().map((user) =>
     user.email.toLowerCase() === request.email
       ? { ...user, password: newPassword.value }
@@ -694,7 +691,7 @@ resetForm?.addEventListener("submit", (event) => {
   localStorage.removeItem(storageKeys.passwordReset);
   setActivePanel("login");
   resetForgotFlow();
-  setState("تم تحديث كلمة المرور بنجاح. يمكنك تسجيل الدخول الآن.");
+  setState(result.message || "تم تحديث كلمة المرور بنجاح. يمكنك تسجيل الدخول الآن.");
 });
 
 verifyForm?.addEventListener("submit", (event) => {
@@ -715,7 +712,7 @@ verifyForm?.addEventListener("submit", (event) => {
     const users = loadUsers();
     if (users.some((entry) => entry.email.toLowerCase() === request.email.toLowerCase())) {
       clearPendingAuth();
-      setState("هذا البريد مسجل مسبقًا.");
+      setState("الحساب موجود من قبل، يلزم تسجيل الدخول لدخول الحساب.");
       openAuthMode("login");
       return;
     }
@@ -725,7 +722,6 @@ verifyForm?.addEventListener("submit", (event) => {
     saveUsers(users);
     localStorage.removeItem(storageKeys.adminSession);
     localStorage.setItem(storageKeys.currentUser, newUser.id);
-    persistClientAuthState();
     ensureUserWorkspace(newUser.id);
     clearPendingAuth();
     setState(`تم إنشاء الحساب بنجاح يا ${newUser.name}.`);
@@ -750,7 +746,6 @@ verifyForm?.addEventListener("submit", (event) => {
 
   localStorage.removeItem(storageKeys.adminSession);
   localStorage.setItem(storageKeys.currentUser, user.id);
-  persistClientAuthState();
   ensureUserWorkspace(user.id);
   clearPendingAuth();
   setState(`أهلًا ${user.name}، تم تسجيل الدخول بنجاح.`);
@@ -758,16 +753,11 @@ verifyForm?.addEventListener("submit", (event) => {
 });
 
 googleButton?.addEventListener("click", () => {
-  const url = getGoogleAuthUrl();
-  if (!url) {
-    if (googleError) {
-      googleError.hidden = false;
-    } else if (authState) {
-      authState.textContent = "تسجيل Google غير متاح الآن. تواصل مع الدعم لتفعيل الربط.";
-    }
+  if (!googleAuthUrl) {
+    setState(googleUnavailableMessage);
     return;
   }
-  window.location.href = url;
+  window.location.href = googleAuthUrl;
 });
 
 registerSubmitButton?.addEventListener("click", () => {

@@ -40,4 +40,3 @@ DumpStack.log
 
 /server.err.log
 /server.out.log
-/runtime-fallback-db.json

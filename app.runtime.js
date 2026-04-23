@@ -13,7 +13,6 @@
   const messageList = document.querySelector("[data-messages]");
   const attachmentList = document.querySelector("[data-attachments]");
   const promptInput = document.querySelector("[data-prompt]");
-  const heroPromptInput = document.querySelector("[data-hero-prompt]");
   const fileInput = document.querySelector("[data-file-input]");
   const gradeSelect = document.querySelector("[data-grade]");
   const subjectSelect = document.querySelector("[data-subject]");
@@ -36,12 +35,7 @@
   const achievementsNode = document.querySelector("[data-achievements]");
   const placeholderButtons = document.querySelectorAll("[data-chat-placeholder]");
   const usageSummaryNodes = document.querySelectorAll("[data-usage-summary]");
-  const progressQuestionsNodes = document.querySelectorAll("[data-progress-questions]");
-  const progressBestSubjectNodes = document.querySelectorAll("[data-progress-best-subject]");
-  const progressBestSubjectCopyNodes = document.querySelectorAll("[data-progress-best-subject-copy]");
-  const progressLevelNodes = document.querySelectorAll("[data-progress-level]");
-  const progressLevelCopyNodes = document.querySelectorAll("[data-progress-level-copy]");
-  const progressBarFillNodes = document.querySelectorAll("[data-progress-bar-fill]");
+  const projectContextNote = document.querySelector("[data-project-note]");
   const planNameNodes = document.querySelectorAll("[data-plan-name]");
   const planStatusNodes = document.querySelectorAll("[data-plan-status]");
   const planBadgeNodes = document.querySelectorAll("[data-plan-badge]");
@@ -55,23 +49,23 @@
   const planUpsellCopyNodes = document.querySelectorAll("[data-plan-upsell-copy]");
   const packagePreviewList = document.querySelector("[data-package-preview-list]");
   const projectSelect = document.querySelector("[data-project-select]");
+  const projectListNode = document.querySelector("[data-project-list]");
   const projectTitleInput = document.querySelector("[data-project-title]");
   const projectLessonInput = document.querySelector("[data-project-lesson]");
   const projectDescriptionInput = document.querySelector("[data-project-description]");
   const createProjectButton = document.querySelector("[data-create-project]");
-  const projectContextNote = document.querySelector("[data-project-note]");
-  const projectListNode = document.querySelector("[data-project-list]");
-  const projectNewChatButton = document.querySelector("[data-project-new-chat]");
-  const projectConversationsNode = document.querySelector("[data-project-conversations]");
 
   if (!form || !messageList || !promptInput) return;
 
   const runtimeState = {
     pendingSolveConfirmation: null,
     lastAcademicRequest: null,
+    guestUsage: null,
+    stats: null,
     packages: [],
     projects: [],
-    projectConversations: []
+    projectMap: {},
+    selectedProjectId: ""
   };
 
   const runtimeMemoryKeys = {
@@ -80,51 +74,8 @@
     intentRules: "mlm_runtime_intent_rules",
     intentErrors: "mlm_runtime_intent_errors"
   };
-  const runtimeProjectSelectionKey = "mlm_runtime_selected_project";
 
   const GUEST_MESSAGE_LIMIT = 5;
-  const fallbackRuntimePackages = [
-    {
-      key: "pro",
-      name: "برو",
-      daily_xp: 200,
-      price_sar: 30,
-      duration_days: 30,
-      summary: "مناسبة للاستخدام اليومي الخفيف مع رصيد ثابت كل يوم.",
-      benefits: [
-        "200 XP يوميًا لمدة شهر",
-        "أفضل للحل السريع والمتابعة المستمرة",
-        "مناسبة لطالب يعتمد على الشات يوميًا"
-      ]
-    },
-    {
-      key: "pro_plus",
-      name: "برو بلس",
-      daily_xp: 500,
-      price_sar: 60,
-      duration_days: 30,
-      summary: "الخطة الأكثر توازنًا بين الرصيد اليومي والسعر.",
-      benefits: [
-        "500 XP يوميًا لمدة شهر",
-        "مريحة للدروس والمراجعات المتكررة",
-        "الأفضل لمعظم الطلاب"
-      ]
-    },
-    {
-      key: "pro_max",
-      name: "برو ماكس",
-      daily_xp: 1000,
-      price_sar: 100,
-      duration_days: 30,
-      summary: "أعلى رصيد يومي لتجربة مكثفة ومشروعات أكثر.",
-      benefits: [
-        "1000 XP يوميًا لمدة شهر",
-        "مناسبة للاستخدام المكثف والملفات والصور",
-        "أفضل خيار للمواد الكثيفة والمشروعات"
-      ]
-    }
-  ];
-
   const blockedVideoExtensions = /\.(mp4|mov|avi|mkv|webm|m4v)$/i;
   const foundationCatalog = {
     "الفيزياء": {
@@ -284,6 +235,477 @@
       localStorage.setItem(getRuntimeScopedKey(baseKey), JSON.stringify(value));
     } catch (_) {
       // ignore storage issues
+    }
+  }
+
+  function syncRuntimeUserSnapshot(user) {
+    if (!user || typeof updateUserRecord !== "function") return null;
+    const nextUser = updateUserRecord({
+      ...user,
+      role: user.role || "Student",
+      package: user.package || "API Connected",
+      status: user.status || "نشط",
+      achievements: Array.isArray(user.achievements) ? user.achievements : [],
+      streakDays: Number.isFinite(Number(user.streakDays)) ? Number(user.streakDays) : 0,
+      motivationScore: Number.isFinite(Number(user.motivationScore)) ? Number(user.motivationScore) : 0,
+      xp: Number.isFinite(Number(user.xp)) ? Number(user.xp) : 0,
+      lastActiveDate: user.lastActiveDate || ""
+    });
+    if (typeof updateXpBalance === "function") updateXpBalance();
+    return nextUser;
+  }
+
+  function getSelectedProjectId() {
+    return String(projectSelect?.value || runtimeState.selectedProjectId || "").trim();
+  }
+
+  function setNodeText(nodes, value) {
+    (Array.isArray(nodes) ? nodes : Array.from(nodes || [])).forEach((node) => {
+      node.textContent = value;
+    });
+  }
+
+  function setNodeHtml(nodes, value) {
+    (Array.isArray(nodes) ? nodes : Array.from(nodes || [])).forEach((node) => {
+      node.innerHTML = value;
+    });
+  }
+
+  function escapeRuntimeHtml(value) {
+    return String(value ?? "")
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&#39;");
+  }
+
+  function formatRuntimeDate(value) {
+    if (!value) return "غير محدد";
+    const parsed = new Date(value);
+    if (Number.isNaN(parsed.getTime())) return "غير محدد";
+    return parsed.toLocaleDateString("ar-SA", {
+      year: "numeric",
+      month: "short",
+      day: "numeric"
+    });
+  }
+
+  function isPaidStudentPackage(user) {
+    if (!user) return false;
+    const packageKey = String(user.packageKey || "").trim().toLowerCase();
+    const paidByKey = packageKey && !["starter", "free", "guest", "basic_free"].includes(packageKey);
+    return paidByKey || Number(user.packageDailyXp || 0) > 0;
+  }
+
+  function formatPackagePreviewPrice(value) {
+    const amount = Number(value || 0);
+    return amount > 0 ? `${amount} ريال / شهر` : "مجانية";
+  }
+
+  function formatPackageBenefits(benefits, fallback = []) {
+    const list = Array.isArray(benefits) ? benefits.filter(Boolean) : [];
+    return list.length ? list : fallback;
+  }
+
+  function renderPackagePreviewCards() {
+    if (!packagePreviewList) return;
+    const activeUser = typeof getActiveUser === "function" ? getActiveUser() : null;
+    const activePackageKey = String(activeUser?.packageKey || "").trim().toLowerCase();
+    const activePackageName = String(activeUser?.package || "").trim();
+    const items = Array.isArray(runtimeState.packages)
+      ? runtimeState.packages.filter((item) => Number(item.daily_xp || 0) > 0).slice(0, 3)
+      : [];
+
+    if (!items.length) {
+      packagePreviewList.innerHTML = '<div class="student-package-empty">ستظهر هنا الباقات المناسبة مباشرة بعد تحميلها من الخادم.</div>';
+      return;
+    }
+
+    packagePreviewList.innerHTML = items.map((item, index) => {
+      const key = String(item.key || "").trim().toLowerCase();
+      const name = String(item.name || "باقة").trim();
+      const isCurrent = Boolean(activeUser) && (
+        (activePackageKey && key && activePackageKey === key) ||
+        (activePackageName && activePackageName === name)
+      );
+      const benefits = formatPackageBenefits(item.benefits, [
+        "تجديد يومي للرصيد داخل المنصة",
+        "تجربة أسرع في الشات والمشروعات",
+        "متابعة واضحة داخل لوحة الطالب"
+      ]);
+      const tags = [
+        index === 1 ? '<span class="student-package-tag">الأكثر طلبًا</span>' : '',
+        isCurrent ? '<span class="student-package-tag">خطة مفعلة</span>' : ''
+      ].filter(Boolean).join("");
+      const ctaLabel = isCurrent
+        ? "خطة مفعلة"
+        : (activeUser ? "اشترك الآن" : "سجّل لتفعيلها");
+      const ctaHref = activeUser ? "subscriptions.html" : "login.html";
+      return `
+        <article class="student-package-preview-card ${index === 1 ? "is-featured" : ""} ${isCurrent ? "is-active" : ""}">
+          <div class="student-package-preview-top">
+            <strong>${escapeRuntimeHtml(name)}</strong>
+            <span class="student-package-preview-price">${escapeRuntimeHtml(formatPackagePreviewPrice(item.price_sar))}</span>
+          </div>
+          <div class="student-package-preview-tags">${tags}</div>
+          <div class="student-package-preview-meta">
+            <span>${escapeRuntimeHtml(String(item.daily_xp || 0))} XP يوميًا</span>
+            <span>${escapeRuntimeHtml(String(item.duration_days || 0))} يومًا</span>
+          </div>
+          <p class="student-package-summary">${escapeRuntimeHtml(item.summary || "باقة شهرية تمنحك رصيدًا يوميًا وتجربة أوسع داخل لوحة الطالب.")}</p>
+          <ul class="student-package-benefits">
+            ${benefits.slice(0, 3).map((benefit) => `<li>${escapeRuntimeHtml(benefit)}</li>`).join("")}
+          </ul>
+          <div class="student-package-preview-actions">
+            <a class="${isCurrent ? "secondary-btn" : "primary-btn"}" href="${ctaHref}">${escapeRuntimeHtml(ctaLabel)}</a>
+          </div>
+        </article>
+      `;
+    }).join("");
+  }
+
+  function renderStudentPlanCard(user = null) {
+    const activeUser = user || (typeof getActiveUser === "function" ? getActiveUser() : null);
+    const paidPlan = isPaidStudentPackage(activeUser);
+    const guestRemaining = Number(runtimeState.guestUsage?.remaining_messages ?? GUEST_MESSAGE_LIMIT);
+    const benefits = paidPlan
+      ? formatPackageBenefits(activeUser?.packageBenefits, [
+          "يتجدد الرصيد تلقائيًا كل يوم طوال مدة الباقة",
+          "محادثاتك ومشروعاتك محفوظة داخل حسابك",
+          "مناسب للدروس المتكررة وحل الأسئلة اليومية"
+        ])
+      : (activeUser
+          ? [
+              "ابدأ بالخطة المجانية ثم فعّل باقتك عند الحاجة",
+              "حفظ المشروعات والمحادثات داخل الحساب",
+              "ترقية مرنة إلى باقات شهرية داخل المنصة"
+            ]
+          : [
+              "5 رسائل يوميًا قبل إنشاء الحساب",
+              "عرض الباقات كاملة قبل الاشتراك",
+              "100 XP بداية الحساب بعد التسجيل"
+            ]);
+
+    const planName = activeUser
+      ? (activeUser.package || "الخطة المجانية")
+      : "تجربة الضيف";
+    const planStatus = activeUser
+      ? (paidPlan
+          ? "باقتك فعالة الآن، ويتجدد رصيدها يوميًا طوال مدة الاشتراك."
+          : "أنت الآن على الخطة المجانية. فعّل باقة شهرية لفتح رصيد يومي أكبر وتجربة أغنى.")
+      : `يمكنك تجربة الشات الآن مع ${guestRemaining} رسائل يوميًا قبل الحاجة إلى تسجيل الدخول.`;
+    const badgeText = activeUser
+      ? (paidPlan ? "باقة فعالة" : "مجانية")
+      : "ضيف";
+    const badgeClass = activeUser
+      ? (paidPlan ? "student-plan-badge is-paid" : "student-plan-badge is-free")
+      : "student-plan-badge is-guest";
+    const primaryMetric = activeUser
+      ? (paidPlan ? `${Number(activeUser.packageDailyXp || 0)} XP` : "مجانية")
+      : `${guestRemaining} رسائل`;
+    const secondaryMetric = activeUser
+      ? (paidPlan
+          ? (Number.isFinite(Number(activeUser.packageDaysRemaining))
+              ? `${Math.max(0, Number(activeUser.packageDaysRemaining))} يوم`
+              : formatRuntimeDate(activeUser.packageExpiresAt))
+          : "ترقية مفتوحة")
+      : "يتجدد يوميًا";
+    const tertiaryMetric = activeUser
+      ? `${Number(activeUser.xp || 0)} XP`
+      : "100 XP بعد التسجيل";
+    const planCopy = activeUser
+      ? (paidPlan
+          ? `خطتك الحالية مناسبة إذا كنت تراجع ${activeUser.grade || "دروسك"} يوميًا وتريد أن يبقى رصيدك متجددًا حتى ${formatRuntimeDate(activeUser.packageExpiresAt)}.`
+          : "فعّل باقتك لفتح عدد أكبر من الأسئلة اليومية، وتنظيم أفضل للمشروعات، وتجربة أكثر راحة داخل الشات.")
+      : "استعرض الباقات من داخل اللوحة نفسها، ثم سجّل دخولك عندما تريد تفعيل خطة شهرية وحفظ التقدم مدى الحياة.";
+    const upsellCopy = activeUser
+      ? (paidPlan
+          ? "هذه هي الخطط المتاحة إذا أردت الترقية لاحقًا أو مقارنة مزايا الباقات الشهرية."
+          : "أنت الآن على الخطة المجانية. اختر الباقة المناسبة عندما تحتاج رصيدًا يوميًا أكبر داخل نفس اللوحة.")
+      : "استعرض الباقات الآن، ثم فعّل ما يناسبك بعد الدخول إلى الحساب بدون أي لخبطة في التجربة.";
+
+    setNodeText(planNameNodes, planName);
+    setNodeText(planStatusNodes, planStatus);
+    setNodeText(planPrimaryMetricNodes, primaryMetric);
+    setNodeText(planSecondaryMetricNodes, secondaryMetric);
+    setNodeText(planTertiaryMetricNodes, tertiaryMetric);
+    setNodeText(planCopyNodes, planCopy);
+    setNodeText(planUpsellCopyNodes, upsellCopy);
+
+    planBadgeNodes.forEach((node) => {
+      node.className = badgeClass;
+      node.textContent = badgeText;
+    });
+
+    setNodeHtml(planBenefitsNodes, benefits.slice(0, 3).map((benefit) => `
+      <span class="student-plan-benefit">${escapeRuntimeHtml(benefit)}</span>
+    `).join(""));
+
+    if (planPrimaryLink) {
+      planPrimaryLink.href = activeUser ? "subscriptions.html" : "login.html";
+      planPrimaryLink.textContent = activeUser
+        ? (paidPlan ? "إدارة الباقة" : "ترقية الباقة")
+        : "أنشئ حسابًا";
+    }
+
+    if (planSecondaryLink) {
+      planSecondaryLink.href = activeUser ? "subscriptions.html" : "subscriptions.html";
+      planSecondaryLink.textContent = activeUser
+        ? "مقارنة الباقات"
+        : "قارن الباقات";
+    }
+
+    renderPackagePreviewCards();
+  }
+
+  function renderGuestStatus(payload = null) {
+    runtimeState.guestUsage = payload || runtimeState.guestUsage;
+    const activeUser = typeof getActiveUser === "function" ? getActiveUser() : null;
+
+    if (activeUser) {
+      setNodeText(usageSummaryNodes, isPaidStudentPackage(activeUser)
+        ? `باقتك فعالة حتى ${formatRuntimeDate(activeUser.packageExpiresAt)} ويتجدد رصيدها يوميًا.`
+        : "أنت الآن على الخطة المجانية. فعّل باقتك عندما تحتاج رصيدًا يوميًا أكبر.");
+      if (projectContextNote) {
+        projectContextNote.textContent = "مشروعاتك محفوظة داخل حسابك. اربط كل محادثة بالمادة أو الدرس الذي تريد الرجوع إليه لاحقًا.";
+      }
+      renderStudentPlanCard(activeUser);
+      return;
+    }
+
+    const remaining = Number(runtimeState.guestUsage?.remaining_messages ?? GUEST_MESSAGE_LIMIT);
+    const used = Number(runtimeState.guestUsage?.used_messages ?? 0);
+    const text = remaining > 0
+      ? `بقي لك ${remaining} من ${GUEST_MESSAGE_LIMIT} رسائل كضيف. سجّل الدخول لحفظ التقدم بدون حد مؤقت.`
+      : "وصلت إلى حد الضيف المجاني. سجّل الدخول لمتابعة الشات وحفظ تقدمك.";
+    setNodeText(usageSummaryNodes, text);
+    if (projectContextNote) {
+      projectContextNote.textContent = used > 0
+        ? `استهلكت ${used} رسالة حتى الآن كضيف. سجّل دخولك لتفعيل حفظ المشروعات والمحادثات.`
+        : "المشروعات الكاملة وحفظ المحادثات يظهران بعد تسجيل الدخول، ويمكنك الآن تجربة الشات مباشرة.";
+    }
+    renderStudentPlanCard(null);
+  }
+
+  function renderProjectList(items = []) {
+    runtimeState.projects = Array.isArray(items) ? items : [];
+    runtimeState.projectMap = Object.fromEntries(runtimeState.projects.map((project) => [String(project.id), project]));
+
+    if (projectSelect) {
+      const previousValue = getSelectedProjectId();
+      const options = [
+        '<option value="">بدون مشروع محفوظ</option>',
+        ...runtimeState.projects.map((project) => `<option value="${String(project.id)}">${project.title}</option>`)
+      ];
+      projectSelect.innerHTML = options.join("");
+      projectSelect.value = runtimeState.projectMap[previousValue] ? previousValue : "";
+      runtimeState.selectedProjectId = projectSelect.value;
+    }
+
+    if (projectListNode) {
+      if (!runtimeState.projects.length) {
+        projectListNode.innerHTML = '<div class="student-project-empty">أنشئ مشروعًا إذا أردت حفظ محادثات مادة أو درس معين في مكان مستقل.</div>';
+      } else {
+        projectListNode.innerHTML = runtimeState.projects.map((project) => {
+          const meta = [project.subject, project.grade, project.lesson].filter(Boolean).join(" · ");
+          const isActive = String(project.id) === getSelectedProjectId();
+          return `
+            <button class="student-project-card ${isActive ? "is-active" : ""}" type="button" data-project-pick="${String(project.id)}">
+              <strong>${project.title}</strong>
+              <span>${meta || "مشروع عام"}</span>
+              <small>${Number(project.conversationsCount || 0)} محادثة محفوظة</small>
+            </button>
+          `;
+        }).join("");
+      }
+    }
+
+    applyUserStudyContext();
+  }
+
+  function renderRuntimeConversationList(items = []) {
+    const sessionListNode = document.querySelector("[data-session-list]");
+    if (!sessionListNode) return;
+
+    if (!Array.isArray(items) || !items.length) {
+      sessionListNode.innerHTML = '<div class="student-project-empty">ستظهر هنا المحادثات المحفوظة المرتبطة بحسابك أو مشروعك المختار.</div>';
+      return;
+    }
+
+    sessionListNode.innerHTML = items.map((item) => {
+      const meta = [item.subject, item.grade, item.term].filter(Boolean).join(" · ");
+      const project = runtimeState.projectMap[item.project_id] || null;
+      const projectText = project?.title ? ` · ${project.title}` : "";
+      return `
+        <button class="session-card student-api-session-card" type="button" data-open-api-conversation="${String(item.id)}">
+          <strong>${item.title || item.subject || "محادثة محفوظة"}</strong>
+          <span>${meta || "سجل محفوظ"}${projectText}</span>
+        </button>
+      `;
+    }).join("");
+  }
+
+  async function loadRuntimeGuestStatus() {
+    const activeUser = typeof getActiveUser === "function" ? getActiveUser() : null;
+    if (activeUser) {
+      renderGuestStatus(null);
+      renderPackagePreviewCards();
+      return;
+    }
+    const apiClient = getRuntimeApiClient();
+    if (!apiClient || typeof apiClient.getGuestStatus !== "function") {
+      renderGuestStatus(null);
+      return;
+    }
+    try {
+      const result = await apiClient.getGuestStatus(getRuntimeGuestSessionId());
+      if (result.ok && result.data) {
+        renderGuestStatus(result.data);
+      } else {
+        renderGuestStatus(null);
+      }
+    } catch (_) {
+      renderGuestStatus(null);
+    }
+    syncStudentDashboardHeader();
+  }
+
+  async function loadRuntimePackages() {
+    const apiClient = getRuntimeApiClient();
+    if (!apiClient || typeof apiClient.getPackages !== "function") {
+      renderStudentPlanCard();
+      return;
+    }
+    try {
+      const result = await apiClient.getPackages();
+      if (result.ok && result.data) {
+        runtimeState.packages = Array.isArray(result.data.items) ? result.data.items : [];
+        if (result.data.user) syncRuntimeUserSnapshot(result.data.user);
+      }
+    } catch (_) {
+      // Keep previously rendered package preview state.
+    }
+    renderStudentPlanCard();
+  }
+
+  async function loadRuntimeStudentDashboard() {
+    const apiClient = getRuntimeApiClient();
+    if (!apiClient || !apiClient.hasToken() || typeof apiClient.getStudentDashboard !== "function") return;
+    try {
+      const result = await apiClient.getStudentDashboard();
+      if (!result.ok || !result.data) return;
+      if (result.data.user) syncRuntimeUserSnapshot(result.data.user);
+      runtimeState.stats = result.data.stats || null;
+      renderProjectList(result.data.projects || []);
+      renderRuntimeConversationList(result.data.recent_conversations || []);
+      renderGuestStatus(null);
+      syncStudentDashboardHeader();
+    } catch (_) {
+      // keep local snapshot if dashboard sync fails
+    }
+  }
+
+  async function loadRuntimeProjectConversations(projectId = "") {
+    const apiClient = getRuntimeApiClient();
+    if (!apiClient || !apiClient.hasToken() || typeof apiClient.getStudentConversations !== "function") return;
+    try {
+      const result = await apiClient.getStudentConversations({
+        project_id: projectId || undefined,
+        limit: 20
+      });
+      if (!result.ok) return;
+      renderRuntimeConversationList(result.data?.items || []);
+    } catch (_) {
+      // Ignore conversation refresh failures during runtime mode.
+    }
+  }
+
+  async function loadRuntimeApiConversation(conversationId) {
+    const apiClient = getRuntimeApiClient();
+    if (!apiClient || typeof apiClient.getChatSession !== "function" || !conversationId) return;
+
+    try {
+      const result = await apiClient.getChatSession(conversationId);
+      if (!result.ok || !result.data?.conversation) return;
+
+      const conversation = result.data.conversation;
+      const messages = Array.isArray(result.data.messages) ? result.data.messages : [];
+
+      if (messageList) {
+        messageList.innerHTML = "";
+      }
+
+      setRuntimeApiConversationId(conversation.id || conversationId);
+
+      if (conversation.grade && gradeSelect) gradeSelect.value = conversation.grade;
+      if (conversation.subject && subjectSelect) subjectSelect.value = conversation.subject;
+      if (conversation.term && termSelect) termSelect.value = conversation.term;
+      if (projectSelect) {
+        projectSelect.value = conversation.project_id ? String(conversation.project_id) : "";
+        runtimeState.selectedProjectId = projectSelect.value;
+      }
+
+      messages.forEach((item) => {
+        const role = String(item.role || "").toLowerCase() === "assistant" ? "assistant" : "user";
+        const text = String(item.text || item.body || "").trim();
+        if (!text) return;
+        addMessage(
+          role,
+          role === "assistant" ? "ملم يحل" : "أنت",
+          role === "assistant" ? formatSimpleReply(text) : text,
+          { enableTools: role === "assistant", sources: [] }
+        );
+      });
+
+      applyUserStudyContext();
+      syncStudentDashboardHeader();
+      scrollToChatSection();
+    } catch (_) {
+      // Ignore open conversation failures.
+    }
+  }
+
+  async function handleRuntimeCreateProject() {
+    const apiClient = getRuntimeApiClient();
+    if (!apiClient || !apiClient.hasToken() || typeof apiClient.createStudentProject !== "function") {
+      window.alert("تسجيل الدخول مطلوب لإنشاء مشروع وحفظ محادثاته.");
+      return;
+    }
+
+    const title = String(projectTitleInput?.value || "").trim();
+    if (!title) {
+      window.alert("اكتب اسم المشروع أولًا.");
+      return;
+    }
+
+    try {
+      const activeUser = typeof getActiveUser === "function" ? getActiveUser() : null;
+      const result = await apiClient.createStudentProject({
+        title,
+        subject: subjectSelect?.value || activeUser?.subject || "",
+        grade: gradeSelect?.value || activeUser?.grade || "",
+        stage: inferRuntimeStageLabel(gradeSelect?.value || activeUser?.grade || ""),
+        term: termSelect?.value || "",
+        lesson: String(projectLessonInput?.value || lessonInput?.value || "").trim(),
+        description: String(projectDescriptionInput?.value || "").trim()
+      });
+
+      if (!result.ok || !result.data?.project) {
+        window.alert(result.message || "تعذر إنشاء المشروع الآن.");
+        return;
+      }
+
+      renderProjectList([result.data.project, ...runtimeState.projects.filter((item) => String(item.id) !== String(result.data.project.id))]);
+      runtimeState.selectedProjectId = String(result.data.project.id);
+      if (projectSelect) projectSelect.value = runtimeState.selectedProjectId;
+      if (projectTitleInput) projectTitleInput.value = "";
+      if (projectLessonInput) projectLessonInput.value = "";
+      if (projectDescriptionInput) projectDescriptionInput.value = "";
+      applyUserStudyContext();
+      loadRuntimeProjectConversations(runtimeState.selectedProjectId);
+    } catch (_) {
+      window.alert("تعذر إنشاء المشروع الآن.");
     }
   }
 
@@ -2721,756 +3143,23 @@
       : ['<span class="student-achievement-chip student-achievement-chip-muted">ستظهر إنجازاتك هنا بعد أول عدة أسئلة.</span>'];
   }
 
-  function getRuntimeProgressSnapshot() {
-    const totalQuestions = Number(analytics?.totalMessages || 0);
-    const rankedSubjects = Object.entries(analytics?.subjects || {}).sort((left, right) => right[1] - left[1]);
-    const bestSubject = rankedSubjects[0]?.[0] || "";
-    const bestSubjectCount = Number(rankedSubjects[0]?.[1] || 0);
-    const level = Math.max(1, Math.floor(totalQuestions / 4) + 1);
-    const cycleBase = Math.floor(Math.max(0, totalQuestions - 1) / 5) * 5;
-    const completedInCycle = totalQuestions > 0 ? totalQuestions - cycleBase : 0;
-    const progressPercent = totalQuestions > 0 ? Math.max(8, Math.min(100, Math.round((completedInCycle / 5) * 100))) : 0;
-    const remainingToNext = totalQuestions > 0 ? Math.max(0, cycleBase + 5 - totalQuestions) : 5;
-    return {
-      totalQuestions,
-      bestSubject,
-      bestSubjectCount,
-      level,
-      progressPercent,
-      remainingToNext
-    };
-  }
-
-  function setRuntimeNodeText(nodes, value) {
-    Array.from(nodes || []).forEach((node) => {
-      node.textContent = value;
-    });
-  }
-
-  function setRuntimeNodeHtml(nodes, value) {
-    Array.from(nodes || []).forEach((node) => {
-      node.innerHTML = value;
-    });
-  }
-
-  function escapeRuntimeHtml(value) {
-    return String(value ?? "")
-      .replace(/&/g, "&amp;")
-      .replace(/</g, "&lt;")
-      .replace(/>/g, "&gt;")
-      .replace(/"/g, "&quot;")
-      .replace(/'/g, "&#39;");
-  }
-
-  function formatRuntimePlanDate(value) {
-    if (!value) return "غير محدد";
-    const parsed = new Date(value);
-    if (Number.isNaN(parsed.getTime())) return "غير محدد";
-    return parsed.toLocaleDateString("ar-SA", {
-      year: "numeric",
-      month: "short",
-      day: "numeric"
-    });
-  }
-
-  function isPaidRuntimePackage(user) {
-    if (!user) return false;
-    const key = String(user.packageKey || "").trim().toLowerCase();
-    return Number(user.packageDailyXp || 0) > 0 || Boolean(key && !["starter", "free", "guest", "basic_free"].includes(key));
-  }
-
-  function getRuntimePackageList() {
-    return Array.isArray(runtimeState.packages) && runtimeState.packages.length
-      ? runtimeState.packages
-      : fallbackRuntimePackages;
-  }
-
-  function renderRuntimePackagePreviewCards(activeUser) {
-    if (!packagePreviewList) return;
-    const activePackageKey = String(activeUser?.packageKey || "").trim().toLowerCase();
-    const activePackageName = String(activeUser?.package || "").trim();
-    const items = getRuntimePackageList()
-      .filter((item) => Number(item.daily_xp || item.dailyXp || 0) > 0)
-      .slice(0, 3);
-
-    if (!items.length) {
-      packagePreviewList.innerHTML = '<div class="student-package-empty">ستظهر هنا باقات المنصة فور تجهيزها.</div>';
-      return;
-    }
-
-    packagePreviewList.innerHTML = items.map((item, index) => {
-      const key = String(item.key || item.package_key || "").trim().toLowerCase();
-      const name = String(item.name || item.display_name || "باقة").trim();
-      const dailyXp = Number(item.daily_xp || item.dailyXp || 0);
-      const duration = Number(item.duration_days || item.durationDays || 30);
-      const price = Number(item.price_sar || item.priceSar || 0);
-      const isCurrent = Boolean(activeUser) && (
-        (activePackageKey && key && activePackageKey === key) ||
-        (activePackageName && activePackageName === name)
-      );
-      const benefits = Array.isArray(item.benefits) && item.benefits.length
-        ? item.benefits
-        : [
-            `${dailyXp} XP يوميًا طوال الشهر`,
-            "تجربة أسرع داخل الشات ولوحة الطالب",
-            "أنسب للمذاكرة المستمرة"
-          ];
-      const tags = [
-        index === 1 ? '<span class="student-package-tag">الأكثر طلبًا</span>' : '',
-        isCurrent ? '<span class="student-package-tag">خطة مفعلة</span>' : ''
-      ].filter(Boolean).join("");
-      return `
-        <article class="student-package-preview-card ${index === 1 ? "is-featured" : ""} ${isCurrent ? "is-active" : ""}">
-          <div class="student-package-preview-top">
-            <strong>${escapeRuntimeHtml(name)}</strong>
-            <span class="student-package-preview-price">${escapeRuntimeHtml(price > 0 ? `${price} ريال / شهر` : "مجانية")}</span>
-          </div>
-          <div class="student-package-preview-tags">${tags}</div>
-          <div class="student-package-preview-meta">
-            <span>${escapeRuntimeHtml(String(dailyXp))} XP يوميًا</span>
-            <span>${escapeRuntimeHtml(String(duration))} يومًا</span>
-          </div>
-          <p class="student-package-summary">${escapeRuntimeHtml(item.summary || "باقة شهرية تمنحك رصيدًا يوميًا وتجربة أكثر راحة داخل المنصة.")}</p>
-          <ul class="student-package-benefits">
-            ${benefits.slice(0, 3).map((benefit) => `<li>${escapeRuntimeHtml(benefit)}</li>`).join("")}
-          </ul>
-          <div class="student-package-preview-actions">
-            <a class="${isCurrent ? "secondary-btn" : "primary-btn"}" href="${activeUser ? "subscriptions.html" : "login.html"}">${isCurrent ? "خطة مفعلة" : (activeUser ? "اشترك الآن" : "سجّل لتفعيلها")}</a>
-          </div>
-        </article>
-      `;
-    }).join("");
-  }
-
-  function renderRuntimeStudentPlan(activeUser) {
-    const isPaid = isPaidRuntimePackage(activeUser);
-    const planName = activeUser ? (activeUser.package || "الخطة المجانية") : "تجربة الضيف";
-    const planStatus = activeUser
-      ? (isPaid
-          ? "باقتك فعالة الآن، ويتجدد رصيدها يوميًا طوال مدة الاشتراك."
-          : "أنت الآن على الخطة المجانية. فعّل باقة شهرية لفتح رصيد يومي أكبر وتجربة أغنى.")
-      : `يمكنك تجربة الشات الآن مع ${GUEST_MESSAGE_LIMIT} رسائل يوميًا قبل الحاجة إلى تسجيل الدخول.`;
-    const badgeText = activeUser ? (isPaid ? "باقة فعالة" : "مجانية") : "ضيف";
-    const badgeClass = activeUser
-      ? (isPaid ? "student-plan-badge is-paid" : "student-plan-badge is-free")
-      : "student-plan-badge is-guest";
-    const primaryMetric = activeUser ? (isPaid ? `${Number(activeUser.packageDailyXp || 0)} XP` : "مجانية") : `${GUEST_MESSAGE_LIMIT} رسائل`;
-    const secondaryMetric = activeUser
-      ? (isPaid
-          ? (Number.isFinite(Number(activeUser.packageDaysRemaining))
-              ? `${Math.max(0, Number(activeUser.packageDaysRemaining))} يوم`
-              : formatRuntimePlanDate(activeUser.packageExpiresAt))
-          : "ترقية مفتوحة")
-      : "يتجدد يوميًا";
-    const tertiaryMetric = activeUser ? `${Number(activeUser.xp || 0)} XP` : "100 XP بعد التسجيل";
-    const planCopy = activeUser
-      ? (isPaid
-          ? `خطتك الحالية مناسبة إذا كنت تراجع ${activeUser.grade || "دروسك"} يوميًا وتريد أن يبقى رصيدك متجددًا حتى ${formatRuntimePlanDate(activeUser.packageExpiresAt)}.`
-          : "فعّل باقتك لفتح عدد أكبر من الأسئلة اليومية، وتنظيم أفضل للمشروعات، وتجربة أكثر راحة داخل الشات.")
-      : "استعرض الباقات من داخل اللوحة نفسها، ثم سجّل دخولك عندما تريد تفعيل خطة شهرية وحفظ التقدم مدى الحياة.";
-    const benefits = isPaid
-      ? (Array.isArray(activeUser?.packageBenefits) && activeUser.packageBenefits.length
-          ? activeUser.packageBenefits
-          : [
-              "يتجدد الرصيد تلقائيًا كل يوم طوال مدة الباقة",
-              "حفظ المحادثات والمشروعات داخل الحساب",
-              "مناسبة للمراجعة اليومية والمواد المكثفة"
-            ])
-      : (activeUser
-          ? [
-              "ابدأ بالخطة المجانية ثم فعّل باقتك عند الحاجة",
-              "حفظ المشروعات والمحادثات داخل الحساب",
-              "ترقية مرنة إلى باقات شهرية"
-            ]
-          : [
-              "5 رسائل يوميًا قبل إنشاء الحساب",
-              "عرض الباقات كاملة قبل الاشتراك",
-              "100 XP بداية الحساب بعد التسجيل"
-            ]);
-    const upsellCopy = activeUser
-      ? (isPaid
-          ? "هذه هي الخطط المتاحة إذا أردت الترقية لاحقًا أو مقارنة مزايا الباقات الشهرية."
-          : "أنت الآن على الخطة المجانية. اختر الباقة المناسبة عندما تحتاج رصيدًا يوميًا أكبر داخل نفس اللوحة.")
-      : "استعرض الباقات الآن، ثم فعّل ما يناسبك بعد الدخول إلى الحساب بدون أي لخبطة في التجربة.";
-
-    setRuntimeNodeText(planNameNodes, planName);
-    setRuntimeNodeText(planStatusNodes, planStatus);
-    setRuntimeNodeText(planPrimaryMetricNodes, primaryMetric);
-    setRuntimeNodeText(planSecondaryMetricNodes, secondaryMetric);
-    setRuntimeNodeText(planTertiaryMetricNodes, tertiaryMetric);
-    setRuntimeNodeText(planCopyNodes, planCopy);
-    setRuntimeNodeText(planUpsellCopyNodes, upsellCopy);
-    setRuntimeNodeHtml(planBenefitsNodes, benefits.slice(0, 3).map((benefit) => `<span class="student-plan-benefit">${escapeRuntimeHtml(benefit)}</span>`).join(""));
-
-    planBadgeNodes.forEach((node) => {
-      node.className = badgeClass;
-      node.textContent = badgeText;
+  function syncProjectAccessState(activeUser) {
+    const disabled = !activeUser;
+    [projectSelect, projectTitleInput, projectLessonInput, projectDescriptionInput, createProjectButton].forEach((node) => {
+      if (!node) return;
+      node.disabled = disabled;
     });
 
-    if (planPrimaryLink) {
-      planPrimaryLink.href = activeUser ? "subscriptions.html" : "login.html";
-      planPrimaryLink.textContent = activeUser ? (isPaid ? "إدارة الباقة" : "ترقية الباقة") : "أنشئ حسابًا";
+    if (projectTitleInput) {
+      projectTitleInput.placeholder = disabled ? "سجّل دخولك أولًا لإنشاء مشروع محفوظ" : "اسم المشروع";
     }
-    if (planSecondaryLink) {
-      planSecondaryLink.href = "subscriptions.html";
-      planSecondaryLink.textContent = activeUser ? "مقارنة الباقات" : "قارن الباقات";
+    if (projectLessonInput) {
+      projectLessonInput.placeholder = disabled ? "يتاح بعد تسجيل الدخول" : "الدرس أو الوحدة";
     }
-
-    renderRuntimePackagePreviewCards(activeUser);
-  }
-
-  function renderRuntimeProgressOverview(activeUser) {
-    const snapshot = getRuntimeProgressSnapshot();
-    setRuntimeNodeText(progressQuestionsNodes, String(snapshot.totalQuestions));
-
-    const bestSubjectTitle = snapshot.bestSubject || (activeUser ? "ابدأ أول مادة" : "للضيف بعد أول سؤال");
-    setRuntimeNodeText(progressBestSubjectNodes, bestSubjectTitle);
-    setRuntimeNodeText(
-      progressBestSubjectCopyNodes,
-      snapshot.bestSubject
-        ? `الأكثر استخدامًا لديك الآن هي ${snapshot.bestSubject} بعد ${snapshot.bestSubjectCount} سؤال.`
-        : (activeUser
-            ? "ستظهر المادة الأكثر نشاطًا بعد أول عدة أسئلة محفوظة في الحساب."
-            : "سجّل دخولك أو ابدأ أول سؤال لتظهر المادة الأكثر استخدامًا هنا.")
-    );
-
-    setRuntimeNodeText(progressLevelNodes, `${snapshot.progressPercent}%`);
-    setRuntimeNodeText(
-      progressLevelCopyNodes,
-      snapshot.totalQuestions
-        ? `مستواك الحالي ${snapshot.level}، ويتبقى ${snapshot.remainingToNext} ${snapshot.remainingToNext === 1 ? "سؤال" : "أسئلة"} للوصول إلى التقدم التالي.`
-        : "ابدأ أول سؤال ليظهر مستوى تقدمك الحالي داخل اللوحة."
-    );
-
-    Array.from(progressBarFillNodes || []).forEach((node) => {
-      node.style.width = `${snapshot.progressPercent}%`;
-    });
-  }
-
-  async function fetchRuntimePackages() {
-    const apiClient = getRuntimeApiClient();
-    if (!apiClient || typeof apiClient.getPackages !== "function") {
-      renderRuntimeStudentPlan(typeof getActiveUser === "function" ? getActiveUser() : null);
-      return;
-    }
-    try {
-      const result = await apiClient.getPackages();
-      if (result.ok && result.data?.items) {
-        runtimeState.packages = Array.isArray(result.data.items) ? result.data.items : [];
-      }
-    } catch (_) {
-      runtimeState.packages = fallbackRuntimePackages;
-    }
-    renderRuntimeStudentPlan(typeof getActiveUser === "function" ? getActiveUser() : null);
-  }
-
-  function normalizeRuntimeProject(project) {
-    if (!project || project.id == null) return null;
-    return {
-      id: String(project.id),
-      title: String(project.title || "مشروع").trim() || "مشروع",
-      subject: String(project.subject || "").trim(),
-      stage: String(project.stage || "").trim(),
-      grade: String(project.grade || "").trim(),
-      term: String(project.term || "").trim(),
-      lesson: String(project.lesson || "").trim(),
-      description: String(project.description || "").trim(),
-      conversationsCount: Math.max(0, Number(project.conversationsCount || project.conversations_count || 0)),
-      lastActivityAt: project.lastActivityAt || project.last_activity_at || project.updatedAt || project.updated_at || "",
-      createdAt: project.createdAt || project.created_at || "",
-      updatedAt: project.updatedAt || project.updated_at || ""
-    };
-  }
-
-  function getRuntimeProjectList() {
-    return Array.isArray(runtimeState.projects) ? runtimeState.projects : [];
-  }
-
-  function normalizeRuntimeProjectConversation(conversation) {
-    if (!conversation?.id) return null;
-    return {
-      id: String(conversation.id),
-      projectId: String(conversation.project_id || conversation.projectId || "").trim(),
-      title: String(conversation.title || "محادثة جديدة").trim() || "محادثة جديدة",
-      subject: String(conversation.subject || "").trim(),
-      grade: String(conversation.grade || "").trim(),
-      term: String(conversation.term || "").trim(),
-      status: String(conversation.status || "active").trim(),
-      lastMessageAt: conversation.last_message_at || conversation.lastMessageAt || conversation.updated_at || conversation.updatedAt || conversation.created_at || conversation.createdAt || "",
-      createdAt: conversation.created_at || conversation.createdAt || "",
-      updatedAt: conversation.updated_at || conversation.updatedAt || ""
-    };
-  }
-
-  function getRuntimeProjectConversationList() {
-    return Array.isArray(runtimeState.projectConversations) ? runtimeState.projectConversations : [];
-  }
-
-  function getRuntimeLocalSessionIdByConversationId(conversationId) {
-    const normalizedConversationId = String(conversationId || "").trim();
-    if (!normalizedConversationId) return "";
-    const map = getRuntimeApiConversationMap();
-    const match = Object.entries(map).find(([, savedConversationId]) => String(savedConversationId || "").trim() === normalizedConversationId);
-    const localSessionId = match?.[0] || "";
-    if (!localSessionId) return "";
-    if (typeof chatSessions !== "undefined" && Array.isArray(chatSessions)) {
-      return chatSessions.some((session) => String(session.id) === localSessionId) ? localSessionId : "";
-    }
-    return localSessionId;
-  }
-
-  function getSelectedRuntimeProjectId() {
-    const selected = projectSelect?.value || loadRuntimeStore(runtimeProjectSelectionKey, "") || "";
-    return String(selected || "").trim();
-  }
-
-  function setSelectedRuntimeProjectId(projectId) {
-    const normalizedProjectId = String(projectId || "").trim();
-    if (getSelectedRuntimeProjectId() !== normalizedProjectId) {
-      runtimeState.projectConversations = [];
-    }
-    saveRuntimeStore(runtimeProjectSelectionKey, normalizedProjectId);
-    if (projectSelect && projectSelect.value !== normalizedProjectId) {
-      projectSelect.value = normalizedProjectId;
-    }
-    syncRuntimeProjectCardState();
-    updateRuntimeProjectContextNote(getRuntimeActiveUser());
-  }
-
-  function formatRuntimeProjectDate(dateValue) {
-    if (!dateValue) return "";
-    const parsed = new Date(dateValue);
-    if (Number.isNaN(parsed.getTime())) return "";
-    try {
-      return parsed.toLocaleDateString("ar-SA", {
-        year: "numeric",
-        month: "short",
-        day: "numeric"
-      });
-    } catch (_) {
-      return parsed.toLocaleDateString();
-    }
-  }
-
-  function updateRuntimeProjectContextNote(activeUser) {
-    if (!projectContextNote) return;
-    const selectedProjectId = getSelectedRuntimeProjectId();
-    const selectedProject = getRuntimeProjectList().find((project) => String(project.id) === selectedProjectId) || null;
-
-    if (!activeUser) {
-      projectContextNote.textContent = "المشروعات الكاملة وحفظ المحادثات داخل الحساب يظهران بعد تسجيل الدخول، ويمكنك الآن تجربة الشات مباشرة.";
-      return;
-    }
-
-    if (selectedProject) {
-      const lessonLabel = selectedProject.lesson || selectedProject.subject || "هذا المشروع";
-      projectContextNote.textContent = `المشروع "${selectedProject.title}" جاهز الآن مثل ملف مستقل، ويمكنك إنشاء عدة محادثات داخله لكل جزء يخص ${lessonLabel}.`;
-      return;
-    }
-
-    projectContextNote.textContent = "أنشئ مشروعًا أولًا، ثم افتح داخله محادثات متعددة لكل درس أو فكرة تريد الرجوع إليها لاحقًا.";
-  }
-
-  function syncRuntimeProjectCardState() {
-    if (!projectListNode) return;
-    const selectedProjectId = getSelectedRuntimeProjectId();
-    projectListNode.querySelectorAll("[data-project-card]").forEach((card) => {
-      card.classList.toggle("is-active", String(card.getAttribute("data-project-card") || "") === selectedProjectId);
-    });
-  }
-
-  function renderRuntimeProjects(activeUser) {
-    const projects = getRuntimeProjectList();
-    const currentSelection = getSelectedRuntimeProjectId();
-    const hasCurrentSelection = projects.some((project) => String(project.id) === currentSelection);
-    const selectedProjectId = hasCurrentSelection ? currentSelection : "";
-
-    if (projectSelect) {
-      const optionsMarkup = projects.map((project) => (
-        `<option value="${escapeRuntimeHtml(project.id)}">${escapeRuntimeHtml(project.title)}</option>`
-      )).join("");
-      projectSelect.innerHTML = `<option value="">بدون مشروع محفوظ</option>${optionsMarkup}`;
-      projectSelect.value = selectedProjectId;
-    }
-
-    saveRuntimeStore(runtimeProjectSelectionKey, selectedProjectId);
-
-    if (projectListNode) {
-      if (!projects.length) {
-        projectListNode.innerHTML = activeUser
-          ? '<div class="student-project-empty">أنشئ مشروعًا إذا أردت حفظ محادثات مادة أو درس معين في مكان مستقل.</div>'
-          : '<div class="student-project-empty">ستظهر مشروعاتك المحفوظة هنا بعد تسجيل الدخول وإنشاء أول مشروع.</div>';
-      } else {
-        projectListNode.innerHTML = projects.map((project) => {
-          const metaBits = [
-            project.lesson || project.subject || "",
-            project.grade || "",
-            project.term || ""
-          ].filter(Boolean);
-          const activityText = project.lastActivityAt
-            ? `آخر نشاط ${formatRuntimeProjectDate(project.lastActivityAt)}`
-            : "لا توجد محادثات محفوظة بعد";
-          return `
-            <button class="student-project-card${String(project.id) === selectedProjectId ? " is-active" : ""}" type="button" data-project-card="${escapeRuntimeHtml(project.id)}">
-              <strong>${escapeRuntimeHtml(project.title)}</strong>
-              <span>${escapeRuntimeHtml(metaBits.join(" • ") || "مشروع مخصص لحفظ المحادثات والأسئلة المرتبطة بنفس الدرس.")}</span>
-              <small>${escapeRuntimeHtml(activityText)}</small>
-              <small>${escapeRuntimeHtml(`عدد المحادثات: ${project.conversationsCount || 0}`)}</small>
-            </button>
-          `;
-        }).join("");
-      }
-    }
-
-    syncRuntimeProjectCardState();
-    updateRuntimeProjectContextNote(activeUser);
-    renderRuntimeProjectConversations(activeUser);
-  }
-
-  function renderRuntimeProjectConversations(activeUser) {
-    if (!projectConversationsNode) return;
-
-    const selectedProjectId = getSelectedRuntimeProjectId();
-    const selectedProject = getRuntimeProjectList().find((project) => String(project.id) === selectedProjectId) || null;
-    const items = getRuntimeProjectConversationList();
-    const currentConversationId = getRuntimeApiConversationId();
-
-    if (projectNewChatButton) {
-      projectNewChatButton.disabled = !activeUser || !selectedProjectId;
-    }
-
-    if (!activeUser) {
-      projectConversationsNode.innerHTML = '<div class="student-project-empty">سجّل دخولك لتظهر لك دردشات المشروعات المحفوظة داخل حسابك.</div>';
-      return;
-    }
-
-    if (!selectedProject) {
-      projectConversationsNode.innerHTML = '<div class="student-project-empty">اختر مشروعًا أولًا ثم أنشئ داخله محادثات مستقلة.</div>';
-      return;
-    }
-
-    if (!items.length) {
-      projectConversationsNode.innerHTML = `<div class="student-project-empty">لا توجد دردشات داخل مشروع "${escapeRuntimeHtml(selectedProject.title)}" بعد. ابدأ أول محادثة داخله الآن.</div>`;
-      return;
-    }
-
-    projectConversationsNode.innerHTML = items.map((conversation) => {
-      const meta = [
-        conversation.subject || selectedProject.subject || "",
-        conversation.grade || selectedProject.grade || ""
-      ].filter(Boolean).join(" • ");
-      const lastActivity = conversation.lastMessageAt
-        ? `آخر نشاط ${formatRuntimeProjectDate(conversation.lastMessageAt)}`
-        : "محادثة جديدة";
-      return `
-        <button class="student-project-conversation-card${String(conversation.id) === String(currentConversationId || "") ? " is-active" : ""}" type="button" data-project-conversation="${escapeRuntimeHtml(conversation.id)}">
-          <strong>${escapeRuntimeHtml(conversation.title)}</strong>
-          <span>${escapeRuntimeHtml(meta || "محادثة محفوظة داخل هذا المشروع")}</span>
-          <small>${escapeRuntimeHtml(lastActivity)}</small>
-        </button>
-      `;
-    }).join("");
-  }
-
-  function upsertRuntimeProject(project) {
-    const normalizedProject = normalizeRuntimeProject(project);
-    if (!normalizedProject) return null;
-    runtimeState.projects = [
-      normalizedProject,
-      ...getRuntimeProjectList().filter((item) => String(item.id) !== String(normalizedProject.id))
-    ];
-    renderRuntimeProjects(getRuntimeActiveUser());
-    return normalizedProject;
-  }
-
-  async function fetchRuntimeProjects() {
-    const activeUser = getRuntimeActiveUser();
-    if (!activeUser) {
-      runtimeState.projects = [];
-      runtimeState.projectConversations = [];
-      renderRuntimeProjects(null);
-      return;
-    }
-
-    const apiClient = getRuntimeApiClient();
-    if (!apiClient || typeof apiClient.getStudentProjects !== "function") {
-      renderRuntimeProjects(activeUser);
-      return;
-    }
-
-    try {
-      const result = await apiClient.getStudentProjects({ limit: 60 });
-      if (result.ok && Array.isArray(result.data?.items)) {
-        runtimeState.projects = result.data.items
-          .map(normalizeRuntimeProject)
-          .filter(Boolean);
-      } else if (projectContextNote && result?.message) {
-        projectContextNote.textContent = String(result.message);
-      }
-    } catch (error) {
-      if (projectContextNote) {
-        projectContextNote.textContent = String(error?.message || "تعذر تحميل المشروعات الآن. حاول مرة أخرى بعد قليل.");
-      }
-    }
-
-    renderRuntimeProjects(activeUser);
-    await fetchRuntimeProjectConversations(getSelectedRuntimeProjectId());
-  }
-
-  async function fetchRuntimeProjectConversations(projectId = getSelectedRuntimeProjectId()) {
-    const activeUser = getRuntimeActiveUser();
-    if (!activeUser || !projectId) {
-      runtimeState.projectConversations = [];
-      renderRuntimeProjectConversations(activeUser);
-      return;
-    }
-
-    const apiClient = getRuntimeApiClient();
-    if (!apiClient || typeof apiClient.getStudentConversations !== "function") {
-      runtimeState.projectConversations = [];
-      renderRuntimeProjectConversations(activeUser);
-      return;
-    }
-
-    try {
-      const result = await apiClient.getStudentConversations({
-        project_id: projectId,
-        limit: 50
-      });
-      runtimeState.projectConversations = Array.isArray(result?.data?.items)
-        ? result.data.items.map(normalizeRuntimeProjectConversation).filter(Boolean)
-        : [];
-    } catch (_) {
-      runtimeState.projectConversations = [];
-    }
-
-    renderRuntimeProjectConversations(activeUser);
-  }
-
-  function syncRuntimeLocalSessionWithConversation(conversation, messages = []) {
-    if (!conversation?.id) return null;
-
-    const previewSource = [...(Array.isArray(messages) ? messages : [])]
-      .reverse()
-      .find((item) => String(item?.text || "").trim())?.text
-      || conversation.title
-      || "ابدأ أول رسالة في هذه المحادثة.";
-    const createdAt = new Date(conversation.created_at || conversation.createdAt || Date.now()).getTime();
-    const updatedAt = new Date(conversation.updated_at || conversation.updatedAt || conversation.last_message_at || Date.now()).getTime();
-    const normalizedMessages = Array.isArray(messages)
-      ? messages.map((message, index) => ({
-          id: `api_msg_${conversation.id}_${index}`,
-          type: message.role === "assistant" ? "assistant" : "user",
-          author: message.role === "assistant" ? "ملم يحل" : "أنت",
-          body: String(message.text || "").trim(),
-          createdAt: new Date(message.created_at || Date.now()).getTime(),
-          enableTools: message.role === "assistant",
-          sources: [],
-          metadata: undefined
-        }))
-      : [];
-
-    let localSessionId = getRuntimeLocalSessionIdByConversationId(conversation.id);
-    if (!localSessionId && typeof createSession === "function") {
-      const session = createSession("", conversation.subject || "", {
-        title: String(conversation.title || "محادثة جديدة").trim() || "محادثة جديدة",
-        preview: stripHtml(previewSource).slice(0, 120) || "ابدأ أول رسالة في هذه المحادثة.",
-        subject: conversation.subject || "",
-        projectId: conversation.project_id || conversation.projectId || "",
-        apiConversationId: conversation.id,
-        createdAt,
-        updatedAt,
-        messages: normalizedMessages
-      });
-      localSessionId = session?.id || "";
-    } else if (localSessionId && typeof updateSession === "function") {
-      updateSession(localSessionId, (current) => ({
-        ...current,
-        title: String(conversation.title || current.title || "محادثة جديدة").trim() || "محادثة جديدة",
-        preview: stripHtml(previewSource).slice(0, 120) || current.preview || "ابدأ أول رسالة في هذه المحادثة.",
-        subject: conversation.subject || current.subject || "",
-        projectId: String(conversation.project_id || conversation.projectId || current.projectId || "").trim(),
-        apiConversationId: String(conversation.id),
-        createdAt,
-        updatedAt,
-        messages: normalizedMessages
-      }));
-    }
-
-    if (!localSessionId) return null;
-
-    const map = getRuntimeApiConversationMap();
-    map[localSessionId] = String(conversation.id);
-    saveRuntimeApiConversationMap(map);
-    return localSessionId;
-  }
-
-  async function openRuntimeProjectConversation(conversationId) {
-    const normalizedConversationId = String(conversationId || "").trim();
-    if (!normalizedConversationId) return;
-
-    const apiClient = getRuntimeApiClient();
-    if (!apiClient || typeof apiClient.getChatSession !== "function") {
-      return;
-    }
-
-    if (projectContextNote) {
-      projectContextNote.textContent = "جارٍ فتح دردشة المشروع...";
-    }
-
-    try {
-      const result = await apiClient.getChatSession(normalizedConversationId);
-      if (!result.ok || !result.data?.conversation) {
-        throw new Error(result.message || "تعذر تحميل دردشة المشروع الآن.");
-      }
-
-      const conversation = normalizeRuntimeProjectConversation(result.data.conversation);
-      if (conversation?.projectId) {
-        setSelectedRuntimeProjectId(conversation.projectId);
-      }
-      const localSessionId = syncRuntimeLocalSessionWithConversation(conversation, result.data.messages || []);
-      if (localSessionId && typeof restoreSession === "function") {
-        restoreSession(localSessionId);
-      }
-
-      if (projectContextNote && conversation) {
-        projectContextNote.textContent = `تم فتح دردشة "${conversation.title}" داخل المشروع.`;
-      }
-      await fetchRuntimeProjectConversations(conversation?.projectId || getSelectedRuntimeProjectId());
-    } catch (error) {
-      if (projectContextNote) {
-        projectContextNote.textContent = String(error?.message || "تعذر فتح هذه الدردشة الآن.");
-      }
-    }
-  }
-
-  async function handleRuntimeCreateProjectChat() {
-    const activeUser = getRuntimeActiveUser();
-    const selectedProjectId = getSelectedRuntimeProjectId();
-    const selectedProject = getRuntimeProjectList().find((project) => String(project.id) === selectedProjectId) || null;
-
-    if (!activeUser) {
-      window.location.href = "login.html";
-      return;
-    }
-
-    if (!selectedProjectId || !selectedProject) {
-      if (projectContextNote) {
-        projectContextNote.textContent = "اختر مشروعًا أولًا حتى تنشئ داخله محادثة جديدة.";
-      }
-      return;
-    }
-
-    const apiClient = getRuntimeApiClient();
-    if (!apiClient || typeof apiClient.createStudentConversation !== "function") {
-      if (projectContextNote) {
-        projectContextNote.textContent = "تعذر الوصول إلى خدمة دردشات المشروع الآن. حاول مرة أخرى بعد قليل.";
-      }
-      return;
-    }
-
-    const originalLabel = projectNewChatButton?.textContent || "محادثة جديدة داخل المشروع";
-    if (projectNewChatButton) {
-      projectNewChatButton.disabled = true;
-      projectNewChatButton.textContent = "جارٍ الإنشاء...";
-    }
-
-    try {
-      const result = await apiClient.createStudentConversation({
-        project_id: selectedProjectId,
-        title: `${selectedProject.title} - محادثة جديدة`,
-        subject: selectedProject.subject || subjectSelect?.value || "",
-        grade: selectedProject.grade || gradeSelect?.value || "",
-        stage: selectedProject.stage || inferRuntimeStageLabel(selectedProject.grade || gradeSelect?.value || ""),
-        term: selectedProject.term || termSelect?.value || ""
-      });
-
-      if (!result.ok || !result.data?.conversation) {
-        throw new Error(result.message || "تعذر إنشاء محادثة جديدة داخل المشروع.");
-      }
-
-      await openRuntimeProjectConversation(result.data.conversation.id);
-    } catch (error) {
-      if (projectContextNote) {
-        projectContextNote.textContent = String(error?.message || "تعذر إنشاء محادثة جديدة داخل المشروع.");
-      }
-    } finally {
-      if (projectNewChatButton) {
-        projectNewChatButton.disabled = !activeUser || !selectedProjectId;
-        projectNewChatButton.textContent = originalLabel;
-      }
-    }
-  }
-
-  async function handleRuntimeCreateProject() {
-    const activeUser = getRuntimeActiveUser();
-    if (!activeUser) {
-      updateRuntimeProjectContextNote(null);
-      window.location.href = "login.html";
-      return;
-    }
-
-    const apiClient = getRuntimeApiClient();
-    if (!apiClient || typeof apiClient.createStudentProject !== "function") {
-      if (projectContextNote) {
-        projectContextNote.textContent = "تعذر الوصول إلى خدمة المشروعات الآن. حاول مرة أخرى بعد قليل.";
-      }
-      return;
-    }
-
-    const title = String(projectTitleInput?.value || "").trim();
-    const lesson = String(projectLessonInput?.value || lessonInput?.value || "").trim();
-    const description = String(projectDescriptionInput?.value || "").trim();
-    if (!title) {
-      if (projectContextNote) {
-        projectContextNote.textContent = "اكتب اسم المشروع أولًا حتى يتم حفظه داخل حسابك.";
-      }
-      projectTitleInput?.focus();
-      return;
-    }
-
-    const originalLabel = createProjectButton?.textContent || "إنشاء مشروع جديد";
-    if (createProjectButton) {
-      createProjectButton.disabled = true;
-      createProjectButton.textContent = "جارٍ الإنشاء...";
-    }
-
-    try {
-      const grade = gradeSelect?.value || activeUser.grade || "";
-      const result = await apiClient.createStudentProject({
-        title,
-        subject: subjectSelect?.value || activeUser.subject || "",
-        stage: inferRuntimeStageLabel(grade),
-        grade,
-        term: termSelect?.value || "",
-        lesson,
-        description
-      });
-
-      if (!result.ok || !result.data?.project) {
-        throw new Error(result.message || "تعذر إنشاء المشروع الآن.");
-      }
-
-      const createdProject = upsertRuntimeProject(result.data.project);
-      setSelectedRuntimeProjectId(String(result.data.project?.id || createdProject?.id || ""));
-      await fetchRuntimeProjects();
-
-      if (projectTitleInput) projectTitleInput.value = "";
-      if (projectLessonInput) projectLessonInput.value = "";
-      if (projectDescriptionInput) projectDescriptionInput.value = "";
-
-      if (projectContextNote && createdProject) {
-        projectContextNote.textContent = `تم إنشاء مشروع "${createdProject.title}" وحفظه داخل حسابك بنجاح.`;
-      }
-    } catch (error) {
-      if (projectContextNote) {
-        projectContextNote.textContent = String(error?.message || "تعذر إنشاء المشروع الآن. حاول مرة أخرى.");
-      }
-    } finally {
-      if (createProjectButton) {
-        createProjectButton.disabled = !activeUser;
-        createProjectButton.textContent = originalLabel;
-      }
+    if (projectDescriptionInput) {
+      projectDescriptionInput.placeholder = disabled
+        ? "حفظ المشروعات والمحادثات مدى الحياة يبدأ بعد تسجيل الدخول."
+        : "وصف مختصر للمشروع أو الهدف منه";
     }
   }
 
@@ -3479,7 +3168,9 @@
     const gradeLabel = activeUser?.grade || gradeSelect?.value || "هذا الصف";
     const displayName = activeUser?.name || "صديق ملم";
     const streakDays = activeUser?.streakDays || 0;
-    const isPaid = isPaidRuntimePackage(activeUser);
+    const motivationScore = Number(activeUser?.motivationScore || 0);
+    const guestRemaining = Number(runtimeState.guestUsage?.remaining_messages || 5);
+    const stats = runtimeState.stats || {};
 
     studentNameNodes.forEach((node) => {
       node.textContent = displayName;
@@ -3490,32 +3181,24 @@
 
     if (dashboardCopyNode) {
       dashboardCopyNode.textContent = activeUser
-        ? `جاهز اليوم لمراجعة ${gradeLabel} بسرعة وبخطوات واضحة. ابدأ بسؤالك وسيتولى ملم الباقي.`
-        : "ابدأ مباشرة كضيف في الشات النصي، وسجّل دخولك عندما تريد حفظ التقدم وتحليل الصور.";
+        ? `جاهز اليوم لمراجعة ${gradeLabel} بسرعة وبخطوات واضحة. حماسك الحالي ${motivationScore} ونقاطك تزيد مع كل رسالة جديدة.`
+        : `ابدأ مباشرة كضيف في الشات النصي. لديك ${guestRemaining} رسائل متبقية قبل الحاجة إلى تسجيل الدخول لحفظ التقدم والمشروعات.`;
     }
 
     if (achievementsNode) {
       achievementsNode.innerHTML = getAchievementChips(activeUser).join("");
     }
 
-    if (projectContextNote) {
-      projectContextNote.textContent = activeUser
-        ? "مشروعاتك تُحفظ داخل حسابك. اربط كل محادثة بالمادة أو الدرس الذي تريد الرجوع إليه لاحقًا."
-        : "المشروعات الكاملة وحفظ المحادثات يظهران بعد تسجيل الدخول، ويمكنك الآن تجربة الشات مباشرة.";
+    if (!activeUser) {
+      setNodeText(usageSummaryNodes, `التجربة الحالية تمنحك ${guestRemaining} رسائل يوميًا قبل الحاجة إلى إنشاء حساب.`);
+    } else if (isPaidStudentPackage(activeUser)) {
+      setNodeText(usageSummaryNodes, `باقتك ${activeUser.package || "الحالية"} فعالة، ولديك ${Number(activeUser.xp || 0)} XP مع ${Number(stats.projects_count || 0)} مشروع محفوظ.`);
+    } else {
+      setNodeText(usageSummaryNodes, `أنت الآن على الخطة المجانية، ومعك ${Number(activeUser.xp || 0)} XP و${Number(stats.conversations_count || 0)} محادثة محفوظة.`);
     }
 
-    if (usageSummaryNodes.length) {
-      const usageSummary = activeUser
-        ? (isPaid
-            ? `باقتك ${activeUser.package || "الحالية"} فعالة، ورصيدك الحالي ${Number(activeUser.xp || 0)} XP.`
-            : `أنت الآن على الخطة المجانية، ومعك ${Number(activeUser.xp || 0)} XP داخل الحساب.`)
-        : `التجربة الحالية تمنحك ${GUEST_MESSAGE_LIMIT} رسائل يوميًا قبل الحاجة إلى إنشاء حساب.`;
-      setRuntimeNodeText(usageSummaryNodes, usageSummary);
-    }
-
-    renderRuntimeStudentPlan(activeUser);
-    renderRuntimeProgressOverview(activeUser);
-    renderRuntimeProjects(activeUser);
+    syncProjectAccessState(activeUser);
+    renderStudentPlanCard(activeUser);
   }
 
   function bindPromptPlaceholderButtons() {
@@ -3539,18 +3222,17 @@
   }
 
   function runtimeStartFreshSession() {
-    const selectedProjectId = getSelectedRuntimeProjectId();
     clearRuntimeAttachments();
     runtimeState.pendingSolveConfirmation = null;
     if (promptInput) {
       promptInput.value = "";
       autoGrow(promptInput);
     }
-    const hasActiveUser = Boolean(getRuntimeActiveUser());
+    const hasActiveUser = typeof getActiveUser === "function" && Boolean(getActiveUser());
     if (!hasActiveUser) {
       clearGuestWorkspace();
     } else if (typeof startFreshSession === "function") {
-      startFreshSession({ projectId: selectedProjectId });
+      startFreshSession();
     } else if (typeof resetConversationView === "function") {
       resetConversationView();
     } else if (messageList) {
@@ -3588,12 +3270,6 @@
     }
 
     try {
-      apiClient?.clearSession?.();
-    } catch (_) {
-      // Ignore client cleanup issues and continue with local cleanup.
-    }
-
-    try {
       localStorage.removeItem("mlm_current_user");
       localStorage.removeItem("mlm_admin_session");
       localStorage.removeItem("mlm_resume_prompt");
@@ -3606,6 +3282,7 @@
   function applyUserStudyContext() {
     const activeUser = typeof getActiveUser === "function" ? getActiveUser() : null;
     const isLogged = Boolean(activeUser);
+    const selectedProject = runtimeState.projectMap[getSelectedProjectId()] || null;
     document.body.classList.toggle("user-logged-in", isLogged);
     document.body.classList.toggle("guest-mode", !isLogged);
 
@@ -3657,25 +3334,14 @@
       element.disabled = !isLogged;
     });
 
-    if (projectTitleInput) {
-      projectTitleInput.placeholder = isLogged ? "اسم المشروع" : "سجّل دخولك أولًا لإنشاء مشروع محفوظ";
-    }
-    if (projectLessonInput) {
-      projectLessonInput.placeholder = isLogged ? "الدرس أو الوحدة" : "يتاح بعد تسجيل الدخول";
-    }
-    if (projectDescriptionInput) {
-      projectDescriptionInput.placeholder = isLogged
-        ? "وصف مختصر للمشروع أو الهدف منه"
-        : "حفظ المشروعات والمحادثات مدى الحياة يبدأ بعد تسجيل الدخول.";
-    }
-
     if (selectionSummary) {
       const gradeLabel = activeUser?.grade || gradeSelect?.value || "";
       const termLabel = termSelect?.value || "";
-      const lessonLabel = lessonInput?.value?.trim() || "الدرس غير محدد";
+      const lessonLabel = lessonInput?.value?.trim() || selectedProject?.lesson || "الدرس غير محدد";
+      const projectLabel = selectedProject?.title ? `المشروع: ${selectedProject.title}` : "";
       selectionSummary.textContent = isLogged
-        ? `${gradeLabel} · ${termLabel} · ${lessonLabel}`
-        : `الوضع الضيف · ${GUEST_MESSAGE_LIMIT} رسائل يوميًا.`;
+        ? [gradeLabel, termLabel, projectLabel || lessonLabel].filter(Boolean).join(" · ")
+        : `الوضع الضيف · ${Math.max(0, Number(runtimeState.guestUsage?.remaining_messages || 5))} رسائل متبقية`;
     }
   }
 
@@ -3696,7 +3362,6 @@
       "mlm_runtime_intent_errors_guest"
     ];
     guestKeys.forEach((key) => localStorage.removeItem(key));
-    localStorage.removeItem(getRuntimeScopedKey(runtimeProjectSelectionKey));
     localStorage.removeItem("mlm_resume_prompt");
 
     if (typeof likedAnswers !== "undefined") likedAnswers = [];
@@ -3711,8 +3376,6 @@
     if (typeof renderSessionList === "function") renderSessionList();
     if (typeof resetConversationView === "function") resetConversationView();
     if (messageList) messageList.innerHTML = "";
-    runtimeState.projects = [];
-    runtimeState.projectConversations = [];
   }
 
   function isUserNearBottom() {
@@ -4321,10 +3984,7 @@
 
   function appendSessionMessage(role, author, body, options = {}) {
     if (typeof appendMessageToSession === "function") {
-      appendMessageToSession(role, author, body, {
-        ...options,
-        projectId: options.projectId || getSelectedRuntimeProjectId()
-      });
+      appendMessageToSession(role, author, body, options);
     }
   }
 
@@ -4531,22 +4191,6 @@
       : null;
   }
 
-  function getRuntimeActiveUser() {
-    try {
-      const apiClient = getRuntimeApiClient();
-      if (apiClient && typeof apiClient.getSessionUser === "function") {
-        const sessionUser = apiClient.getSessionUser();
-        if (sessionUser?.id && String(sessionUser.role || "").toLowerCase() !== "admin") {
-          return sessionUser;
-        }
-      }
-    } catch (_) {
-      // Ignore session lookup problems and fall back to the legacy page state.
-    }
-
-    return typeof getActiveUser === "function" ? getActiveUser() : null;
-  }
-
   function resolveRuntimeSolveEndpoint() {
     const apiClient = getRuntimeApiClient();
     if (apiClient && typeof apiClient.buildApiUrl === "function") {
@@ -4631,30 +4275,32 @@
     saveRuntimeApiConversationMap(map);
   }
 
-  function buildRuntimeApiChatPayload(question, route) {
-    const activeUser = getRuntimeActiveUser();
+  function buildRuntimeApiChatPayload(question, route, attachmentCount = 0) {
+    const activeUser = typeof getActiveUser === "function" ? getActiveUser() : null;
     const guestSessionId = !activeUser ? getRuntimeGuestSessionId() : undefined;
     const grade = gradeSelect?.value || activeUser?.grade || "";
-    const selectedProjectId = getSelectedRuntimeProjectId();
+    const selectedProject = runtimeState.projectMap[getSelectedProjectId()] || null;
     return {
       conversation_id: getRuntimeApiConversationId() || undefined,
       guest_session_id: guestSessionId,
-      project_id: selectedProjectId || undefined,
       message: question,
-      subject: route?.detected_subject || subjectSelect?.value || "",
-      stage: inferRuntimeStageLabel(grade),
+      subject: route?.detected_subject || subjectSelect?.value || selectedProject?.subject || activeUser?.subject || "",
+      stage: inferRuntimeStageLabel(grade) || selectedProject?.stage || activeUser?.stage || "",
       grade,
-      term: termSelect?.value || "",
-      lesson: lessonInput?.value?.trim() || projectLessonInput?.value?.trim() || "",
+      term: termSelect?.value || selectedProject?.term || "",
+      lesson: String(lessonInput?.value || projectLessonInput?.value || selectedProject?.lesson || "").trim(),
+      project_id: getSelectedProjectId() || undefined,
+      has_attachment: attachmentCount > 0,
+      attachment_count: attachmentCount > 0 ? attachmentCount : undefined,
       stream: false
     };
   }
 
-  async function fetchRuntimeApiChat(question, route) {
+  async function fetchRuntimeApiChat(question, route, attachmentCount = 0) {
     const apiClient = getRuntimeApiClient();
     if (!apiClient) return null;
 
-    const result = await apiClient.sendChat(buildRuntimeApiChatPayload(question, route));
+    const result = await apiClient.sendChat(buildRuntimeApiChatPayload(question, route, attachmentCount));
     if (!result.ok || !result.data?.assistant_message?.body) {
       return result?.serverUnavailable ? null : {
         content: "",
@@ -4663,18 +4309,20 @@
     }
 
     setRuntimeApiConversationId(result.data.conversation_id);
-    if (result.data.project) {
-      const savedProject = upsertRuntimeProject(result.data.project);
-      if (savedProject?.id) {
-        setSelectedRuntimeProjectId(savedProject.id);
-      }
+    if (result.data.user) syncRuntimeUserSnapshot(result.data.user);
+    if (result.data.guest) renderGuestStatus(result.data.guest);
+    if (result.data.project && projectSelect) {
+      runtimeState.selectedProjectId = String(result.data.project.id || "");
+      projectSelect.value = runtimeState.selectedProjectId;
     }
-    await fetchRuntimeProjectConversations(getSelectedRuntimeProjectId());
 
     return {
       content: String(result.data.assistant_message.body || "").trim(),
       conversationId: result.data.conversation_id || null,
-      provider: result.data.assistant_message?.source || "openai"
+      provider: result.data.assistant_message?.source || "openai",
+      user: result.data.user || null,
+      guest: result.data.guest || null,
+      project: result.data.project || null
     };
   }
 
@@ -5939,34 +5587,21 @@
   enhanceRuntimeChatUi();
   applyReadableRuntimeLabels();
   bindPromptPlaceholderButtons();
-  fetchRuntimePackages();
-  fetchRuntimeProjects();
+  loadRuntimeGuestStatus();
+  loadRuntimePackages();
+  loadRuntimeStudentDashboard();
   gradeSelect?.addEventListener("change", syncStudentDashboardHeader);
+  termSelect?.addEventListener("change", applyUserStudyContext);
+  lessonInput?.addEventListener("input", applyUserStudyContext);
   projectSelect?.addEventListener("change", () => {
-    setSelectedRuntimeProjectId(projectSelect.value || "");
-    fetchRuntimeProjectConversations(projectSelect.value || "");
+    runtimeState.selectedProjectId = String(projectSelect.value || "").trim();
+    applyUserStudyContext();
+    loadRuntimeProjectConversations(runtimeState.selectedProjectId);
   });
-  projectListNode?.addEventListener("click", (event) => {
-    const projectCard = event.target.closest("[data-project-card]");
-    if (!projectCard) return;
-    const projectId = projectCard.getAttribute("data-project-card") || "";
-    setSelectedRuntimeProjectId(projectId);
-    fetchRuntimeProjectConversations(projectId);
-  });
-  projectConversationsNode?.addEventListener("click", (event) => {
-    const conversationCard = event.target.closest("[data-project-conversation]");
-    if (!conversationCard) return;
-    openRuntimeProjectConversation(conversationCard.getAttribute("data-project-conversation") || "");
-  });
-  createProjectButton?.addEventListener("click", () => {
-    handleRuntimeCreateProject();
-  });
-  projectNewChatButton?.addEventListener("click", () => {
-    handleRuntimeCreateProjectChat();
-  });
+  createProjectButton?.addEventListener("click", handleRuntimeCreateProject);
   function submitHeroExample() {
     if (!form || !promptInput) return;
-    submitPresetPrompt("احسب محيط دائرة نصف قطرها 7", "الرياضيات", { scrollToChat: true, autoSubmit: true });
+    submitPresetPrompt("احسب محيط دائرة نصف قطرها 7", "الرياضيات", { scrollToChat: true });
   }
 
   function applyRuntimeSubject(subject) {
@@ -5996,11 +5631,6 @@
           promptInput.focus();
         }
       }
-      if (options.autoSubmit) {
-        window.setTimeout(() => {
-          form.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
-        }, options.submitDelayMs || 40);
-      }
     };
     if (options.scrollToChat) {
       scrollToChatSection();
@@ -6008,25 +5638,6 @@
     } else {
       preservePageScroll(preparePrompt);
     }
-  }
-
-  function submitHeroPrompt() {
-    if (!form || !promptInput) return;
-    const heroValue = (heroPromptInput?.value || "").trim();
-    if (heroValue) {
-      submitPresetPrompt(heroValue, "", { scrollToChat: true, autoSubmit: true });
-      return;
-    }
-    const promptValue = (promptInput?.value || "").trim();
-    if (promptValue) {
-      scrollToChatSection();
-      window.setTimeout(() => {
-        form.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
-      }, 80);
-      return;
-    }
-    scrollToChatSection();
-    submitPresetPrompt("ابدأ بشرح أساسيات هذا الدرس ثم أعطني مثالًا محلولًا.");
   }
 
   window.mullemTryExample = submitHeroExample;
@@ -6069,7 +5680,7 @@
       } else if (action === "upload-file") {
         if (typeof openGenericUpload === "function") openGenericUpload();
       } else if (prompt) {
-        submitPresetPrompt(prompt, subject, { scrollToChat: true, autoSubmit: true });
+        submitPresetPrompt(prompt, subject);
       }
       return;
     }
@@ -6086,15 +5697,7 @@
     if (quickSolveButton) {
       event.preventDefault();
       event.stopImmediatePropagation();
-      submitPresetPrompt("ابدأ بحل سؤال من هذا الدرس مع شرح مبسط وخطوات وأخطاء شائعة.", "", { scrollToChat: true, autoSubmit: true });
-      return;
-    }
-
-    const heroSubmitButton = event.target.closest("[data-hero-submit]");
-    if (heroSubmitButton) {
-      event.preventDefault();
-      event.stopImmediatePropagation();
-      submitHeroPrompt();
+      submitPresetPrompt("ابدأ بحل سؤال من هذا الدرس مع شرح مبسط وخطوات وأخطاء شائعة.");
       return;
     }
 
@@ -6112,10 +5715,31 @@
     }
 
     const heroExampleButton = event.target.closest("[data-hero-example]");
-    if (!heroExampleButton) return;
-    event.preventDefault();
-    event.stopImmediatePropagation();
-    submitHeroExample();
+    if (heroExampleButton) {
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      submitHeroExample();
+      return;
+    }
+
+    const pickProjectButton = event.target.closest("[data-project-pick]");
+    if (pickProjectButton) {
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      runtimeState.selectedProjectId = String(pickProjectButton.getAttribute("data-project-pick") || "").trim();
+      if (projectSelect) projectSelect.value = runtimeState.selectedProjectId;
+      applyUserStudyContext();
+      loadRuntimeProjectConversations(runtimeState.selectedProjectId);
+      return;
+    }
+
+    const openApiConversationButton = event.target.closest("[data-open-api-conversation]");
+    if (openApiConversationButton) {
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      loadRuntimeApiConversation(openApiConversationButton.getAttribute("data-open-api-conversation"));
+      return;
+    }
   }, true);
   logoutTriggers.forEach((button) => {
     button.addEventListener("click", (event) => {
@@ -6123,11 +5747,6 @@
       event.stopImmediatePropagation();
       logoutUser();
     });
-  });
-  heroPromptInput?.addEventListener("keydown", (event) => {
-    if (event.key !== "Enter" || event.shiftKey) return;
-    event.preventDefault();
-    submitHeroPrompt();
   });
   window.addEventListener("scroll", syncRuntimeScrollButton, { passive: true });
   scrollTopButton?.addEventListener("click", (event) => {
@@ -6140,7 +5759,7 @@
     });
   }, true);
   syncRuntimeScrollButton();
-  fetchRuntimeApiChat = async function patchedFetchRuntimeApiChat(question, route) {
+  fetchRuntimeApiChat = async function patchedFetchRuntimeApiChat(question, route, attachmentCount = 0) {
     const apiClient = getRuntimeApiClient();
     if (!apiClient) {
       return {
@@ -6150,7 +5769,7 @@
       };
     }
 
-    const result = await apiClient.sendChat(buildRuntimeApiChatPayload(question, route));
+    const result = await apiClient.sendChat(buildRuntimeApiChatPayload(question, route, attachmentCount));
     if (!result.ok || !result.data?.assistant_message?.body) {
       let failureMessage = result?.message || "";
 
@@ -6163,8 +5782,8 @@
 
           if (aiConfigured === false) {
             failureMessage = "OPENAI_API_KEY is not configured on the server.";
-          } else if (dbState?.connected === false) {
-            failureMessage = failureMessage || "بعض ميزات الحفظ غير متاحة مؤقتًا على الخادم.";
+          } else if (dbState?.connected === false && dbState?.message) {
+            failureMessage = `${failureMessage} ${dbState.message}`.trim();
           }
         } catch (_) {
           // Ignore health probe failures and keep original error details.
@@ -6174,28 +5793,32 @@
       return {
         content: "",
         failed: true,
-        errorType: result?.status === 401 || result?.status === 403
-          ? "unauthorized"
-          : result?.serverUnavailable
-            ? "server_unavailable"
-            : "request_failed",
+        errorType: /guest message limit reached/i.test(failureMessage)
+          ? "guest_limit"
+          : result?.status === 401 || result?.status === 403
+            ? "unauthorized"
+            : result?.serverUnavailable
+              ? "server_unavailable"
+              : "request_failed",
         message: failureMessage
       };
     }
 
     setRuntimeApiConversationId(result.data.conversation_id);
-    if (result.data.project) {
-      const savedProject = upsertRuntimeProject(result.data.project);
-      if (savedProject?.id) {
-        setSelectedRuntimeProjectId(savedProject.id);
-      }
+    if (result.data.user) syncRuntimeUserSnapshot(result.data.user);
+    if (result.data.guest) renderGuestStatus(result.data.guest);
+    if (result.data.project && projectSelect) {
+      runtimeState.selectedProjectId = String(result.data.project.id || "");
+      projectSelect.value = runtimeState.selectedProjectId;
     }
-    await fetchRuntimeProjectConversations(getSelectedRuntimeProjectId());
 
     return {
       content: String(result.data.assistant_message.body || "").trim(),
       conversationId: result.data.conversation_id || null,
       provider: result.data.assistant_message?.source || "openai",
+      user: result.data.user || null,
+      guest: result.data.guest || null,
+      project: result.data.project || null,
       failed: false
     };
   };
@@ -6220,7 +5843,9 @@
 
     let message = "تعذر الوصول إلى خدمة الشات الآن. أعد المحاولة بعد قليل.";
 
-    if (/quota|billing details|exceeded your current quota|insufficient_quota/i.test(readableDetails)) {
+    if (reason === "guest_limit" || /guest message limit reached/i.test(readableDetails)) {
+      message = "استخدمت الحد المتاح للضيف وهو 5 رسائل. سجّل دخولك الآن حتى تستمر المحادثة وتحفظ تقدمك ومشروعاتك.";
+    } else if (/quota|billing details|exceeded your current quota|insufficient_quota/i.test(readableDetails)) {
       message = "الشات مربوط فعلًا مع OpenAI، لكن الطلب مرفوض الآن لأن حصة الحساب أو الفوترة غير كافية (`429 quota exceeded`). فعّل Billing أو استخدم مفتاحًا عليه رصيد ثم أعد المحاولة.";
     } else if (reason === "missing_auth" || reason === "unauthorized") {
       message = "الخادم طلب تسجيل الدخول قبل إكمال هذه المحادثة. إذا كان الشات عندكم يفترض أن يعمل للزائر، فالمشكلة من حماية endpoint في Laravel وليست من السؤال نفسه.";
@@ -6272,9 +5897,9 @@
     };
   }
 
-  buildAcademicResponseWithBackend = async function patchedBuildAcademicResponseWithBackend(question, route, analysis, reasoning, decision) {
+  buildAcademicResponseWithBackend = async function patchedBuildAcademicResponseWithBackend(question, route, analysis, reasoning, decision, attachmentCount = 0) {
     const resolvedQuestion = question || route?.extracted_text || "";
-    const apiReply = await fetchRuntimeApiChat(resolvedQuestion, route);
+    const apiReply = await fetchRuntimeApiChat(resolvedQuestion, route, attachmentCount);
 
     if (apiReply?.content) {
       return buildRuntimeApiResponse(
@@ -6343,24 +5968,21 @@
 
     const pendingNode = addMessage("assistant", "ملم يحل", createLoadingCopy(), { pending: true });
 
-    let responseForLog = null;
-    if (hasAttachments) {
-      responseForLog = buildRuntimeApiUnavailableResponse(question, route, "attachment_not_supported");
-    } else {
-      responseForLog = await buildAcademicResponseWithBackend(
-        question || route.extracted_text || "",
-        route,
-        {
-          questionType: route?.question_type || "",
-          subject: route?.detected_subject || subjectSelect?.value || ""
-        },
-        {},
-        { action: "answer", confidence: 1 }
-      );
-    }
+    const effectiveQuestion = question || `لدي مرفق دراسي وأحتاج الحل أو الشرح. أسماء المرفقات: ${attachments.map((item) => item.name).join("، ")}`;
+    const responseForLog = await buildAcademicResponseWithBackend(
+      effectiveQuestion || route.extracted_text || "",
+      route,
+      {
+        questionType: route?.question_type || "",
+        subject: route?.detected_subject || subjectSelect?.value || ""
+      },
+      {},
+      { action: "answer", confidence: 1 },
+      hasAttachments ? attachments.length : 0
+    );
 
     const body = finalRuntimeSafetyGate(
-      question || route.extracted_text || "",
+      effectiveQuestion || route.extracted_text || "",
       "solve",
       responseForLog?.preRenderedBody || (responseForLog ? formatAssistantSections(responseForLog) : "") || formatSimpleReply("تعذر تجهيز الرد حاليًا.")
     ).replacement;
@@ -6380,6 +6002,11 @@
 
     if (typeof renderSessionList === "function") renderSessionList();
     syncStudentDashboardHeader();
+    if (typeof getActiveUser === "function" && getActiveUser()) {
+      loadRuntimeProjectConversations(getSelectedProjectId());
+    } else {
+      loadRuntimeGuestStatus();
+    }
   };
 
   renderRuntimeAttachments();

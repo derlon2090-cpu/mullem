@@ -13,7 +13,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800;900&display=swap" rel="stylesheet">
   <link rel="icon" type="image/svg+xml" href="favicon.svg">
-  <link rel="stylesheet" href="styles.css?v=20260410-7">
+  <link rel="stylesheet" href="styles.css?v=20260409-8">
 </head>
 <body>
   <div class="shell">
@@ -31,31 +31,12 @@
       <div class="topbar-actions">
         <div class="top-status">
           <div class="top-chip xp-chip">الرصيد: <span data-package-top-xp>0</span> XP</div>
-          <div class="top-chip" data-package-top-status>تصفح الباقات الآن، وتفعيل أي باقة يتم بعد تسجيل الدخول</div>
-          <button class="theme-toggle" type="button" data-theme-toggle aria-label="تبديل الوضع الداكن">
-            <span class="theme-toggle-track" aria-hidden="true">
-              <span class="theme-toggle-thumb">
-                <svg class="theme-toggle-icon theme-toggle-sun" viewBox="0 0 24 24" aria-hidden="true">
-                  <circle cx="12" cy="12" r="4"></circle>
-                  <line x1="12" y1="2" x2="12" y2="4.5"></line>
-                  <line x1="12" y1="19.5" x2="12" y2="22"></line>
-                  <line x1="2" y1="12" x2="4.5" y2="12"></line>
-                  <line x1="19.5" y1="12" x2="22" y2="12"></line>
-                  <line x1="4.6" y1="4.6" x2="6.4" y2="6.4"></line>
-                  <line x1="17.6" y1="17.6" x2="19.4" y2="19.4"></line>
-                  <line x1="17.6" y1="6.4" x2="19.4" y2="4.6"></line>
-                  <line x1="4.6" y1="19.4" x2="6.4" y2="17.6"></line>
-                </svg>
-                <svg class="theme-toggle-icon theme-toggle-moon" viewBox="0 0 24 24" aria-hidden="true">
-                  <path d="M20 14.5A8.5 8.5 0 1 1 9.5 4a7 7 0 1 0 10.5 10.5Z"></path>
-                </svg>
-              </span>
-            </span>
-          </button>
+          <div class="top-chip" data-package-top-status>سجّل الدخول لعرض باقتك الحالية</div>
+          <button class="theme-toggle" type="button" data-theme-toggle aria-label="تبديل الوضع الداكن">☙</button>
         </div>
         <div class="top-cta">
           <a class="secondary-btn top-cta-link" href="index.html">الرئيسية</a>
-          <a class="secondary-btn top-cta-link" href="features.html">كيف يساعدك ملم</a>
+          <a class="secondary-btn top-cta-link" href="student.html">الشات</a>
           <a class="primary-btn top-cta-link" href="profile.html">ملفي</a>
         </div>
       </div>
@@ -84,6 +65,17 @@
             <strong>+5 XP</strong>
             <span>هدية الحماس اليومية مع كل يوم دخول</span>
           </article>
+        </div>
+      </section>
+
+      <section class="packages-auth-state" data-packages-auth-state>
+        <div class="packages-lock-card">
+          <strong>هذه الصفحة تتطلب تسجيل الدخول إلى الحساب</strong>
+          <p>سجّل الدخول أولًا لعرض باقتك الحالية، ومعرفة رصيدك اليومي، وطلب تفعيل الباقة المناسبة من خلال المنصة.</p>
+          <div class="packages-lock-actions">
+            <a class="primary-btn" href="login.html">تسجيل الدخول</a>
+            <a class="secondary-btn" href="student.html">العودة إلى الشات</a>
+          </div>
         </div>
       </section>
 
@@ -141,14 +133,12 @@
           <div class="packages-grid" data-packages-grid></div>
         </section>
       </section>
-
-      <section class="packages-auth-state packages-auth-state-footer" data-packages-auth-state hidden></section>
     </div>
   </main>
 
   <button class="scroll-top-btn" type="button" data-scroll-top aria-label="العودة إلى أعلى الصفحة">↑</button>
   <script src="mullem-config.js?v=20260409-5"></script>
-  <script src="api-client.js?v=20260410-6"></script>
-  <script src="subscriptions.js?v=20260410-2"></script>
+  <script src="api-client.js?v=20260409-8"></script>
+  <script src="subscriptions.js?v=20260409-3"></script>
 </body>
 </html>

@@ -13,7 +13,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800;900&display=swap" rel="stylesheet">
   <link rel="icon" type="image/svg+xml" href="favicon.svg">
-  <link rel="stylesheet" href="styles.css?v=20260410-6">
+  <link rel="stylesheet" href="styles.css?v=20260409-8">
 </head>
 <body>
   <div class="shell">
@@ -31,31 +31,14 @@
       <div class="topbar-actions">
         <nav class="main-nav" aria-label="التنقل الرئيسي">
           <a href="#home">الرئيسية</a>
+          <a href="#how-it-works">كيف يعمل</a>
+          <a href="#stages">المراحل</a>
           <a href="subscriptions.html">الباقات</a>
-          <a href="features.html">حول المنصة</a>
+          <a href="about.html">عن المنصة</a>
           <a href="login.html">دخول</a>
         </nav>
         <div class="top-status">
-          <button class="theme-toggle" type="button" data-theme-toggle aria-label="تبديل الوضع الداكن">
-            <span class="theme-toggle-track" aria-hidden="true">
-              <span class="theme-toggle-thumb">
-                <svg class="theme-toggle-icon theme-toggle-sun" viewBox="0 0 24 24" aria-hidden="true">
-                  <circle cx="12" cy="12" r="4"></circle>
-                  <line x1="12" y1="2" x2="12" y2="4.5"></line>
-                  <line x1="12" y1="19.5" x2="12" y2="22"></line>
-                  <line x1="2" y1="12" x2="4.5" y2="12"></line>
-                  <line x1="19.5" y1="12" x2="22" y2="12"></line>
-                  <line x1="4.6" y1="4.6" x2="6.4" y2="6.4"></line>
-                  <line x1="17.6" y1="17.6" x2="19.4" y2="19.4"></line>
-                  <line x1="17.6" y1="6.4" x2="19.4" y2="4.6"></line>
-                  <line x1="4.6" y1="19.4" x2="6.4" y2="17.6"></line>
-                </svg>
-                <svg class="theme-toggle-icon theme-toggle-moon" viewBox="0 0 24 24" aria-hidden="true">
-                  <path d="M20 14.5A8.5 8.5 0 1 1 9.5 4a7 7 0 1 0 10.5 10.5Z"></path>
-                </svg>
-              </span>
-            </span>
-          </button>
+          <button class="theme-toggle" type="button" data-theme-toggle aria-label="تبديل الوضع الداكن">☾</button>
         </div>
       </div>
     </header>
@@ -66,37 +49,35 @@
       <section class="hero-card hero-card-showcase premium-hero-card">
         <div class="premium-hero-copy">
           <div class="eyebrow premium-eyebrow">منصة تعليمية ذكية للمنهج السعودي</div>
-          <h1>صوّر سؤالك أو اكتبه</h1>
+          <h1>مساعدك الذكي لحل أسئلة المنهج السعودي</h1>
           <p>
-            واحصل على الحل مع الشرح خلال ثوانٍ. افتح المحادثة من أول ثانية، وارفع صورة السؤال أو الملف مباشرة بدون
-            تشتيت.
+            صوّر السؤال أو اكتبه، واحصل على حل منظم وشرح خطوة بخطوة خلال ثوانٍ، مع تجربة مصممة للطالب على الجوال
+            والكمبيوتر وبنفس هوية ملم التي تعرفها.
           </p>
+
+          <div class="premium-hero-actions">
+            <button class="primary-btn top-cta-link" type="button" data-start-chat>ابدأ الآن</button>
+            <button class="secondary-btn" type="button" data-hero-example>جرّب مثالًا</button>
+            <a class="helper-btn helper-btn-ghost premium-login-link" href="login.html">سجّل دخولك لحفظ تقدمك</a>
+          </div>
 
           <div class="premium-hero-pills">
             <span class="hero-pill">للضيف 5 رسائل يوميًا</span>
             <span class="hero-pill">100 XP بداية عند التسجيل</span>
-            <span class="hero-pill">حل مباشر أو شرح خطوة بخطوة</span>
+            <span class="hero-pill">شرح منظم وخطوات واضحة</span>
           </div>
 
-          <div class="premium-core-ask" aria-label="ابدأ سؤالك مباشرة">
-            <label class="premium-core-label" for="heroPromptInput">ابدأ من هنا مباشرة</label>
-            <textarea
-              id="heroPromptInput"
-              class="premium-core-textarea"
-              data-hero-prompt
-              rows="3"
-              placeholder="اكتب سؤالك هنا... مثال: اشرح درس الحضارة الرومانية أو احسب محيط دائرة نصف قطرها 7"
-            ></textarea>
-
-            <div class="premium-core-actions">
-              <button class="primary-btn top-cta-link premium-core-submit" type="button" data-hero-submit>
-                <span class="btn-icon" aria-hidden="true">+</span>
-                <span>ابدأ الآن</span>
-              </button>
-              <button class="helper-btn premium-core-helper" type="button" data-upload-image>📸 رفع صورة</button>
-              <button class="helper-btn premium-core-helper" type="button" data-upload-file>📄 رفع ملف</button>
+          <div class="premium-quick-ask">
+            <div class="premium-quick-box">
+              <span>اسأل الآن: ما هي الحضارة الرومانية؟ أو ارفع صورة السؤال.</span>
             </div>
-
+            <div class="premium-quick-chips">
+              <button class="subject-pill" type="button" data-starter-prompt="احسب محيط دائرة نصف قطرها 7" data-starter-subject="الرياضيات">رياضيات</button>
+              <button class="subject-pill" type="button" data-starter-prompt="اشرح قانون نيوتن الثاني" data-starter-subject="الفيزياء">اشرح درس</button>
+              <button class="subject-pill" type="button" data-starter-prompt="صحح الجملة: She go to school every day" data-starter-subject="اللغة الإنجليزية">إنجليزي</button>
+              <button class="subject-pill" type="button" data-starter-prompt="اختبرني في الأحياء بثلاثة أسئلة قصيرة" data-starter-subject="الأحياء">اختبرني</button>
+              <button class="subject-pill" type="button" data-starter-action="upload-image">رفع صورة</button>
+            </div>
           </div>
         </div>
       </section>
@@ -144,77 +125,160 @@
       </section>
     </section>
 
+    <section class="shell premium-section" id="how-it-works">
+      <div class="premium-section-head">
+        <span class="eyebrow">كيف يعمل</span>
+        <h2>3 خطوات فقط لتبدأ</h2>
+        <p>واجهة بسيطة للطالب، لكنها مبنية بمنهجية ذكاء اصطناعي واضحة في الخلفية.</p>
+      </div>
+
+      <div class="premium-steps-grid">
+        <article class="premium-step-card">
+          <div class="premium-step-number">01</div>
+          <strong>اكتب السؤال أو صوّره</strong>
+          <p>ابدأ بسؤال مباشر، أو أرسل صورة/ملف، أو اختر مثالًا جاهزًا لتجربة السرعة.</p>
+        </article>
+        <article class="premium-step-card">
+          <div class="premium-step-number">02</div>
+          <strong>حدد المادة والصف عند الحاجة</strong>
+          <p>يمكنك ترك النظام يستنتج المطلوب، أو اختيار الصف والمادة والترم للحل الدقيق.</p>
+        </article>
+        <article class="premium-step-card">
+          <div class="premium-step-number">03</div>
+          <strong>استلم حلًا منظمًا وواضحًا</strong>
+          <p>إجابة مختصرة عند الطلب، أو شرح خطوة بخطوة، أو اختبار قصير وتدريب على نفس الدرس.</p>
+        </article>
+      </div>
+    </section>
+
+    <section class="shell premium-section" id="stages">
+      <div class="premium-section-head">
+        <span class="eyebrow">المراحل والمواد</span>
+        <h2>مصمم لرحلة الطالب اليومية</h2>
+        <p>تقسيم بصري أوضح للمراحل الدراسية والمواد، بدل التكديس النصي الطويل.</p>
+      </div>
+
+      <div class="premium-stage-tabs">
+        <article class="premium-stage-panel premium-stage-panel-active">
+          <strong>الابتدائي</strong>
+          <span>تأسيس قوي بلغة سهلة، وأمثلة مبسطة، وبداية مريحة على الجوال.</span>
+        </article>
+        <article class="premium-stage-panel">
+          <strong>المتوسط</strong>
+          <span>حلول أوضح، وتدرج في الشرح، ومراعاة للانتقال بين الفهم والتطبيق.</span>
+        </article>
+        <article class="premium-stage-panel">
+          <strong>الثانوي</strong>
+          <span>صياغة أدق، وربط بالمقرر والدرس والترم، ومحادثات محفوظة لكل مشروع أو مادة.</span>
+        </article>
+      </div>
+
+      <div class="premium-subject-grid">
+        <article class="premium-subject-card">
+          <strong>رياضيات</strong>
+          <span>خطوات مرتبة، قوانين واضحة، وأخطاء شائعة مختصرة.</span>
+        </article>
+        <article class="premium-subject-card">
+          <strong>علوم وكيمياء</strong>
+          <span>شرح المفاهيم وربطها بالسؤال بدل الاكتفاء بالإجابة المجردة.</span>
+        </article>
+        <article class="premium-subject-card">
+          <strong>إنجليزي وعربي</strong>
+          <span>أسلوب مناسب للصف، مع تصحيح مباشر وإكمالات وقواعد واضحة.</span>
+        </article>
+        <article class="premium-subject-card">
+          <strong>شرح دروس ومشاريع</strong>
+          <span>يمكن حفظ كل مادة أو مشروع في مساحة مستقلة داخل لوحة الطالب.</span>
+        </article>
+      </div>
+    </section>
+
+    <section class="shell onboarding-stage premium-precision-stage">
+      <div class="onboarding-card premium-onboarding-card">
+        <div class="premium-section-head premium-section-head-inline">
+          <div>
+            <span class="eyebrow">الحل الدقيق</span>
+            <h2>خصص الصف والمادة والترم إن أردت جوابًا أدق</h2>
+          </div>
+          <p>عند اختيار الحل الدقيق، يرسل النظام صف الطالب والمادة والترم إلى الـ API ليصيغ الجواب بشكل أنسب.</p>
+        </div>
+
+        <div class="solve-mode-row" aria-label="وضع الحل">
+          <button class="solve-mode-btn active" type="button" data-solve-mode="quick">
+            <strong>حل سريع</strong>
+            <span>إذا كان السؤال واضحًا سيجيب مباشرة</span>
+          </button>
+          <button class="solve-mode-btn" type="button" data-solve-mode="structured">
+            <strong>حل دقيق</strong>
+            <span>يراعي الصف والمادة والترم والدروس المختارة</span>
+          </button>
+        </div>
+
+        <div class="stage-cards" aria-label="اختيار المرحلة">
+          <button class="stage-card" type="button" data-stage-button="ابتدائي">
+            <strong>ابتدائي</strong>
+            <span>الأول إلى السادس</span>
+            <small>لغة بسيطة وتأسيس واضح</small>
+          </button>
+          <button class="stage-card" type="button" data-stage-button="متوسط">
+            <strong>متوسط</strong>
+            <span>الأول إلى الثالث</span>
+            <small>توازن بين الشرح والتطبيق</small>
+          </button>
+          <button class="stage-card active" type="button" data-stage-button="ثانوي">
+            <strong>ثانوي</strong>
+            <span>الأول إلى الثالث</span>
+            <small>مستوى أدق ومصطلحات أوضح</small>
+          </button>
+        </div>
+
+        <div class="selectors selectors-hero premium-selectors">
+          <select class="field" data-grade>
+            <option>الأول الابتدائي</option>
+            <option>الثاني الابتدائي</option>
+            <option>الثالث الابتدائي</option>
+            <option>الرابع الابتدائي</option>
+            <option>الخامس الابتدائي</option>
+            <option>السادس الابتدائي</option>
+            <option>الأول المتوسط</option>
+            <option>الثاني المتوسط</option>
+            <option>الثالث المتوسط</option>
+            <option>الأول الثانوي</option>
+            <option selected>الثاني الثانوي</option>
+            <option>الثالث الثانوي</option>
+          </select>
+          <select class="field" data-subject>
+            <option selected>الرياضيات</option>
+            <option>العلوم</option>
+            <option>الفيزياء</option>
+            <option>الكيمياء</option>
+            <option>الأحياء</option>
+            <option>اللغة العربية</option>
+            <option>اللغة الإنجليزية</option>
+            <option>الاجتماعيات</option>
+            <option>المهارات الرقمية</option>
+          </select>
+          <select class="field" data-term>
+            <option selected>الفصل الدراسي الأول</option>
+            <option>الفصل الدراسي الثاني</option>
+          </select>
+          <input class="field" data-lesson type="text" placeholder="اسم الدرس اختياري">
+        </div>
+      </div>
+    </section>
+
     <section class="shell chat-stage premium-chat-stage">
       <section class="chat-shell" id="chat">
         <div class="chat-top premium-chat-top">
           <div class="premium-chat-copy">
             <span class="eyebrow">تجربة مباشرة</span>
-            <h2>اسأل ملم الآن</h2>
-            <p>اختر طريقة الحل مرة واحدة، ثم اكتب سؤالك أو ارفع صورة مباشرة.</p>
+            <h2>جرّب الشات الذكي الآن</h2>
+            <p>ابدأ كضيف حتى 5 رسائل يوميًا، أو سجّل دخولك لتحفظ المحادثات والمشروعات وتحصل على 100 XP كبداية.</p>
           </div>
-        </div>
-
-        <div class="landing-chat-config">
-          <div class="landing-chat-config-head">
-            <strong>طريقة الحل</strong>
-            <span>السريع يجيب مباشرة، والدقيق يفتح الصف والمادة والترم عند الحاجة فقط.</span>
-          </div>
-
-          <div class="chat-ai-status" aria-live="polite">
-            <div class="chat-ai-status-main">
-              <span class="chat-ai-status-pulse"></span>
-              <strong>جاري التفكير...</strong>
-            </div>
-            <div class="chat-ai-status-typing" aria-hidden="true">
-              <span></span>
-              <span></span>
-              <span></span>
-            </div>
-            <span class="chat-ai-status-copy">المنصة تجهز ردًا سريعًا أو شرحًا أدق بحسب اختيارك.</span>
-          </div>
-
-          <div class="solve-mode-row landing-solve-mode-row" aria-label="وضع الحل">
-            <button class="solve-mode-btn active" type="button" data-solve-mode="quick">
-              <strong>سريع</strong>
-              <span>إجابة مباشرة إذا كان السؤال واضحًا</span>
-            </button>
-            <button class="solve-mode-btn" type="button" data-solve-mode="structured">
-              <strong>دقيق</strong>
-              <span>يراعي الصف والمادة والترم</span>
-            </button>
-          </div>
-
-          <div class="selectors selectors-hero landing-precision-selectors">
-            <select class="field" data-grade>
-              <option>الأول الابتدائي</option>
-              <option>الثاني الابتدائي</option>
-              <option>الثالث الابتدائي</option>
-              <option>الرابع الابتدائي</option>
-              <option>الخامس الابتدائي</option>
-              <option>السادس الابتدائي</option>
-              <option>الأول المتوسط</option>
-              <option>الثاني المتوسط</option>
-              <option>الثالث المتوسط</option>
-              <option>الأول الثانوي</option>
-              <option selected>الثاني الثانوي</option>
-              <option>الثالث الثانوي</option>
-            </select>
-            <select class="field" data-subject>
-              <option selected>الرياضيات</option>
-              <option>العلوم</option>
-              <option>الفيزياء</option>
-              <option>الكيمياء</option>
-              <option>الأحياء</option>
-              <option>اللغة العربية</option>
-              <option>اللغة الإنجليزية</option>
-              <option>الاجتماعيات</option>
-              <option>المهارات الرقمية</option>
-            </select>
-            <select class="field" data-term>
-              <option selected>الفصل الدراسي الأول</option>
-              <option>الفصل الدراسي الثاني</option>
-            </select>
-            <input type="hidden" data-lesson value="">
+          <div class="example-list">
+            <button class="example-chip" type="button" data-starter-prompt="احسب محيط دائرة نصف قطرها 7" data-starter-subject="الرياضيات">احسب محيط دائرة</button>
+            <button class="example-chip" type="button" data-starter-prompt="اشرح قانون نيوتن الثاني" data-starter-subject="الفيزياء">اشرح نيوتن</button>
+            <button class="example-chip" type="button" data-starter-action="upload-image">حل من صورة</button>
           </div>
         </div>
 
@@ -243,32 +307,41 @@
           <div class="helper-toolbar">
             <button class="helper-btn" type="button" data-upload-image>رفع صورة</button>
             <button class="helper-btn" type="button" data-upload-file>رفع ملف</button>
+            <button class="helper-btn" type="button" data-focus-subject>اختيار مادة</button>
+            <a class="helper-btn helper-btn-ghost" href="login.html">تسجيل الدخول</a>
           </div>
 
-          <div class="chat-starter-strip" aria-label="أمثلة جاهزة">
-            <span class="chat-starter-strip-label">ابدأ بسرعة:</span>
-            <button class="subject-pill" type="button" data-starter-prompt="حل معادلة 2س + 6 = 14" data-starter-subject="الرياضيات">حل معادلة</button>
-            <button class="subject-pill" type="button" data-starter-prompt="اشرح درس الحضارة الرومانية بأسلوب مبسط" data-starter-subject="الاجتماعيات">اشرح درس</button>
-            <button class="subject-pill" type="button" data-starter-prompt="اختبرني في الأحياء بثلاثة أسئلة قصيرة" data-starter-subject="الأحياء">اختبرني</button>
-          </div>
-
-          <div class="composer-note">تحقق من المعلومات المهمة قبل الاعتماد النهائي.</div>
+          <div class="composer-note">قد تصدر عن الشات الذكي بعض الأخطاء غير المقصودة، لذلك يستحسن التحقق من المعلومات المهمة قبل اعتمادها.</div>
         </div>
       </section>
     </section>
 
-    <div hidden class="runtime-support-hidden" aria-hidden="true">
+    <section class="shell premium-section premium-final-cta">
+      <div class="premium-final-card">
+        <div>
+          <span class="eyebrow">جاهز للبدء؟</span>
+          <h2>ابدأ كضيف، أو ادخل إلى حسابك لحفظ التقدم والمشروعات</h2>
+          <p>الواجهة الآن أسرع وأوضح، والشات يحافظ على نفس الهوية التعليمية مع تجربة أقرب لمنتج AI حديث.</p>
+        </div>
+        <div class="premium-final-actions">
+          <button class="primary-btn" type="button" data-quick-solve>ابدأ الحل الآن</button>
+          <a class="secondary-btn" href="subscriptions.html">استعرض الباقات</a>
+        </div>
+      </div>
+    </section>
+
+    <div hidden>
       <div data-selection-summary>ابدأ أول محادثة لك الآن.</div>
-      <div data-runtime-summary>الإعدادات التعليمية تتم تلقائيًا داخل المنصة.</div>
+      <div data-runtime-summary>الإعدادات التقنية مخفية عن الطالب داخل النسخة العامة.</div>
       <select data-runtime>
-        <option selected>الوضع الأساسي</option>
-        <option>الوضع المتوازن</option>
-        <option>الوضع المخصص</option>
+        <option selected>vLLM Runtime</option>
+        <option>Ollama Runtime</option>
+        <option>وضع تجريبي داخل الواجهة</option>
       </select>
       <select data-training-mode>
-        <option selected>حل مباشر</option>
-        <option>شرح موسع</option>
-        <option>دعم تعليمي متقدم</option>
+        <option selected>Prompt + RAG</option>
+        <option>Prompt + RAG + LoRA</option>
+        <option>Prompt + RAG + LoRA + DPO</option>
       </select>
       <button type="button" data-start-chat>ابدأ الشات</button>
       <button type="button" data-quick-solve>ابدأ حل سؤال الآن</button>
@@ -278,8 +351,8 @@
   <button class="scroll-top-btn" type="button" data-scroll-top aria-label="العودة إلى أعلى الصفحة">↑</button>
   <script src="guest-preinit.js?v=20260408-5"></script>
   <script src="mullem-config.js?v=20260409-5"></script>
-  <script src="api-client.js?v=20260410-6"></script>
+  <script src="api-client.js?v=20260409-7"></script>
   <script src="app.js?v=20260409-2"></script>
-  <script src="app.runtime.js?v=20260410-6"></script>
+  <script src="app.runtime.js?v=20260409-4"></script>
 </body>
 </html>
