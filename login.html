@@ -991,6 +991,55 @@
         line-height: 1.5;
       }
     }
+
+    .auth-v2-top-actions {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .auth-v2-link {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      padding: 10px 14px;
+      border-radius: 999px;
+      text-decoration: none;
+      color: #28543a;
+      background: rgba(255, 255, 255, 0.62);
+      border: 1px solid rgba(255, 255, 255, 0.72);
+      box-shadow: 0 10px 24px rgba(21, 128, 61, 0.08);
+      backdrop-filter: blur(16px);
+      font-weight: 800;
+    }
+
+    .auth-v2-card,
+    .auth-v2-tabs,
+    .auth-v2-panels,
+    .auth-v2-panel,
+    .auth-v2-form,
+    .auth-v2-meta,
+    .primary-btn,
+    .secondary-btn,
+    .auth-link-btn,
+    .password-toggle {
+      position: relative;
+      z-index: 2;
+      pointer-events: auto;
+    }
+
+    @media (max-width: 720px) {
+      .auth-v2-top-actions {
+        gap: 6px;
+      }
+
+      .auth-v2-link,
+      .auth-v2-back {
+        padding: 10px 12px;
+        font-size: 0.86rem;
+      }
+    }
   </style>
 </head>
 <body class="auth-page-v2">
@@ -1006,7 +1055,10 @@
         </span>
       </a>
 
-      <a class="auth-v2-back" href="index.html">العودة للرئيسية</a>
+      <div class="auth-v2-top-actions">
+        <a class="auth-v2-link" href="subscriptions.html">الباقات</a>
+        <a class="auth-v2-back" href="index.html">العودة للرئيسية</a>
+      </div>
     </header>
 
     <section class="auth-v2-stage">
