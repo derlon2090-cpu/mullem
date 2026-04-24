@@ -54,6 +54,7 @@
         </div>
         <div class="top-cta">
           <a class="secondary-btn top-cta-link" href="index.html">الرئيسية</a>
+          <a class="secondary-btn top-cta-link" href="subscriptions.html">الباقات</a>
           <a class="primary-btn top-cta-link" href="profile.html">ملفي</a>
           <button class="secondary-btn top-cta-link top-logout-btn" type="button" data-logout>تسجيل الخروج</button>
         </div>
@@ -84,100 +85,6 @@
       </section>
 
       <div class="student-dashboard">
-      <section class="student-plan-grid student-area-plan">
-        <article class="student-plan-card student-plan-card-primary">
-          <div class="student-section-head">
-            <div>
-              <span class="student-plan-eyebrow">خطتك الحالية</span>
-              <h3 data-plan-name>جارٍ تجهيز الخطة...</h3>
-              <p class="student-section-copy" data-plan-status>نعرض لك باقتك الحالية وتجديدها واستخدامك المتبقي مباشرة داخل اللوحة.</p>
-            </div>
-            <span class="student-plan-badge" data-plan-badge>...</span>
-          </div>
-
-          <div class="student-plan-metrics">
-            <article class="student-plan-metric">
-              <strong data-plan-metric-primary>--</strong>
-              <span>الرصيد اليومي</span>
-            </article>
-            <article class="student-plan-metric">
-              <strong data-plan-metric-secondary>--</strong>
-              <span>التجديد أو الانتهاء</span>
-            </article>
-            <article class="student-plan-metric">
-              <strong data-plan-metric-tertiary>--</strong>
-              <span>الرصيد الحالي</span>
-            </article>
-          </div>
-
-          <p class="student-plan-copy" data-plan-copy>سنكيّف هذه البطاقة حسب حالة الحساب: ضيف، مجاني، أو مشترك.</p>
-
-          <div class="student-plan-benefits" data-plan-benefits>
-            <span class="student-plan-benefit">حفظ المحادثات والمشروعات</span>
-            <span class="student-plan-benefit">تجديد يومي للرصيد</span>
-            <span class="student-plan-benefit">ترقية سريعة عند الحاجة</span>
-          </div>
-
-          <div class="student-plan-actions">
-            <a class="primary-btn" href="subscriptions.html" data-plan-primary-link>مقارنة الباقات</a>
-            <a class="secondary-btn" href="login.html" data-plan-secondary-link>سجّل دخولك</a>
-          </div>
-        </article>
-
-        <article class="student-plan-card student-plan-card-preview">
-          <div class="student-section-head">
-            <div>
-              <span class="student-plan-eyebrow">ترقية ذكية</span>
-              <h3>باقات ملم</h3>
-              <p class="student-section-copy" data-plan-upsell-copy>اختر الخطة التي تناسب عدد أسئلتك اليومي، ثم افتح التفاصيل الكاملة عند الحاجة.</p>
-            </div>
-            <a class="top-link" href="subscriptions.html">عرض التفاصيل</a>
-          </div>
-
-          <div class="student-package-preview" data-package-preview-list>
-            <div class="student-package-empty">جارٍ تحميل الباقات المناسبة لك...</div>
-          </div>
-        </article>
-      </section>
-
-      <section class="student-summary-strip student-area-summary">
-        <article class="student-mini-card">
-          <strong>XP المتبقي</strong>
-          <span><span data-xp-balance>0</span> نقطة</span>
-        </article>
-        <article class="student-mini-card student-mini-card-wide">
-          <strong>إعدادك الحالي</strong>
-          <span data-selection-summary>ابدأ أول محادثة لك الآن.</span>
-        </article>
-        <article class="student-mini-card">
-          <strong>خطتك اليوم</strong>
-          <span data-usage-summary>جارٍ تجهيز حالة الحساب الحالية...</span>
-        </article>
-      </section>
-
-      <section class="student-progress-grid student-area-progress" aria-label="لوحة الإنجازات">
-        <article class="student-progress-card">
-          <span class="student-progress-label">عدد الأسئلة</span>
-          <strong data-progress-questions>0</strong>
-          <p>إجمالي الأسئلة التعليمية التي أنجزتها داخل حسابك حتى الآن.</p>
-        </article>
-        <article class="student-progress-card">
-          <span class="student-progress-label">أفضل مادة</span>
-          <strong data-progress-best-subject>—</strong>
-          <p data-progress-best-subject-copy>ستظهر المادة الأكثر استخدامًا بعد أول عدة أسئلة.</p>
-        </article>
-        <article class="student-progress-card student-progress-card-accent">
-          <div class="student-progress-head">
-            <span class="student-progress-label">تقدمك</span>
-            <strong data-progress-level>0%</strong>
-          </div>
-          <div class="student-progress-bar">
-            <span class="student-progress-bar-fill" data-progress-bar-fill style="width: 0%"></span>
-          </div>
-          <p data-progress-level-copy>ابدأ أول سؤال ليظهر مستوى تقدمك الحالي.</p>
-        </article>
-      </section>
-
       <section class="student-quick-grid student-area-quick">
         <button class="student-quick-card" type="button" data-starter-prompt="احسب محيط دائرة نصف قطرها 7" data-starter-subject="الرياضيات" data-chat-placeholder="اكتب مسألة من المنهج السعودي...">
           <strong>🧮 حل سؤال</strong>
@@ -352,29 +259,13 @@
         </div>
       </section>
 
-      <section class="student-bottom-grid">
+      <section class="student-bottom-grid student-bottom-grid-solo">
         <article class="student-section-card">
           <div class="student-section-head">
-            <h3>آخر محادثاتك</h3>
+            <h3>الشاتات المحفوظة</h3>
             <a class="top-link" href="profile.html#history">عرض الكل</a>
           </div>
           <div class="session-list recent-session-list" data-session-list></div>
-        </article>
-
-        <article class="student-section-card">
-          <div class="student-section-head">
-            <h3>تقدمك</h3>
-            <a class="top-link" href="profile.html#progress">عرض التفاصيل</a>
-          </div>
-          <div class="learned-list compact-list" data-insights></div>
-        </article>
-
-        <article class="student-section-card student-achievements-card">
-          <div class="student-section-head">
-            <h3>الإنجازات</h3>
-            <a class="top-link" href="profile.html">ملفي</a>
-          </div>
-          <div class="student-achievements-list" data-achievements></div>
         </article>
       </section>
 

@@ -530,9 +530,7 @@ body.theme-dark .theme-toggle-moon {
   display: grid;
   grid-template-columns: minmax(0, 1.1fr) minmax(0, 0.9fr);
   grid-template-areas:
-    "plan plan"
-    "summary summary"
-    "progress quick"
+    "quick quick"
     "projects precision";
   gap: 20px;
 }
@@ -668,9 +666,6 @@ body.theme-dark .theme-toggle-moon {
   .student-dashboard {
     grid-template-columns: 1fr;
     grid-template-areas:
-      "plan"
-      "summary"
-      "progress"
       "quick"
       "projects"
       "precision";
@@ -5031,6 +5026,10 @@ body.theme-dark .admin-status-banner[data-state="error"] {
   display: grid;
   grid-template-columns: 1.1fr 0.9fr;
   gap: 18px;
+}
+
+.student-bottom-grid-solo {
+  grid-template-columns: 1fr;
 }
 
 .student-section-card {
