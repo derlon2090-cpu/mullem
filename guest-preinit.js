@@ -1,5 +1,130 @@
 (() => {
   try {
+    const cookieKeys = {
+      token: "mlm_auth_token",
+      user: "mlm_auth_user",
+      currentUser: "mlm_auth_current_user",
+      adminSession: "mlm_auth_admin_session",
+      logoutMarker: "mlm_auth_logged_out"
+    };
+
+    function getCookie(name) {
+      try {
+        const encodedName = `${encodeURIComponent(name)}=`;
+        const match = String(document.cookie || "")
+          .split("; ")
+          .find((item) => item.startsWith(encodedName));
+        return match ? decodeURIComponent(match.slice(encodedName.length)) : "";
+      } catch (_) {
+        return "";
+      }
+    }
+
+    function deleteCookie(name) {
+      try {
+        document.cookie = `${encodeURIComponent(name)}=; path=/; max-age=0; SameSite=Lax`;
+      } catch (_) {
+        // Ignore cookie cleanup issues during early bootstrap.
+      }
+    }
+
+    function loadJson(key, fallback) {
+      try {
+        const value = localStorage.getItem(key);
+        return value ? JSON.parse(value) : fallback;
+      } catch (_) {
+        return fallback;
+      }
+    }
+
+    function saveJson(key, value) {
+      try {
+        localStorage.setItem(key, JSON.stringify(value));
+      } catch (_) {
+        // Ignore storage failures during early bootstrap.
+      }
+    }
+
+    function restorePersistentAuthState() {
+      const logoutMarker = localStorage.getItem(cookieKeys.logoutMarker) || getCookie(cookieKeys.logoutMarker);
+      if (logoutMarker === "1") {
+        [
+          "mlm_api_token",
+          "mlm_api_user",
+          "mlm_current_user",
+          "mlm_admin_session"
+        ].forEach((key) => localStorage.removeItem(key));
+        deleteCookie(cookieKeys.token);
+        deleteCookie(cookieKeys.user);
+        deleteCookie(cookieKeys.currentUser);
+        deleteCookie(cookieKeys.adminSession);
+        return;
+      }
+
+      const cookieToken = getCookie(cookieKeys.token);
+      const cookieUser = getCookie(cookieKeys.user);
+      const cookieCurrentUser = getCookie(cookieKeys.currentUser);
+      const cookieAdminSession = getCookie(cookieKeys.adminSession);
+
+      if (cookieToken && !localStorage.getItem("mlm_api_token")) {
+        localStorage.setItem("mlm_api_token", cookieToken);
+      }
+
+      let parsedUser = null;
+      if (cookieUser) {
+        try {
+          parsedUser = JSON.parse(cookieUser);
+          if (!localStorage.getItem("mlm_api_user")) {
+            saveJson("mlm_api_user", parsedUser);
+          }
+        } catch (_) {
+          parsedUser = null;
+        }
+      }
+
+      if (cookieCurrentUser && !localStorage.getItem("mlm_current_user")) {
+        localStorage.setItem("mlm_current_user", cookieCurrentUser);
+      }
+
+      if (cookieAdminSession && !localStorage.getItem("mlm_admin_session")) {
+        localStorage.setItem("mlm_admin_session", cookieAdminSession);
+      }
+
+      const sessionUser = parsedUser || loadJson("mlm_api_user", null);
+      if (sessionUser?.id) {
+        const legacyUsers = loadJson("mlm_users", []);
+        const existing = legacyUsers.find((user) => String(user.id) === String(sessionUser.id));
+        const mergedUser = {
+          ...(existing || {}),
+          id: String(sessionUser.id),
+          name: sessionUser.name || existing?.name || "",
+          email: String(sessionUser.email || existing?.email || "").toLowerCase(),
+          password: existing?.password || "",
+          role: String(sessionUser.role || existing?.role || "student").toLowerCase() === "admin" ? "Admin" : "Student",
+          stage: sessionUser.stage || existing?.stage || "",
+          grade: sessionUser.grade || existing?.grade || "",
+          subject: sessionUser.subject || existing?.subject || "",
+          package: sessionUser.package || existing?.package || "API Connected",
+          xp: Number.isFinite(Number(sessionUser.xp)) ? Number(sessionUser.xp) : Number(existing?.xp || 0),
+          streakDays: Number.isFinite(Number(existing?.streakDays)) ? Number(existing.streakDays) : 0,
+          lastActiveDate: existing?.lastActiveDate || "",
+          achievements: Array.isArray(existing?.achievements) ? existing.achievements : [],
+          status: existing?.status || "نشط",
+          activity: existing?.activity || "تمت استعادة الجلسة من الكوكيز"
+        };
+
+        saveJson(
+          "mlm_users",
+          [mergedUser, ...legacyUsers.filter((user) => String(user.id) !== String(mergedUser.id))]
+        );
+      }
+    }
+
+    restorePersistentAuthState();
+    window.mullemApiClient?.restorePersistentAuthFromCookies?.();
+    window.mullemApiClient?.syncLegacySessionUser?.();
+    window.mullemApiClient?.persistLegacyAuthState?.();
+
     if ("scrollRestoration" in window.history) {
       window.history.scrollRestoration = "manual";
     }
