@@ -8936,18 +8936,25 @@ body.theme-dark .phone-mini-card::before {
 }
 
 .showcase-hero-shell.showcase-hero-panel {
+  direction: ltr;
+  grid-template-columns: minmax(0, 1.04fr) minmax(420px, 0.9fr);
+  grid-template-areas: "scene copy";
   min-height: 560px;
   padding: 34px 38px 30px;
   align-items: center;
+  gap: 30px;
 }
 
 .showcase-hero-copy {
+  direction: rtl;
+  justify-self: end;
+  max-width: 560px;
   gap: 20px;
 }
 
 .showcase-hero-copy h1 {
-  font-size: clamp(3.25rem, 4.8vw, 4.95rem);
-  line-height: 1.18;
+  font-size: clamp(2.9rem, 4vw, 4.15rem);
+  line-height: 1.24;
 }
 
 .showcase-hero-copy h1 span {
@@ -8956,6 +8963,13 @@ body.theme-dark .phone-mini-card::before {
 
 .showcase-hero-copy p {
   max-width: 560px;
+  font-size: 1.05rem;
+  line-height: 1.9;
+}
+
+.showcase-hero-scene {
+  direction: rtl;
+  justify-self: start;
 }
 
 .showcase-hero-kicker {
