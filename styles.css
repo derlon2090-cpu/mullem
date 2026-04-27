@@ -278,7 +278,7 @@ textarea {
 }
 
 .shell {
-  width: min(1280px, calc(100% - 32px));
+  width: min(1432px, calc(100% - 48px));
   margin: 0 auto;
 }
 
@@ -7427,6 +7427,7 @@ body.showcase-home-body {
   display: flex;
   align-items: center;
   gap: 10px;
+  direction: ltr;
 }
 
 .showcase-login-btn {
@@ -7473,7 +7474,7 @@ body.showcase-home-body {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 28px;
+  gap: 34px;
 }
 
 .showcase-main-nav a {
@@ -8919,6 +8920,9 @@ body.theme-dark .phone-mini-card::before {
 .showcase-topbar {
   position: relative;
   z-index: 5;
+  margin-top: 14px;
+  padding: 14px 20px;
+  border-radius: 28px;
 }
 
 .showcase-hero-shell.showcase-hero-panel {
@@ -8980,13 +8984,14 @@ body.theme-dark .phone-mini-card::before {
 
 .showcase-service-card h3 {
   margin: 0 0 10px;
-  font-size: 1.32rem;
+  font-size: 1.26rem;
   color: #16271f;
 }
 
 .showcase-service-card p {
   margin: 0;
   color: #5a7266;
+  font-size: 0.98rem;
   line-height: 1.85;
 }
 
@@ -9103,6 +9108,7 @@ body.theme-dark .phone-mini-card::before {
   grid-template-columns: 1.1fr 0.78fr 0.82fr 0.82fr 1.05fr;
   gap: 24px;
   align-items: start;
+  direction: ltr;
 }
 
 .showcase-footer-newsletter,
@@ -9110,6 +9116,7 @@ body.theme-dark .phone-mini-card::before {
 .showcase-footer-brand {
   display: grid;
   gap: 10px;
+  direction: rtl;
 }
 
 .showcase-footer-newsletter h3,
@@ -9177,6 +9184,8 @@ body.theme-dark .phone-mini-card::before {
 }
 
 .showcase-newsletter-form {
+  flex-direction: column;
+  align-items: stretch;
   background: rgba(244, 250, 246, 0.98);
   border: 1px solid rgba(15, 141, 88, 0.08);
 }
@@ -9188,6 +9197,8 @@ body.theme-dark .phone-mini-card::before {
 .showcase-newsletter-form button {
   background: linear-gradient(135deg, #0f8d58, #1fa667);
   color: #fff;
+  align-self: flex-start;
+  min-width: 96px;
 }
 
 .showcase-footer-bottom {
@@ -9312,6 +9323,10 @@ body.theme-dark .showcase-newsletter-form input {
 }
 
 @media (max-width: 640px) {
+  .shell {
+    width: min(100%, calc(100% - 24px));
+  }
+
   .showcase-topbar {
     padding: 12px;
   }
