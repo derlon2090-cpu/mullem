@@ -9438,18 +9438,17 @@ body.orlixor-platform .scroll-top-btn {
 .orlixor-brand {
   display: flex;
   align-items: center;
-  gap: 12px;
+  justify-content: flex-start;
   color: #141f44;
   font-size: 1.18rem;
   font-weight: 800;
-  direction: ltr;
 }
 
 .orlixor-brand img {
-  width: 44px;
-  height: 44px;
+  width: 182px;
+  height: auto;
   object-fit: contain;
-  filter: drop-shadow(0 12px 24px rgba(110, 88, 255, 0.18));
+  filter: drop-shadow(0 10px 20px rgba(110, 88, 255, 0.08));
 }
 
 .orlixor-primary-action {
@@ -9481,6 +9480,7 @@ body.orlixor-platform .scroll-top-btn {
   gap: 12px;
   color: #1a2748;
   font-weight: 700;
+  font-size: 1.04rem;
 }
 
 .orlixor-sidebar-nav a.is-active {
@@ -9490,7 +9490,7 @@ body.orlixor-platform .scroll-top-btn {
 
 .orlixor-sidebar-nav a i {
   font-style: normal;
-  font-size: 1rem;
+  font-size: 1.12rem;
   opacity: 0.9;
 }
 
@@ -9637,7 +9637,7 @@ body.orlixor-platform .scroll-top-btn {
   grid-template-columns: minmax(0, 1fr) 420px;
   direction: ltr;
   align-items: center;
-  gap: 28px;
+  gap: 34px;
   padding: 10px 6px 4px;
 }
 
@@ -9651,9 +9651,9 @@ body.orlixor-platform .scroll-top-btn {
 
 .orlixor-hero-copy h1 {
   margin: 0;
-  max-width: 720px;
-  font-size: clamp(2.5rem, 4vw, 4rem);
-  line-height: 1.38;
+  max-width: 660px;
+  font-size: clamp(2.55rem, 3.7vw, 3.95rem);
+  line-height: 1.44;
   color: #121e3c;
 }
 
@@ -9663,14 +9663,14 @@ body.orlixor-platform .scroll-top-btn {
 
 .orlixor-hero-copy p {
   margin: 0;
-  max-width: 690px;
+  max-width: 610px;
   color: #66708b;
-  font-size: 1.14rem;
+  font-size: 1.12rem;
   line-height: 1.9;
 }
 
 .orlixor-askbar {
-  width: min(100%, 720px);
+  width: min(100%, 690px);
   min-height: 62px;
   padding: 8px 12px;
   border-radius: 32px;
@@ -9731,63 +9731,17 @@ body.orlixor-platform .scroll-top-btn {
 
 .orlixor-hero-visual {
   position: relative;
-  min-height: 400px;
+  min-height: 370px;
   display: grid;
   place-items: center;
-}
-
-.orlixor-glow-ring {
-  position: absolute;
-  inset: 44px;
-  border-radius: 50%;
-  background:
-    radial-gradient(circle, rgba(123, 92, 255, 0.18), transparent 56%),
-    radial-gradient(circle at center, rgba(255, 255, 255, 0.86), transparent 66%);
-  filter: blur(4px);
-}
-
-.orlixor-pedestal {
-  position: absolute;
-  bottom: 14px;
-  width: 240px;
-  height: 124px;
-}
-
-.orlixor-pedestal::before,
-.orlixor-pedestal::after,
-.orlixor-pedestal span {
-  content: "";
-  position: absolute;
-  inset-inline: 0;
-  margin: auto;
-  border-radius: 999px;
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(194, 183, 255, 0.95));
-  box-shadow: 0 22px 34px rgba(123, 92, 255, 0.16);
-}
-
-.orlixor-pedestal::before {
-  bottom: 0;
-  width: 240px;
-  height: 42px;
-}
-
-.orlixor-pedestal::after {
-  bottom: 28px;
-  width: 188px;
-  height: 34px;
-}
-
-.orlixor-pedestal span {
-  bottom: 52px;
-  width: 148px;
-  height: 28px;
 }
 
 .orlixor-hero-visual img {
   position: relative;
   z-index: 2;
-  width: min(84%, 350px);
-  filter: drop-shadow(0 32px 60px rgba(110, 88, 255, 0.22));
+  width: min(100%, 320px);
+  height: auto;
+  filter: none;
 }
 
 .orlixor-stats {
@@ -9962,88 +9916,14 @@ body.orlixor-platform .scroll-top-btn {
 
 .orlixor-cta-visual {
   min-height: 142px;
-  position: relative;
+  display: grid;
+  align-items: end;
 }
 
-.orlixor-cap {
-  position: absolute;
-  top: 12px;
-  right: 56px;
-  width: 136px;
-  height: 26px;
-  border-radius: 14px;
-  background: linear-gradient(135deg, #8b72ff, #6d56f5);
-  transform: skewX(-18deg);
-  box-shadow: 0 18px 38px rgba(110, 88, 255, 0.2);
-}
-
-.orlixor-cap::after {
-  content: "";
-  position: absolute;
-  left: 14px;
-  top: 18px;
-  width: 112px;
-  height: 12px;
-  border-radius: 10px;
-  background: linear-gradient(135deg, #7c63ff, #604bf0);
-}
-
-.orlixor-book-stack,
-.orlixor-book-stack::before,
-.orlixor-book-stack::after {
-  position: absolute;
-  content: "";
-  right: 92px;
-  bottom: 18px;
-  width: 132px;
-  height: 22px;
-  border-radius: 12px;
-  background: linear-gradient(135deg, #8d76ff, #6d57f4);
-}
-
-.orlixor-book-stack::before {
-  right: 8px;
-  bottom: 28px;
-}
-
-.orlixor-book-stack::after {
-  right: -8px;
-  bottom: 56px;
-}
-
-.orlixor-plant-pot {
-  position: absolute;
-  left: 38px;
-  bottom: 14px;
-  width: 64px;
-  height: 64px;
-  border-radius: 24px;
-  background: rgba(255, 255, 255, 0.92);
-  box-shadow: 0 18px 34px rgba(25, 33, 72, 0.08);
-}
-
-.orlixor-plant-pot::before,
-.orlixor-plant-pot::after {
-  content: "";
-  position: absolute;
-  border-radius: 20px 20px 0 20px;
-  background: linear-gradient(180deg, #6d56f5, #8d76ff);
-}
-
-.orlixor-plant-pot::before {
-  width: 16px;
-  height: 30px;
-  top: 14px;
-  left: 20px;
-  transform: rotate(-14deg);
-}
-
-.orlixor-plant-pot::after {
-  width: 18px;
-  height: 34px;
-  top: 10px;
-  left: 30px;
-  transform: rotate(22deg);
+.orlixor-cta-visual img {
+  width: min(100%, 338px);
+  height: auto;
+  display: block;
 }
 
 .orlixor-cta-copy {
