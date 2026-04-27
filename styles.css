@@ -9870,9 +9870,10 @@ body.orlixor-platform .scroll-top-btn {
 }
 
 .orlixor-feature-icon img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
+  width: 66%;
+  height: 66%;
+  object-fit: contain;
+  object-position: center;
   display: block;
 }
 
