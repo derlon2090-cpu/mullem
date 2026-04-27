@@ -7428,6 +7428,7 @@ body.showcase-home-body {
   align-items: center;
   gap: 10px;
   direction: ltr;
+  justify-self: start;
 }
 
 .showcase-login-btn {
@@ -7475,6 +7476,7 @@ body.showcase-home-body {
   align-items: center;
   justify-content: center;
   gap: 34px;
+  justify-self: center;
 }
 
 .showcase-main-nav a {
@@ -7504,6 +7506,7 @@ body.showcase-home-body {
 
 .showcase-brand {
   gap: 12px;
+  justify-self: end;
 }
 
 .showcase-brand .brand-copy {
@@ -8917,12 +8920,16 @@ body.theme-dark .phone-mini-card::before {
   padding-bottom: 40px;
 }
 
+.showcase-home-body > .shell:first-of-type {
+  width: min(1500px, calc(100% - 20px));
+}
+
 .showcase-topbar {
   position: relative;
   z-index: 5;
-  margin-top: 14px;
-  padding: 14px 20px;
-  border-radius: 28px;
+  margin-top: 8px;
+  padding: 14px 18px;
+  border-radius: 26px;
 }
 
 .showcase-hero-shell.showcase-hero-panel {
@@ -9327,7 +9334,12 @@ body.theme-dark .showcase-newsletter-form input {
     width: min(100%, calc(100% - 24px));
   }
 
+  .showcase-home-body > .shell:first-of-type {
+    width: min(100%, calc(100% - 12px));
+  }
+
   .showcase-topbar {
+    margin-top: 6px;
     padding: 12px;
   }
 
