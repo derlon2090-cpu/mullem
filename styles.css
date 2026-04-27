@@ -9418,7 +9418,7 @@ body.orlixor-platform .scroll-top-btn {
 
 .orlixor-layout {
   display: grid;
-  grid-template-columns: 262px minmax(0, 1fr);
+  grid-template-columns: 268px minmax(0, 1fr);
   min-height: 100vh;
 }
 
@@ -9426,7 +9426,7 @@ body.orlixor-platform .scroll-top-btn {
   position: sticky;
   top: 0;
   height: 100vh;
-  padding: 22px 22px 20px;
+  padding: 26px 22px 20px;
   direction: rtl;
   border-right: 1px solid rgba(99, 88, 180, 0.1);
   background: rgba(255, 255, 255, 0.88);
@@ -9445,10 +9445,11 @@ body.orlixor-platform .scroll-top-btn {
 }
 
 .orlixor-brand img {
-  width: 182px;
+  width: 214px;
+  max-width: 100%;
   height: auto;
   object-fit: contain;
-  filter: drop-shadow(0 10px 20px rgba(110, 88, 255, 0.08));
+  filter: none;
 }
 
 .orlixor-primary-action {
@@ -9457,12 +9458,17 @@ body.orlixor-platform .scroll-top-btn {
   justify-content: center;
   gap: 10px;
   min-height: 56px;
-  padding: 0 18px;
+  padding: 0 20px;
   border-radius: 18px;
   background: linear-gradient(135deg, #7b5cff, #5e4aef);
   color: #fff;
   font-weight: 800;
   box-shadow: 0 18px 40px rgba(110, 88, 255, 0.26);
+}
+
+.orlixor-primary-action span {
+  font-size: 1.1rem;
+  line-height: 1;
 }
 
 .orlixor-sidebar-nav {
@@ -9480,12 +9486,18 @@ body.orlixor-platform .scroll-top-btn {
   gap: 12px;
   color: #1a2748;
   font-weight: 700;
-  font-size: 1.04rem;
+  font-size: 1.02rem;
+  transition: background-color 180ms ease, color 180ms ease, transform 180ms ease;
 }
 
 .orlixor-sidebar-nav a.is-active {
   background: linear-gradient(135deg, rgba(123, 92, 255, 0.13), rgba(123, 92, 255, 0.06));
   color: #654eff;
+}
+
+.orlixor-sidebar-nav a:hover {
+  background: rgba(123, 92, 255, 0.05);
+  transform: translateX(-2px);
 }
 
 .orlixor-sidebar-nav a i {
@@ -9571,7 +9583,7 @@ body.orlixor-platform .scroll-top-btn {
 
 .orlixor-main {
   direction: rtl;
-  padding: 22px 28px 34px;
+  padding: 22px 30px 34px;
   display: grid;
   gap: 18px;
 }
@@ -9739,9 +9751,9 @@ body.orlixor-platform .scroll-top-btn {
 .orlixor-hero-visual img {
   position: relative;
   z-index: 2;
-  width: min(100%, 320px);
+  width: min(100%, 336px);
   height: auto;
-  filter: none;
+  filter: drop-shadow(0 14px 26px rgba(110, 88, 255, 0.12));
 }
 
 .orlixor-stats {
@@ -9921,7 +9933,7 @@ body.orlixor-platform .scroll-top-btn {
 }
 
 .orlixor-cta-visual img {
-  width: min(100%, 338px);
+  width: min(100%, 332px);
   height: auto;
   display: block;
 }
@@ -9969,10 +9981,27 @@ body.orlixor-platform .scroll-top-btn {
   .orlixor-sidebar {
     position: relative;
     height: auto;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    align-items: start;
   }
 
-  .orlixor-main {
-    padding-top: 0;
+  .orlixor-brand,
+  .orlixor-primary-action {
+    grid-column: span 1;
+  }
+
+  .orlixor-sidebar-nav {
+    grid-column: 1 / -1;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .orlixor-sidebar-spacer {
+    display: none;
+  }
+
+  .orlixor-support-card,
+  .orlixor-user-card {
+    min-height: 100%;
   }
 
   .orlixor-feature-grid {
@@ -9988,7 +10017,7 @@ body.orlixor-platform .scroll-top-btn {
 
   .orlixor-hero-visual {
     order: -1;
-    min-height: 320px;
+    min-height: 300px;
   }
 
   .orlixor-feature-grid {
@@ -10010,7 +10039,12 @@ body.orlixor-platform .scroll-top-btn {
   }
 
   .orlixor-sidebar {
-    padding: 20px 14px;
+    grid-template-columns: 1fr;
+    padding: 18px 14px;
+  }
+
+  .orlixor-sidebar-nav {
+    grid-template-columns: 1fr;
   }
 
   .orlixor-search {
@@ -10023,7 +10057,19 @@ body.orlixor-platform .scroll-top-btn {
   }
 
   .orlixor-hero-copy h1 {
-    font-size: 2.25rem;
+    font-size: 2.2rem;
+  }
+
+  .orlixor-brand img {
+    width: 188px;
+  }
+
+  .orlixor-hero-visual img {
+    width: min(100%, 280px);
+  }
+
+  .orlixor-cta-visual img {
+    width: min(100%, 280px);
   }
 
   .orlixor-feature-grid,
