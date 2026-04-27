@@ -1898,6 +1898,17 @@
         });
         if (previewTitle) previewTitle.textContent = previewCopy[next].title;
         if (previewHint) previewHint.textContent = previewCopy[next].hint;
+        try {
+          const nextUrl = new URL(window.location.href);
+          if (next === "dashboard") {
+            nextUrl.searchParams.delete("section");
+          } else {
+            nextUrl.searchParams.set("section", next);
+          }
+          window.history.replaceState({ section: next }, "", nextUrl.toString());
+        } catch (_) {
+          // Ignore URL sync issues and keep the interface interactive.
+        }
       }
 
       function promptLogin(message) {
@@ -1923,7 +1934,8 @@
       const observer = new MutationObserver(syncVisiblePanel);
       panels.forEach((panel) => observer.observe(panel, { attributes: true, attributeFilter: ["hidden"] }));
       syncVisiblePanel();
-      setPreview("dashboard");
+      const initialSection = new URLSearchParams(window.location.search).get("section") || "dashboard";
+      setPreview(initialSection);
 
       previewButtons.forEach((button) => {
         button.addEventListener("click", () => {
