@@ -1,0 +1,35 @@
+body.orlixor-section-preview-page {
+  margin: 0;
+  min-height: 100vh;
+  background:
+    radial-gradient(circle at top left, rgba(122, 91, 255, 0.09), transparent 20%),
+    radial-gradient(circle at top right, rgba(135, 161, 255, 0.08), transparent 18%),
+    linear-gradient(180deg, #ffffff 0%, #fafaff 100%);
+  display: grid;
+  place-items: center;
+  padding: 18px;
+  box-sizing: border-box;
+  font-family: "Cairo", sans-serif;
+}
+
+.section-preview-shell {
+  width: min(100%, 1089px);
+}
+
+.section-preview-image {
+  width: 100%;
+  height: auto;
+  display: block;
+  border-radius: 22px;
+  box-shadow: 0 24px 56px rgba(30, 35, 84, 0.08);
+}
+
+@media (max-width: 720px) {
+  body.orlixor-section-preview-page {
+    padding: 10px;
+  }
+
+  .section-preview-image {
+    border-radius: 16px;
+  }
+}
