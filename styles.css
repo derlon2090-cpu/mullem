@@ -8921,15 +8921,18 @@ body.theme-dark .phone-mini-card::before {
 }
 
 .showcase-home-body > .shell:first-of-type {
-  width: min(1500px, calc(100% - 20px));
+  width: 100%;
 }
 
 .showcase-topbar {
   position: relative;
   z-index: 5;
-  margin-top: 8px;
-  padding: 14px 18px;
-  border-radius: 26px;
+  margin-top: 0;
+  padding: 14px 26px;
+  border-radius: 0;
+  border-left: 0;
+  border-right: 0;
+  box-shadow: 0 10px 28px rgba(15, 23, 42, 0.05);
 }
 
 .showcase-hero-shell.showcase-hero-panel {
@@ -9335,12 +9338,12 @@ body.theme-dark .showcase-newsletter-form input {
   }
 
   .showcase-home-body > .shell:first-of-type {
-    width: min(100%, calc(100% - 12px));
+    width: 100%;
   }
 
   .showcase-topbar {
-    margin-top: 6px;
-    padding: 12px;
+    margin-top: 0;
+    padding: 12px 14px;
   }
 
   .showcase-header-actions {
