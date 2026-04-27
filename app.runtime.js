@@ -4783,6 +4783,13 @@
     const guestSessionId = !activeUser ? getRuntimeGuestSessionId() : undefined;
     const grade = gradeSelect?.value || activeUser?.grade || "";
     const selectedProjectId = getSelectedRuntimeProjectId();
+    const currentAttachments = typeof attachments !== "undefined" && Array.isArray(attachments)
+      ? attachments
+      : Array.from(fileInput?.files || []);
+    const attachmentNames = currentAttachments
+      .map((file) => String(file?.name || "").trim())
+      .filter(Boolean)
+      .slice(0, 8);
     return {
       conversation_id: getRuntimeApiConversationId() || undefined,
       guest_session_id: guestSessionId,
@@ -4793,6 +4800,9 @@
       grade,
       term: termSelect?.value || "",
       lesson: lessonInput?.value?.trim() || projectLessonInput?.value?.trim() || "",
+      has_attachment: attachmentNames.length > 0,
+      attachment_count: attachmentNames.length,
+      attachment_names: attachmentNames,
       stream: false
     };
   }

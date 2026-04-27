@@ -286,6 +286,27 @@ function sanitizeOptionalText(value, maxLength = MAX_METADATA_LENGTH) {
   return String(value || "").trim().slice(0, maxLength);
 }
 
+function sanitizeAttachmentNames(value) {
+  if (!Array.isArray(value)) return [];
+  return value
+    .map((item) => sanitizeOptionalText(item, 160))
+    .filter(Boolean)
+    .slice(0, 8);
+}
+
+function buildAttachmentContext(payload) {
+  const names = sanitizeAttachmentNames(payload?.attachment_names || payload?.attachmentNames);
+  const attachmentCount = Math.max(
+    names.length,
+    Number(payload?.attachment_count || payload?.attachmentCount || 0) || 0
+  );
+
+  if (!attachmentCount) return "";
+
+  const listedNames = names.length ? ` أسماء المرفقات: ${names.join("، ")}.` : "";
+  return `\n\nملاحظة عن المرفقات: أرسل المستخدم ${attachmentCount} مرفقًا مع هذه الرسالة.${listedNames} إذا احتجت محتوى الملف نفسه فاطلب من المستخدم كتابة النص أو وصف الصورة بشكل أوضح.`;
+}
+
 function sanitizeModelDisplayText(value) {
   return String(value || "")
     .replace(/\r\n?/g, "\n")
@@ -1794,6 +1815,7 @@ async function handleAdminUpdateUser(req, res, userId) {
 async function buildChatMessages(conversation, payload) {
   const systemPrompt = buildAudienceAwareChatPrompt(payload);
   const history = await listConversationHistory(conversation);
+  const attachmentContext = buildAttachmentContext(payload);
   const messages = [
     {
       role: "system",
@@ -1822,7 +1844,7 @@ async function buildChatMessages(conversation, payload) {
 
   messages.push({
     role: "user",
-    content: String(payload.message || "").trim()
+    content: `${String(payload.message || "").trim()}${attachmentContext}`
   });
 
   return messages;
@@ -1839,7 +1861,12 @@ async function handleChatSend(req, res) {
   const stage = sanitizeOptionalText(payload.stage, MAX_METADATA_LENGTH) || inferStageFromGrade(grade);
   const term = sanitizeOptionalText(payload.term, MAX_METADATA_LENGTH);
   const projectId = sanitizeOptionalText(payload.project_id, MAX_METADATA_LENGTH);
-  const hasAttachment = Boolean(payload.has_attachment || payload.hasAttachment || Number(payload.attachment_count || 0) > 0);
+  const attachmentNames = sanitizeAttachmentNames(payload.attachment_names || payload.attachmentNames);
+  const attachmentCount = Math.max(
+    attachmentNames.length,
+    Number(payload.attachment_count || payload.attachmentCount || 0) || 0
+  );
+  const hasAttachment = Boolean(payload.has_attachment || payload.hasAttachment || attachmentCount > 0);
   const auth = await getAuthContext(req);
   const activeUser = auth?.user ? await syncUserDailyProgress(auth.user, "بدأ جلسة شات جديدة") : null;
 
@@ -1871,6 +1898,8 @@ async function handleChatSend(req, res) {
     input: buildResponsesInput(await buildChatMessages(conversation, {
       ...payload,
       message,
+      attachment_count: attachmentCount,
+      attachment_names: attachmentNames,
       user_id: activeUser?.id || null,
       project_id: project?.id || null,
       subject: subject || project?.subject || activeUser?.subject || "",

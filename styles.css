@@ -9681,42 +9681,174 @@ body.orlixor-platform .scroll-top-btn {
   line-height: 1.9;
 }
 
-.orlixor-askbar {
+.orlixor-askbar-wrap {
   width: min(100%, 690px);
-  min-height: 62px;
+  display: grid;
+  gap: 12px;
+}
+
+.orlixor-askbar {
+  min-height: 68px;
   padding: 8px 12px;
   border-radius: 32px;
   border: 1px solid rgba(123, 92, 255, 0.08);
   background: rgba(255, 255, 255, 0.96);
-  display: flex;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: center;
   gap: 12px;
   box-shadow: 0 18px 34px rgba(25, 33, 72, 0.04);
 }
 
-.orlixor-askbar button {
-  width: 46px;
-  height: 46px;
-  border: 0;
-  border-radius: 50%;
-  background: linear-gradient(135deg, #7b5cff, #5e4aef);
-  color: #fff;
-  font-size: 1rem;
-  box-shadow: 0 14px 26px rgba(110, 88, 255, 0.22);
-}
-
-.orlixor-askbar input {
-  flex: 1;
+.orlixor-askbar textarea {
+  min-height: 44px;
+  max-height: 152px;
   border: 0;
   outline: 0;
+  resize: none;
   background: transparent;
   font: inherit;
   color: #1a2748;
   text-align: right;
+  line-height: 1.7;
+  padding: 10px 0;
 }
 
-.orlixor-askbar input::placeholder {
+.orlixor-askbar textarea::placeholder {
   color: #8a91aa;
+}
+
+.orlixor-ask-submit,
+.orlixor-ask-upload {
+  width: 48px;
+  height: 48px;
+  border: 0;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  transition: transform 180ms ease, opacity 180ms ease, box-shadow 180ms ease;
+}
+
+.orlixor-ask-submit {
+  background: linear-gradient(135deg, #7b5cff, #5e4aef);
+  color: #fff;
+  box-shadow: 0 14px 26px rgba(110, 88, 255, 0.22);
+}
+
+.orlixor-ask-upload {
+  background: rgba(103, 76, 255, 0.08);
+  color: #674cff;
+  box-shadow: inset 0 0 0 1px rgba(103, 76, 255, 0.08);
+}
+
+.orlixor-ask-submit:hover,
+.orlixor-ask-upload:hover,
+.orlixor-askbar-actions button:hover {
+  transform: translateY(-1px);
+}
+
+.orlixor-ask-submit:disabled,
+.orlixor-ask-upload:disabled,
+.orlixor-askbar-actions button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+}
+
+.orlixor-ask-submit svg,
+.orlixor-ask-upload svg {
+  width: 20px;
+  height: 20px;
+}
+
+.orlixor-askbar-actions {
+  display: flex;
+  gap: 10px;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
+.orlixor-askbar-actions button {
+  min-height: 42px;
+  padding: 0 16px;
+  border-radius: 999px;
+  border: 1px solid rgba(123, 92, 255, 0.12);
+  background: rgba(255, 255, 255, 0.9);
+  color: #5b4cdc;
+  font: inherit;
+  font-weight: 700;
+  transition: transform 180ms ease, border-color 180ms ease, background 180ms ease;
+}
+
+.orlixor-askbar-actions button:hover {
+  border-color: rgba(123, 92, 255, 0.24);
+  background: rgba(247, 244, 255, 0.96);
+}
+
+.orlixor-ask-attachments {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+.orlixor-ask-attachment {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border-radius: 999px;
+  border: 1px solid rgba(123, 92, 255, 0.12);
+  background: rgba(255, 255, 255, 0.92);
+  color: #66708b;
+  font-size: 0.9rem;
+}
+
+.orlixor-ask-attachment button {
+  width: 24px;
+  height: 24px;
+  border: 0;
+  border-radius: 50%;
+  background: rgba(103, 76, 255, 0.08);
+  color: #674cff;
+}
+
+.orlixor-ask-response {
+  padding: 18px 20px;
+  border-radius: 24px;
+  border: 1px solid rgba(123, 92, 255, 0.08);
+  background: rgba(255, 255, 255, 0.94);
+  box-shadow: 0 18px 34px rgba(31, 44, 93, 0.04);
+  color: #243159;
+  line-height: 1.95;
+  text-align: right;
+  white-space: pre-wrap;
+}
+
+.orlixor-ask-response.is-pending {
+  color: #6b7280;
+}
+
+.orlixor-ask-response.is-error {
+  border-color: rgba(220, 38, 38, 0.14);
+  background: rgba(255, 248, 248, 0.96);
+  color: #b91c1c;
+}
+
+.orlixor-ask-response-files {
+  margin-top: 12px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.orlixor-ask-response-files span {
+  padding: 6px 10px;
+  border-radius: 999px;
+  background: rgba(103, 76, 255, 0.08);
+  color: #5b4cdc;
+  font-size: 0.88rem;
 }
 
 .orlixor-quick-pills {
@@ -10079,6 +10211,27 @@ body.orlixor-platform .scroll-top-btn {
 
   .orlixor-hero-copy h1 {
     font-size: 2.2rem;
+  }
+
+  .orlixor-askbar {
+    grid-template-columns: 44px minmax(0, 1fr) 44px;
+    padding: 8px 10px;
+    border-radius: 24px;
+  }
+
+  .orlixor-ask-submit,
+  .orlixor-ask-upload {
+    width: 44px;
+    height: 44px;
+  }
+
+  .orlixor-askbar-actions {
+    flex-direction: column;
+  }
+
+  .orlixor-askbar-actions button {
+    width: 100%;
+    justify-content: center;
   }
 
   .orlixor-brand img {
