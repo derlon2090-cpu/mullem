@@ -8,12 +8,12 @@
     if ("scrollRestoration" in history) history.scrollRestoration = "manual";
     if (location.hash === "#chat") history.replaceState(null, "", location.pathname + location.search);
   </script>
-  <title>ملم — منصة ذكاء اصطناعي مصممة لطلاب المملكة</title>
+  <title>ملم — منصة ذكاء اصطناعي مصممة لطلاب المرحلة الدراسية في المملكة</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800;900&display=swap" rel="stylesheet">
   <link rel="icon" type="image/svg+xml" href="favicon.svg">
-  <link rel="stylesheet" href="styles.css?v=20260427-1">
+  <link rel="stylesheet" href="styles.css?v=20260427-3">
 </head>
 <body class="showcase-home-body">
   <div class="shell">
@@ -50,9 +50,9 @@
 
       <nav class="main-nav showcase-main-nav" aria-label="التنقل الرئيسي">
         <a class="active" href="#home">الرئيسية</a>
-        <a href="#how-it-works">كيف يعمل</a>
-        <a href="#ai-experience">الذكاء</a>
         <a href="#subjects">المواد الدراسية</a>
+        <a href="#ai">الذكاء</a>
+        <a href="#how-it-works">كيف يعمل</a>
         <a href="#faq">الأسئلة الشائعة</a>
         <a href="#about-platform">عن المنصة</a>
       </nav>
@@ -63,299 +63,247 @@
         </div>
         <div class="brand-text">
           <div class="brand-name">ملم</div>
-          <div class="brand-copy">منصة الذكاء الاصطناعي للمرحلة الدراسية</div>
+          <div class="brand-copy">منصة الذكاء الاصطناعي التعليمية</div>
         </div>
       </a>
     </header>
   </div>
 
   <main class="page-wrap showcase-page" id="home">
-    <div class="shell showcase-layout">
-      <section class="showcase-main-column">
-        <section class="showcase-hero-panel" id="ai-experience">
-          <div class="showcase-hero-scene" aria-hidden="true">
-            <div class="scene-wave scene-wave-one"></div>
-            <div class="scene-wave scene-wave-two"></div>
+    <section class="shell showcase-hero-shell showcase-hero-panel" id="ai">
+      <div class="showcase-hero-scene" aria-hidden="true">
+        <div class="scene-wave scene-wave-one"></div>
+        <div class="scene-wave scene-wave-two"></div>
 
-            <div class="scene-floating scene-floating-bot">🤖</div>
-            <div class="scene-floating scene-floating-brain">🧠</div>
-            <div class="scene-floating scene-floating-cap">🎓</div>
-            <div class="scene-floating scene-floating-note">📝</div>
-            <div class="scene-floating scene-floating-chart">📈</div>
+        <div class="scene-floating scene-floating-bot">🤖</div>
+        <div class="scene-floating scene-floating-brain">🧠</div>
+        <div class="scene-floating scene-floating-cap">🎓</div>
+        <div class="scene-floating scene-floating-note">📝</div>
+        <div class="scene-floating scene-floating-chart">💬</div>
 
-            <div class="scene-flag-stack">
-              <div class="scene-books">
-                <span></span>
-                <span></span>
-                <span></span>
-              </div>
-              <div class="scene-flag-pole"></div>
-              <div class="scene-flag-banner">
-                <strong>السعودية</strong>
-                <small></small>
-              </div>
-            </div>
-
-            <div class="scene-laptop">
-              <div class="scene-laptop-screen">
-                <div class="scene-screen-top">
-                  <span></span>
-                  <span></span>
-                  <span></span>
-                </div>
-                <div class="scene-screen-content">
-                  <strong>مرحباً، كيف أساعدك اليوم؟</strong>
-                  <div class="scene-screen-grid">
-                    <div>حل سؤال<br><small>مع شرح مبسط</small></div>
-                    <div>تلخيص محتوى<br><small>بشكل منظم</small></div>
-                    <div>شرح درس<br><small>حسب الصف</small></div>
-                    <div>اختبار قصير<br><small>وتدريب سريع</small></div>
-                  </div>
-                  <div class="scene-screen-input">
-                    <span>اكتب سؤالك...</span>
-                    <b>➜</b>
-                  </div>
-                </div>
-              </div>
-              <div class="scene-laptop-base"></div>
-            </div>
-
-            <div class="scene-pencil-cup">
-              <span class="pencil pencil-one"></span>
-              <span class="pencil pencil-two"></span>
-              <span class="pencil pencil-three"></span>
-            </div>
-
-            <div class="scene-plant">
-              <span class="leaf leaf-one"></span>
-              <span class="leaf leaf-two"></span>
-              <span class="leaf leaf-three"></span>
-            </div>
-          </div>
-
-          <div class="showcase-hero-copy">
-            <div class="showcase-hero-kicker">منصة الذكاء الاصطناعي للمرحلة الدراسية</div>
-            <h1>
-              منصة ذكاء اصطناعي
-              <span>مصممة لطلاب المملكة</span>
-            </h1>
-            <p>
-              مساعدك الذكي لحل الأسئلة، شرح الدروس، تلخيص المحتوى
-              والمذاكرة بذكاء في جميع المواد الدراسية للمرحلة الدراسية.
-            </p>
-
-            <div class="showcase-hero-actions">
-              <a class="showcase-primary-btn" href="login.html">ابدأ الآن مجاناً</a>
-              <a class="showcase-secondary-btn" href="#how-it-works">
-                <span>كيف يعمل؟</span>
-                <i>▶</i>
-              </a>
-            </div>
-
-            <div class="showcase-trust-row">
-              <span><i>✓</i> دقة عالية 99%</span>
-              <span><i>✓</i> متاح 24/7</span>
-              <span><i>✓</i> آمن وموثوق</span>
-            </div>
-          </div>
-        </section>
-
-        <section class="showcase-stats-strip">
-          <article class="showcase-stat-card">
-            <span class="showcase-stat-icon">🕘</span>
-            <strong>+100K</strong>
-            <small>سؤال تم حله</small>
-          </article>
-          <article class="showcase-stat-card">
-            <span class="showcase-stat-icon">👥</span>
-            <strong>+25K</strong>
-            <small>طالب نشط</small>
-          </article>
-          <article class="showcase-stat-card">
-            <span class="showcase-stat-icon">🎯</span>
-            <strong>99%</strong>
-            <small>دقة الإجابات</small>
-          </article>
-          <article class="showcase-stat-card">
-            <span class="showcase-stat-icon">🧭</span>
-            <strong>24/7</strong>
-            <small>متاح دائماً</small>
-          </article>
-        </section>
-
-        <section class="showcase-features-section" id="subjects">
-          <div class="showcase-section-title">
+        <div class="scene-flag-stack">
+          <div class="scene-books">
             <span></span>
-            <strong>كل ما تحتاجه في مكان واحد</strong>
+            <span></span>
             <span></span>
           </div>
-
-          <div class="showcase-feature-grid">
-            <article class="showcase-feature-card">
-              <div class="showcase-feature-icon">💬</div>
-              <h2>حل الأسئلة</h2>
-              <p>حلول فورية لجميع أسئلتك واستفساراتك.</p>
-            </article>
-            <article class="showcase-feature-card">
-              <div class="showcase-feature-icon">📘</div>
-              <h2>شرح الدروس</h2>
-              <p>تبسيط وشرح شامل لموضوعاتك الدراسية.</p>
-            </article>
-            <article class="showcase-feature-card">
-              <div class="showcase-feature-icon">📝</div>
-              <h2>تلخيص المحتوى</h2>
-              <p>تلخيص دقيق وسريع لأي درس أو نص.</p>
-            </article>
-            <article class="showcase-feature-card">
-              <div class="showcase-feature-icon">🧪</div>
-              <h2>اختبارات وتدريب</h2>
-              <p>اختبارات تفاعلية لقياس مستواك.</p>
-            </article>
-            <article class="showcase-feature-card">
-              <div class="showcase-feature-icon">🎓</div>
-              <h2>مساعدة في الواجبات</h2>
-              <p>دعم شامل في الواجبات والمشاريع الدراسية.</p>
-            </article>
+          <div class="scene-flag-pole"></div>
+          <div class="scene-flag-banner">
+            <strong>السعودية</strong>
+            <small></small>
           </div>
-        </section>
+        </div>
 
-        <footer class="showcase-footer" id="about-platform">
-          <div class="showcase-footer-newsletter" id="faq">
-            <h2>اشترك في النشرة <span>🔔</span></h2>
-            <p>احصل على آخر التحديثات والنصائح التعليمية.</p>
-            <form class="showcase-newsletter-form">
-              <button type="button">اشتراك</button>
-              <input type="email" placeholder="أدخل بريدك الإلكتروني" aria-label="أدخل بريدك الإلكتروني">
-            </form>
-            <div class="showcase-socials">
-              <strong>تابعنا على</strong>
-              <div class="showcase-social-links">
-                <a href="#" aria-label="يوتيوب">▶</a>
-                <a href="#" aria-label="تويتر">𝕏</a>
-                <a href="#" aria-label="تيك توك">♪</a>
-                <a href="#" aria-label="إنستغرام">◎</a>
+        <div class="scene-laptop">
+          <div class="scene-laptop-screen">
+            <div class="scene-screen-top">
+              <span></span>
+              <span></span>
+              <span></span>
+            </div>
+            <div class="scene-screen-content">
+              <strong>مرحباً، كيف يمكنني مساعدتك اليوم؟</strong>
+              <div class="scene-screen-input">
+                <span>اسأل عن درس أو موضوع تريده</span>
+                <b>➜</b>
               </div>
             </div>
           </div>
+          <div class="scene-laptop-base"></div>
+        </div>
 
-          <div class="showcase-footer-links">
-            <div class="showcase-footer-column">
-              <h3>المنصة</h3>
-              <a href="#home">الرئيسية</a>
-              <a href="#how-it-works">كيف يعمل</a>
-              <a href="#ai-experience">الذكاء</a>
-              <a href="#subjects">المواد الدراسية</a>
-            </div>
-            <div class="showcase-footer-column">
-              <h3>الموارد</h3>
-              <a href="#faq">الأسئلة الشائعة</a>
-              <a href="features.html">المدونة</a>
-              <a href="about.html">الأدلة التعليمية</a>
-              <a href="terms.html">سياسة الاستخدام</a>
-            </div>
-            <div class="showcase-footer-column">
-              <h3>الدعم</h3>
-              <a href="about.html">تواصل معنا</a>
-              <a href="about.html">مركز المساعدة</a>
-              <a href="terms.html">الشروط والأحكام</a>
-              <a href="privacy.html">سياسة الخصوصية</a>
-            </div>
-            <div class="showcase-footer-brand">
-              <div class="showcase-footer-brand-head">
-                <img src="favicon.svg" alt="">
-                <strong>ملم</strong>
-              </div>
-              <p>منصة الذكاء الاصطناعي للمرحلة الدراسية</p>
-              <span>مساعدة طلاب المملكة بأحدث تقنيات الذكاء الاصطناعي</span>
-            </div>
-          </div>
+        <div class="scene-pencil-cup">
+          <span class="pencil pencil-one"></span>
+          <span class="pencil pencil-two"></span>
+          <span class="pencil pencil-three"></span>
+        </div>
 
-          <div class="showcase-footer-bottom">
-            <div class="showcase-footer-copy">© 2024 ملم - جميع الحقوق محفوظة</div>
-            <div class="showcase-footer-badges">
-              <span>أمن</span>
-              <span>موثوق</span>
-              <span>معتمد</span>
-            </div>
-          </div>
-        </footer>
-      </section>
+        <div class="scene-plant">
+          <span class="leaf leaf-one"></span>
+          <span class="leaf leaf-two"></span>
+          <span class="leaf leaf-three"></span>
+        </div>
+      </div>
 
-      <aside class="showcase-side-column">
-        <article class="showcase-device-card showcase-device-card-wide">
-          <div class="showcase-device-frame">
-            <div class="device-screen">
-              <div class="device-topbar">
-                <span class="device-pill dark"></span>
-                <span class="device-pill green"></span>
-                <span class="device-pill light"></span>
-              </div>
-              <div class="device-mini-hero">
-                <div class="device-mini-copy">
-                  <strong>منصة ذكاء اصطناعي</strong>
-                  <span>مصممة لطلاب المملكة</span>
-                </div>
-                <div class="device-mini-illustration">
-                  <div class="mini-laptop"></div>
-                  <div class="mini-books"></div>
-                </div>
-              </div>
-              <div class="device-mini-stats">
-                <div><strong>+100K</strong><small>سؤال</small></div>
-                <div><strong>+25K</strong><small>طالب</small></div>
-                <div><strong>99%</strong><small>دقة</small></div>
-              </div>
-              <div class="device-mini-grid">
-                <span>حل الأسئلة</span>
-                <span>تلخيص</span>
-                <span>شرح الدروس</span>
-              </div>
-            </div>
-          </div>
+      <div class="showcase-hero-copy">
+        <div class="showcase-hero-kicker">منصة الذكاء الاصطناعي التعليمية</div>
+        <h1>
+          منصة ذكاء اصطناعي
+          <span>مصممة لطلاب المرحلة الدراسية</span>
+          في المملكة العربية السعودية
+        </h1>
+        <p>
+          مساعدك الذكي لحل الأسئلة، شرح الدروس، تلخيص المحتوى
+          والمذاكرة بذكاء في جميع المواد الدراسية.
+        </p>
+
+        <div class="showcase-hero-actions">
+          <a class="showcase-primary-btn" href="login.html">ابدأ الآن مجاناً</a>
+          <a class="showcase-secondary-btn" href="#how-it-works">
+            <span>كيف يعمل؟</span>
+            <i>▶</i>
+          </a>
+        </div>
+
+        <div class="showcase-trust-row">
+          <span><i>✓</i> دقة عالية 99%</span>
+          <span><i>✓</i> متاح 24/7</span>
+          <span><i>✓</i> آمن وموثوق</span>
+        </div>
+      </div>
+    </section>
+
+    <section class="shell showcase-stats-shell showcase-stats-strip">
+      <article class="showcase-stat-card">
+        <span class="showcase-stat-icon">💬</span>
+        <strong>+100K</strong>
+        <small>سؤال تم حله</small>
+      </article>
+      <article class="showcase-stat-card">
+        <span class="showcase-stat-icon">📣</span>
+        <strong>+25K</strong>
+        <small>طالب نشط</small>
+      </article>
+      <article class="showcase-stat-card">
+        <span class="showcase-stat-icon">🎯</span>
+        <strong>99%</strong>
+        <small>دقة عالية</small>
+      </article>
+      <article class="showcase-stat-card">
+        <span class="showcase-stat-icon">🕘</span>
+        <strong>24/7</strong>
+        <small>متاح دائماً</small>
+      </article>
+    </section>
+
+    <section class="shell showcase-services-shell showcase-features-section">
+      <div class="showcase-section-title">
+        <span></span>
+        <strong>كل ما تحتاجه في مكان واحد</strong>
+        <span></span>
+      </div>
+      <p class="showcase-section-subtitle">أدوات ذكية تساعدك على الدراسة والفهم والتفوق</p>
+
+      <div class="showcase-services-grid showcase-feature-grid">
+        <article class="showcase-service-card showcase-feature-card">
+          <div class="showcase-service-icon showcase-feature-icon">🎓</div>
+          <h3>مساعدة في الواجبات</h3>
+          <p>دعم فوري في الواجبات والمشاريع الدراسية.</p>
         </article>
-
-        <article class="showcase-cta-card" id="how-it-works">
-          <div class="showcase-cta-visual">
-            <div class="cta-bag"></div>
-            <div class="cta-books"></div>
-            <div class="cta-lamp"></div>
-          </div>
-          <div class="showcase-cta-copy">
-            <strong>ابدأ رحلتك التعليمية الذكية</strong>
-            <p>انضم إلى آلاف الطلاب واعتمد على ملم لفهمك الدراسي بشكل أسرع ونتائج أفضل.</p>
-          </div>
-          <a class="showcase-cta-button" href="login.html">أنشئ حسابك مجاناً</a>
-          <small>لا حاجة لإضافة الضمان</small>
+        <article class="showcase-service-card showcase-feature-card">
+          <div class="showcase-service-icon showcase-feature-icon">✏️</div>
+          <h3>اختبر نفسك</h3>
+          <p>اختبارات تفاعلية لقياس مستواك وتطورك.</p>
         </article>
+        <article class="showcase-service-card showcase-feature-card">
+          <div class="showcase-service-icon showcase-feature-icon">📝</div>
+          <h3>تلخيص المحتوى</h3>
+          <p>تلخيص دقيق لأهم النقاط في أي درس أو نص.</p>
+        </article>
+        <article class="showcase-service-card showcase-feature-card">
+          <div class="showcase-service-icon showcase-feature-icon">📖</div>
+          <h3>شرح الدروس</h3>
+          <p>شرح مبسط ومفصل لموضوعاتك الدراسية.</p>
+        </article>
+        <article class="showcase-service-card showcase-feature-card">
+          <div class="showcase-service-icon showcase-feature-icon">❔</div>
+          <h3>حل الأسئلة</h3>
+          <p>حلول خطوة بخطوة لمسائل جميع المواد.</p>
+        </article>
+      </div>
+    </section>
 
-        <article class="showcase-device-card showcase-device-card-phone">
-          <div class="showcase-phone-frame">
-            <div class="device-screen phone-screen">
-              <div class="device-topbar">
-                <span class="device-pill dark"></span>
-                <span class="device-pill green"></span>
-                <span class="device-pill light"></span>
-              </div>
-              <div class="phone-copy">
-                <strong>منصة ذكاء اصطناعي</strong>
-                <span>مصممة لطلاب المملكة</span>
-              </div>
-              <div class="phone-mini-card"></div>
-              <div class="phone-stat-row">
-                <div><strong>100K</strong><small>سؤال</small></div>
-                <div><strong>25K</strong><small>طالب</small></div>
-                <div><strong>24/7</strong><small>متاح</small></div>
-              </div>
-              <div class="phone-feature-row">
-                <span>حل سؤال</span>
-                <span>شرح درس</span>
-                <span>تلخيص</span>
-              </div>
+    <section class="shell showcase-stages-shell" id="subjects">
+      <div class="showcase-section-head">
+        <h2>جميع المواد والمراحل الدراسية</h2>
+      </div>
+
+      <div class="showcase-stage-pills">
+        <button class="showcase-stage-pill is-active" type="button"><span class="showcase-stage-icon">◫</span>الكل</button>
+        <button class="showcase-stage-pill" type="button"><span class="showcase-stage-icon">📚</span>المرحلة الابتدائية</button>
+        <button class="showcase-stage-pill" type="button"><span class="showcase-stage-icon">📘</span>المرحلة المتوسطة</button>
+        <button class="showcase-stage-pill" type="button"><span class="showcase-stage-icon">📖</span>المرحلة الثانوية</button>
+        <button class="showcase-stage-pill" type="button"><span class="showcase-stage-icon">🎓</span>الجامعي</button>
+      </div>
+    </section>
+
+    <section class="shell showcase-cta-shell" id="how-it-works">
+      <div class="showcase-cta-visual" aria-hidden="true">
+        <div class="cta-bag"></div>
+        <div class="cta-books"></div>
+        <div class="cta-lamp"></div>
+        <div class="cta-cup"></div>
+      </div>
+
+      <div class="showcase-cta-copy">
+        <h2>ابدأ رحلتك التعليمية الذكية الآن</h2>
+        <p>انضم إلى أذكى الطلاب واكتشف تجربة تعلم أفضل مع الذكاء الاصطناعي.</p>
+        <a class="showcase-cta-button" href="login.html">ابدأ الآن مجاناً</a>
+      </div>
+    </section>
+
+    <footer class="shell showcase-footer-shell" id="about-platform">
+      <div class="showcase-footer-grid">
+        <div class="showcase-footer-newsletter" id="faq">
+          <h3>اشترك في نشرتنا</h3>
+          <p>احصل على آخر النصائح وأخبار المنصة التعليمية.</p>
+          <form class="showcase-newsletter-form">
+            <input type="email" placeholder="البريد الإلكتروني" aria-label="البريد الإلكتروني">
+            <button type="button">اشتراك</button>
+          </form>
+          <small>صنع في المملكة العربية السعودية</small>
+        </div>
+
+        <div class="showcase-footer-column">
+          <h3>الدعم</h3>
+          <a href="about.html">مركز المساعدة</a>
+          <a href="about.html">تواصل معنا</a>
+          <a href="terms.html">الأسئلة الشائعة</a>
+          <a href="privacy.html">سياسة الخصوصية</a>
+        </div>
+
+        <div class="showcase-footer-column">
+          <h3>الموارد</h3>
+          <a href="#subjects">المواد الدراسية</a>
+          <a href="features.html">المدونة</a>
+          <a href="about.html">الأدلة التعليمية</a>
+          <a href="terms.html">سياسة الاستخدام</a>
+        </div>
+
+        <div class="showcase-footer-column">
+          <h3>المنصة</h3>
+          <a href="#home">الرئيسية</a>
+          <a href="#how-it-works">كيف يعمل</a>
+          <a href="#ai">الذكاء</a>
+          <a href="#about-platform">عن المنصة</a>
+        </div>
+
+        <div class="showcase-footer-brand">
+          <div class="showcase-footer-brand-head">
+            <img src="favicon.svg" alt="">
+            <div>
+              <strong>ملم</strong>
+              <span>منصة الذكاء الاصطناعي التعليمية</span>
             </div>
           </div>
-        </article>
-      </aside>
-    </div>
+          <p>منصة الذكاء الاصطناعي التعليمية</p>
+          <div class="showcase-footer-socials">
+            <a href="#" aria-label="يوتيوب">▶</a>
+            <a href="#" aria-label="إكس">𝕏</a>
+            <a href="#" aria-label="إنستغرام">◎</a>
+            <a href="#" aria-label="تيك توك">♪</a>
+          </div>
+        </div>
+      </div>
+
+      <div class="showcase-footer-bottom">
+        <div class="showcase-footer-policy-links">
+          <a href="privacy.html">سياسة الخصوصية</a>
+          <a href="terms.html">الشروط والأحكام</a>
+        </div>
+        <div class="showcase-footer-copy">جميع الحقوق محفوظة © 2024 ملم</div>
+      </div>
+    </footer>
 
     <section hidden aria-hidden="true" class="landing-runtime-support">
       <div class="premium-core-ask">
@@ -415,7 +363,7 @@
       </div>
 
       <div data-selection-summary>ابدأ أول محادثة لك الآن.</div>
-      <div data-runtime-summary>الإعدادات التعليمية تتم تلقائيًا داخل المنصة.</div>
+      <div data-runtime-summary>الإعدادات التعليمية تتم تلقائياً داخل المنصة.</div>
       <button type="button" data-start-chat>ابدأ الشات</button>
       <button type="button" data-quick-solve>ابدأ حل سؤال الآن</button>
     </section>
