@@ -1412,7 +1412,12 @@
       state.currentUser = getActiveUser();
       state.authModalOpen = false;
       render();
-      showToast(`مرحبًا ${state.currentUser?.name || "بك"}، تم تسجيل الدخول بنجاح.`, 4000);
+      window.requestAnimationFrame(() => {
+        const composeInput = app.querySelector("[data-compose-input]");
+        if (composeInput && typeof composeInput.focus === "function") {
+          composeInput.focus({ preventScroll: true });
+        }
+      });
     });
   }
 
