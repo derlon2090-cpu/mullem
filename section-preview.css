@@ -70,7 +70,7 @@ body[data-workspace-mode="home"] .guest-root {
   margin: 0;
   padding: 0;
   gap: 0;
-  grid-template-columns: 300px minmax(0, 1fr);
+  grid-template-columns: 250px minmax(0, 1fr);
   overflow: hidden;
 }
 
@@ -123,13 +123,13 @@ body[data-workspace-mode="home"] .guest-root {
 }
 
 .guest-shell.is-home-workspace .guest-sidebar {
-  gap: 16px;
+  gap: 10px;
   overflow: hidden;
   top: 0;
   height: 100vh;
   min-height: 100vh;
   max-height: 100vh;
-  padding: 30px 28px 24px;
+  padding: 24px 16px 18px;
   border-top: 0;
   border-bottom: 0;
   border-left: 0;
@@ -148,10 +148,10 @@ body[data-workspace-mode="home"] .guest-root {
   border-radius: 0;
   box-shadow: none;
   background: rgba(255, 255, 255, 0.78);
-  padding: 24px 64px 28px;
+  padding: 24px 56px 24px;
   gap: 0;
   align-content: stretch;
-  grid-template-rows: 58px 292px 128px minmax(0, 1fr) 202px 36px;
+  grid-template-rows: 58px 292px 112px minmax(0, 1fr) 164px 34px;
 }
 
 .guest-brand {
@@ -168,7 +168,7 @@ body[data-workspace-mode="home"] .guest-root {
 }
 
 .guest-shell.is-home-workspace .guest-brand img {
-  width: 170px;
+  width: 150px;
 }
 
 .guest-new-chat {
@@ -187,11 +187,11 @@ body[data-workspace-mode="home"] .guest-root {
 }
 
 .guest-shell.is-home-workspace .guest-new-chat {
-  min-height: 52px;
+  min-height: 42px;
   border-radius: 8px;
-  padding: 0 22px;
-  font-size: 0.9rem;
-  box-shadow: 0 16px 28px rgba(111, 76, 255, 0.22);
+  padding: 0 16px;
+  font-size: 0.78rem;
+  box-shadow: 0 12px 24px rgba(111, 76, 255, 0.2);
 }
 
 .guest-search-box {
@@ -207,26 +207,26 @@ body[data-workspace-mode="home"] .guest-root {
 }
 
 .guest-shell.is-home-workspace .guest-search-box {
-  min-height: 50px;
+  min-height: 42px;
   border-radius: 10px;
-  padding: 0 18px;
+  padding: 0 12px;
 }
 
 .guest-shell.is-home-workspace .guest-history-item {
-  min-height: 44px;
-  padding: 8px 10px;
+  min-height: 34px;
+  padding: 5px 8px;
   border-radius: 9px;
-  gap: 10px;
+  gap: 7px;
 }
 
 .guest-shell.is-home-workspace .guest-history-copy strong {
-  font-size: 0.8rem;
-  line-height: 1.35;
+  font-size: 0.72rem;
+  line-height: 1.25;
 }
 
 .guest-shell.is-home-workspace .guest-history-copy small {
-  font-size: 0.7rem;
-  line-height: 1.25;
+  font-size: 0.64rem;
+  line-height: 1.15;
 }
 
 .guest-shell.theme-dark .guest-search-box {
@@ -292,7 +292,7 @@ body[data-workspace-mode="home"] .guest-root {
 
 .guest-shell.is-home-workspace .guest-history-wrap {
   margin-top: 2px;
-  gap: 10px;
+  gap: 8px;
   overflow-y: auto;
   scrollbar-width: none;
 }
@@ -308,6 +308,10 @@ body[data-workspace-mode="home"] .guest-root {
   gap: 8px;
 }
 
+.guest-shell.is-home-workspace .guest-history-group {
+  gap: 4px;
+}
+
 .guest-history-group h3 {
   margin: 0;
   padding: 0 6px;
@@ -316,9 +320,19 @@ body[data-workspace-mode="home"] .guest-root {
   font-weight: 800;
 }
 
+.guest-shell.is-home-workspace .guest-history-group h3 {
+  padding: 0 4px;
+  font-size: 0.74rem;
+  line-height: 1.15;
+}
+
 .guest-history-list {
   display: grid;
   gap: 4px;
+}
+
+.guest-shell.is-home-workspace .guest-history-list {
+  gap: 2px;
 }
 
 .guest-history-item {
@@ -356,6 +370,18 @@ body[data-workspace-mode="home"] .guest-root {
   display: grid;
   place-items: center;
   color: #8d93b3;
+}
+
+.guest-shell.is-home-workspace .guest-history-dot,
+.guest-shell.is-home-workspace .guest-history-badge {
+  width: 16px;
+  height: 16px;
+}
+
+.guest-shell.is-home-workspace .guest-history-dot svg,
+.guest-shell.is-home-workspace .guest-history-badge svg {
+  width: 15px;
+  height: 15px;
 }
 
 .guest-history-copy {
@@ -403,10 +429,10 @@ body[data-workspace-mode="home"] .guest-root {
 }
 
 .guest-shell.is-home-workspace .guest-upgrade-card {
-  min-height: 68px;
-  padding: 10px 12px;
-  grid-template-columns: 42px 1fr;
-  gap: 10px;
+  min-height: 58px;
+  padding: 8px 10px;
+  grid-template-columns: 34px 1fr;
+  gap: 8px;
 }
 
 .guest-shell.is-home-workspace .guest-user-card {
@@ -418,22 +444,22 @@ body[data-workspace-mode="home"] .guest-root {
 
 .guest-shell.is-home-workspace .upgrade-mark,
 .guest-shell.is-home-workspace .guest-user-avatar {
-  width: 40px;
-  height: 40px;
-  border-radius: 12px;
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
 }
 
 .guest-shell.is-home-workspace .guest-upgrade-card strong,
 .guest-shell.is-home-workspace .guest-user-copy strong {
   margin-bottom: 2px;
-  font-size: 0.86rem;
+  font-size: 0.76rem;
   line-height: 1.35;
 }
 
 .guest-shell.is-home-workspace .guest-upgrade-card span,
 .guest-shell.is-home-workspace .guest-user-copy small {
-  font-size: 0.72rem;
-  line-height: 1.45;
+  font-size: 0.62rem;
+  line-height: 1.35;
 }
 
 .guest-shell.is-home-workspace .guest-user-action {
@@ -654,10 +680,65 @@ body[data-workspace-mode="home"] .guest-root {
 }
 
 .guest-shell.is-home-workspace .guest-user-card.is-orlixor-guest {
-  min-height: 128px;
-  padding: 14px;
-  border-radius: 16px;
-  display: block;
+  min-height: 64px;
+  padding: 10px;
+  border-radius: 12px;
+  display: grid;
+  grid-template-columns: 34px minmax(0, 1fr) auto;
+  gap: 8px;
+  direction: rtl;
+  align-items: center;
+  background: rgba(255, 255, 255, 0.94);
+}
+
+.guest-shell.is-home-workspace .guest-user-card.is-orlixor-guest::after {
+  display: none;
+}
+
+.guest-shell.is-home-workspace .guest-user-card.is-orlixor-guest .guest-user-head {
+  position: static;
+  grid-column: 2;
+  grid-row: 1;
+  justify-items: start;
+  gap: 0;
+  min-width: 0;
+}
+
+.guest-shell.is-home-workspace .guest-user-card.is-orlixor-guest .guest-user-head strong {
+  font-size: 0.8rem;
+}
+
+.guest-shell.is-home-workspace .guest-user-card.is-orlixor-guest .guest-user-head small,
+.guest-shell.is-home-workspace .guest-user-card.is-orlixor-guest .guest-user-lines,
+.guest-shell.is-home-workspace .guest-user-card.is-orlixor-guest .guest-user-lines span {
+  display: none;
+}
+
+.guest-shell.is-home-workspace .guest-user-card.is-orlixor-guest .guest-user-avatar {
+  position: static;
+  grid-column: 1;
+  grid-row: 1;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+}
+
+.guest-shell.is-home-workspace .guest-user-card.is-orlixor-guest .guest-user-avatar svg {
+  width: 20px;
+  height: 20px;
+}
+
+.guest-shell.is-home-workspace .guest-user-card.is-orlixor-guest .guest-user-action {
+  position: static;
+  grid-column: 2 / 4;
+  grid-row: 2;
+  justify-self: start;
+  min-height: 28px;
+  width: auto;
+  max-width: none;
+  padding: 0 12px;
+  border-radius: 999px;
+  font-size: 0.68rem;
 }
 
 .guest-main {
@@ -1007,8 +1088,8 @@ body[data-workspace-mode="home"] .guest-root {
 }
 
 .home-hero-mark {
-  width: 62px;
-  height: 62px;
+  width: 54px;
+  height: 54px;
   display: grid;
   place-items: center;
   margin-bottom: 24px;
@@ -1023,7 +1104,7 @@ body[data-workspace-mode="home"] .guest-root {
 .home-hero-panel h1 {
   margin: 0;
   color: #171936;
-  font-size: clamp(2rem, 2.2vw, 2.55rem);
+  font-size: clamp(1.75rem, 2vw, 2.25rem);
   line-height: 1.18;
   font-weight: 900;
 }
@@ -1031,43 +1112,43 @@ body[data-workspace-mode="home"] .guest-root {
 .home-hero-panel p {
   margin: 0;
   color: #828aa8;
-  font-size: 1.08rem;
+  font-size: 0.98rem;
   font-weight: 700;
 }
 
 .guest-shell.is-home-workspace .home-quick-grid {
   grid-row: 3;
-  max-width: 1450px;
+  max-width: 1210px;
   width: 100%;
   margin: 0 auto;
   grid-template-columns: repeat(6, minmax(0, 1fr));
-  gap: 20px;
+  gap: 16px;
   align-self: start;
   direction: rtl;
 }
 
 .guest-shell.is-home-workspace .home-quick-grid .guest-quick-card {
-  min-height: 124px;
+  min-height: 104px;
   border-radius: 15px;
-  padding: 24px 24px;
-  grid-template-columns: 44px minmax(0, 1fr);
-  gap: 16px;
+  padding: 18px 18px;
+  grid-template-columns: 38px minmax(0, 1fr);
+  gap: 12px;
   box-shadow: 0 18px 38px rgba(31, 44, 93, 0.035);
 }
 
 .guest-shell.is-home-workspace .home-quick-grid .guest-quick-icon {
-  width: 44px;
-  height: 44px;
+  width: 38px;
+  height: 38px;
   border-radius: 13px;
 }
 
 .guest-shell.is-home-workspace .home-quick-grid .guest-quick-copy strong {
-  font-size: 0.95rem;
+  font-size: 0.84rem;
   line-height: 1.35;
 }
 
 .guest-shell.is-home-workspace .home-quick-grid .guest-quick-copy span {
-  font-size: 0.78rem;
+  font-size: 0.68rem;
   line-height: 1.55;
 }
 
@@ -1075,9 +1156,9 @@ body[data-workspace-mode="home"] .guest-root {
   grid-row: 5;
   position: relative;
   display: block;
-  max-width: 1170px;
-  width: min(100%, 1170px);
-  min-height: 194px;
+  max-width: 1080px;
+  width: min(100%, 1080px);
+  min-height: 162px;
   margin: 0 auto;
   padding: 0;
   border-radius: 18px;
@@ -1086,7 +1167,7 @@ body[data-workspace-mode="home"] .guest-root {
 
 .guest-shell.is-home-workspace .home-compose .compose-input {
   position: absolute;
-  top: 38px;
+  top: 34px;
   right: 34px;
   left: 104px;
   width: auto;
@@ -1098,15 +1179,15 @@ body[data-workspace-mode="home"] .guest-root {
 .home-compose-actions {
   position: absolute;
   left: 28px;
-  bottom: 28px;
+  bottom: 24px;
   display: flex;
   gap: 16px;
   direction: rtl;
 }
 
 .home-compose-tool {
-  min-height: 48px;
-  padding: 0 20px;
+  min-height: 42px;
+  padding: 0 16px;
   border: 1px solid rgba(111, 76, 255, 0.1);
   border-radius: 999px;
   background: rgba(255, 255, 255, 0.96);
@@ -1114,16 +1195,16 @@ body[data-workspace-mode="home"] .guest-root {
   display: inline-flex;
   align-items: center;
   gap: 9px;
-  font-size: 0.88rem;
+  font-size: 0.78rem;
   font-weight: 800;
 }
 
 .guest-shell.is-home-workspace .home-compose .compose-send {
   position: absolute;
   right: 30px;
-  bottom: 28px;
-  width: 52px;
-  height: 52px;
+  bottom: 24px;
+  width: 48px;
+  height: 48px;
   border-radius: 50%;
 }
 
@@ -1139,7 +1220,7 @@ body[data-workspace-mode="home"] .guest-root {
 
 .guest-shell.is-home-workspace .guest-attachment-pills {
   grid-row: 4;
-  width: min(100%, 1170px);
+  width: min(100%, 1080px);
   margin: 0 auto;
   align-self: end;
 }
@@ -1948,7 +2029,7 @@ body[data-workspace-mode="home"] .guest-root {
 
 @media (max-width: 1320px) {
   .guest-shell.is-home-workspace {
-    grid-template-columns: 300px minmax(900px, 1fr);
+    grid-template-columns: 250px minmax(900px, 1fr);
   }
 
   .guest-shell.is-home-workspace .guest-sidepanel {
@@ -1963,7 +2044,7 @@ body[data-workspace-mode="home"] .guest-root {
 
   .guest-shell.is-home-workspace {
     width: 100%;
-    grid-template-columns: 300px minmax(900px, 1fr);
+    grid-template-columns: 250px minmax(900px, 1fr);
     overflow-x: auto;
     overflow-y: hidden;
   }
@@ -1999,7 +2080,7 @@ body[data-workspace-mode="home"] .guest-root {
   .guest-shell.is-home-workspace {
     width: 100%;
     padding: 0;
-    grid-template-columns: 300px minmax(900px, 1fr);
+    grid-template-columns: 250px minmax(900px, 1fr);
   }
 
   .guest-shell.is-home-workspace .guest-sidebar,
