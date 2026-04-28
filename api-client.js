@@ -541,7 +541,7 @@
       headers.Authorization = `Bearer ${getToken()}`;
     }
 
-    const requestInit = {
+    const requestInitBase = {
       method: options.method || "GET",
       headers,
       body: bodyIsFormData
@@ -556,6 +556,14 @@
     const candidates = buildApiCandidates(path);
 
     for (const url of candidates) {
+      const controller = typeof AbortController !== "undefined" ? new AbortController() : null;
+      const timeoutMs = Number(options.timeoutMs) || 25000;
+      const timeoutId = controller
+        ? window.setTimeout(() => controller.abort(), timeoutMs)
+        : 0;
+      const requestInit = controller
+        ? { ...requestInitBase, signal: controller.signal }
+        : requestInitBase;
       try {
         const response = await fetch(url, requestInit);
         const contentType = response.headers.get("content-type") || "";
@@ -635,6 +643,8 @@
           serverUnavailable: true,
           networkError: true
         };
+      } finally {
+        if (timeoutId) window.clearTimeout(timeoutId);
       }
     }
 

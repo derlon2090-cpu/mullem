@@ -29,6 +29,9 @@ const backButton = document.querySelector("[data-auth-back]");
 const scrollTopButton = document.querySelector("[data-scroll-top]");
 const registerSubmitButton = document.querySelector("[data-register-submit]");
 const passwordToggleButtons = document.querySelectorAll("[data-password-toggle]");
+let authStateTimer = 0;
+let loginSubmitting = false;
+let registerSubmitting = false;
 
 const storageKeys = {
   users: "mlm_users",
@@ -94,17 +97,28 @@ function persistClientAuthState() {
 function notifyEmbeddedAuthSuccess(payload = {}) {
   if (!isEmbeddedAuth || window.parent === window) return false;
   try {
+    const targetOrigin = window.location.origin && window.location.origin !== "null"
+      ? window.location.origin
+      : "*";
     window.parent.postMessage(
       {
         type: "mullem-auth-success",
         payload
       },
-      window.location.origin
+      targetOrigin
     );
     return true;
   } catch (_) {
     return false;
   }
+}
+
+function finishAuthSuccess(payload = {}, redirectUrl = "student.html") {
+  if (notifyEmbeddedAuthSuccess(payload)) return true;
+  window.setTimeout(() => {
+    window.location.href = redirectUrl;
+  }, 650);
+  return false;
 }
 
 function inferStageFromGrade(grade) {
@@ -156,9 +170,8 @@ function completeStudentApiLogin(user, message, passwordOverride = "") {
   persistClientAuthState();
   ensureUserWorkspace(normalizedUser.id);
   clearPendingAuth();
-  setState(message || `أهلًا ${normalizedUser.name}، تم تسجيل الدخول بنجاح عبر الخادم.`);
-  if (notifyEmbeddedAuthSuccess({ role: "student", user: normalizedUser })) return;
-  redirectToStudent();
+  setSuccessState(message || `أهلًا ${normalizedUser.name}، تم تسجيل الدخول بنجاح عبر الخادم.`);
+  finishAuthSuccess({ role: "student", user: normalizedUser }, "student.html");
 }
 
 function completeAdminApiLogin(message) {
@@ -166,9 +179,8 @@ function completeAdminApiLogin(message) {
   localStorage.removeItem(storageKeys.currentUser);
   persistClientAuthState();
   clearPendingAuth();
-  setState(message || "تم تسجيل دخول الأدمن بنجاح عبر الخادم.");
-  if (notifyEmbeddedAuthSuccess({ role: "admin" })) return;
-  window.location.href = "admin.html";
+  setSuccessState(message || "تم تسجيل دخول الأدمن بنجاح عبر الخادم.");
+  finishAuthSuccess({ role: "admin" }, "admin.html");
 }
 
 function shouldFallbackToLocalAuth(result) {
@@ -180,9 +192,8 @@ function handleLocalLoginFallback(email, password) {
     localStorage.setItem(storageKeys.adminSession, "1");
     localStorage.removeItem(storageKeys.currentUser);
     persistClientAuthState();
-    setState("تم تسجيل دخول الأدمن بنجاح. سيتم تحويلك الآن.");
-    if (notifyEmbeddedAuthSuccess({ role: "admin" })) return;
-    window.location.href = "admin.html";
+    setSuccessState("تم تسجيل دخول الأدمن بنجاح. سيتم تحويلك الآن.");
+    finishAuthSuccess({ role: "admin" }, "admin.html");
     return;
   }
 
@@ -291,11 +302,30 @@ function saveUsers(users) {
   saveJson(storageKeys.users, users);
 }
 
-function setState(text) {
+function setState(text, options = {}) {
   if (!authState) return;
+  window.clearTimeout(authStateTimer);
   const message = String(text || "").trim();
   authState.hidden = !message;
   authState.textContent = message;
+  if (message && options.autoHide) {
+    authStateTimer = window.setTimeout(() => {
+      authState.hidden = true;
+      authState.textContent = "";
+    }, Number(options.duration) || 4000);
+  }
+}
+
+function setSuccessState(text) {
+  setState(text, { autoHide: true, duration: 4000 });
+}
+
+function setFormBusy(form, isBusy) {
+  if (!form) return;
+  form.querySelectorAll("button, input, select").forEach((control) => {
+    if (control.matches("[data-password-toggle]")) return;
+    control.disabled = Boolean(isBusy);
+  });
 }
 
 function setFieldError(field, hasError) {
@@ -511,11 +541,26 @@ loginForm?.addEventListener("submit", async (event) => {
     return;
   }
 
-  const apiResult = await apiClient.login({
-    email,
-    password,
-    device_name: "mullem-web"
-  });
+  if (loginSubmitting) return;
+  loginSubmitting = true;
+  setFormBusy(loginForm, true);
+  let apiResult;
+  try {
+    apiResult = await apiClient.login({
+      email,
+      password,
+      device_name: "mullem-web"
+    });
+  } catch (_) {
+    apiResult = {
+      ok: false,
+      serverUnavailable: true,
+      message: "تعذر الاتصال بالخادم الآن."
+    };
+  } finally {
+    loginSubmitting = false;
+    setFormBusy(loginForm, false);
+  }
 
   if (shouldFallbackToLocalAuth(apiResult)) {
     handleLocalLoginFallback(email, password);
@@ -590,15 +635,30 @@ registerForm?.addEventListener("submit", async (event) => {
     return;
   }
 
-  const apiResult = await apiClient.register({
-    name,
-    email,
-    password,
-    password_confirmation: password,
-    grade,
-    stage: inferStageFromGrade(grade),
-    device_name: "mullem-web"
-  });
+  if (registerSubmitting) return;
+  registerSubmitting = true;
+  setFormBusy(registerForm, true);
+  let apiResult;
+  try {
+    apiResult = await apiClient.register({
+      name,
+      email,
+      password,
+      password_confirmation: password,
+      grade,
+      stage: inferStageFromGrade(grade),
+      device_name: "mullem-web"
+    });
+  } catch (_) {
+    apiResult = {
+      ok: false,
+      serverUnavailable: true,
+      message: "تعذر الاتصال بالخادم الآن."
+    };
+  } finally {
+    registerSubmitting = false;
+    setFormBusy(registerForm, false);
+  }
 
   if (shouldFallbackToLocalAuth(apiResult)) {
     handleLocalRegisterFallback(name, email, password, grade);
@@ -759,8 +819,8 @@ verifyForm?.addEventListener("submit", (event) => {
     persistClientAuthState();
     ensureUserWorkspace(newUser.id);
     clearPendingAuth();
-    setState(`تم إنشاء الحساب بنجاح يا ${newUser.name}.`);
-    redirectToStudent();
+    setSuccessState(`تم إنشاء الحساب بنجاح يا ${newUser.name}.`);
+    finishAuthSuccess({ role: "student", user: newUser }, "student.html");
     return;
   }
 
@@ -784,8 +844,8 @@ verifyForm?.addEventListener("submit", (event) => {
   persistClientAuthState();
   ensureUserWorkspace(user.id);
   clearPendingAuth();
-  setState(`أهلًا ${user.name}، تم تسجيل الدخول بنجاح.`);
-  redirectToStudent();
+  setSuccessState(`أهلًا ${user.name}، تم تسجيل الدخول بنجاح.`);
+  finishAuthSuccess({ role: "student", user }, "student.html");
 });
 
 googleButton?.addEventListener("click", () => {

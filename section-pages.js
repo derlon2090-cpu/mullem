@@ -936,14 +936,14 @@
     `;
   }
 
-  function showToast(message) {
+  function showToast(message, duration = 4000) {
     const stack = app.querySelector(".guest-toast-stack");
     if (!stack) return;
     const node = document.createElement("div");
     node.className = "guest-toast";
     node.textContent = message;
     stack.appendChild(node);
-    window.setTimeout(() => node.remove(), 2400);
+    window.setTimeout(() => node.remove(), duration);
   }
 
   function openAuthModal(reason) {
@@ -1290,7 +1290,7 @@
       state.currentUser = getActiveUser();
       state.authModalOpen = false;
       render();
-      showToast(`مرحبًا ${state.currentUser?.name || "بك"}، تم تسجيل الدخول بنجاح.`);
+      showToast(`مرحبًا ${state.currentUser?.name || "بك"}، تم تسجيل الدخول بنجاح.`, 4000);
     });
   }
 
