@@ -11,6 +11,7 @@ body.orlixor-guest-page {
     radial-gradient(circle at top left, rgba(123, 92, 255, 0.08), transparent 18%),
     linear-gradient(180deg, #fefeff 0%, #f6f3ff 100%);
   color: #17173a;
+  overflow-x: hidden;
 }
 
 *,
@@ -48,6 +49,14 @@ a {
   gap: 18px;
   align-items: start;
   direction: ltr;
+}
+
+.guest-shell.is-home-workspace {
+  width: calc(100% - 8px);
+  margin: 0;
+  padding: 4px 0 6px;
+  gap: 14px;
+  grid-template-columns: 312px minmax(0, 1fr) 332px;
 }
 
 .guest-shell.theme-dark {
@@ -101,6 +110,16 @@ a {
 .guest-shell.is-home-workspace .guest-sidebar {
   gap: 14px;
   overflow: hidden;
+  top: 4px;
+  min-height: calc(100vh - 10px);
+  border-top-left-radius: 0;
+  border-bottom-left-radius: 0;
+  padding: 22px 18px 14px;
+}
+
+.guest-shell.is-home-workspace .guest-main {
+  min-height: calc(100vh - 10px);
+  border-radius: 30px;
 }
 
 .guest-brand {
@@ -114,6 +133,10 @@ a {
   max-width: 100%;
   height: auto;
   display: block;
+}
+
+.guest-shell.is-home-workspace .guest-brand img {
+  width: 180px;
 }
 
 .guest-new-chat {
@@ -131,6 +154,11 @@ a {
   font-weight: 800;
 }
 
+.guest-shell.is-home-workspace .guest-new-chat {
+  min-height: 56px;
+  border-radius: 20px;
+}
+
 .guest-search-box {
   min-height: 44px;
   border-radius: 16px;
@@ -141,6 +169,10 @@ a {
   align-items: center;
   gap: 10px;
   color: #8890ae;
+}
+
+.guest-shell.is-home-workspace .guest-search-box {
+  min-height: 48px;
 }
 
 .guest-shell.theme-dark .guest-search-box {
@@ -206,6 +238,7 @@ a {
 
 .guest-shell.is-home-workspace .guest-history-wrap {
   margin-top: 4px;
+  gap: 14px;
 }
 
 .guest-history-group {
@@ -300,6 +333,11 @@ a {
   grid-template-columns: 52px 1fr;
   gap: 12px;
   align-items: center;
+}
+
+.guest-shell.is-home-workspace .guest-upgrade-card,
+.guest-shell.is-home-workspace .guest-user-card {
+  border-radius: 20px;
 }
 
 .upgrade-mark {
@@ -451,6 +489,10 @@ a {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 16px;
+}
+
+.guest-shell.is-home-workspace .guest-quick-grid {
+  gap: 18px;
 }
 
 .guest-quick-card {
@@ -723,8 +765,10 @@ a {
 
 .guest-shell.is-home-workspace .guest-sidepanel {
   gap: 0;
-  padding: 16px 18px 18px;
-  overflow: hidden;
+  padding: 14px 22px 18px;
+  overflow: visible;
+  top: 4px;
+  min-height: calc(100vh - 10px);
 }
 
 .guest-sidepanel-top {
@@ -793,7 +837,7 @@ a {
   border-radius: 0;
   background: transparent;
   box-shadow: none;
-  padding: 22px 6px;
+  padding: 22px 0;
   border-top: 1px solid rgba(111, 76, 255, 0.09);
 }
 
