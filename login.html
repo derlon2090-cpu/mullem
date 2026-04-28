@@ -136,15 +136,10 @@
       align-items: center;
       justify-content: space-between;
       gap: 14px;
-      width: 100%;
       padding: 14px 18px;
-      border: 0;
       border-radius: 18px;
-      background: transparent;
       color: var(--text);
-      text-align: right;
       transition: background-color 160ms ease, color 160ms ease, transform 160ms ease;
-      cursor: pointer;
     }
 
     .sidebar-link:hover {
@@ -230,13 +225,11 @@
       align-items: center;
       width: fit-content;
       padding: 7px 12px;
-      border: 0;
       border-radius: 999px;
       color: #fff;
       background: linear-gradient(135deg, #7a5bff, #5d37ff);
       font-size: 12px;
       font-weight: 700;
-      cursor: pointer;
     }
 
     .login-main {
@@ -346,12 +339,10 @@
     .login-main-content {
       display: grid;
       align-content: start;
-      justify-items: stretch;
+      justify-items: center;
       min-height: calc(100vh - 128px);
       padding: 18px 20px 30px;
-      gap: 28px;
-      width: min(100%, 1240px);
-      margin-inline: auto;
+      text-align: center;
     }
 
     .hero-mark {
@@ -366,9 +357,8 @@
     }
 
     .hero-copy {
-      max-width: 920px;
-      margin-bottom: 0;
-      text-align: right;
+      max-width: 620px;
+      margin-bottom: 28px;
     }
 
     .hero-copy h1 {
@@ -391,7 +381,7 @@
     }
 
     .auth-card {
-      width: 100%;
+      width: min(100%, 470px);
       padding: 26px 28px 24px;
       border: 1px solid rgba(111, 76, 255, 0.1);
       border-radius: 34px;
@@ -399,8 +389,6 @@
       box-shadow: 0 30px 80px rgba(111, 76, 255, 0.15);
       backdrop-filter: blur(18px);
       text-align: right;
-      position: sticky;
-      top: 18px;
     }
 
     .auth-card-brand {
@@ -743,361 +731,6 @@
       text-align: right;
     }
 
-    .guest-shell {
-      display: grid;
-      grid-template-columns: minmax(0, 1.2fr) 430px;
-      gap: 28px;
-      align-items: start;
-      width: 100%;
-    }
-
-    .guest-preview-shell {
-      padding: 24px;
-      border: 1px solid rgba(111, 76, 255, 0.1);
-      border-radius: 34px;
-      background: rgba(255, 255, 255, 0.88);
-      box-shadow: 0 26px 70px rgba(111, 76, 255, 0.12);
-      backdrop-filter: blur(16px);
-    }
-
-    .guest-preview-header {
-      display: flex;
-      align-items: flex-start;
-      justify-content: space-between;
-      gap: 18px;
-      margin-bottom: 22px;
-    }
-
-    .guest-preview-chip {
-      display: inline-flex;
-      align-items: center;
-      gap: 8px;
-      margin-bottom: 10px;
-      padding: 8px 14px;
-      border-radius: 999px;
-      color: var(--primary);
-      background: rgba(111, 76, 255, 0.09);
-      font-size: 12px;
-      font-weight: 800;
-    }
-
-    .guest-preview-copy h2 {
-      margin: 0 0 8px;
-      font-size: clamp(26px, 2vw, 34px);
-      line-height: 1.25;
-      font-weight: 900;
-    }
-
-    .guest-preview-copy p {
-      margin: 0;
-      color: var(--muted);
-      line-height: 1.8;
-      font-size: 14px;
-    }
-
-    .guest-preview-cta {
-      flex: 0 0 auto;
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      gap: 8px;
-      min-width: 172px;
-      height: 52px;
-      padding: 0 18px;
-      border: 0;
-      border-radius: 18px;
-      color: #fff;
-      background: linear-gradient(135deg, #7a5bff, #5d37ff);
-      box-shadow: 0 18px 34px rgba(111, 76, 255, 0.24);
-      cursor: pointer;
-      font-weight: 800;
-    }
-
-    .guest-preview-panel {
-      display: grid;
-      gap: 18px;
-    }
-
-    .guest-preview-grid {
-      display: grid;
-      grid-template-columns: repeat(2, minmax(0, 1fr));
-      gap: 16px;
-    }
-
-    .preview-card,
-    .preview-row-card,
-    .preview-note-card,
-    .preview-setting-card {
-      padding: 18px;
-      border: 1px solid rgba(111, 76, 255, 0.09);
-      border-radius: 24px;
-      background: linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(247, 244, 255, 0.92));
-      box-shadow: 0 12px 28px rgba(111, 76, 255, 0.08);
-    }
-
-    .preview-card strong,
-    .preview-row-card strong,
-    .preview-note-card strong,
-    .preview-setting-card strong {
-      display: block;
-      margin-bottom: 6px;
-      font-size: 17px;
-      font-weight: 800;
-    }
-
-    .preview-card p,
-    .preview-row-card p,
-    .preview-note-card p,
-    .preview-setting-card p {
-      margin: 0;
-      color: var(--muted);
-      line-height: 1.7;
-      font-size: 13px;
-    }
-
-    .preview-icon {
-      width: 48px;
-      height: 48px;
-      display: grid;
-      place-items: center;
-      margin-bottom: 14px;
-      border-radius: 16px;
-      color: var(--primary);
-      background: rgba(111, 76, 255, 0.08);
-      font-size: 20px;
-      font-weight: 900;
-    }
-
-    .guest-kpi-strip {
-      display: grid;
-      grid-template-columns: repeat(3, minmax(0, 1fr));
-      gap: 14px;
-    }
-
-    .guest-kpi {
-      padding: 18px 16px;
-      border-radius: 22px;
-      background: linear-gradient(180deg, rgba(111, 76, 255, 0.09), rgba(111, 76, 255, 0.03));
-      border: 1px solid rgba(111, 76, 255, 0.08);
-    }
-
-    .guest-kpi strong {
-      display: block;
-      margin-bottom: 4px;
-      color: var(--primary);
-      font-size: 28px;
-      line-height: 1;
-      font-weight: 900;
-    }
-
-    .guest-kpi span {
-      color: var(--muted);
-      font-size: 13px;
-      font-weight: 700;
-    }
-
-    .guest-conversation-list,
-    .guest-pills {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 10px;
-    }
-
-    .guest-conversation-pill,
-    .guest-pill {
-      display: inline-flex;
-      align-items: center;
-      gap: 8px;
-      padding: 10px 14px;
-      border: 1px solid rgba(111, 76, 255, 0.12);
-      border-radius: 999px;
-      background: rgba(255, 255, 255, 0.94);
-      color: var(--text);
-      font-size: 13px;
-      font-weight: 800;
-    }
-
-    .guest-conversation-pill.is-active,
-    .guest-pill.is-active {
-      color: var(--primary);
-      background: rgba(111, 76, 255, 0.09);
-      border-color: rgba(111, 76, 255, 0.2);
-    }
-
-    .guest-chat-shell {
-      display: grid;
-      gap: 16px;
-    }
-
-    .guest-chat-thread {
-      display: grid;
-      gap: 12px;
-      padding: 20px;
-      min-height: 280px;
-      border: 1px solid rgba(111, 76, 255, 0.09);
-      border-radius: 28px;
-      background: linear-gradient(180deg, rgba(251, 250, 255, 0.98), rgba(246, 242, 255, 0.92));
-    }
-
-    .message-bubble {
-      max-width: min(80%, 520px);
-      padding: 14px 16px;
-      border-radius: 20px;
-      line-height: 1.8;
-      font-size: 14px;
-      box-shadow: 0 10px 22px rgba(111, 76, 255, 0.08);
-    }
-
-    .message-bubble.assistant {
-      justify-self: start;
-      color: #32285c;
-      background: rgba(255, 255, 255, 0.96);
-      border: 1px solid rgba(111, 76, 255, 0.08);
-    }
-
-    .message-bubble.user {
-      justify-self: end;
-      color: #fff;
-      background: linear-gradient(135deg, #7a5bff, #5d37ff);
-    }
-
-    .guest-compose {
-      display: grid;
-      grid-template-columns: auto auto minmax(0, 1fr) auto;
-      gap: 10px;
-      align-items: center;
-      padding: 12px;
-      border: 1px solid rgba(111, 76, 255, 0.1);
-      border-radius: 24px;
-      background: rgba(255, 255, 255, 0.96);
-      box-shadow: 0 14px 28px rgba(111, 76, 255, 0.08);
-    }
-
-    .guest-compose-input {
-      width: 100%;
-      height: 50px;
-      padding: 0 16px;
-      border: 1px solid rgba(111, 76, 255, 0.1);
-      border-radius: 16px;
-      background: rgba(247, 244, 255, 0.74);
-      outline: 0;
-    }
-
-    .guest-compose-icon,
-    .guest-compose-send {
-      height: 50px;
-      padding: 0 16px;
-      border: 0;
-      border-radius: 16px;
-      cursor: pointer;
-      font-weight: 800;
-    }
-
-    .guest-compose-icon {
-      color: var(--primary);
-      background: rgba(111, 76, 255, 0.09);
-    }
-
-    .guest-compose-send {
-      color: #fff;
-      background: linear-gradient(135deg, #7a5bff, #5d37ff);
-      min-width: 108px;
-    }
-
-    .guest-lock-note {
-      margin: 0;
-      color: var(--muted);
-      font-size: 13px;
-      line-height: 1.8;
-    }
-
-    .guest-stack {
-      display: grid;
-      gap: 16px;
-    }
-
-    .preview-row-card {
-      display: flex;
-      align-items: flex-start;
-      justify-content: space-between;
-      gap: 16px;
-    }
-
-    .preview-row-card .preview-icon {
-      margin-bottom: 0;
-      flex: 0 0 48px;
-    }
-
-    .preview-tag {
-      display: inline-flex;
-      align-items: center;
-      padding: 7px 12px;
-      border-radius: 999px;
-      color: var(--primary);
-      background: rgba(111, 76, 255, 0.08);
-      font-size: 12px;
-      font-weight: 800;
-    }
-
-    .preview-setting-card {
-      display: grid;
-      gap: 14px;
-    }
-
-    .preview-setting-row {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 12px;
-      padding-top: 10px;
-      border-top: 1px solid rgba(111, 76, 255, 0.08);
-    }
-
-    .preview-toggle {
-      width: 52px;
-      height: 30px;
-      border-radius: 999px;
-      background: rgba(111, 76, 255, 0.14);
-      position: relative;
-      flex: 0 0 52px;
-    }
-
-    .preview-toggle::after {
-      content: "";
-      position: absolute;
-      top: 4px;
-      inset-inline-start: 26px;
-      width: 22px;
-      height: 22px;
-      border-radius: 50%;
-      background: #fff;
-      box-shadow: 0 4px 10px rgba(0, 0, 0, 0.12);
-    }
-
-    .sidebar-guest-callout {
-      position: relative;
-      z-index: 1;
-      display: grid;
-      gap: 10px;
-      padding: 18px;
-      border-radius: 24px;
-      background: linear-gradient(180deg, rgba(111, 76, 255, 0.09), rgba(111, 76, 255, 0.03));
-      border: 1px solid rgba(111, 76, 255, 0.1);
-      box-shadow: 0 14px 28px rgba(109, 78, 255, 0.08);
-    }
-
-    .sidebar-guest-callout strong {
-      font-size: 17px;
-      font-weight: 900;
-    }
-
-    .sidebar-guest-callout p {
-      margin: 0;
-      color: var(--muted);
-      line-height: 1.8;
-      font-size: 13px;
-    }
-
     .is-error {
       border-color: rgba(212, 60, 95, 0.42) !important;
       box-shadow: 0 0 0 4px rgba(212, 60, 95, 0.08) !important;
@@ -1111,10 +744,6 @@
 
       .login-main {
         padding-inline: 18px;
-      }
-
-      .guest-shell {
-        grid-template-columns: minmax(0, 1fr) 390px;
       }
 
       .hero-mark {
@@ -1143,15 +772,6 @@
         min-height: auto;
       }
 
-      .guest-shell {
-        grid-template-columns: 1fr;
-      }
-
-      .auth-card {
-        position: static;
-        order: -1;
-      }
-
       .hero-mark {
         top: 108px;
         inset-inline: 50% auto;
@@ -1174,8 +794,7 @@
       }
 
       .hero-copy {
-        margin-bottom: 0;
-        text-align: center;
+        margin-bottom: 22px;
       }
 
       .hero-copy h1 {
@@ -1189,36 +808,6 @@
       .auth-card {
         padding: 22px 18px 18px;
         border-radius: 28px;
-      }
-
-      .guest-preview-shell {
-        padding: 20px 16px;
-        border-radius: 28px;
-      }
-
-      .guest-preview-header {
-        flex-direction: column;
-      }
-
-      .guest-preview-cta {
-        width: 100%;
-      }
-
-      .guest-preview-grid,
-      .guest-kpi-strip {
-        grid-template-columns: 1fr;
-      }
-
-      .guest-compose {
-        grid-template-columns: 1fr 1fr;
-      }
-
-      .guest-compose-input {
-        grid-column: 1 / -1;
-      }
-
-      .guest-compose-send {
-        grid-column: 1 / -1;
       }
 
       .auth-card-brand strong {
@@ -1252,56 +841,67 @@
         <img src="orlixor-brand.png" alt="Orlixor">
       </a>
 
-      <button class="sidebar-action" type="button" data-preview-nav="messages">
+      <a class="sidebar-action" href="login.html">
         <span>محادثة جديدة</span>
         <span>✦</span>
-      </button>
+      </a>
 
       <nav class="sidebar-nav">
-        <button class="sidebar-link is-active" type="button" data-preview-nav="dashboard">
+        <a class="sidebar-link is-active" href="index.html">
           <span>لوحة التحكم</span>
           <svg viewBox="0 0 24 24"><path d="M3 12 12 4l9 8"/><path d="M5 10.5V20h14v-9.5"/><path d="M10 20v-6h4v6"/></svg>
-        </button>
-        <button class="sidebar-link" type="button" data-preview-nav="messages">
+        </a>
+        <a class="sidebar-link" href="login.html">
           <span>المحادثات</span>
           <svg viewBox="0 0 24 24"><path d="M20 11.5c0 4.1-3.8 7.5-8.5 7.5-1.2 0-2.4-.2-3.4-.7L4 20l1.4-3.2A7.1 7.1 0 0 1 3 11.5C3 7.4 6.8 4 11.5 4S20 7.4 20 11.5Z"/></svg>
-        </button>
-        <button class="sidebar-link" type="button" data-preview-nav="projects">
+        </a>
+        <a class="sidebar-link" href="login.html">
           <span>المشاريع</span>
           <svg viewBox="0 0 24 24"><path d="M3 7.5A2.5 2.5 0 0 1 5.5 5H10l2 2h6.5A2.5 2.5 0 0 1 21 9.5v8A2.5 2.5 0 0 1 18.5 20h-13A2.5 2.5 0 0 1 3 17.5Z"/><path d="M7.5 11.5h9"/><path d="M7.5 15h5"/></svg>
-        </button>
-        <button class="sidebar-link" type="button" data-preview-nav="library">
+        </a>
+        <a class="sidebar-link" href="login.html">
           <span>المكتبة</span>
           <svg viewBox="0 0 24 24"><path d="M6 4h12v16H6a3 3 0 0 0 0-6h12"/><path d="M6 4a3 3 0 0 0-3 3v10a3 3 0 0 1 3-3"/></svg>
-        </button>
-        <button class="sidebar-link" type="button" data-preview-nav="subjects">
+        </a>
+        <a class="sidebar-link" href="login.html">
           <span>المواد الدراسية</span>
           <svg viewBox="0 0 24 24"><path d="M8 6V4.8A1.8 1.8 0 0 1 9.8 3h4.4A1.8 1.8 0 0 1 16 4.8V6"/><path d="M4 6h16a2 2 0 0 1 2 2v9a3 3 0 0 1-3 3H5a3 3 0 0 1-3-3V8a2 2 0 0 1 2-2Z"/><path d="M2 12h20"/><path d="M10 15h4"/></svg>
-        </button>
-        <button class="sidebar-link" type="button" data-preview-nav="ai-tools">
+        </a>
+        <a class="sidebar-link" href="login.html">
           <span>أدوات الذكاء الاصطناعي</span>
           <svg viewBox="0 0 24 24"><path d="M12 4v4"/><path d="M12 16v4"/><path d="m5.1 7.1 2.8 1.6"/><path d="m16.1 15.3 2.8 1.6"/><path d="m5.1 16.9 2.8-1.6"/><path d="m16.1 8.7 2.8-1.6"/><circle cx="12" cy="12" r="3.5"/></svg>
-        </button>
-        <button class="sidebar-link" type="button" data-preview-nav="notes">
+        </a>
+        <a class="sidebar-link" href="login.html">
           <span>الملاحظات</span>
           <svg viewBox="0 0 24 24"><path d="M7 3h7l5 5v12a1 1 0 0 1-1 1H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2Z"/><path d="M14 3v5h5"/><path d="M9 13h6"/><path d="M9 17h4"/></svg>
-        </button>
-        <button class="sidebar-link" type="button" data-preview-nav="tests">
+        </a>
+        <a class="sidebar-link" href="login.html">
           <span>الاختبارات</span>
           <svg viewBox="0 0 24 24"><path d="M7 3h7l5 5v12a1 1 0 0 1-1 1H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2Z"/><path d="M14 3v5h5"/><path d="m9 14 2 2 4-4"/></svg>
-        </button>
-        <button class="sidebar-link" type="button" data-preview-nav="settings">
+        </a>
+        <a class="sidebar-link" href="login.html">
           <span>الإعدادات</span>
           <svg viewBox="0 0 24 24"><path d="m12 3 1.8 2.1 2.8-.2 1 2.6 2.5 1-.2 2.8L21 12l-2.1 1.7.2 2.8-2.5 1-1 2.6-2.8-.2L12 21l-1.8-2.1-2.8.2-1-2.6-2.5-1 .2-2.8L3 12l2.1-1.7-.2-2.8 2.5-1 1-2.6 2.8.2Z"/><circle cx="12" cy="12" r="3.2"/></svg>
-        </button>
+        </a>
       </nav>
 
       <div class="sidebar-spacer"></div>
 
-      <section class="sidebar-guest-callout" aria-label="تنبيه قبل الدخول">
-        <strong>جرّب الأقسام من نفس الصفحة</strong>
-        <p>استعرض المحادثات والمشاريع والمكتبة من هنا، وعند أول إرسال أو استخدام فعلي سنفتح لك تسجيل الدخول داخل نفس الواجهة بدون نقلك لصفحة ثانية.</p>
-        <button class="sidebar-user-action" type="button" data-auth-open="login">تسجيل الدخول</button>
+      <section class="sidebar-card" aria-label="الدعم الفني">
+        <div class="sidebar-card-icon">⌁</div>
+        <div>
+          <strong>الدعم الفني</strong>
+          <span>تواصل معنا نحن هنا لمساعدتك في أي استفسار داخل المنصة.</span>
+        </div>
+      </section>
+
+      <section class="sidebar-user" aria-label="حالة الزائر">
+        <div class="sidebar-user-avatar"></div>
+        <div class="sidebar-user-meta">
+          <strong>ضيف</strong>
+          <span>يمكنك تصفح الواجهة قبل الدخول</span>
+          <a class="sidebar-user-action" href="login.html">تسجيل الدخول</a>
+        </div>
       </section>
     </aside>
 
@@ -1327,228 +927,7 @@
           <p id="authHeroSubtitle">منصتك الذكية للتعلم والإبداع. سجّل دخولك للوصول إلى محادثاتك، مشاريعك، ومحتواك الدراسي في واجهة منظمة وسريعة.</p>
         </div>
 
-        <div class="guest-shell">
-          <section class="guest-preview-shell" aria-label="معاينة الأقسام قبل تسجيل الدخول">
-            <div class="guest-preview-header">
-              <div class="guest-preview-copy">
-                <span class="guest-preview-chip">واجهة واحدة قبل تسجيل الدخول</span>
-                <h2 id="guestSectionTitle">لوحة التحكم</h2>
-                <p id="guestSectionHint">استعرض شكل كل قسم من نفس الصفحة. لا يوجد انتقال إلى صفحات منفصلة قبل تسجيل الدخول.</p>
-              </div>
-              <button class="guest-preview-cta" type="button" data-auth-open="login">سجّل دخولك للمتابعة</button>
-            </div>
-
-            <section class="guest-preview-panel" data-preview-panel="dashboard">
-              <div class="guest-kpi-strip">
-                <div class="guest-kpi"><strong>8</strong><span>أقسام جاهزة</span></div>
-                <div class="guest-kpi"><strong>1</strong><span>واجهة موحدة</span></div>
-                <div class="guest-kpi"><strong>24/7</strong><span>جاهزة للدخول</span></div>
-              </div>
-              <div class="guest-preview-grid">
-                <article class="preview-card">
-                  <div class="preview-icon">💬</div>
-                  <strong>المحادثات</strong>
-                  <p>محادثات محفوظة، ردود منظمة، وتجربة إرسال تبقى داخل نفس الواجهة حتى قبل الدخول.</p>
-                </article>
-                <article class="preview-card">
-                  <div class="preview-icon">📁</div>
-                  <strong>المشاريع</strong>
-                  <p>تنظيم المواد والملفات والمحادثات داخل مشاريع واضحة بدل التنقل العشوائي بين الصفحات.</p>
-                </article>
-                <article class="preview-card">
-                  <div class="preview-icon">📚</div>
-                  <strong>المكتبة</strong>
-                  <p>عرض نظيف للملفات والملخصات والمصادر التعليمية في مكان واحد وبنفس الأسلوب البصري.</p>
-                </article>
-                <article class="preview-card">
-                  <div class="preview-icon">⚙️</div>
-                  <strong>الإعدادات</strong>
-                  <p>ضبط التجربة والواجهة والإشعارات داخل نفس المساحة بدون فتح قوالب متباينة أو متضاربة.</p>
-                </article>
-              </div>
-            </section>
-
-            <section class="guest-preview-panel" data-preview-panel="messages" hidden>
-              <div class="guest-chat-shell">
-                <div class="guest-conversation-list">
-                  <span class="guest-conversation-pill is-active">محادثة الرياضيات</span>
-                  <span class="guest-conversation-pill">شرح درس</span>
-                  <span class="guest-conversation-pill">اختبار سريع</span>
-                </div>
-                <div class="guest-chat-thread" data-guest-thread>
-                  <div class="message-bubble assistant">أهلًا، اكتب سؤالك وسأرتب لك الإجابة خطوة بخطوة داخل نفس الواجهة.</div>
-                  <div class="message-bubble user">أشرح لي كيف أحل معادلة من الدرجة الثانية.</div>
-                  <div class="message-bubble assistant">أستطيع ذلك، لكن الإرسال الفعلي وحفظ المحادثة داخل حسابك يتطلبان تسجيل الدخول أولًا.</div>
-                </div>
-                <form class="guest-compose" data-guest-message-form>
-                  <button class="guest-compose-icon" type="button" data-guest-lock="image">صورة</button>
-                  <button class="guest-compose-icon" type="button" data-guest-lock="file">ملف</button>
-                  <input class="guest-compose-input" name="message" placeholder="اكتب رسالتك هنا...">
-                  <button class="guest-compose-send" type="submit">إرسال</button>
-                </form>
-                <p class="guest-lock-note">قبل تسجيل الدخول يمكنك معاينة شكل المحادثة فقط. عند الإرسال سنفتح لك نموذج الدخول داخل نفس الصفحة بدون أي انتقال.</p>
-              </div>
-            </section>
-
-            <section class="guest-preview-panel" data-preview-panel="projects" hidden>
-              <div class="guest-preview-grid">
-                <article class="preview-row-card">
-                  <div>
-                    <strong>مشروع الفيزياء</strong>
-                    <p>يحفظ أسئلة المادة، التجارب، والملخصات داخل مساحة واحدة منظمة.</p>
-                  </div>
-                  <div class="preview-tag">12 عنصر</div>
-                </article>
-                <article class="preview-row-card">
-                  <div>
-                    <strong>مشروع الرياضيات</strong>
-                    <p>يجمع محادثات الدروس والواجبات والاختبارات القصيرة في واجهة واحدة.</p>
-                  </div>
-                  <div class="preview-tag">8 عناصر</div>
-                </article>
-                <article class="preview-row-card">
-                  <div>
-                    <strong>خطة الاختبار</strong>
-                    <p>مراجعات منظمة وتقسيم للمذاكرة اليومية داخل مشروع مخصص لكل هدف.</p>
-                  </div>
-                  <div class="preview-tag">جديد</div>
-                </article>
-                <article class="preview-row-card">
-                  <div>
-                    <strong>ملف الإنجاز</strong>
-                    <p>مكان لحفظ الأفكار والملاحظات والملفات المهمة قبل الدخول وبعده.</p>
-                  </div>
-                  <div class="preview-tag">مرن</div>
-                </article>
-              </div>
-            </section>
-
-            <section class="guest-preview-panel" data-preview-panel="library" hidden>
-              <div class="guest-stack">
-                <article class="preview-note-card">
-                  <strong>ملخص الكيمياء</strong>
-                  <p>بطاقة نظيفة للملفات والملخصات مع وصف قصير، حالة الملف، وإمكانية الرجوع له بعد الدخول.</p>
-                </article>
-                <article class="preview-note-card">
-                  <strong>أوراق العمل</strong>
-                  <p>تنظيم أوراق المراجعة والملفات المرفوعة بصريًا في نفس مساحة المكتبة داخل الواجهة.</p>
-                </article>
-                <article class="preview-note-card">
-                  <strong>مصادر مساعدة</strong>
-                  <p>روابط، صور، ومستندات دراسية ضمن تصميم موحد بدون القفز بين صفحات مختلفة.</p>
-                </article>
-              </div>
-            </section>
-
-            <section class="guest-preview-panel" data-preview-panel="subjects" hidden>
-              <div class="guest-pills">
-                <span class="guest-pill is-active">رياضيات</span>
-                <span class="guest-pill">علوم</span>
-                <span class="guest-pill">إنجليزي</span>
-                <span class="guest-pill">عربي</span>
-              </div>
-              <div class="guest-preview-grid">
-                <article class="preview-card">
-                  <div class="preview-icon">∑</div>
-                  <strong>الرياضيات</strong>
-                  <p>حل منظم، شرح خطوات، وأسئلة تطبيقية محفوظة داخل نفس المسار الدراسي.</p>
-                </article>
-                <article class="preview-card">
-                  <div class="preview-icon">🧪</div>
-                  <strong>العلوم</strong>
-                  <p>فهم المفاهيم، التجارب، والتدريب على الأسئلة مع واجهة مواد ثابتة وواضحة.</p>
-                </article>
-                <article class="preview-card">
-                  <div class="preview-icon">A+</div>
-                  <strong>الإنجليزي</strong>
-                  <p>تدريب على القواعد والكتابة والمفردات ضمن نفس تصميم المنصة العام.</p>
-                </article>
-                <article class="preview-card">
-                  <div class="preview-icon">✍️</div>
-                  <strong>العربي</strong>
-                  <p>شرح نصوص وقواعد وأسئلة مباشرة مع انتقالات بسيطة داخل نفس الصفحة.</p>
-                </article>
-              </div>
-            </section>
-
-            <section class="guest-preview-panel" data-preview-panel="ai-tools" hidden>
-              <div class="guest-preview-grid">
-                <article class="preview-card">
-                  <div class="preview-icon">🧠</div>
-                  <strong>شرح ذكي</strong>
-                  <p>يحوّل السؤال أو الدرس إلى شرح مرتب ومناسب لمستوى الطالب.</p>
-                </article>
-                <article class="preview-card">
-                  <div class="preview-icon">🪄</div>
-                  <strong>تلخيص فوري</strong>
-                  <p>يلخص الدرس أو المستند في نقاط واضحة مع إبقاء التجربة ضمن نفس الواجهة.</p>
-                </article>
-                <article class="preview-card">
-                  <div class="preview-icon">📷</div>
-                  <strong>تحليل صورة</strong>
-                  <p>رفع صور الأسئلة والمستندات يبدأ من نفس القالب، والتفعيل الكامل بعد تسجيل الدخول.</p>
-                </article>
-                <article class="preview-card">
-                  <div class="preview-icon">🧩</div>
-                  <strong>اختبارات تلقائية</strong>
-                  <p>أدوات مساعدة لصنع أسئلة وتدريب سريع ضمن نفس المسار التعليمي.</p>
-                </article>
-              </div>
-            </section>
-
-            <section class="guest-preview-panel" data-preview-panel="notes" hidden>
-              <div class="guest-stack">
-                <article class="preview-note-card">
-                  <strong>ملاحظات الحصة</strong>
-                  <p>بطاقات ملاحظات مختصرة تحفظ الأفكار المهمة وتبقى منظمة ضمن نفس الواجهة.</p>
-                </article>
-                <article class="preview-note-card">
-                  <strong>ملخصات سريعة</strong>
-                  <p>مكان لالتقاط النقاط التي تريد الرجوع لها لاحقًا بعد تسجيل الدخول.</p>
-                </article>
-                <article class="preview-note-card">
-                  <strong>قائمة مراجعة</strong>
-                  <p>عناصر متابعة للمذاكرة والمهام اليومية في شكل مريح وبسيط.</p>
-                </article>
-              </div>
-            </section>
-
-            <section class="guest-preview-panel" data-preview-panel="tests" hidden>
-              <div class="guest-preview-grid">
-                <article class="preview-card">
-                  <div class="preview-icon">✓</div>
-                  <strong>اختبار سريع</strong>
-                  <p>نموذج اختبار فوري من نفس الصفحة مع أسئلة قصيرة وسريعة للمراجعة.</p>
-                </article>
-                <article class="preview-card">
-                  <div class="preview-icon">🏁</div>
-                  <strong>محاكاة كاملة</strong>
-                  <p>تقسيم واضح للاختبارات حسب المادة والمرحلة بدون تشتيت بصري أو تنقل زائد.</p>
-                </article>
-              </div>
-            </section>
-
-            <section class="guest-preview-panel" data-preview-panel="settings" hidden>
-              <div class="preview-setting-card">
-                <strong>الإعدادات العامة</strong>
-                <p>مكان موحد لإدارة التفضيلات، الإشعارات، وطريقة عرض الواجهة بعد تسجيل الدخول.</p>
-                <div class="preview-setting-row">
-                  <span>حفظ الجلسة والعودة التلقائية</span>
-                  <span class="preview-toggle" aria-hidden="true"></span>
-                </div>
-                <div class="preview-setting-row">
-                  <span>تنبيهات المحادثات والمشروعات</span>
-                  <span class="preview-toggle" aria-hidden="true"></span>
-                </div>
-                <div class="preview-setting-row">
-                  <span>تخصيص تجربة الدراسة</span>
-                  <span class="preview-toggle" aria-hidden="true"></span>
-                </div>
-              </div>
-            </section>
-          </section>
-
-          <section class="auth-card" aria-label="نموذج تسجيل الدخول">
+        <section class="auth-card" aria-label="نموذج تسجيل الدخول">
           <div class="auth-card-brand">
             <img src="orlixor-mark.png" alt="Orlixor icon">
             <strong>Orlixor</strong>
@@ -1799,7 +1178,6 @@
 
           <div class="auth-state" data-auth-state hidden></div>
         </section>
-        </div>
       </div>
     </section>
   </main>
@@ -1814,14 +1192,6 @@
       const panels = document.querySelectorAll("[data-auth-panel]");
       const appleButton = document.querySelector("[data-auth-apple]");
       const authState = document.querySelector("[data-auth-state]");
-      const loginLauncher = document.querySelector('[data-auth-open="login"]');
-      const loginEmail = document.getElementById("loginEmail");
-      const previewButtons = document.querySelectorAll("[data-preview-nav]");
-      const previewPanels = document.querySelectorAll("[data-preview-panel]");
-      const previewTitle = document.getElementById("guestSectionTitle");
-      const previewHint = document.getElementById("guestSectionHint");
-      const guestThread = document.querySelector("[data-guest-thread]");
-      const guestMessageForm = document.querySelector("[data-guest-message-form]");
 
       const copy = {
         login: {
@@ -1842,45 +1212,6 @@
         }
       };
 
-      const previewCopy = {
-        dashboard: {
-          title: "لوحة التحكم",
-          hint: "واجهة عامة تعرض شكل الأقسام والمزايا في مكان واحد قبل تسجيل الدخول، بدون أي تنقل لصفحات مختلفة."
-        },
-        messages: {
-          title: "المحادثات",
-          hint: "معاينة حية للشات داخل نفس الصفحة. عند الإرسال أو رفع صورة سنطلب منك الدخول داخل هذا القالب نفسه."
-        },
-        projects: {
-          title: "المشاريع",
-          hint: "تنظيم المواد والمحادثات والمهام داخل مشاريع مرتبة، مع بقاء تجربة الزائر في واجهة واحدة."
-        },
-        library: {
-          title: "المكتبة",
-          hint: "الملفات والمستندات والملخصات تظهر في تصميم ثابت ومنظم داخل نفس الواجهة."
-        },
-        subjects: {
-          title: "المواد الدراسية",
-          hint: "تصفح سريع للمراحل والمواد بنفس الشكل العام، قبل تفعيل الحساب وبعده."
-        },
-        "ai-tools": {
-          title: "أدوات الذكاء الاصطناعي",
-          hint: "استعراض الأدوات الذكية من نفس الصفحة، مع تفعيل الاستخدام الحقيقي بعد تسجيل الدخول."
-        },
-        notes: {
-          title: "الملاحظات",
-          hint: "واجهة ملاحظات مختصرة ومنظمة تحفظ الأفكار بعد تسجيل الدخول، لكن شكلها ظاهر هنا كمعاينة حقيقية."
-        },
-        tests: {
-          title: "الاختبارات",
-          hint: "بطاقات الاختبارات والمعاينات تبقى ضمن نفس الصفحة بدل نقلك إلى صفحة ثانية منفصلة."
-        },
-        settings: {
-          title: "الإعدادات",
-          hint: "حتى الإعدادات صارت جزءًا من نفس الواجهة العامة بدل فتح قالب مختلف قبل الدخول."
-        }
-      };
-
       function syncVisiblePanel() {
         const activePanel = Array.from(panels).find((panel) => !panel.hidden)?.getAttribute("data-auth-panel") || "login";
         const content = copy[activePanel] || copy.login;
@@ -1888,82 +1219,9 @@
         if (subtitle) subtitle.textContent = content.subtitle;
       }
 
-      function setPreview(section) {
-        const next = previewCopy[section] ? section : "dashboard";
-        previewButtons.forEach((button) => {
-          button.classList.toggle("is-active", button.getAttribute("data-preview-nav") === next);
-        });
-        previewPanels.forEach((panel) => {
-          panel.hidden = panel.getAttribute("data-preview-panel") !== next;
-        });
-        if (previewTitle) previewTitle.textContent = previewCopy[next].title;
-        if (previewHint) previewHint.textContent = previewCopy[next].hint;
-        try {
-          const nextUrl = new URL(window.location.href);
-          if (next === "dashboard") {
-            nextUrl.searchParams.delete("section");
-          } else {
-            nextUrl.searchParams.set("section", next);
-          }
-          window.history.replaceState({ section: next }, "", nextUrl.toString());
-        } catch (_) {
-          // Ignore URL sync issues and keep the interface interactive.
-        }
-      }
-
-      function promptLogin(message) {
-        loginLauncher?.click();
-        window.setTimeout(() => {
-          if (authState) {
-            authState.hidden = false;
-            authState.textContent = message;
-          }
-          loginEmail?.focus();
-        }, 0);
-      }
-
-      function appendGuestBubble(role, text) {
-        if (!guestThread) return;
-        const bubble = document.createElement("div");
-        bubble.className = `message-bubble ${role}`;
-        bubble.textContent = text;
-        guestThread.appendChild(bubble);
-        guestThread.scrollTop = guestThread.scrollHeight;
-      }
-
       const observer = new MutationObserver(syncVisiblePanel);
       panels.forEach((panel) => observer.observe(panel, { attributes: true, attributeFilter: ["hidden"] }));
       syncVisiblePanel();
-      const initialSection = new URLSearchParams(window.location.search).get("section") || "dashboard";
-      setPreview(initialSection);
-
-      previewButtons.forEach((button) => {
-        button.addEventListener("click", () => {
-          setPreview(button.getAttribute("data-preview-nav") || "dashboard");
-        });
-      });
-
-      guestMessageForm?.addEventListener("submit", (event) => {
-        event.preventDefault();
-        const input = guestMessageForm.elements.message;
-        const message = String(input?.value || "").trim();
-        if (!message) return;
-        setPreview("messages");
-        appendGuestBubble("user", message);
-        appendGuestBubble("assistant", "تمت معاينة الرسالة داخل نفس الواجهة. للرد الفعلي وحفظ المحادثة وربطها مع API الذكاء الاصطناعي، سجّل دخولك الآن.");
-        input.value = "";
-        promptLogin("إرسال الرسائل متاح بعد تسجيل الدخول فقط. سجّل دخولك هنا وسنكمل من نفس الواجهة.");
-      });
-
-      document.querySelectorAll("[data-guest-lock]").forEach((button) => {
-        button.addEventListener("click", () => {
-          setPreview("messages");
-          const type = button.getAttribute("data-guest-lock");
-          promptLogin(type === "image"
-            ? "رفع الصور متاح بعد تسجيل الدخول. سجّل دخولك وسنفتح التحليل داخل نفس الواجهة."
-            : "رفع المستندات متاح بعد تسجيل الدخول. سجّل دخولك وسنكمل من نفس الصفحة.");
-        });
-      });
 
       appleButton?.addEventListener("click", () => {
         if (!authState) return;
