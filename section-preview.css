@@ -41,10 +41,13 @@ button {
   grid-template-columns: 248px minmax(0, 1fr);
   gap: 20px;
   align-items: start;
+  direction: ltr;
 }
 
 .workspace-sidebar,
 .workspace-main {
+  direction: rtl;
+  text-align: right;
   border: 1px solid rgba(123, 92, 255, 0.08);
   border-radius: 28px;
   background: rgba(255, 255, 255, 0.92);
@@ -119,7 +122,7 @@ button {
 
 .workspace-nav-link:hover {
   background: rgba(123, 92, 255, 0.07);
-  transform: translateX(-2px);
+  transform: translateX(2px);
 }
 
 .workspace-nav-link.is-active {
