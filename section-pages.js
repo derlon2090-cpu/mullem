@@ -604,12 +604,12 @@
         <div class="guest-history-list">
           ${groupEntry.items.map((item) => `
             <button class="guest-history-item ${activeThread?.id === item.id ? "is-active" : ""}" type="button" data-thread="${item.id}">
-              <span class="guest-history-dot">${icons.menu}</span>
+              <span class="guest-history-dot">${icons.chat}</span>
               <div class="guest-history-copy">
                 <strong>${escapeHtml(item.title)}</strong>
                 <small>${escapeHtml(item.time)}</small>
               </div>
-              <span class="guest-history-badge">${icons.chat}</span>
+              <span class="guest-history-badge">${icons.menu}</span>
             </button>
           `).join("")}
         </div>
@@ -620,11 +620,11 @@
   function renderQuickCards(profile) {
     return profile.quickCards.map(([title, desc, icon]) => `
       <button class="guest-quick-card ${isAuthenticated() ? "" : "requires-auth"}" type="button" data-card="${escapeHtml(title)}">
+        <i class="guest-quick-icon" aria-hidden="true">${icons[icon]}</i>
         <div class="guest-quick-copy">
           <strong>${escapeHtml(title)}</strong>
           <span>${escapeHtml(desc)}</span>
         </div>
-        <i aria-hidden="true">${icons[icon]}</i>
       </button>
     `).join("");
   }
