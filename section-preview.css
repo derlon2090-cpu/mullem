@@ -122,6 +122,8 @@ a {
   max-height: calc(100vh - 12px);
   overflow: auto;
   border-radius: 30px;
+  padding: 18px 24px 16px;
+  gap: 14px;
 }
 
 .guest-brand {
@@ -175,6 +177,18 @@ a {
 
 .guest-shell.is-home-workspace .guest-search-box {
   min-height: 48px;
+}
+
+.guest-shell.is-home-workspace .guest-history-item {
+  padding: 10px 12px;
+}
+
+.guest-shell.is-home-workspace .guest-history-copy strong {
+  font-size: 0.94rem;
+}
+
+.guest-shell.is-home-workspace .guest-history-copy small {
+  font-size: 0.78rem;
 }
 
 .guest-shell.theme-dark .guest-search-box {
@@ -342,6 +356,14 @@ a {
   border-radius: 20px;
 }
 
+.guest-shell.is-home-workspace .guest-upgrade-card {
+  padding: 16px 14px;
+}
+
+.guest-shell.is-home-workspace .guest-user-card {
+  padding: 12px 14px;
+}
+
 .upgrade-mark {
   width: 52px;
   height: 52px;
@@ -423,6 +445,7 @@ a {
 
 .guest-shell.is-home-workspace .guest-main-topbar {
   align-items: center;
+  gap: 10px;
 }
 
 .ai-switcher {
@@ -476,7 +499,17 @@ a {
 }
 
 .guest-shell.is-home-workspace .guest-hero-copy h1 {
-  font-size: clamp(2.35rem, 3vw, 3.1rem);
+  font-size: clamp(2.1rem, 2.6vw, 2.8rem);
+  line-height: 1.1;
+}
+
+.guest-shell.is-home-workspace .guest-hero-copy {
+  gap: 4px;
+}
+
+.guest-shell.is-home-workspace .guest-hero-copy p {
+  font-size: 0.93rem;
+  line-height: 1.6;
 }
 
 .guest-hero-copy p {
@@ -494,7 +527,27 @@ a {
 }
 
 .guest-shell.is-home-workspace .guest-quick-grid {
-  gap: 18px;
+  gap: 12px;
+}
+
+.guest-shell.is-home-workspace .guest-quick-card {
+  min-height: 92px;
+  padding: 14px 16px;
+  border-radius: 18px;
+}
+
+.guest-shell.is-home-workspace .guest-quick-icon {
+  width: 42px;
+  height: 42px;
+}
+
+.guest-shell.is-home-workspace .guest-quick-copy strong {
+  font-size: 1rem;
+}
+
+.guest-shell.is-home-workspace .guest-quick-copy span {
+  font-size: 0.84rem;
+  line-height: 1.5;
 }
 
 .guest-quick-card {
@@ -554,6 +607,11 @@ a {
 
 .guest-conversation-card.is-home-conversation {
   padding-top: 22px;
+}
+
+.guest-shell.is-home-workspace .guest-conversation-card {
+  padding: 18px 18px 16px;
+  border-radius: 24px;
 }
 
 .guest-shell.theme-dark .guest-conversation-card {
