@@ -21,6 +21,10 @@
     logo: '<img src="orlixor-mark.png" alt="" aria-hidden="true">',
     plus: '<svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>',
     home: '<svg viewBox="0 0 24 24"><path d="M4 10.5 12 4l8 6.5V20a1 1 0 0 1-1 1h-4.5v-5.5h-5V21H5a1 1 0 0 1-1-1z"/></svg>',
+    user: '<svg viewBox="0 0 24 24"><path d="M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8Z"/><path d="M4.5 21a7.5 7.5 0 0 1 15 0"/></svg>',
+    login: '<svg viewBox="0 0 24 24"><path d="M10 17l5-5-5-5"/><path d="M15 12H3"/><path d="M14 4h5a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-5"/></svg>',
+    eye: '<svg viewBox="0 0 24 24"><path d="M2.5 12s3.5-6 9.5-6 9.5 6 9.5 6-3.5 6-9.5 6-9.5-6-9.5-6Z"/><circle cx="12" cy="12" r="3"/></svg>',
+    lock: '<svg viewBox="0 0 24 24"><rect x="5" y="10" width="14" height="10" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg>',
     chat: '<svg viewBox="0 0 24 24"><path d="M20 11.5c0 4.1-3.8 7.5-8.5 7.5-1.2 0-2.4-.2-3.4-.7L4 20l1.4-3.2A7.1 7.1 0 0 1 3 11.5C3 7.4 6.8 4 11.5 4S20 7.4 20 11.5Z"/></svg>',
     projects: '<svg viewBox="0 0 24 24"><path d="M4 6.5A2.5 2.5 0 0 1 6.5 4H10l2 2h5.5A2.5 2.5 0 0 1 20 8.5v9A2.5 2.5 0 0 1 17.5 20h-11A2.5 2.5 0 0 1 4 17.5z"/><path d="M8 11h8M8 14h5"/></svg>',
     library: '<svg viewBox="0 0 24 24"><path d="M6 5.5A2.5 2.5 0 0 1 8.5 3H19v16H8.5A2.5 2.5 0 0 0 6 21z"/><path d="M6 5.5V21H5a2 2 0 0 1-2-2V7.5A2.5 2.5 0 0 1 5.5 5z"/></svg>',
@@ -855,6 +859,33 @@
 
   function renderSidebar() {
     const userCard = getUserCardMeta();
+    const userAccountCard = userCard.guest
+      ? `
+        <button class="guest-user-card is-guest is-orlixor-guest" type="button" data-open-account>
+          <span class="guest-user-head">
+            <strong>ضيف</strong>
+            <small aria-hidden="true"></small>
+          </span>
+          <span class="guest-user-lines">
+            <span><i aria-hidden="true">${icons.user}</i>يمكنك</span>
+            <span><i aria-hidden="true">${icons.internet}</i>تصفح</span>
+            <span><i aria-hidden="true">${icons.eye}</i>الواجهة قبل</span>
+            <span><i aria-hidden="true">${icons.lock}</i>الدخول</span>
+          </span>
+          <span class="guest-user-avatar" aria-hidden="true">${icons.user}</span>
+          <span class="guest-user-action"><i aria-hidden="true">${icons.login}</i>تسجيل الدخول</span>
+        </button>
+      `
+      : `
+        <button class="guest-user-card is-member" type="button" data-open-account>
+          <span class="guest-user-avatar">${escapeHtml(userCard.title.slice(0, 1))}</span>
+          <span class="guest-user-copy">
+            <strong>${escapeHtml(userCard.title)}</strong>
+            <small>${escapeHtml(userCard.subtitle)}</small>
+          </span>
+          <span class="guest-user-action">${escapeHtml(userCard.action)}</span>
+        </button>
+      `;
     return `
       <aside class="guest-sidebar">
         <a class="guest-brand" href="${shellBaseUrl}" aria-label="Orlixor">
@@ -889,14 +920,7 @@
           </div>
         </section>
 
-        <button class="guest-user-card ${userCard.guest ? "is-guest" : "is-member"}" type="button" data-open-account>
-          <span class="guest-user-avatar">${userCard.guest ? "ض" : escapeHtml(userCard.title.slice(0, 1))}</span>
-          <span class="guest-user-copy">
-            <strong>${escapeHtml(userCard.title)}</strong>
-            <small>${escapeHtml(userCard.subtitle)}</small>
-          </span>
-          <span class="guest-user-action">${escapeHtml(userCard.action)}</span>
-        </button>
+        ${userAccountCard}
       </aside>
     `;
   }
