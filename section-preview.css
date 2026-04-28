@@ -70,7 +70,7 @@ body[data-workspace-mode="home"] .guest-root {
   margin: 0;
   padding: 0;
   gap: 0;
-  grid-template-columns: 262px minmax(0, 1fr) 286px;
+  grid-template-columns: 276px minmax(0, 1fr) 286px;
   overflow: hidden;
 }
 
@@ -536,7 +536,7 @@ body[data-workspace-mode="home"] .guest-root {
 .guest-user-card.is-orlixor-guest .guest-user-head {
   position: absolute;
   top: 12px;
-  left: 106px;
+  left: 116px;
   right: 56px;
   z-index: 1;
   display: grid;
@@ -568,7 +568,7 @@ body[data-workspace-mode="home"] .guest-root {
 .guest-user-card.is-orlixor-guest .guest-user-lines {
   position: absolute;
   top: 40px;
-  left: 108px;
+  left: 116px;
   right: 58px;
   z-index: 1;
   display: grid;
@@ -583,7 +583,7 @@ body[data-workspace-mode="home"] .guest-root {
   align-items: center;
   gap: 4px;
   color: #737897;
-  font-size: 0.62rem;
+  font-size: 0.6rem;
   line-height: 1.15;
   font-weight: 800;
   white-space: nowrap;
@@ -633,15 +633,15 @@ body[data-workspace-mode="home"] .guest-root {
   top: 61px;
   z-index: 1;
   min-height: 44px;
-  width: 102px;
-  max-width: 102px;
+  width: 94px;
+  max-width: 94px;
   border-radius: 15px;
   padding: 0 6px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: 0;
-  font-size: 0.72rem;
+  font-size: 0.68rem;
   font-weight: 900;
   white-space: nowrap;
   box-shadow: 0 14px 28px rgba(111, 76, 255, 0.23);
@@ -1728,7 +1728,7 @@ body[data-workspace-mode="home"] .guest-root {
 
 @media (max-width: 1320px) {
   .guest-shell.is-home-workspace {
-    grid-template-columns: 250px minmax(0, 1fr) 282px;
+    grid-template-columns: 276px minmax(0, 1fr) 282px;
   }
 
   .guest-shell.is-home-workspace .guest-sidepanel {
@@ -1748,7 +1748,7 @@ body[data-workspace-mode="home"] .guest-root {
 
   .guest-shell.is-home-workspace {
     width: 100%;
-    grid-template-columns: 238px minmax(560px, 1fr) 270px;
+    grid-template-columns: 276px minmax(560px, 1fr) 270px;
     overflow-x: auto;
     overflow-y: hidden;
   }
@@ -1784,7 +1784,7 @@ body[data-workspace-mode="home"] .guest-root {
   .guest-shell.is-home-workspace {
     width: 100%;
     padding: 0;
-    grid-template-columns: 232px minmax(540px, 1fr) 266px;
+    grid-template-columns: 276px minmax(540px, 1fr) 266px;
   }
 
   .guest-shell.is-home-workspace .guest-sidebar,
