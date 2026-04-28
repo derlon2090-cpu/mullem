@@ -43,6 +43,7 @@
     document: '<svg viewBox="0 0 24 24"><path d="M7 3h8l4 4v14H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2Z"/><path d="M15 3v5h5"/></svg>',
     internet: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14.5 14.5 0 0 1 0 18M12 3a14.5 14.5 0 0 0 0 18"/></svg>',
     menu: '<svg viewBox="0 0 24 24"><circle cx="6" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="18" cy="12" r="1.6"/></svg>',
+    code: '<svg viewBox="0 0 24 24"><path d="m8 8-4 4 4 4"/><path d="m16 8 4 4-4 4"/><path d="m14 5-4 14"/></svg>',
     delete: '<svg viewBox="0 0 24 24"><path d="M4 7h16"/><path d="M10 11v6M14 11v6"/><path d="M6 7 7 20a1 1 0 0 0 1 .9h8a1 1 0 0 0 1-.9L18 7"/><path d="M9 7V4h6v3"/></svg>',
     copy: '<svg viewBox="0 0 24 24"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V6a2 2 0 0 1 2-2h9"/></svg>',
     refresh: '<svg viewBox="0 0 24 24"><path d="M3 12a9 9 0 0 1 15.4-6.4L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-15.4 6.4L3 16"/><path d="M3 21v-5h5"/></svg>',
@@ -342,6 +343,7 @@
     composerDraft: {},
     selectedFiles: [],
     sending: false,
+    homeConversationOpen: false,
     theme: loadStoredTheme(),
     authModalOpen: false,
     authReason: "",
@@ -622,7 +624,16 @@
   }
 
   function renderQuickCards(profile) {
-    const cards = isHomeWorkspace ? [...profile.quickCards].reverse() : profile.quickCards;
+    const cards = isHomeWorkspace
+      ? [
+          ["ترجمة", "ترجمة النصوص بدقة", "internet"],
+          ["مساعدة برمجية", "حل المشكلات البرمجية", "code"],
+          ["أفكار وإبداع", "الحصول على أفكار جديدة", "star"],
+          ["كتابة المحتوى", "إنشاء محتوى احترافي", "sparkle"],
+          ["تلخيص المحتوى", "تلخيص النصوص والمقالات", "document"],
+          ["تحليل البيانات", "تحليل وتصوير البيانات", "ai"]
+        ]
+      : profile.quickCards;
     return cards.map(([title, desc, icon]) => `
       <button class="guest-quick-card ${isAuthenticated() ? "" : "requires-auth"}" type="button" data-card="${escapeHtml(title)}">
         <i class="guest-quick-icon" aria-hidden="true">${icons[icon]}</i>
@@ -664,6 +675,9 @@
   function renderConversation(profile) {
     const thread = getActiveThread();
     const messages = thread?.messages || [];
+    if (isHomeWorkspace && !state.homeConversationOpen) {
+      return "";
+    }
     return `
       <section class="guest-conversation-card ${isHomeWorkspace ? "is-home-conversation" : ""}">
         ${isHomeWorkspace ? "" : `
@@ -814,7 +828,88 @@
     `;
   }
 
+  function renderHomeTopActions() {
+    const userInitial = isAuthenticated()
+      ? String(state.currentUser?.name || "م").trim().slice(0, 1)
+      : "ض";
+
+    return `
+      <div class="home-top-actions">
+        <button class="ghost-balance ${isAuthenticated() ? "" : "requires-auth"}" type="button" data-balance>
+          <span>الرصيد: ${formatNumber(getPreviewBalance())} نقطة</span>
+          ${icons.sparkle}
+        </button>
+        <button class="circle-control ${isAuthenticated() ? "" : "requires-auth"}" type="button" aria-label="الإشعارات">${icons.bell}</button>
+        <button class="circle-control" type="button" aria-label="تبديل الثيم" data-theme-toggle>${icons.moon}</button>
+        <button class="home-avatar-button" type="button" data-open-account aria-label="الحساب">
+          <span>${escapeHtml(userInitial)}</span>
+          <i aria-hidden="true"></i>
+        </button>
+      </div>
+    `;
+  }
+
+  function renderHomeMain(profile) {
+    const firstName = isAuthenticated()
+      ? String(state.currentUser?.name || "أحمد").trim().split(/\s+/)[0] || "أحمد"
+      : "بك";
+    const greeting = firstName === "بك" ? "مرحبًا بك" : `مرحبًا بك، ${escapeHtml(firstName)}`;
+
+    return `
+      <section class="guest-main home-orlixor-main">
+        <header class="guest-main-topbar home-main-topbar">
+          <button class="ai-switcher" type="button">
+            <span class="ai-switcher-mark">${icons.logo}</span>
+            <span>Orlixor AI</span>
+            <i aria-hidden="true">⌄</i>
+          </button>
+          ${renderHomeTopActions()}
+        </header>
+
+        <section class="home-hero-panel">
+          <span class="home-hero-mark" aria-hidden="true">${icons.logo}</span>
+          <h1>${greeting} <span>👋</span></h1>
+          <p>كيف يمكنني مساعدتك اليوم؟</p>
+        </section>
+
+        <section class="guest-quick-grid home-quick-grid">
+          ${renderQuickCards(profile)}
+        </section>
+
+        ${renderConversation(profile)}
+
+        ${renderAttachmentPills()}
+
+        <form class="guest-compose home-compose" data-compose-form>
+          <input
+            class="compose-input"
+            data-compose-input
+            value="${escapeHtml(getComposerValue())}"
+            placeholder="اكتب رسالتك هنا..."
+          >
+          <div class="home-compose-actions">
+            <button class="home-compose-tool ${isAuthenticated() ? "" : "requires-auth"}" type="button" data-pick-file>
+              ${icons.attach}
+              <span>إرفاق ملف</span>
+            </button>
+            <button class="home-compose-tool ${isAuthenticated() ? "" : "requires-auth"}" type="button" data-toggle-web>
+              ${icons.settings}
+              <span>أدوات</span>
+            </button>
+          </div>
+          <button class="compose-send ${isAuthenticated() ? "" : "requires-auth"}" type="submit" ${state.sending ? "disabled" : ""} aria-label="إرسال">
+            ${icons.send}
+          </button>
+        </form>
+        <p class="guest-compose-note home-compose-note">قد يخطئ Orlixor في بعض المعلومات. تحقّق من المعلومات المهمة.</p>
+      </section>
+    `;
+  }
+
   function renderMain(profile) {
+    if (isHomeWorkspace) {
+      return renderHomeMain(profile);
+    }
     const hero = getMainHero(profile);
     return `
       <section class="guest-main">
@@ -952,7 +1047,7 @@
       <div class="guest-shell ${state.theme === "dark" ? "theme-dark" : ""} ${isHomeWorkspace ? "is-home-workspace" : ""}">
         ${renderSidebar()}
         ${renderMain(profile)}
-        ${renderRightPanel(profile)}
+        ${isHomeWorkspace ? "" : renderRightPanel(profile)}
         <input type="file" id="guestFilePicker" hidden multiple accept=".pdf,.doc,.docx,.png,.jpg,.jpeg,.txt,.md,.ppt,.pptx">
       </div>
       ${renderAuthModal()}
@@ -1063,6 +1158,7 @@
     };
 
     threadEntry.messages.push(newUserMessage, pendingAssistant);
+    state.homeConversationOpen = true;
     threadEntry.time = "الآن";
     threadEntry.stats = {
       ...(threadEntry.stats || {}),
@@ -1152,6 +1248,7 @@
       const threadButton = event.target.closest("[data-thread]");
       if (threadButton) {
         state.activeThreadId[state.section] = threadButton.getAttribute("data-thread") || "";
+        state.homeConversationOpen = true;
         render();
         return;
       }
@@ -1188,6 +1285,7 @@
           return;
         }
         createNewThreadFromDraft("محادثة جديدة");
+        state.homeConversationOpen = false;
         render();
         return;
       }
