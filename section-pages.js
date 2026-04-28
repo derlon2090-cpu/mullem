@@ -346,6 +346,7 @@
     homeConversationOpen: false,
     theme: loadStoredTheme(),
     authModalOpen: false,
+    settingsModalOpen: false,
     authReason: "",
     conversationIds: {},
     settings: {}
@@ -849,14 +850,143 @@
     `;
   }
 
+  function renderSettingsModal() {
+    const userName = String(state.currentUser?.name || "ضيف").trim() || "ضيف";
+    const firstLetter = userName.slice(0, 1);
+    const settings = state.settings[state.section] || {};
+    const modalTabs = [
+      ["عام", "settings"],
+      ["الإشعارات", "bell"],
+      ["تخصيص", "ai"],
+      ["التطبيقات", "subjects"],
+      ["عناصر التحكم في البيانات", "library"],
+      ["الأمان", "lock"],
+      ["رقابة الوالدين", "user"],
+      ["الحساب", "settings"]
+    ];
+
+    return `
+      <div class="settings-gate ${state.settingsModalOpen ? "is-open" : ""}" ${state.settingsModalOpen ? "" : "hidden"}>
+        <button class="settings-gate-backdrop" type="button" data-close-settings aria-label="إغلاق الإعدادات"></button>
+        <section class="settings-modal-card" role="dialog" aria-modal="true" aria-label="الإعدادات">
+          <button class="settings-close-btn" type="button" data-close-settings aria-label="إغلاق">×</button>
+
+          <aside class="settings-modal-side">
+            <div class="settings-profile">
+              <span class="settings-avatar">${escapeHtml(firstLetter)}</span>
+              <div>
+                <strong>${escapeHtml(userName)}</strong>
+                <span>عضو مميز</span>
+              </div>
+            </div>
+
+            <nav class="settings-modal-nav" aria-label="أقسام الإعدادات">
+              ${modalTabs.map(([label, icon], index) => `
+                <button class="${index === 0 ? "active" : ""}" type="button">
+                  <span>${icons[icon] || icons.settings}</span>
+                  <b>${escapeHtml(label)}</b>
+                </button>
+              `).join("")}
+            </nav>
+
+            <button class="settings-logout-btn" type="button" data-logout>
+              ${icons.login}
+              <span>تسجيل الخروج</span>
+            </button>
+          </aside>
+
+          <div class="settings-modal-main">
+            <header>
+              <h2>الإعدادات</h2>
+              <p>إدارة تفضيلاتك وخياراتك الشخصية</p>
+            </header>
+
+            <section class="settings-general-head">
+              <span>${icons.settings}</span>
+              <div>
+                <strong>عام</strong>
+                <p>إدارة الإعدادات العامة لتجربة استخدام أفضل</p>
+              </div>
+            </section>
+
+            <div class="settings-option-list">
+              <article class="settings-option-row">
+                <span class="settings-option-icon">${icons.internet}</span>
+                <div class="settings-option-copy">
+                  <strong>المظهر</strong>
+                  <small>اختر المظهر المفضل لك</small>
+                </div>
+                <div class="settings-segmented">
+                  <button type="button" data-modal-theme="light" class="${state.theme === "light" ? "active" : ""}">فاتح</button>
+                  <button type="button" data-modal-theme="dark" class="${state.theme === "dark" ? "active" : ""}">داكن</button>
+                  <button type="button" data-modal-theme="system">تلقائي</button>
+                </div>
+              </article>
+
+              <article class="settings-option-row">
+                <span class="settings-option-icon">A</span>
+                <div class="settings-option-copy">
+                  <strong>اللغة</strong>
+                  <small>تغيير لغة واجهة المنصة</small>
+                </div>
+                <select data-setting="language">
+                  ${["العربية", "English"].map((item) => `
+                    <option value="${escapeHtml(item)}" ${settings.language === item ? "selected" : ""}>${escapeHtml(item)}</option>
+                  `).join("")}
+                </select>
+              </article>
+
+              <article class="settings-option-row">
+                <span class="settings-option-icon">${icons.moon}</span>
+                <div class="settings-option-copy">
+                  <strong>المنطقة الزمنية</strong>
+                  <small>تحديد المنطقة الزمنية الخاصة بك</small>
+                </div>
+                <select>
+                  <option>(GMT+3) الرياض</option>
+                  <option>(GMT+3) مكة</option>
+                </select>
+              </article>
+
+              <article class="settings-option-row">
+                <span class="settings-option-icon">${icons.document}</span>
+                <div class="settings-option-copy">
+                  <strong>تنسيق التاريخ</strong>
+                  <small>اختر تنسيق عرض التاريخ</small>
+                </div>
+                <select>
+                  <option>YYYY-MM-DD</option>
+                  <option>DD/MM/YYYY</option>
+                </select>
+              </article>
+
+              <article class="settings-option-row">
+                <span class="settings-option-icon">${icons.sparkle}</span>
+                <div class="settings-option-copy">
+                  <strong>بداية الأسبوع من</strong>
+                  <small>اختر اليوم الذي يبدأ منه الأسبوع</small>
+                </div>
+                <div class="settings-segmented">
+                  <button type="button" class="active">الأحد</button>
+                  <button type="button">السبت</button>
+                </div>
+              </article>
+            </div>
+          </div>
+        </section>
+      </div>
+    `;
+  }
+
   function renderHomeMain(profile) {
     const firstName = isAuthenticated()
       ? String(state.currentUser?.name || "أحمد").trim().split(/\s+/)[0] || "أحمد"
       : "بك";
     const greeting = firstName === "بك" ? "مرحبًا بك" : `مرحبًا بك، ${escapeHtml(firstName)}`;
+    const isChatting = state.homeConversationOpen;
 
     return `
-      <section class="guest-main home-orlixor-main">
+      <section class="guest-main home-orlixor-main ${isChatting ? "is-chatting" : ""}">
         <header class="guest-main-topbar home-main-topbar">
           <button class="ai-switcher" type="button">
             <span class="ai-switcher-mark">${icons.logo}</span>
@@ -866,15 +996,17 @@
           ${renderHomeTopActions()}
         </header>
 
-        <section class="home-hero-panel">
-          <span class="home-hero-mark" aria-hidden="true">${icons.logo}</span>
-          <h1>${greeting} <span>👋</span></h1>
-          <p>كيف يمكنني مساعدتك اليوم؟</p>
-        </section>
+        ${isChatting ? "" : `
+          <section class="home-hero-panel">
+            <span class="home-hero-mark" aria-hidden="true">${icons.logo}</span>
+            <h1>${greeting} <span>👋</span></h1>
+            <p>كيف يمكنني مساعدتك اليوم؟</p>
+          </section>
 
-        <section class="guest-quick-grid home-quick-grid">
-          ${renderQuickCards(profile)}
-        </section>
+          <section class="guest-quick-grid home-quick-grid">
+            ${renderQuickCards(profile)}
+          </section>
+        `}
 
         ${renderConversation(profile)}
 
@@ -1051,6 +1183,7 @@
         <input type="file" id="guestFilePicker" hidden multiple accept=".pdf,.doc,.docx,.png,.jpg,.jpeg,.txt,.md,.ppt,.pptx">
       </div>
       ${renderAuthModal()}
+      ${renderSettingsModal()}
       <div class="guest-toast-stack" aria-live="polite"></div>
     `;
   }
@@ -1074,6 +1207,21 @@
   function closeAuthModal() {
     state.authModalOpen = false;
     render();
+  }
+
+  function closeSettingsModal() {
+    state.settingsModalOpen = false;
+    render();
+  }
+
+  function scrollConversationToLatest() {
+    window.requestAnimationFrame(() => {
+      const conversation = app.querySelector(".guest-conversation-card");
+      const lastMessage = conversation?.querySelector(".guest-message:last-child");
+      if (!conversation) return;
+      conversation.scrollTop = conversation.scrollHeight;
+      lastMessage?.scrollIntoView({ block: "end", behavior: "smooth" });
+    });
   }
 
   function setSection(sectionKey, replace = false) {
@@ -1103,6 +1251,7 @@
       "بدون ملف",
       { created: "الآن", messages: "0 رسائل", updated: "الآن" }
     );
+    newThread.messages = [];
 
     const todayGroup = state.threadState[sectionKey][0];
     if (todayGroup) {
@@ -1145,7 +1294,10 @@
 
     ensureThreadState();
     let threadEntry = getActiveThread();
-    if (!threadEntry) {
+    if (isHomeWorkspace && !state.homeConversationOpen) {
+      createNewThreadFromDraft(input.slice(0, 28) || "محادثة جديدة");
+      threadEntry = getActiveThread();
+    } else if (!threadEntry) {
       createNewThreadFromDraft(input.slice(0, 28) || "محادثة جديدة");
       threadEntry = getActiveThread();
     }
@@ -1166,7 +1318,9 @@
       messages: `${Math.max(1, threadEntry.messages.length)} رسالة`
     };
     state.sending = true;
+    setComposerValue("");
     render();
+    scrollConversationToLatest();
 
     try {
       const result = await apiClient.sendChat({
@@ -1212,8 +1366,8 @@
     } finally {
       state.sending = false;
       state.selectedFiles = [];
-      setComposerValue("");
       render();
+      scrollConversationToLatest();
     }
   }
 
@@ -1250,11 +1404,17 @@
         state.activeThreadId[state.section] = threadButton.getAttribute("data-thread") || "";
         state.homeConversationOpen = true;
         render();
+        scrollConversationToLatest();
         return;
       }
 
       if (event.target.closest("[data-close-auth]")) {
         closeAuthModal();
+        return;
+      }
+
+      if (event.target.closest("[data-close-settings]")) {
+        closeSettingsModal();
         return;
       }
 
@@ -1272,9 +1432,37 @@
 
       if (event.target.closest("[data-open-account]")) {
         if (isAuthenticated()) {
-          window.location.href = STUDENT_PAGE_URL;
+          state.settingsModalOpen = true;
+          render();
         } else {
           openAuthModal("افتح حسابك للوصول إلى التجربة الكاملة.");
+        }
+        return;
+      }
+
+      const modalThemeButton = event.target.closest("[data-modal-theme]");
+      if (modalThemeButton) {
+        const nextTheme = modalThemeButton.getAttribute("data-modal-theme") || "light";
+        state.theme = nextTheme === "system" ? "light" : nextTheme;
+        setStoredTheme(state.theme);
+        render();
+        return;
+      }
+
+      if (event.target.closest("[data-logout]")) {
+        const apiClient = getApiClient();
+        const finishLogout = () => {
+          localStorage.removeItem(legacyStorageKeys.currentUser);
+          state.currentUser = getActiveUser();
+          state.settingsModalOpen = false;
+          state.authModalOpen = false;
+          state.homeConversationOpen = false;
+          render();
+        };
+        if (apiClient?.logout) {
+          apiClient.logout().finally(finishLogout);
+        } else {
+          finishLogout();
         }
         return;
       }
