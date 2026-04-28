@@ -38,7 +38,7 @@
   };
 
   const navItems = [
-    { key: "dashboard", label: "لوحة التحكم", href: "index.html", icon: "dashboard" },
+    { key: "dashboard", label: "الرئيسية", href: "index.html", icon: "dashboard" },
     { key: "messages", label: "المحادثات", href: "messages.html", icon: "messages" },
     { key: "projects", label: "المشاريع", href: "projects.html", icon: "projects" },
     { key: "library", label: "المكتبة", href: "library.html", icon: "library" },
@@ -821,23 +821,7 @@
     return `
       <div class="workspace-shell">
         <aside class="workspace-sidebar" aria-label="التنقل">
-          <a class="workspace-brand" href="index.html" aria-label="Orlixor">
-            <img src="orlixor-brand.png" alt="Orlixor">
-          </a>
-          <button class="workspace-primary-btn" type="button" data-primary-action>
-            ${icons.plus}
-            تسجيل الدخول
-          </button>
           <nav class="workspace-nav">${renderSidebarNav()}</nav>
-          <div class="workspace-sidebar-foot">
-            <div class="workspace-user-card">
-              <div class="workspace-user-avatar">${icons.spark}</div>
-              <div class="workspace-user-copy">
-                <strong>ضيف مميز</strong>
-                <span>نسخة استعراض عامة</span>
-              </div>
-            </div>
-          </div>
         </aside>
         <section class="workspace-main">
           <header class="workspace-topbar">
