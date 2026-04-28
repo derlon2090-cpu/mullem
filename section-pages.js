@@ -873,7 +873,7 @@
             <span><i aria-hidden="true">${icons.lock}</i>الدخول</span>
           </span>
           <span class="guest-user-avatar" aria-hidden="true">${icons.user}</span>
-          <span class="guest-user-action"><i aria-hidden="true">${icons.login}</i>تسجيل الدخول</span>
+          <span class="guest-user-action">تسجيل الدخول</span>
         </button>
       `
       : `
