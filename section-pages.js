@@ -618,7 +618,8 @@
   }
 
   function renderQuickCards(profile) {
-    return profile.quickCards.map(([title, desc, icon]) => `
+    const cards = isHomeWorkspace ? [...profile.quickCards].reverse() : profile.quickCards;
+    return cards.map(([title, desc, icon]) => `
       <button class="guest-quick-card ${isAuthenticated() ? "" : "requires-auth"}" type="button" data-card="${escapeHtml(title)}">
         <i class="guest-quick-icon" aria-hidden="true">${icons[icon]}</i>
         <div class="guest-quick-copy">

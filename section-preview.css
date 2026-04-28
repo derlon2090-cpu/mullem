@@ -100,6 +100,7 @@ a {
 
 .guest-shell.is-home-workspace .guest-sidebar {
   gap: 14px;
+  overflow: hidden;
 }
 
 .guest-brand {
@@ -720,10 +721,20 @@ a {
   gap: 16px;
 }
 
+.guest-shell.is-home-workspace .guest-sidepanel {
+  gap: 0;
+  padding: 16px 18px 18px;
+  overflow: hidden;
+}
+
 .guest-sidepanel-top {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto auto;
   gap: 10px;
+}
+
+.guest-shell.is-home-workspace .guest-sidepanel-top {
+  margin-bottom: 18px;
 }
 
 .ghost-balance,
@@ -777,6 +788,20 @@ a {
   box-shadow: 0 18px 34px rgba(31, 44, 93, 0.04);
 }
 
+.guest-shell.is-home-workspace .side-card {
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  padding: 22px 6px;
+  border-top: 1px solid rgba(111, 76, 255, 0.09);
+}
+
+.guest-shell.is-home-workspace .side-card:first-of-type {
+  border-top: 0;
+  padding-top: 8px;
+}
+
 .guest-shell.theme-dark .side-card {
   background: rgba(28, 30, 54, 0.95);
   border-color: rgba(151, 125, 255, 0.14);
@@ -787,6 +812,11 @@ a {
   align-items: center;
   gap: 12px;
   margin-bottom: 12px;
+}
+
+.guest-shell.is-home-workspace .ai-card-brand {
+  justify-content: space-between;
+  align-items: center;
 }
 
 .ai-card-mark {
@@ -827,9 +857,17 @@ a {
   gap: 12px;
 }
 
+.guest-shell.is-home-workspace .settings-card {
+  gap: 14px;
+}
+
 .side-select {
   display: grid;
   gap: 6px;
+}
+
+.guest-shell.is-home-workspace .side-select {
+  gap: 8px;
 }
 
 .side-select select {
@@ -842,6 +880,14 @@ a {
   color: #202652;
 }
 
+.guest-shell.is-home-workspace .side-select select {
+  min-height: 56px;
+  border-radius: 18px;
+  padding: 0 18px;
+  font-size: 1rem;
+  font-weight: 700;
+}
+
 .side-toggle {
   min-height: 48px;
   border: 1px solid rgba(111, 76, 255, 0.08);
@@ -852,6 +898,12 @@ a {
   align-items: center;
   justify-content: space-between;
   color: #29305d;
+}
+
+.guest-shell.is-home-workspace .side-toggle {
+  min-height: 56px;
+  border-radius: 18px;
+  padding: 0 18px;
 }
 
 .side-toggle-track {
@@ -890,6 +942,11 @@ a {
   color: #9097b6;
   text-align: center;
   line-height: 1.9;
+}
+
+.guest-shell.is-home-workspace .file-dropzone {
+  min-height: 118px;
+  border-radius: 20px;
 }
 
 .file-list {
@@ -952,6 +1009,10 @@ a {
   justify-content: center;
   gap: 10px;
   font-weight: 800;
+}
+
+.guest-shell.is-home-workspace .delete-chat-btn {
+  margin-top: 18px;
 }
 
 .side-empty,
