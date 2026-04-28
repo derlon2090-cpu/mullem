@@ -6,7 +6,11 @@
   const LOGIN_PAGE_URL = "login.html";
   const STUDENT_PAGE_URL = "student.html";
   const GUEST_URL = "guest.html";
+  const HOME_URL = "index.html";
   const SEARCH_PARAM = "section";
+  const workspaceMode = document.body?.dataset.workspaceMode === "home" ? "home" : "sections";
+  const isHomeWorkspace = workspaceMode === "home";
+  const shellBaseUrl = isHomeWorkspace ? HOME_URL : GUEST_URL;
   const themeKey = "orlixor_guest_theme";
   const legacyStorageKeys = {
     users: "mlm_users",
@@ -469,14 +473,25 @@
     return Boolean(state.currentUser);
   }
 
+  function getDefaultSection() {
+    return isHomeWorkspace ? "messages" : "dashboard";
+  }
+
   function resolveSection() {
     const params = new URLSearchParams(window.location.search);
-    const requested = params.get(SEARCH_PARAM) || "dashboard";
-    return sectionProfiles[requested] ? requested : "dashboard";
+    const requested = params.get(SEARCH_PARAM) || getDefaultSection();
+    return sectionProfiles[requested] ? requested : getDefaultSection();
   }
 
   function updateUrl(replace = false) {
-    const url = `${GUEST_URL}?${SEARCH_PARAM}=${encodeURIComponent(state.section)}`;
+    const params = new URLSearchParams(window.location.search);
+    if (state.section === getDefaultSection()) {
+      params.delete(SEARCH_PARAM);
+    } else {
+      params.set(SEARCH_PARAM, state.section);
+    }
+    const query = params.toString();
+    const url = `${shellBaseUrl}${query ? `?${query}` : ""}`;
     window.history[replace ? "replaceState" : "pushState"]({}, "", url);
   }
 
@@ -645,19 +660,43 @@
     const thread = getActiveThread();
     const messages = thread?.messages || [];
     return `
-      <section class="guest-conversation-card">
-        <header class="guest-conversation-head">
-          <div>
-            <strong>${escapeHtml(profile.heroTitle)}</strong>
-            <p>${escapeHtml(profile.heroSubtitle)}</p>
-          </div>
-          <span class="guest-conversation-status">${isAuthenticated() ? "جاهز للإرسال" : "وضع الاستعراض"}</span>
-        </header>
+      <section class="guest-conversation-card ${isHomeWorkspace ? "is-home-conversation" : ""}">
+        ${isHomeWorkspace ? "" : `
+          <header class="guest-conversation-head">
+            <div>
+              <strong>${escapeHtml(profile.heroTitle)}</strong>
+              <p>${escapeHtml(profile.heroSubtitle)}</p>
+            </div>
+            <span class="guest-conversation-status">${isAuthenticated() ? "جاهز للإرسال" : "وضع الاستعراض"}</span>
+          </header>
+        `}
         <div class="guest-messages">
           ${messages.map(renderMessage).join("")}
         </div>
       </section>
     `;
+  }
+
+  function getMainHero(profile) {
+    if (!isHomeWorkspace) {
+      return {
+        title: profile.heroTitle,
+        subtitle: profile.heroSubtitle
+      };
+    }
+
+    if (isAuthenticated()) {
+      const firstName = String(state.currentUser?.name || "بك").trim().split(/\s+/)[0] || "بك";
+      return {
+        title: `مرحبًا ${firstName}! 👋`,
+        subtitle: "أنا Orlixor AI، مساعدك الذكي. كيف يمكنني مساعدتك اليوم؟"
+      };
+    }
+
+    return {
+      title: "مرحبًا بك!",
+      subtitle: "أنا Orlixor AI، مساعدك الذكي. تصفح الواجهة بحرية، وعند الإرسال أو استخدام الأدوات سنطلب منك تسجيل الدخول."
+    };
   }
 
   function renderAttachmentPills() {
@@ -771,6 +810,7 @@
   }
 
   function renderMain(profile) {
+    const hero = getMainHero(profile);
     return `
       <section class="guest-main">
         <header class="guest-main-topbar">
@@ -779,8 +819,8 @@
             <span>Orlixor AI</span>
           </button>
           <div class="guest-hero-copy">
-            <h1>${escapeHtml(profile.heroTitle)}</h1>
-            <p>${escapeHtml(profile.heroSubtitle)}</p>
+            <h1>${escapeHtml(hero.title)}</h1>
+            <p>${escapeHtml(hero.subtitle)}</p>
           </div>
         </header>
 
@@ -816,7 +856,7 @@
     const userCard = getUserCardMeta();
     return `
       <aside class="guest-sidebar">
-        <a class="guest-brand" href="${GUEST_URL}?${SEARCH_PARAM}=dashboard" aria-label="Orlixor">
+        <a class="guest-brand" href="${shellBaseUrl}" aria-label="Orlixor">
           <img src="orlixor-brand.png" alt="Orlixor">
         </a>
 
@@ -830,9 +870,11 @@
           <span>${icons.search}</span>
         </label>
 
-        <nav class="guest-nav" aria-label="أقسام المنصة">
-          ${renderNav()}
-        </nav>
+        ${isHomeWorkspace ? "" : `
+          <nav class="guest-nav" aria-label="أقسام المنصة">
+            ${renderNav()}
+          </nav>
+        `}
 
         <div class="guest-history-wrap">
           ${renderHistory()}
@@ -882,7 +924,7 @@
   function renderShell() {
     const profile = getProfile();
     app.innerHTML = `
-      <div class="guest-shell ${state.theme === "dark" ? "theme-dark" : ""}">
+      <div class="guest-shell ${state.theme === "dark" ? "theme-dark" : ""} ${isHomeWorkspace ? "is-home-workspace" : ""}">
         ${renderSidebar()}
         ${renderMain(profile)}
         ${renderRightPanel(profile)}

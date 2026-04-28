@@ -98,6 +98,10 @@ a {
   gap: 16px;
 }
 
+.guest-shell.is-home-workspace .guest-sidebar {
+  gap: 14px;
+}
+
 .guest-brand {
   display: inline-flex;
   align-items: center;
@@ -197,6 +201,10 @@ a {
   display: grid;
   align-content: start;
   gap: 14px;
+}
+
+.guest-shell.is-home-workspace .guest-history-wrap {
+  margin-top: 4px;
 }
 
 .guest-history-group {
@@ -372,6 +380,10 @@ a {
   flex-wrap: wrap;
 }
 
+.guest-shell.is-home-workspace .guest-main-topbar {
+  align-items: center;
+}
+
 .ai-switcher {
   min-height: 52px;
   padding: 0 16px;
@@ -420,6 +432,10 @@ a {
   font-size: clamp(2rem, 3vw, 3rem);
   line-height: 1.2;
   font-weight: 900;
+}
+
+.guest-shell.is-home-workspace .guest-hero-copy h1 {
+  font-size: clamp(2.2rem, 3.4vw, 3.45rem);
 }
 
 .guest-hero-copy p {
@@ -487,6 +503,10 @@ a {
   background: rgba(255, 255, 255, 0.96);
   padding: 26px 24px 22px;
   box-shadow: 0 20px 40px rgba(31, 44, 93, 0.04);
+}
+
+.guest-conversation-card.is-home-conversation {
+  padding-top: 22px;
 }
 
 .guest-shell.theme-dark .guest-conversation-card {
