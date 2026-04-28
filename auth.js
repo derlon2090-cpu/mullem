@@ -50,6 +50,8 @@ const adminCredentials = {
   password: "Mullem@2026"
 };
 
+const isEmbeddedAuth = new URLSearchParams(window.location.search).get("embed") === "1";
+
 try {
   window.mullemApiClient?.restorePersistentAuthFromCookies?.();
   window.mullemApiClient?.syncLegacySessionUser?.();
@@ -61,9 +63,9 @@ try {
 try {
   const activeAdminSession = localStorage.getItem(storageKeys.adminSession);
   const activeUserId = localStorage.getItem(storageKeys.currentUser);
-  if (activeAdminSession === "1") {
+  if (!isEmbeddedAuth && activeAdminSession === "1") {
     window.location.href = "admin.html";
-  } else if (activeUserId && !window.location.pathname.endsWith("admin.html")) {
+  } else if (!isEmbeddedAuth && activeUserId && !window.location.pathname.endsWith("admin.html")) {
     window.location.href = "student.html";
   }
 } catch (_) {
@@ -86,6 +88,22 @@ function persistClientAuthState() {
     window.mullemApiClient?.persistLegacyAuthState?.();
   } catch (_) {
     // Ignore persistence issues on restricted browsers.
+  }
+}
+
+function notifyEmbeddedAuthSuccess(payload = {}) {
+  if (!isEmbeddedAuth || window.parent === window) return false;
+  try {
+    window.parent.postMessage(
+      {
+        type: "mullem-auth-success",
+        payload
+      },
+      window.location.origin
+    );
+    return true;
+  } catch (_) {
+    return false;
   }
 }
 
@@ -139,6 +157,7 @@ function completeStudentApiLogin(user, message, passwordOverride = "") {
   ensureUserWorkspace(normalizedUser.id);
   clearPendingAuth();
   setState(message || `أهلًا ${normalizedUser.name}، تم تسجيل الدخول بنجاح عبر الخادم.`);
+  if (notifyEmbeddedAuthSuccess({ role: "student", user: normalizedUser })) return;
   redirectToStudent();
 }
 
@@ -148,6 +167,7 @@ function completeAdminApiLogin(message) {
   persistClientAuthState();
   clearPendingAuth();
   setState(message || "تم تسجيل دخول الأدمن بنجاح عبر الخادم.");
+  if (notifyEmbeddedAuthSuccess({ role: "admin" })) return;
   window.location.href = "admin.html";
 }
 
@@ -161,6 +181,7 @@ function handleLocalLoginFallback(email, password) {
     localStorage.removeItem(storageKeys.currentUser);
     persistClientAuthState();
     setState("تم تسجيل دخول الأدمن بنجاح. سيتم تحويلك الآن.");
+    if (notifyEmbeddedAuthSuccess({ role: "admin" })) return;
     window.location.href = "admin.html";
     return;
   }
@@ -426,6 +447,13 @@ function startAuthVerification(request) {
 }
 
 function redirectToStudent() {
+  if (isEmbeddedAuth) {
+    const activeUserId = localStorage.getItem(storageKeys.currentUser);
+    const user = loadUsers().find((entry) => String(entry.id) === String(activeUserId || ""));
+    if (notifyEmbeddedAuthSuccess({ role: "student", user: user || null })) {
+      return;
+    }
+  }
   window.location.href = "student.html";
 }
 
@@ -780,6 +808,17 @@ registerSubmitButton?.addEventListener("click", () => {
 const pendingAuth = loadPendingAuth();
 if (pendingAuth) {
   openAuthMode("verify");
+}
+
+if (isEmbeddedAuth) {
+  const activeAdminSession = localStorage.getItem(storageKeys.adminSession);
+  const activeUserId = localStorage.getItem(storageKeys.currentUser);
+  if (activeAdminSession === "1") {
+    notifyEmbeddedAuthSuccess({ role: "admin" });
+  } else if (activeUserId) {
+    const activeUser = loadUsers().find((entry) => String(entry.id) === String(activeUserId));
+    notifyEmbeddedAuthSuccess({ role: "student", user: activeUser || null });
+  }
 }
 
 window.addEventListener("scroll", syncScrollTopButton, { passive: true });

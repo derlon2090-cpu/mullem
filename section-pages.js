@@ -1,918 +1,1269 @@
-﻿(() => {
-  const $ = (selector, root = document) => root.querySelector(selector);
-  const $$ = (selector, root = document) => Array.from(root.querySelectorAll(selector));
+(() => {
   const app = document.getElementById("sectionApp");
-  const initialPageKey = document.body.dataset.page || "messages";
-  const LOGIN_URL = "login.html";
-
   if (!app) return;
 
+  const LOGIN_FRAME_URL = "login.html?embed=1&mode=login";
+  const LOGIN_PAGE_URL = "login.html";
+  const STUDENT_PAGE_URL = "student.html";
+  const GUEST_URL = "guest.html";
+  const SEARCH_PARAM = "section";
+  const themeKey = "orlixor_guest_theme";
+  const legacyStorageKeys = {
+    users: "mlm_users",
+    currentUser: "mlm_current_user"
+  };
+
   const icons = {
-    plus: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>',
-    dashboard: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 13h6V4H4zM14 20h6v-9h-6zM14 10h6V4h-6zM4 20h6v-3H4z"/></svg>',
-    messages: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 11.5a8.5 8.5 0 0 1-8.5 8.5A8.7 8.7 0 0 1 8 18.8L3 20l1.4-4.5A8.5 8.5 0 1 1 21 11.5Z"/></svg>',
-    projects: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><path d="M8 12h8M8 15h5"/></svg>',
-    library: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 4h13v16H6a3 3 0 0 0 0-6h13"/><path d="M6 20a3 3 0 1 1 0-6"/></svg>',
-    subjects: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 6V4M8 4h8M5 8h14a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-8a2 2 0 0 1 2-2Z"/><path d="M8 14h8"/></svg>',
-    aiTools: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3v3M12 18v3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M3 12h3M18 12h3M4.9 19.1 7 17M17 7l2.1-2.1"/><circle cx="12" cy="12" r="4"/></svg>',
-    notes: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M7 3h8l4 4v14H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2Z"/><path d="M15 3v5h5M9 13h6M9 17h4"/></svg>',
-    tests: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M7 3h8l4 4v14H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2Z"/><path d="m9 14 2 2 4-4"/></svg>',
-    settings: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m12 3 1.7 2.6 3-.1.9 2.8 2.7 1-.2 3 2.4 1.9-1.9 2.4.2 3-2.7 1-.9 2.8-3-.1L12 21l-1.7-2.6-3 .1-.9-2.8-2.7-1 .2-3L1.5 12l1.9-2.4-.2-3 2.7-1 .9-2.8 3 .1Z"/><circle cx="12" cy="12" r="3.2"/></svg>',
-    search: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>',
-    bell: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 8a6 6 0 1 1 12 0c0 7 3 8 3 8H3s3-1 3-8"/><path d="M10 20a2 2 0 0 0 4 0"/></svg>',
-    rocket: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 19c2.5-.5 4.5-2.5 5-5l7-7a4.2 4.2 0 0 0 0-6 4.2 4.2 0 0 0-6 0l-7 7c-.5 2.5-2.5 4.5-5 5 2 1 3 2 4 4 1-1 2-2 4-4Z"/><path d="M14 10 9 15"/></svg>',
-    chart: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 19V5M4 19h16"/><path d="M8 15v-4M12 15V8M16 15V6"/></svg>',
-    megaphone: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 10v4a2 2 0 0 0 2 2h2l4 4V6L7 10H5a2 2 0 0 0-2 2Z"/><path d="M15 8a4 4 0 0 1 0 8"/><path d="M17 5a8 8 0 0 1 0 14"/></svg>',
-    file: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M7 3h8l4 4v14H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2Z"/><path d="M15 3v5h5"/></svg>',
-    cap: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m3 9 9-5 9 5-9 5-9-5Z"/><path d="M7 11.5V16c0 1.8 2.2 3.2 5 3.2s5-1.4 5-3.2v-4.5"/></svg>',
-    pencil: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m4 20 4.5-1 9-9a2.1 2.1 0 0 0-3-3l-9 9L4 20Z"/><path d="m13.5 6.5 4 4"/></svg>',
-    shield: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3 5 6v5c0 5 3.5 8.5 7 10 3.5-1.5 7-5 7-10V6l-7-3Z"/></svg>',
-    users: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 21v-2a4 4 0 0 0-4-4H7a4 4 0 0 0-4 4v2"/><circle cx="9.5" cy="7" r="3.5"/><path d="M20 21v-2a4 4 0 0 0-3-3.9"/><path d="M14 4.1a3.5 3.5 0 0 1 0 5.8"/></svg>',
-    spark: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m12 3 1.5 4.5L18 9l-4.5 1.5L12 15l-1.5-4.5L6 9l4.5-1.5Z"/><path d="m19 15 .8 2.2L22 18l-2.2.8L19 21l-.8-2.2L16 18l2.2-.8Z"/></svg>',
-    globe: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14.5 14.5 0 0 1 0 18M12 3a14.5 14.5 0 0 0 0 18"/></svg>',
-    image: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="9" cy="10" r="2"/><path d="m21 15-4-4L7 21"/></svg>',
-    send: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 2 11 13"/><path d="m22 2-7 20-4-9-9-4 20-7Z"/></svg>',
-    dots: '<svg viewBox="0 0 24 24" fill="currentColor"><circle cx="6" cy="12" r="1.7"/><circle cx="12" cy="12" r="1.7"/><circle cx="18" cy="12" r="1.7"/></svg>',
-    book: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 17A2.5 2.5 0 0 0 4 19.5V5a2 2 0 0 1 2-2h14v14Z"/></svg>',
-    clock: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 3"/></svg>'
+    logo: '<img src="orlixor-mark.png" alt="" aria-hidden="true">',
+    plus: '<svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>',
+    home: '<svg viewBox="0 0 24 24"><path d="M4 10.5 12 4l8 6.5V20a1 1 0 0 1-1 1h-4.5v-5.5h-5V21H5a1 1 0 0 1-1-1z"/></svg>',
+    chat: '<svg viewBox="0 0 24 24"><path d="M20 11.5c0 4.1-3.8 7.5-8.5 7.5-1.2 0-2.4-.2-3.4-.7L4 20l1.4-3.2A7.1 7.1 0 0 1 3 11.5C3 7.4 6.8 4 11.5 4S20 7.4 20 11.5Z"/></svg>',
+    projects: '<svg viewBox="0 0 24 24"><path d="M4 6.5A2.5 2.5 0 0 1 6.5 4H10l2 2h5.5A2.5 2.5 0 0 1 20 8.5v9A2.5 2.5 0 0 1 17.5 20h-11A2.5 2.5 0 0 1 4 17.5z"/><path d="M8 11h8M8 14h5"/></svg>',
+    library: '<svg viewBox="0 0 24 24"><path d="M6 5.5A2.5 2.5 0 0 1 8.5 3H19v16H8.5A2.5 2.5 0 0 0 6 21z"/><path d="M6 5.5V21H5a2 2 0 0 1-2-2V7.5A2.5 2.5 0 0 1 5.5 5z"/></svg>',
+    subjects: '<svg viewBox="0 0 24 24"><path d="M8 7V5.5A1.5 1.5 0 0 1 9.5 4h5A1.5 1.5 0 0 1 16 5.5V7"/><path d="M5 7h14a2 2 0 0 1 2 2v8.5a2.5 2.5 0 0 1-2.5 2.5h-13A2.5 2.5 0 0 1 3 17.5V9a2 2 0 0 1 2-2Z"/><path d="M3 12h18M10 15h4"/></svg>',
+    ai: '<svg viewBox="0 0 24 24"><path d="M12 3v4M12 17v4M4.2 7l3.2 1.8M16.6 15.2 19.8 17M4.2 17l3.2-1.8M16.6 8.8 19.8 7"/><circle cx="12" cy="12" r="3.8"/></svg>',
+    notes: '<svg viewBox="0 0 24 24"><path d="M7 4h8l4 4v11a1 1 0 0 1-1 1H7a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2Z"/><path d="M15 4v4h4M8.5 13H15M8.5 16H13"/></svg>',
+    tests: '<svg viewBox="0 0 24 24"><path d="M7 4h8l4 4v11a1 1 0 0 1-1 1H7a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2Z"/><path d="M15 4v4h4M8.5 13l1.7 1.7L15 10"/></svg>',
+    settings: '<svg viewBox="0 0 24 24"><path d="m12 3 1.8 2.1 2.8-.2 1 2.6 2.5 1-.2 2.8L21 12l-2.1 1.7.2 2.8-2.5 1-1 2.6-2.8-.2L12 21l-1.8-2.1-2.8.2-1-2.6-2.5-1 .2-2.8L3 12l2.1-1.7-.2-2.8 2.5-1 1-2.6 2.8.2Z"/><circle cx="12" cy="12" r="3.2"/></svg>',
+    search: '<svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>',
+    bell: '<svg viewBox="0 0 24 24"><path d="M15 18H5.5a1.5 1.5 0 0 1-1.2-2.4l1.2-1.6V10a6.5 6.5 0 1 1 13 0v4l1.2 1.6a1.5 1.5 0 0 1-1.2 2.4H9"/><path d="M10 18a2 2 0 0 0 4 0"/></svg>',
+    moon: '<svg viewBox="0 0 24 24"><path d="M20 14.3A8 8 0 0 1 9.7 4 8 8 0 1 0 20 14.3Z"/></svg>',
+    crown: '<svg viewBox="0 0 24 24"><path d="m3 8 4.4 4.4L12 6l4.6 6.4L21 8l-2 10H5L3 8Z"/></svg>',
+    send: '<svg viewBox="0 0 24 24"><path d="M22 2 11 13"/><path d="m22 2-7 20-4-9-9-4 20-7Z"/></svg>',
+    attach: '<svg viewBox="0 0 24 24"><path d="m21.4 11-8.5 8.5a5 5 0 1 1-7.1-7.1l9.2-9.2a3.5 3.5 0 0 1 5 4.9l-9.2 9.3a2 2 0 1 1-2.9-2.8l8-8"/></svg>',
+    sparkle: '<svg viewBox="0 0 24 24"><path d="m12 3 1.5 4.5L18 9l-4.5 1.5L12 15l-1.5-4.5L6 9l4.5-1.5Z"/><path d="m19 15 .8 2.2L22 18l-2.2.8L19 21l-.8-2.2L16 18l2.2-.8Z"/></svg>',
+    document: '<svg viewBox="0 0 24 24"><path d="M7 3h8l4 4v14H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2Z"/><path d="M15 3v5h5"/></svg>',
+    internet: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14.5 14.5 0 0 1 0 18M12 3a14.5 14.5 0 0 0 0 18"/></svg>',
+    menu: '<svg viewBox="0 0 24 24"><circle cx="6" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="18" cy="12" r="1.6"/></svg>',
+    delete: '<svg viewBox="0 0 24 24"><path d="M4 7h16"/><path d="M10 11v6M14 11v6"/><path d="M6 7 7 20a1 1 0 0 0 1 .9h8a1 1 0 0 0 1-.9L18 7"/><path d="M9 7V4h6v3"/></svg>',
+    copy: '<svg viewBox="0 0 24 24"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V6a2 2 0 0 1 2-2h9"/></svg>',
+    refresh: '<svg viewBox="0 0 24 24"><path d="M3 12a9 9 0 0 1 15.4-6.4L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-15.4 6.4L3 16"/><path d="M3 21v-5h5"/></svg>',
+    thumbsUp: '<svg viewBox="0 0 24 24"><path d="M7 10v11H4V10h3Z"/><path d="M10 21h6a2 2 0 0 0 2-1.6l1.2-6a2 2 0 0 0-2-2.4h-4.5l.7-3.6A2.3 2.3 0 0 0 11 5l-4 5v11h3Z"/></svg>',
+    filePdf: '<svg viewBox="0 0 24 24"><path d="M7 3h8l4 4v14H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2Z"/><path d="M15 3v5h5"/><path d="M8 15h8M8 18h5"/></svg>',
+    star: '<svg viewBox="0 0 24 24"><path d="m12 3 2.8 5.7 6.2.9-4.5 4.4 1 6.2L12 17.2 6.5 20l1-6.2L3 9.6l6.2-.9Z"/></svg>'
   };
 
   const navItems = [
-    { key: "dashboard", label: "الرئيسية", href: "index.html", icon: "dashboard" },
-    { key: "messages", label: "المحادثات", href: "messages.html", icon: "messages" },
-    { key: "projects", label: "المشاريع", href: "projects.html", icon: "projects" },
-    { key: "library", label: "المكتبة", href: "library.html", icon: "library" },
-    { key: "subjects", label: "المواد الدراسية", href: "subjects.html", icon: "subjects" },
-    { key: "ai-tools", label: "أدوات الذكاء الاصطناعي", href: "ai-tools.html", icon: "aiTools" },
-    { key: "notes", label: "الملاحظات", href: "notes.html", icon: "notes" },
-    { key: "tests", label: "الاختبارات", href: "tests.html", icon: "tests" },
-    { key: "settings", label: "الإعدادات", href: "settings.html", icon: "settings" }
+    { key: "dashboard", label: "لوحة التحكم", icon: "home" },
+    { key: "messages", label: "المحادثات", icon: "chat" },
+    { key: "projects", label: "المشاريع", icon: "projects" },
+    { key: "library", label: "المكتبة", icon: "library" },
+    { key: "subjects", label: "المواد الدراسية", icon: "subjects" },
+    { key: "ai-tools", label: "أدوات الذكاء الاصطناعي", icon: "ai" },
+    { key: "notes", label: "الملاحظات", icon: "notes" },
+    { key: "tests", label: "الاختبارات", icon: "tests" },
+    { key: "settings", label: "الإعدادات", icon: "settings" }
   ];
 
-  const clone = (value) => JSON.parse(JSON.stringify(value));
-  const storageKey = (key) => `orlixor-public-${key}`;
-  const escapeHtml = (value) =>
-    String(value)
+  const sectionProfiles = {
+    dashboard: buildProfile({
+      key: "dashboard",
+      heroTitle: "مرحبًا بك!",
+      heroSubtitle: "أنا Orlixor AI، مساعدك الذكي. كيف يمكنني مساعدتك اليوم؟",
+      responseMode: "مرن",
+      responseLength: "متوازن",
+      webEnabled: true,
+      quickCards: [
+        ["تحليل البيانات", "تحميل وتحليل ملف بيانات", "ai"],
+        ["تلخيص المحتوى", "تلخيص النصوص والملفات", "document"],
+        ["كتابة المحتوى", "إنشاء محتوى احترافي", "sparkle"],
+        ["أفكار وإبداع", "الحصول على أفكار جديدة", "star"]
+      ],
+      groups: [
+        group("اليوم", [
+          thread("dash-1", "تحليل السوق السعودي 2024", "10:30 AM", "أريد تحليل السوق السعودي في عام 2024 في قطاع التجارة الإلكترونية.", assistantReply("إليك تحليلًا شاملًا للسوق السعودي في قطاع التجارة الإلكترونية لعام 2024:", [
+            "نمو السوق مدفوع بزيادة الاعتماد على الشراء الرقمي والخدمات اللوجستية السريعة.",
+            "أبرز المحركات الحالية: المدفوعات الرقمية، سلوك المستهلك المحمول، والطلب على التوصيل في نفس اليوم.",
+            "أهم التحديات: المنافسة السعرية، ارتفاع تكلفة الإعلانات، والحاجة إلى تجربة مستخدم أكثر سلاسة."
+          ]), "ملف تحليلي أساسي", { created: "اليوم 10:30 AM", messages: "8 رسائل", updated: "منذ دقيقة واحدة" }),
+          thread("dash-2", "خطة إطلاق أكاديمية", "9:10 AM", "أعطني خطة إطلاق مختصرة لمنصة تعليمية جديدة في السعودية.", assistantReply("هذه بداية سريعة لخطة الإطلاق:", [
+            "بناء عرض قيمة واضح للطلاب وأولياء الأمور.",
+            "البدء بمحتوى مجاني قصير لاكتساب الثقة.",
+            "ربط الإطلاق بحملة محتوى وتجارب استخدام مباشرة."
+          ]), "خطة_إطلاق.pdf", { created: "اليوم 9:10 AM", messages: "5 رسائل", updated: "منذ 12 دقيقة" })
+        ]),
+        group("أمس", [
+          thread("dash-3", "دراسة جدوى مشروع", "أمس", "أحتاج إلى دراسة جدوى أولية لمشروع تعليمي صغير.", assistantReply("تم إعداد تصور أولي يشمل:", [
+            "الهدف من المشروع والجمهور المستهدف.",
+            "التكاليف التشغيلية الأساسية والإيرادات المتوقعة.",
+            "مخاطر التنفيذ وخيارات التوسع المرحلي."
+          ]), "دراسة_جدوى.docx", { created: "أمس 6:20 PM", messages: "6 رسائل", updated: "أمس" })
+        ])
+      ]
+    }),
+    messages: buildProfile({
+      key: "messages",
+      heroTitle: "مرحبًا أحمد! 👋",
+      heroSubtitle: "أنا Orlixor AI، مساعدك الذكي. كيف يمكنني مساعدتك اليوم؟",
+      responseMode: "شرح",
+      responseLength: "مفصل",
+      webEnabled: true,
+      quickCards: [
+        ["تحليل البيانات", "تحميل وتحليل ملف بيانات", "ai"],
+        ["تلخيص المحتوى", "تلخيص النصوص والملفات", "document"],
+        ["كتابة المحتوى", "إنشاء محتوى احترافي", "sparkle"],
+        ["أفكار وإبداع", "الحصول على أفكار جديدة", "star"]
+      ],
+      groups: [
+        group("اليوم", [
+          thread("msg-1", "تحليل السوق السعودي 2024", "10:30 AM", "أريد تحليل السوق السعودي في عام 2024 في قطاع التجارة الإلكترونية.", assistantReply("بالطبع، إليك تحليلًا شاملًا للسوق السعودي في قطاع التجارة الإلكترونية لعام 2024:", [
+            "يشهد السوق السعودي نموًا متسارعًا مدفوعًا برؤية 2030 وزيادة انتشار التسوق عبر الإنترنت.",
+            "نسبة المتسوقين عبر الإنترنت تتجاوز 79% مع توسع واضح في المدفوعات الرقمية.",
+            "أكبر الفرص الحالية في اللوجستيات، تجربة المستخدم، والتخصيص الذكي للعروض."
+          ]), "تقرير_السوق_السعودي.pdf", { created: "اليوم 10:30 AM", messages: "8 رسائل", updated: "منذ دقيقة واحدة" }),
+          thread("msg-2", "مساعدة في كتابة محتوى", "9:14 AM", "اكتب لي مقدمة احترافية لتقرير عن الذكاء الاصطناعي في التعليم.", assistantReply("هذه مقدمة جاهزة بصياغة احترافية:", [
+            "يشهد قطاع التعليم تحولًا متسارعًا بفضل تقنيات الذكاء الاصطناعي.",
+            "أصبح بالإمكان تخصيص التعلم، رفع كفاءة التقييم، وتحسين تجربة الطالب اليومية.",
+            "هذا التقرير يستعرض الأثر العملي لتلك التقنيات والفرص التي تفتحها للمؤسسات التعليمية."
+          ]), "مقدمة_تقرير.docx", { created: "اليوم 9:14 AM", messages: "4 رسائل", updated: "منذ 14 دقيقة" })
+        ]),
+        group("هذا الأسبوع", [
+          thread("msg-3", "تلخيص مقال علمي", "هذا الأسبوع", "لخّص لي هذا المقال العلمي في ثلاث نقاط واضحة.", assistantReply("تم تلخيص المقال في ثلاث نقاط رئيسية:", [
+            "الفكرة المحورية للمقال تشرح أثر الأتمتة على جودة المخرجات.",
+            "الدراسة تؤكد أن الدمج الصحيح للتقنيات يزيد من الكفاءة دون تقليل الجودة.",
+            "أوصت النتائج بالتركيز على التدريب المستمر والقياس المرحلي."
+          ]), "ملخص_مقال.md", { created: "هذا الأسبوع", messages: "3 رسائل", updated: "منذ يومين" })
+        ])
+      ]
+    }),
+    projects: buildProfile({
+      key: "projects",
+      heroTitle: "إدارة المشاريع بوضوح",
+      heroSubtitle: "نظم خططك وملفاتك ومحادثاتك في مشروع واحد مرتب.",
+      responseMode: "تنفيذي",
+      responseLength: "متوازن",
+      webEnabled: false,
+      quickCards: [
+        ["خطة مشروع", "هيكلة الأهداف والمهام", "projects"],
+        ["تقسيم المهام", "تحويل المشروع إلى خطوات", "document"],
+        ["توليد أفكار", "اقتراح مراحل تنفيذ جديدة", "sparkle"],
+        ["صياغة العرض", "بناء عرض مشروع احترافي", "star"]
+      ],
+      groups: [
+        group("اليوم", [
+          thread("proj-1", "خطة متجر إلكتروني", "اليوم", "أنشئ لي خارطة طريق لمشروع متجر إلكتروني تعليمي.", assistantReply("هذه خارطة طريق أولية للمشروع:", [
+            "مرحلة الاكتشاف: تحديد الفئة المستهدفة وعرض القيمة.",
+            "مرحلة التنفيذ: الواجهة، إدارة المحتوى، وربط أدوات الشحن والدفع.",
+            "مرحلة الإطلاق: المحتوى، التحليلات، وخطة التحسين بعد أول شهر."
+          ]), "خارطة_طريق.pptx", { created: "اليوم 12:45 PM", messages: "7 رسائل", updated: "منذ 5 دقائق" }),
+          thread("proj-2", "لوحة متابعة فريق", "اليوم", "ساعدني في بناء لوحة متابعة أسبوعية لفريق العمل.", assistantReply("لإنشاء لوحة متابعة فعالة نبدأ بـ:", [
+            "تقسيم اللوحة إلى الأولويات والمهام الجارية والمتأخرة.",
+            "تعيين مالك واضح لكل مهمة مع تاريخ تسليم.",
+            "مراجعة أسبوعية قصيرة تعتمد على مؤشرات قابلة للقياس."
+          ]), "متابعة_الفريق.xlsx", { created: "اليوم 11:20 AM", messages: "5 رسائل", updated: "منذ 18 دقيقة" })
+        ]),
+        group("هذا الأسبوع", [
+          thread("proj-3", "مشروع هوية منصة", "هذا الأسبوع", "رتب لي خطوات تصميم هوية بصرية لمنصة تعليمية.", assistantReply("الخطوات المقترحة للهوية:", [
+            "تحديد شخصية العلامة ومشاعرها الأساسية.",
+            "اختيار نظام ألوان وخطوط متسق مع طبيعة الجمهور.",
+            "إخراج مكتبة عناصر مرئية قابلة للتوسع عبر الويب والتطبيق."
+          ]), "هوية_المنصة.fig", { created: "هذا الأسبوع", messages: "6 رسائل", updated: "منذ يوم" })
+        ])
+      ]
+    }),
+    library: buildProfile({
+      key: "library",
+      heroTitle: "مكتبتك مرتبة في مكان واحد",
+      heroSubtitle: "كل الملفات والمراجع والمستندات قابلة للبحث والوصول السريع.",
+      responseMode: "منظم",
+      responseLength: "قصير",
+      webEnabled: false,
+      quickCards: [
+        ["تنظيم المستندات", "ترتيب الملفات حسب المشاريع", "library"],
+        ["استخراج الملخصات", "تلخيص سريع للمستندات", "document"],
+        ["تحويل لملاحظات", "تحويل الملف إلى نقاط مذاكرة", "notes"],
+        ["أسئلة من الملف", "إنشاء أسئلة مباشرة من المرجع", "tests"]
+      ],
+      groups: [
+        group("مراجع حديثة", [
+          thread("lib-1", "مرجع الذكاء الاصطناعي", "مضاف اليوم", "لخّص هذا المرجع في نقاط عملية قصيرة.", assistantReply("الملف يحتوي على محاور رئيسية يمكن تقسيمها إلى:", [
+            "تعريفات أساسية ومصطلحات شائعة.",
+            "أمثلة تطبيقية في التعليم والعمل.",
+            "قائمة مراجع سريعة تساعد على التوسع لاحقًا."
+          ]), "مرجع_AI.pdf", { created: "اليوم 8:40 AM", messages: "4 رسائل", updated: "اليوم" }),
+          thread("lib-2", "ملف تسويق رقمي", "مضاف أمس", "استخرج لي أهم ثلاث أفكار من هذا الملف.", assistantReply("الأفكار الأبرز من الملف:", [
+            "أهمية الرسائل القصيرة الواضحة في الإعلانات.",
+            "القياس المستمر للحملات وتحسينها أسبوعيًا.",
+            "دمج المحتوى التعليمي مع دعوات الإجراء لرفع التحويل."
+          ]), "تسويق_رقمي.pdf", { created: "أمس 7:15 PM", messages: "3 رسائل", updated: "أمس" })
+        ])
+      ]
+    }),
+    subjects: buildProfile({
+      key: "subjects",
+      heroTitle: "المواد الدراسية",
+      heroSubtitle: "تحكم ذكي في المسار الدراسي، المادة، والشرح المناسب لكل سؤال.",
+      responseMode: "تعليمي",
+      responseLength: "مفصل",
+      webEnabled: true,
+      quickCards: [
+        ["شرح درس", "تبسيط الدروس خطوة بخطوة", "subjects"],
+        ["حل واجب", "حل موجه بحسب المادة", "document"],
+        ["اختبرني", "أسئلة تدريبية سريعة", "tests"],
+        ["تلخيص وحدة", "ملخص مركز وسهل", "notes"]
+      ],
+      groups: [
+        group("اليوم", [
+          thread("sub-1", "مراجعة الرياضيات", "اليوم", "اشرح لي مفهوم الدوال التربيعية ببساطة.", assistantReply("لفهم الدوال التربيعية بسرعة ركز على:", [
+            "الصيغة العامة: ax² + bx + c.",
+            "الرسم البياني يكون على شكل قطع مكافئ.",
+            "الاتجاه ونقطة الرأس يتحددان بقيمة a والعوامل الأخرى."
+          ]), "رياضيات_وحدة_الدوال.pdf", { created: "اليوم 1:00 PM", messages: "9 رسائل", updated: "منذ 3 دقائق" }),
+          thread("sub-2", "علوم - الطاقة", "اليوم", "أعطني ملخصًا سريعًا لدرس الطاقة.", assistantReply("ملخص مختصر للدرس:", [
+            "الطاقة لا تفنى ولا تستحدث ولكن تتحول من شكل لآخر.",
+            "من أهم أشكالها: الحركية، الحرارية، الكهربائية، والكيميائية.",
+            "فهم التحولات يساعد في تفسير كثير من التطبيقات اليومية."
+          ]), "علوم_الطاقة.txt", { created: "اليوم 11:50 AM", messages: "4 رسائل", updated: "منذ 25 دقيقة" })
+        ])
+      ]
+    }),
+    "ai-tools": buildProfile({
+      key: "ai-tools",
+      heroTitle: "أدوات الذكاء الاصطناعي",
+      heroSubtitle: "مجموعة خدمات سريعة تساعدك على الإنتاج، الصياغة، والتحليل.",
+      responseMode: "احترافي",
+      responseLength: "متوازن",
+      webEnabled: true,
+      quickCards: [
+        ["كتابة المحتوى", "صياغة نصوص احترافية", "sparkle"],
+        ["تحليل البيانات", "قراءة وتقارير سريعة", "ai"],
+        ["تلخيص الملفات", "تلخيص منظم ومباشر", "document"],
+        ["توليد أفكار", "أفكار جديدة ومبتكرة", "star"]
+      ],
+      groups: [
+        group("الأكثر استخدامًا", [
+          thread("ai-1", "أداة كتابة المحتوى", "الآن", "اكتب لي وصفًا تسويقيًا قصيرًا لمنصة تعليمية.", assistantReply("وصف تسويقي جاهز:", [
+            "منصة تعليمية ذكية تساعد الطالب على الفهم والحل والتلخيص داخل تجربة حديثة وسريعة.",
+            "تجمع بين الشرح المنظم، التخصيص، وسهولة الوصول من أي جهاز.",
+            "مصممة لتبسيط المذاكرة اليومية وتحويلها إلى تجربة أكثر راحة وفاعلية."
+          ]), "وصف_تسويقي.docx", { created: "الآن", messages: "2 رسائل", updated: "الآن" }),
+          thread("ai-2", "تحليل ملف مبيعات", "اليوم", "حلل لي هذا الملف واخرج أهم الملاحظات.", assistantReply("أهم الملاحظات الأولية من الملف:", [
+            "المنتجات الأعلى أداءً ظهرت في نهاية الأسبوع.",
+            "هناك تراجع ملحوظ في معدل التحويل في منتصف القمع.",
+            "أفضل فرصة تحسين حاليًا هي اختبار الرسائل والعروض على الصفحة الرئيسية."
+          ]), "مبيعات_Q1.xlsx", { created: "اليوم 9:30 AM", messages: "5 رسائل", updated: "اليوم" })
+        ])
+      ]
+    }),
+    notes: buildProfile({
+      key: "notes",
+      heroTitle: "الملاحظات",
+      heroSubtitle: "قائمة ذكية للملاحظات السريعة داخل واجهة موحدة ومنظمة.",
+      responseMode: "مختصر",
+      responseLength: "قصير",
+      webEnabled: false,
+      quickCards: [
+        ["ملاحظة جديدة", "ابدأ تدوين فكرة سريعة", "notes"],
+        ["تلخيص إلى ملاحظات", "تحويل الشرح إلى نقاط", "document"],
+        ["فرز حسب المشروع", "ترتيب الملاحظات بذكاء", "projects"],
+        ["أسئلة من الملاحظة", "حوّل المعلومة لاختبار", "tests"]
+      ],
+      groups: [
+        group("اليوم", [
+          thread("note-1", "أفكار المشروع الجديد", "منذ 5 دقائق", "رتب لي أفكار المشروع إلى قائمة تنفيذية.", assistantReply("تم تحويل الأفكار إلى قائمة أولية:", [
+            "تعريف الهدف الرئيسي للمشروع.",
+            "تقسيم المهام إلى تنفيذ وتسويق وقياس.",
+            "تحديد أول خطوة قابلة للتنفيذ خلال اليوم."
+          ]), "أفكار_المشروع.md", { created: "اليوم 2:15 PM", messages: "3 رسائل", updated: "منذ 5 دقائق" }),
+          thread("note-2", "اجتماع الفريق", "منذ 4 ساعات", "لخص لي قرارات اجتماع اليوم.", assistantReply("ملخص القرارات:", [
+            "اعتماد الشكل الأولي للواجهة.",
+            "توزيع المهام بين التصميم والبرمجة.",
+            "تحديد مراجعة ثانية بعد اكتمال النموذج التفاعلي."
+          ]), "اجتماع_الفريق.txt", { created: "اليوم 10:00 AM", messages: "4 رسائل", updated: "منذ 4 ساعات" })
+        ])
+      ]
+    }),
+    tests: buildProfile({
+      key: "tests",
+      heroTitle: "الاختبارات",
+      heroSubtitle: "مؤشرات ونتائج واختبارات جاهزة للمتابعة السريعة.",
+      responseMode: "تقييمي",
+      responseLength: "قصير",
+      webEnabled: false,
+      quickCards: [
+        ["اختبار سريع", "قياس فوري للمستوى", "tests"],
+        ["تحليل النتيجة", "قراءة الأداء بدقة", "ai"],
+        ["تصميم بنك أسئلة", "أسئلة جديدة لنفس الموضوع", "document"],
+        ["خطة تحسين", "اقتراح خطوات بعد الاختبار", "sparkle"]
+      ],
+      groups: [
+        group("هذا الأسبوع", [
+          thread("test-1", "اختبار الذكاء الاصطناعي", "منذ 2 يوم", "اعرض لي تحليل نتيجة هذا الاختبار.", assistantReply("قراءة سريعة للنتيجة 95%:", [
+            "الفهم النظري ممتاز جدًا.",
+            "يحتاج المستخدم إلى تمارين تطبيقية إضافية في الأسئلة المركبة.",
+            "أفضل خطوة تالية: اختبار قصير جديد بعد مراجعة 15 دقيقة."
+          ]), "نتيجة_الاختبار.pdf", { created: "هذا الأسبوع", messages: "5 رسائل", updated: "منذ يومين" }),
+          thread("test-2", "اختبار تحليل البيانات", "منذ 3 يوم", "كيف أرفع درجتي في الاختبار القادم؟", assistantReply("لتحسين الدرجة ركز على:", [
+            "حل أسئلة مشابهة لنفس النوعيات التي أخطأت فيها.",
+            "تقسيم المراجعة إلى جلسات قصيرة متتابعة.",
+            "الرجوع إلى الملخصات ثم التطبيق الفوري بعدها."
+          ]), "تحليل_نتيجة.md", { created: "هذا الأسبوع", messages: "4 رسائل", updated: "منذ 3 أيام" })
+        ])
+      ]
+    }),
+    settings: buildProfile({
+      key: "settings",
+      heroTitle: "إعدادات المحادثة",
+      heroSubtitle: "اضبط اللغة وطول الرد وأسلوب المساعدة من نفس الواجهة.",
+      responseMode: "مرن",
+      responseLength: "متوازن",
+      webEnabled: true,
+      quickCards: [
+        ["ضبط اللغة", "اختيار اللغة المناسبة", "internet"],
+        ["تخصيص الرد", "تحديد النمط والطول", "settings"],
+        ["تجربة الإنترنت", "تفعيل أو إيقاف البحث", "internet"],
+        ["إعدادات الذكاء", "تخصيص المساعد الحالي", "ai"]
+      ],
+      groups: [
+        group("آخر التغييرات", [
+          thread("set-1", "إعدادات المحادثة", "الآن", "ما أفضل إعدادات لمحادثة تعليمية؟", assistantReply("أفضل إعدادات مقترحة للمحادثة التعليمية:", [
+            "نمط الرد: شرح منظم وواضح.",
+            "طول الرد: متوازن مع أمثلة عند الحاجة.",
+            "تفعيل البحث فقط عندما تحتاج لمعلومة حديثة أو موثقة."
+          ]), "إعدادات_مقترحة.txt", { created: "الآن", messages: "2 رسائل", updated: "الآن" })
+        ])
+      ]
+    })
+  };
+
+  const state = {
+    section: resolveSection(),
+    currentUser: null,
+    historySearch: {},
+    threadState: cloneThreadState(),
+    composerDraft: {},
+    selectedFiles: [],
+    sending: false,
+    theme: loadStoredTheme(),
+    authModalOpen: false,
+    authReason: "",
+    conversationIds: {},
+    settings: {}
+  };
+
+  function buildProfile(config) {
+    return {
+      ...config,
+      groups: config.groups || [],
+      quickCards: config.quickCards || [],
+      responseMode: config.responseMode || "مرن",
+      responseLength: config.responseLength || "متوازن",
+      webEnabled: Boolean(config.webEnabled)
+    };
+  }
+
+  function group(title, items) {
+    return { title, items };
+  }
+
+  function thread(id, title, time, prompt, response, fileLabel, stats) {
+    return {
+      id,
+      title,
+      time,
+      fileLabel,
+      stats,
+      messages: [
+        { role: "user", body: prompt },
+        { role: "assistant", body: response }
+      ]
+    };
+  }
+
+  function assistantReply(heading, bullets) {
+    return {
+      heading,
+      bullets
+    };
+  }
+
+  function loadStoredTheme() {
+    try {
+      return localStorage.getItem(themeKey) === "dark" ? "dark" : "light";
+    } catch (_) {
+      return "light";
+    }
+  }
+
+  function setStoredTheme(value) {
+    try {
+      localStorage.setItem(themeKey, value);
+    } catch (_) {
+      // Ignore storage issues.
+    }
+  }
+
+  function cloneThreadState() {
+    const next = {};
+    Object.entries(sectionProfiles).forEach(([key, profile]) => {
+      next[key] = profile.groups.map((entry) => ({
+        title: entry.title,
+        items: entry.items.map((item) => ({
+          ...item,
+          stats: { ...(item.stats || {}) },
+          messages: item.messages.map((message) => {
+            if (message.role === "assistant") {
+              return {
+                role: message.role,
+                body: { ...message.body, bullets: [...message.body.bullets] }
+              };
+            }
+            return { ...message };
+          })
+        }))
+      }));
+    });
+    return next;
+  }
+
+  function loadJson(key, fallback) {
+    try {
+      const raw = localStorage.getItem(key);
+      return raw ? JSON.parse(raw) : fallback;
+    } catch (_) {
+      return fallback;
+    }
+  }
+
+  function getApiClient() {
+    return window.mullemApiClient && typeof window.mullemApiClient.sendChat === "function"
+      ? window.mullemApiClient
+      : null;
+  }
+
+  function syncSessionFromCookies() {
+    try {
+      window.mullemApiClient?.restorePersistentAuthFromCookies?.();
+      window.mullemApiClient?.syncLegacySessionUser?.();
+    } catch (_) {
+      // Ignore sync issues.
+    }
+  }
+
+  function normalizeUser(user) {
+    if (!user || typeof user !== "object") return null;
+    return {
+      id: String(user.id || ""),
+      name: String(user.name || "").trim() || "مستخدم",
+      email: String(user.email || "").trim(),
+      role: String(user.role || "student").toLowerCase(),
+      stage: String(user.stage || "").trim(),
+      grade: String(user.grade || "").trim(),
+      subject: String(user.subject || "").trim(),
+      xp: Number.isFinite(Number(user.xp)) ? Number(user.xp) : 50
+    };
+  }
+
+  function getActiveUser() {
+    syncSessionFromCookies();
+    const apiUser = normalizeUser(getApiClient()?.getSessionUser?.());
+    if (apiUser && apiUser.role !== "admin") return apiUser;
+    const currentId = String(localStorage.getItem(legacyStorageKeys.currentUser) || "").trim();
+    if (!currentId) return null;
+    const users = loadJson(legacyStorageKeys.users, []);
+    const user = users.find((entry) => String(entry.id) === currentId);
+    return normalizeUser(user);
+  }
+
+  function isAuthenticated() {
+    return Boolean(state.currentUser);
+  }
+
+  function resolveSection() {
+    const params = new URLSearchParams(window.location.search);
+    const requested = params.get(SEARCH_PARAM) || "dashboard";
+    return sectionProfiles[requested] ? requested : "dashboard";
+  }
+
+  function updateUrl(replace = false) {
+    const url = `${GUEST_URL}?${SEARCH_PARAM}=${encodeURIComponent(state.section)}`;
+    window.history[replace ? "replaceState" : "pushState"]({}, "", url);
+  }
+
+  function escapeHtml(value) {
+    return String(value || "")
       .replaceAll("&", "&amp;")
       .replaceAll("<", "&lt;")
       .replaceAll(">", "&gt;")
       .replaceAll('"', "&quot;")
       .replaceAll("'", "&#39;");
-
-  const makeId = (prefix) => `${prefix}-${Date.now()}-${Math.random().toString(16).slice(2, 6)}`;
-
-  function toast(message) {
-    let stack = $(".toast-stack");
-    if (!stack) {
-      stack = document.createElement("div");
-      stack.className = "toast-stack";
-      document.body.appendChild(stack);
-    }
-    const item = document.createElement("div");
-    item.className = "toast";
-    item.textContent = message;
-    stack.appendChild(item);
-    setTimeout(() => item.remove(), 2600);
   }
 
-  function loadState(key, defaults) {
-    try {
-      const raw = localStorage.getItem(storageKey(key));
-      if (!raw) return clone(defaults);
-      return { ...clone(defaults), ...JSON.parse(raw) };
-    } catch {
-      return clone(defaults);
-    }
+  function formatNumber(value) {
+    return new Intl.NumberFormat("en-US").format(Number(value || 0));
   }
 
-  const pageMap = {
-    dashboard: {
-      title: "لوحة التحكم",
-      subtitle: "شريط واحد ثابت للضيف. تنقّل بين الأقسام من نفس الواجهة، وعند محاولة الاستخدام سيتم طلب تسجيل الدخول.",
-      searchPlaceholder: "ابحث عن قسم أو خدمة...",
-      primaryLabel: "تسجيل الدخول",
-      defaults: {
-        search: ""
-      },
-      render() {
-        return `
-          <div class="workspace-page-header">
-            <h1>${this.title}</h1>
-            <p>${this.subtitle}</p>
-          </div>
-          <div class="workspace-grid-3">
-            <button class="project-card" type="button" data-section-nav="messages">
-              <div class="card-icon">${icons.messages}</div>
-              <strong>المحادثات</strong>
-              <span>استعرض واجهة الشات قبل تسجيل الدخول.</span>
-              <div class="card-stat">شات ذكي</div>
-            </button>
-            <button class="project-card" type="button" data-section-nav="projects">
-              <div class="card-icon blue">${icons.projects}</div>
-              <strong>المشاريع</strong>
-              <span>تنظيم الملفات والمسارات الدراسية في عرض واحد.</span>
-              <div class="card-stat">تنظيم مرن</div>
-            </button>
-            <button class="project-card" type="button" data-section-nav="library">
-              <div class="card-icon mint">${icons.library}</div>
-              <strong>المكتبة</strong>
-              <span>معاينة المستندات والمواد المحفوظة داخل المنصة.</span>
-              <div class="card-stat">محتوى محفوظ</div>
-            </button>
-          </div>
-          <div class="workspace-grid-3" style="margin-top:18px;">
-            <button class="project-card" type="button" data-section-nav="subjects">
-              <div class="card-icon orange">${icons.subjects}</div>
-              <strong>المواد الدراسية</strong>
-              <span>اعرف شكل عرض المواد والتقدم قبل الدخول.</span>
-              <div class="card-stat">مسارات تعليمية</div>
-            </button>
-            <button class="project-card" type="button" data-section-nav="ai-tools">
-              <div class="card-icon pink">${icons.aiTools}</div>
-              <strong>أدوات الذكاء الاصطناعي</strong>
-              <span>استعرض الأدوات المتاحة من نفس الواجهة العامة.</span>
-              <div class="card-stat">أدوات ذكية</div>
-            </button>
-            <button class="project-card" type="button" data-section-nav="tests">
-              <div class="card-icon">${icons.tests}</div>
-              <strong>الاختبارات</strong>
-              <span>شاهد نماذج الاختبارات والنتائج قبل تسجيل الدخول.</span>
-              <div class="card-stat">تقييم فوري</div>
-            </button>
-          </div>
-        `;
-      },
-      bind() {}
-    },
-    messages: {
-      title: "المحادثات",
-      subtitle: "نفس روح التصميم المرجعي ولكن كواجهة حقيقية يمكنك استخدامها مباشرة.",
-      searchPlaceholder: "ابحث في المحادثات...",
-      primaryLabel: "محادثة جديدة",
-      defaults: {
-        search: "",
-        activeId: "conv-1",
-        conversations: [
-          {
-            id: "conv-1",
-            title: "تحليل البيانات",
-            preview: "أريد تحليل البيانات الخاصة بمبيعات الشهر الماضي",
-            time: "منذ دقائق",
-            messages: [
-              { role: "assistant", text: "مرحبًا، كيف يمكنني مساعدتك اليوم؟" },
-              { role: "user", text: "أريد تحليل البيانات الخاصة بمبيعات الشهر الماضي" },
-              { role: "assistant", text: "بالتأكيد، يمكنني تنظيم البيانات، استخراج الأنماط المهمة، وتلخيص النتائج بشكل واضح يساعدك على اتخاذ قرارات أفضل." }
-            ]
-          },
-          {
-            id: "conv-2",
-            title: "خطة تسويقية",
-            preview: "ابنِ لي خطة تسويقية لمتجر إلكتروني",
-            time: "منذ ساعة",
-            messages: [
-              { role: "assistant", text: "لنبدأ بتحديد الجمهور المستهدف ثم القنوات المناسبة للإطلاق." }
-            ]
-          },
-          {
-            id: "conv-3",
-            title: "مساعدة برمجية",
-            preview: "ساعدني في إصلاح واجهة المستخدم",
-            time: "منذ ساعتين",
-            messages: [
-              { role: "assistant", text: "أرسل لي المشكلة الحالية وسأرتب لك الحل خطوة بخطوة." }
-            ]
-          },
-          {
-            id: "conv-4",
-            title: "بحث قانوني",
-            preview: "لخّص لي النقاط القانونية الرئيسية",
-            time: "منذ 3 أيام",
-            messages: [
-              { role: "assistant", text: "أستطيع إعداد ملخص مركز ومنظم للنقاط الرئيسية." }
-            ]
-          }
-        ]
-      },
-      render(state) {
-        const list = state.conversations.filter((item) => {
-          const needle = state.search.trim().toLowerCase();
-          if (!needle) return true;
-          return `${item.title} ${item.preview}`.toLowerCase().includes(needle);
-        });
-        const active = state.conversations.find((item) => item.id === state.activeId) || list[0] || state.conversations[0];
-        return `
-          <div class="workspace-page-header">
-            <h1>${this.title}</h1>
-            <p>${this.subtitle}</p>
-          </div>
-          <div class="messages-layout">
-            <section class="workspace-panel messages-sidebar">
-              <div class="workspace-page-tools">
-                <button class="workspace-secondary-btn" type="button" data-new-conversation>${icons.plus}محادثة جديدة</button>
-              </div>
-              <label class="workspace-mini-search">
-                ${icons.search}
-                <input data-page-search value="${escapeHtml(state.search)}" placeholder="ابحث في المحادثات">
-              </label>
-              <div class="conversation-list">
-                ${list.map((item) => `
-                  <button class="conversation-card ${item.id === active?.id ? "is-active" : ""}" type="button" data-conversation="${item.id}">
-                    <strong>${escapeHtml(item.title)}</strong>
-                    <span>${escapeHtml(item.preview)}</span>
-                    <small>${escapeHtml(item.time)}</small>
-                  </button>
-                `).join("") || '<div class="empty-state">لا توجد محادثات مطابقة الآن.</div>'}
-              </div>
-            </section>
-            <section class="workspace-panel chat-panel">
-              <div class="chat-header-row">
-                <div>
-                  <strong>${escapeHtml(active?.title || "محادثة جديدة")}</strong>
-                  <div class="muted-time">${escapeHtml(active?.time || "الآن")}</div>
-                </div>
-                <button class="workspace-menu-btn" type="button" data-chat-info>${icons.dots}</button>
-              </div>
-              <div class="chat-thread">
-                ${(active?.messages || []).map((message) => `
-                  <div class="chat-bubble ${message.role}">
-                    ${escapeHtml(message.text)}
-                  </div>
-                `).join("")}
-              </div>
-              <form class="chat-compose" data-send-form>
-                <input name="message" placeholder="اكتب رسالتك هنا..." autocomplete="off">
-                <button class="chat-send-btn" type="submit" aria-label="إرسال">${icons.send}</button>
-              </form>
-            </section>
-          </div>
-        `;
-      },
-      bind(root, state, setState) {
-        $$("[data-conversation]", root).forEach((button) => {
-          button.addEventListener("click", () => setState({ ...state, activeId: button.dataset.conversation }, false));
-        });
-        $("[data-new-conversation]", root)?.addEventListener("click", () => {
-          const title = window.prompt("اسم المحادثة الجديدة", "محادثة جديدة");
-          if (!title) return;
-          const created = {
-            id: makeId("conv"),
-            title,
-            preview: "ابدأ كتابة سؤالك الآن",
-            time: "الآن",
-            messages: [{ role: "assistant", text: `تم إنشاء "${title}" بنجاح. ابدأ سؤالك وسأتابع معك هنا.` }]
-          };
-          setState({
-            ...state,
-            activeId: created.id,
-            conversations: [created, ...state.conversations]
-          });
-          toast("تم إنشاء محادثة جديدة.");
-        });
-        $("[data-page-search]", root)?.addEventListener("input", (event) => {
-          setState({ ...state, search: event.target.value }, false);
-        });
-        $("[data-send-form]", root)?.addEventListener("submit", (event) => {
-          event.preventDefault();
-          const input = event.currentTarget.elements.message;
-          const text = input.value.trim();
-          if (!text) return;
-          const nextConversations = state.conversations.map((item) => {
-            if (item.id !== state.activeId) return item;
-            return {
-              ...item,
-              preview: text,
-              time: "الآن",
-              messages: [
-                ...item.messages,
-                { role: "user", text },
-                { role: "assistant", text: `فهمت طلبك حول "${text}". أستطيع الآن تحويله إلى خطوات واضحة أو تلخيص أو إجابة مباشرة حسب ما تريد.` }
-              ]
-            };
-          });
-          input.value = "";
-          setState({ ...state, conversations: nextConversations });
-        });
-        $("[data-chat-info]", root)?.addEventListener("click", () => toast("هذه محادثة تفاعلية عامة بدون تسجيل دخول."));
-      }
-    },
-    projects: {
-      title: "المشاريع",
-      subtitle: "نظّم مشاريعك ومهامك في بطاقات مرنة مثل المرجع تمامًا.",
-      searchPlaceholder: "ابحث في المشاريع...",
-      primaryLabel: "مشروع جديد",
-      defaults: {
-        search: "",
-        projects: [
-          { id: "project-1", title: "مشروع التسويق", updated: "تحديث منذ 2 يوم", count: 12, icon: "rocket", tone: "purple" },
-          { id: "project-2", title: "تحليل البيانات", updated: "تحديث منذ 2 يوم", count: 8, icon: "chart", tone: "blue" },
-          { id: "project-3", title: "تطوير الموقع", updated: "تحديث منذ 4 أيام", count: 16, icon: "megaphone", tone: "mint" },
-          { id: "project-4", title: "خطة المحتوى", updated: "تحديث منذ 2 يوم", count: 9, icon: "file", tone: "purple" },
-          { id: "project-5", title: "بحث السوق", updated: "تحديث منذ 2 يوم", count: 9, icon: "users", tone: "orange" },
-          { id: "project-6", title: "تطبيق الجوال", updated: "تحديث منذ 4 أيام", count: 11, icon: "subjects", tone: "pink" }
-        ]
-      },
-      render(state) {
-        const list = state.projects.filter((item) => {
-          const needle = state.search.trim().toLowerCase();
-          if (!needle) return true;
-          return item.title.toLowerCase().includes(needle);
-        });
-        return `
-          <div class="workspace-page-header">
-            <h1>${this.title}</h1>
-            <p>${this.subtitle}</p>
-          </div>
-          <div class="workspace-page-tools">
-            <button class="workspace-secondary-btn" type="button" data-new-project>${icons.plus}مشروع جديد</button>
-            <label class="workspace-mini-search">
-              ${icons.search}
-              <input data-page-search value="${escapeHtml(state.search)}" placeholder="ابحث في المشاريع">
-            </label>
-          </div>
-          <div class="workspace-grid-3">
-            ${list.map((item) => `
-              <button class="project-card" type="button" data-project="${item.id}">
-                <div class="card-icon ${item.tone}">${icons[item.icon]}</div>
+  function getProfile(sectionKey = state.section) {
+    return sectionProfiles[sectionKey] || sectionProfiles.dashboard;
+  }
+
+  function getSearchValue(sectionKey = state.section) {
+    return state.historySearch[sectionKey] || "";
+  }
+
+  function getComposerValue(sectionKey = state.section) {
+    return state.composerDraft[sectionKey] || "";
+  }
+
+  function setComposerValue(value, sectionKey = state.section) {
+    state.composerDraft[sectionKey] = value;
+  }
+
+  function getThreadGroups(sectionKey = state.section) {
+    return state.threadState[sectionKey] || [];
+  }
+
+  function getAllThreads(sectionKey = state.section) {
+    return getThreadGroups(sectionKey).flatMap((groupEntry) => groupEntry.items);
+  }
+
+  function getActiveThread(sectionKey = state.section) {
+    const threads = getAllThreads(sectionKey);
+    const activeId = state.activeThreadId?.[sectionKey];
+    return threads.find((item) => item.id === activeId) || threads[0] || null;
+  }
+
+  function ensureThreadState(sectionKey = state.section) {
+    state.activeThreadId = state.activeThreadId || {};
+    if (!state.activeThreadId[sectionKey]) {
+      const firstThread = getAllThreads(sectionKey)[0];
+      state.activeThreadId[sectionKey] = firstThread?.id || "";
+    }
+    state.settings[sectionKey] = state.settings[sectionKey] || {
+      responseMode: getProfile(sectionKey).responseMode,
+      language: "العربية",
+      responseLength: getProfile(sectionKey).responseLength,
+      webEnabled: getProfile(sectionKey).webEnabled
+    };
+  }
+
+  function filterGroups(sectionKey = state.section) {
+    const search = getSearchValue(sectionKey).trim().toLowerCase();
+    if (!search) return getThreadGroups(sectionKey);
+    return getThreadGroups(sectionKey)
+      .map((groupEntry) => ({
+        ...groupEntry,
+        items: groupEntry.items.filter((item) =>
+          `${item.title} ${item.time} ${item.fileLabel}`.toLowerCase().includes(search)
+        )
+      }))
+      .filter((groupEntry) => groupEntry.items.length);
+  }
+
+  function getPreviewBalance() {
+    return isAuthenticated() ? Math.max(0, Number(state.currentUser.xp || 0)) : 2450;
+  }
+
+  function getUserCardMeta() {
+    if (isAuthenticated()) {
+      return {
+        title: state.currentUser.name,
+        subtitle: "عضو مميز داخل المنصة",
+        action: "الدخول إلى اللوحة",
+        guest: false
+      };
+    }
+    return {
+      title: "ضيف",
+      subtitle: "يمكنك تصفح الواجهة قبل الدخول",
+      action: "تسجيل الدخول",
+      guest: true
+    };
+  }
+
+  function renderNav() {
+    return navItems.map((item) => `
+      <button class="guest-nav-link ${item.key === state.section ? "is-active" : ""}" type="button" data-nav="${item.key}">
+        <span>${escapeHtml(item.label)}</span>
+        <i aria-hidden="true">${icons[item.icon]}</i>
+      </button>
+    `).join("");
+  }
+
+  function renderHistory() {
+    const groups = filterGroups();
+    const activeThread = getActiveThread();
+    return groups.map((groupEntry) => `
+      <section class="guest-history-group">
+        <h3>${escapeHtml(groupEntry.title)}</h3>
+        <div class="guest-history-list">
+          ${groupEntry.items.map((item) => `
+            <button class="guest-history-item ${activeThread?.id === item.id ? "is-active" : ""}" type="button" data-thread="${item.id}">
+              <span class="guest-history-dot">${icons.menu}</span>
+              <div class="guest-history-copy">
                 <strong>${escapeHtml(item.title)}</strong>
-                <span>${escapeHtml(item.updated)}</span>
-                <div class="card-stat">${item.count} مهمة</div>
-              </button>
-            `).join("") || '<div class="empty-state">لا توجد مشاريع مطابقة للبحث.</div>'}
-          </div>
-        `;
-      },
-      bind(root, state, setState) {
-        $("[data-new-project]", root)?.addEventListener("click", () => {
-          const title = window.prompt("اسم المشروع الجديد", "مشروع جديد");
-          if (!title) return;
-          const project = {
-            id: makeId("project"),
-            title,
-            updated: "تحديث الآن",
-            count: 1,
-            icon: "rocket",
-            tone: "purple"
-          };
-          setState({ ...state, projects: [project, ...state.projects] });
-          toast("تمت إضافة المشروع الجديد.");
-        });
-        $("[data-page-search]", root)?.addEventListener("input", (event) => {
-          setState({ ...state, search: event.target.value }, false);
-        });
-        $$("[data-project]", root).forEach((button) => {
-          button.addEventListener("click", () => {
-            const project = state.projects.find((item) => item.id === button.dataset.project);
-            toast(`"${project?.title || "المشروع"}" جاهز الآن للمتابعة.`);
-          });
-        });
-      }
-    },
-    library: {
-      title: "المكتبة",
-      subtitle: "ملفاتك مرتبة وفلاترها تعمل، بنفس أسلوب الواجهة المرجعية.",
-      searchPlaceholder: "ابحث في المكتبة...",
-      primaryLabel: "رفع ملف",
-      defaults: {
-        search: "",
-        filter: "الكل",
-        filters: ["الكل", "رائجة", "ملفات", "وورد", "إكسل", "عروض تقديمية"],
-        files: [
-          { id: "file-1", title: "دليل المستخدم", type: "PDF", size: "2.4 MB", icon: "file", tone: "purple", category: "ملفات" },
-          { id: "file-2", title: "استراتيجية التسويق", type: "DOCX", size: "1.1 MB", icon: "notes", tone: "blue", category: "وورد" },
-          { id: "file-3", title: "تقرير المبيعات", type: "XLSX", size: "850 KB", icon: "chart", tone: "mint", category: "إكسل" },
-          { id: "file-4", title: "عرض تقديمي", type: "PPTX", size: "3.2 MB", icon: "subjects", tone: "orange", category: "عروض تقديمية" },
-          { id: "file-5", title: "بحث المنافسين", type: "PDF", size: "1.7 MB", icon: "search", tone: "pink", category: "ملفات" },
-          { id: "file-6", title: "خطة المشروع", type: "DOCX", size: "950 KB", icon: "projects", tone: "blue", category: "وورد" }
-        ]
-      },
-      render(state) {
-        const list = state.files.filter((item) => {
-          const needle = state.search.trim().toLowerCase();
-          const matchText = !needle || `${item.title} ${item.type}`.toLowerCase().includes(needle);
-          const matchFilter = state.filter === "الكل" || item.category === state.filter;
-          return matchText && matchFilter;
-        });
-        return `
-          <div class="workspace-page-header">
-            <h1>${this.title}</h1>
-            <p>${this.subtitle}</p>
-          </div>
-          <div class="workspace-page-tools">
-            <label class="workspace-mini-search">
-              ${icons.search}
-              <input data-page-search value="${escapeHtml(state.search)}" placeholder="ابحث في المكتبة">
-            </label>
-          </div>
-          <div class="pill-row">
-            ${state.filters.map((item) => `
-              <button class="workspace-pill ${state.filter === item ? "is-active" : ""}" type="button" data-filter="${escapeHtml(item)}">
-                ${item}
-              </button>
-            `).join("")}
-          </div>
-          <div class="workspace-grid-3" style="margin-top:18px;">
-            ${list.map((item) => `
-              <article class="file-card">
-                <div class="file-card-head">
-                  <div class="card-icon ${item.tone}">${icons[item.icon]}</div>
-                  <button class="workspace-menu-btn" type="button" data-file-menu="${item.id}">${icons.dots}</button>
-                </div>
-                <strong>${escapeHtml(item.title)}</strong>
-                <span class="file-type">${escapeHtml(item.type)}</span>
-                <small>${escapeHtml(item.size)}</small>
-              </article>
-            `).join("") || '<div class="empty-state">لا توجد ملفات مطابقة لهذا الفلتر.</div>'}
-          </div>
-        `;
-      },
-      bind(root, state, setState) {
-        $("[data-page-search]", root)?.addEventListener("input", (event) => {
-          setState({ ...state, search: event.target.value }, false);
-        });
-        $$("[data-filter]", root).forEach((button) => {
-          button.addEventListener("click", () => setState({ ...state, filter: button.dataset.filter }, false));
-        });
-        $$("[data-file-menu]", root).forEach((button) => {
-          button.addEventListener("click", () => toast("يمكنك فتح الملف أو مشاركته أو حفظه للمراجعة."));
-        });
-      }
-    },
-    subjects: {
-      title: "المواد الدراسية",
-      subtitle: "إحصاءات سريعة وتقدّم واضح للمقررات الرئيسية.",
-      searchPlaceholder: "ابحث عن مادة أو مقرر...",
-      primaryLabel: "استعراض المواد",
-      defaults: {
-        search: "",
-        stats: [
-          { value: "128", label: "إجمالي المقررات" },
-          { value: "64", label: "الدروس" },
-          { value: "24", label: "الاختبارات" },
-          { value: "36h", label: "إجمالي التقدم" }
-        ],
-        progress: [
-          { title: "الذكاء الاصطناعي للمبتدئين", meta: "24 درس", percent: 75 },
-          { title: "تصميم تجربة المستخدم", meta: "19 درس", percent: 60 },
-          { title: "تحليل البيانات", meta: "20 درس", percent: 90 },
-          { title: "تطوير تطبيقات الذكاء الاصطناعي", meta: "14 درس", percent: 30 }
-        ]
-      },
-      render(state) {
-        const progress = state.progress.filter((item) => {
-          const needle = state.search.trim().toLowerCase();
-          if (!needle) return true;
-          return `${item.title} ${item.meta}`.toLowerCase().includes(needle);
-        });
-        return `
-          <div class="workspace-page-header">
-            <h1>${this.title}</h1>
-            <p>${this.subtitle}</p>
-          </div>
-          <div class="workspace-page-tools">
-            <label class="workspace-mini-search">
-              ${icons.search}
-              <input data-page-search value="${escapeHtml(state.search)}" placeholder="ابحث عن مادة">
-            </label>
-          </div>
-          <div class="subject-stats">
-            ${state.stats.map((item) => `
-              <article class="subject-stat-box">
-                <strong>${item.value}</strong>
-                <span>${item.label}</span>
-              </article>
-            `).join("")}
-          </div>
-          <section class="workspace-panel subject-progress-panel">
-            <strong class="subject-progress-title">المقررات</strong>
-            <div class="subject-progress-list" style="margin-top:18px;">
-              ${progress.map((item) => `
-                <div class="subject-progress-row">
-                  <div class="subject-progress-copy">
-                    <strong>${escapeHtml(item.title)}</strong>
-                    <span>${escapeHtml(item.meta)}</span>
-                    <div class="progress-track"><b style="width:${item.percent}%"></b></div>
-                  </div>
-                  <strong>${item.percent}%</strong>
-                </div>
-              `).join("") || '<div class="empty-state">لا توجد مواد مطابقة للبحث.</div>'}
+                <small>${escapeHtml(item.time)}</small>
+              </div>
+              <span class="guest-history-badge">${icons.chat}</span>
+            </button>
+          `).join("")}
+        </div>
+      </section>
+    `).join("") || '<div class="guest-empty-side">لا توجد عناصر مطابقة لبحثك الآن.</div>';
+  }
+
+  function renderQuickCards(profile) {
+    return profile.quickCards.map(([title, desc, icon]) => `
+      <button class="guest-quick-card ${isAuthenticated() ? "" : "requires-auth"}" type="button" data-card="${escapeHtml(title)}">
+        <div class="guest-quick-copy">
+          <strong>${escapeHtml(title)}</strong>
+          <span>${escapeHtml(desc)}</span>
+        </div>
+        <i aria-hidden="true">${icons[icon]}</i>
+      </button>
+    `).join("");
+  }
+
+  function renderMessage(message) {
+    if (message.role === "assistant") {
+      return `
+        <article class="guest-message assistant">
+          <div class="guest-message-mark">${icons.logo}</div>
+          <div class="guest-message-body">
+            <h3>${escapeHtml(message.body.heading)}</h3>
+            <ul>
+              ${message.body.bullets.map((item) => `<li>${escapeHtml(item)}</li>`).join("")}
+            </ul>
+            <div class="guest-message-actions">
+              <button class="ghost-action ${isAuthenticated() ? "" : "requires-auth"}" type="button" data-copy-reply>${icons.copy}</button>
+              <button class="ghost-action ${isAuthenticated() ? "" : "requires-auth"}" type="button" data-refresh-reply>${icons.refresh}</button>
+              <button class="ghost-action ${isAuthenticated() ? "" : "requires-auth"}" type="button" data-like-reply>${icons.thumbsUp}</button>
             </div>
-          </section>
-        `;
-      },
-      bind(root, state, setState) {
-        $("[data-page-search]", root)?.addEventListener("input", (event) => {
-          setState({ ...state, search: event.target.value }, false);
-        });
-      }
-    },
-    "ai-tools": {
-      title: "أدوات الذكاء الاصطناعي",
-      subtitle: "مجموعة أدوات عملية جاهزة للاستخدام الفوري.",
-      searchPlaceholder: "ابحث عن أداة...",
-      primaryLabel: "تشغيل أداة",
-      defaults: {
-        search: "",
-        tools: [
-          { id: "tool-1", title: "مساعد الكتابة", desc: "صياغة النصوص والمقالات باحترافية.", icon: "pencil", tone: "blue" },
-          { id: "tool-2", title: "تحليل البيانات", desc: "تحويل الجداول إلى قراءات واضحة وسريعة.", icon: "chart", tone: "purple" },
-          { id: "tool-3", title: "توليد الصور", desc: "إنشاء صور مخصصة للأفكار والعروض.", icon: "image", tone: "orange" },
-          { id: "tool-4", title: "تلخيص النصوص", desc: "تلخيص طويل أو قصير للنصوص والمستندات.", icon: "file", tone: "blue" },
-          { id: "tool-5", title: "ترجمة ذكية", desc: "ترجمة دقيقة بصياغة طبيعية وواضحة.", icon: "globe", tone: "mint" },
-          { id: "tool-6", title: "مساعد البرمجة", desc: "مساعدة في كتابة الكود وتحسينه.", icon: "spark", tone: "orange" }
-        ]
-      },
-      render(state) {
-        const list = state.tools.filter((item) => {
-          const needle = state.search.trim().toLowerCase();
-          if (!needle) return true;
-          return `${item.title} ${item.desc}`.toLowerCase().includes(needle);
-        });
-        return `
-          <div class="workspace-page-header">
-            <h1>${this.title}</h1>
-            <p>${this.subtitle}</p>
           </div>
-          <div class="workspace-page-tools">
-            <label class="workspace-mini-search">
-              ${icons.search}
-              <input data-page-search value="${escapeHtml(state.search)}" placeholder="ابحث عن أداة">
-            </label>
-          </div>
-          <div class="workspace-grid-3">
-            ${list.map((item) => `
-              <article class="tool-card">
-                <div class="card-icon ${item.tone}">${icons[item.icon]}</div>
-                <strong>${escapeHtml(item.title)}</strong>
-                <p>${escapeHtml(item.desc)}</p>
-                <button class="workspace-secondary-btn tool-action" type="button" data-tool="${item.id}">استخدام</button>
-              </article>
-            `).join("") || '<div class="empty-state">لا توجد أدوات مطابقة الآن.</div>'}
-          </div>
-        `;
-      },
-      bind(root, state, setState) {
-        $("[data-page-search]", root)?.addEventListener("input", (event) => {
-          setState({ ...state, search: event.target.value }, false);
-        });
-        $$("[data-tool]", root).forEach((button) => {
-          button.addEventListener("click", () => {
-            const tool = state.tools.find((item) => item.id === button.dataset.tool);
-            toast(`تم تشغيل "${tool?.title || "الأداة"}" بشكل تجريبي.`);
-          });
-        });
-      }
-    },
-    notes: {
-      title: "الملاحظات",
-      subtitle: "ملاحظات سريعة منظمة داخل قائمة حقيقية قابلة للإضافة والفتح.",
-      searchPlaceholder: "ابحث في الملاحظات...",
-      primaryLabel: "ملاحظة جديدة",
-      defaults: {
-        search: "",
-        notes: [
-          { id: "note-1", title: "أفكار المشروع الجديد", excerpt: "ملاحظات حول تطوير المشروع...", time: "منذ 5 دقائق", tone: "green" },
-          { id: "note-2", title: "اجتماع الفريق", excerpt: "ملخص اجتماع اليوم مع الفريق", time: "منذ 4 ساعات", tone: "blue" },
-          { id: "note-3", title: "قائمة المهام", excerpt: "المهام المطلوبة لإنجازها هذا الأسبوع", time: "منذ 1 يوم", tone: "red" },
-          { id: "note-4", title: "أفكار المحتوى", excerpt: "أفكار لمحتوى وسائل التواصل الاجتماعي", time: "منذ 3 أيام", tone: "purple" }
-        ]
-      },
-      render(state) {
-        const list = state.notes.filter((item) => {
-          const needle = state.search.trim().toLowerCase();
-          if (!needle) return true;
-          return `${item.title} ${item.excerpt}`.toLowerCase().includes(needle);
-        });
-        return `
-          <div class="workspace-page-header">
-            <h1>${this.title}</h1>
-            <p>${this.subtitle}</p>
-          </div>
-          <div class="workspace-page-tools">
-            <button class="workspace-secondary-btn" type="button" data-new-note>${icons.plus}ملاحظة جديدة</button>
-            <label class="workspace-mini-search">
-              ${icons.search}
-              <input data-page-search value="${escapeHtml(state.search)}" placeholder="ابحث في الملاحظات">
-            </label>
-          </div>
-          <section class="workspace-panel notes-panel">
-            ${list.map((item) => `
-              <button class="note-row" type="button" data-note="${item.id}">
-                <span class="note-icon ${item.tone}">${icons.file}</span>
-                <span class="note-copy">
-                  <strong>${escapeHtml(item.title)}</strong>
-                  <p>${escapeHtml(item.excerpt)}</p>
-                </span>
-                <small class="muted-time">${escapeHtml(item.time)}</small>
-                <span class="workspace-menu-btn">${icons.dots}</span>
-              </button>
-            `).join("") || '<div class="empty-state">لا توجد ملاحظات مطابقة الآن.</div>'}
-          </section>
-        `;
-      },
-      bind(root, state, setState) {
-        $("[data-new-note]", root)?.addEventListener("click", () => {
-          const title = window.prompt("عنوان الملاحظة", "ملاحظة جديدة");
-          if (!title) return;
-          const note = {
-            id: makeId("note"),
-            title,
-            excerpt: "اكتب تفاصيل الملاحظة هنا...",
-            time: "الآن",
-            tone: "purple"
-          };
-          setState({ ...state, notes: [note, ...state.notes] });
-          toast("تم إنشاء ملاحظة جديدة.");
-        });
-        $("[data-page-search]", root)?.addEventListener("input", (event) => {
-          setState({ ...state, search: event.target.value }, false);
-        });
-        $$("[data-note]", root).forEach((button) => {
-          button.addEventListener("click", () => {
-            const note = state.notes.find((item) => item.id === button.dataset.note);
-            toast(`فتحت "${note?.title || "الملاحظة"}" بنجاح.`);
-          });
-        });
-      }
-    },
-    tests: {
-      title: "الاختبارات",
-      subtitle: "مؤشرات ونتائج واختبارات جاهزة للمتابعة الفورية.",
-      searchPlaceholder: "ابحث عن اختبار...",
-      primaryLabel: "اختبار جديد",
-      defaults: {
-        search: "",
-        metrics: [
-          { value: "24", label: "اختبار جديد" },
-          { value: "18", label: "مفتوحة" },
-          { value: "85%", label: "متوسط النتيجة" },
-          { value: "98%", label: "أفضل نتيجة" }
-        ],
-        tests: [
-          { id: "test-1", title: "اختبار الذكاء الاصطناعي", score: "95%", time: "منذ 2 يوم" },
-          { id: "test-2", title: "اختبار تحليل البيانات", score: "88%", time: "منذ 3 يوم" },
-          { id: "test-3", title: "اختبار تعلم الآلة", score: "92%", time: "منذ 5 يوم" },
-          { id: "test-4", title: "اختبار الرياضيات", score: "75%", time: "منذ أسبوع" }
-        ]
-      },
-      render(state) {
-        const list = state.tests.filter((item) => {
-          const needle = state.search.trim().toLowerCase();
-          if (!needle) return true;
-          return item.title.toLowerCase().includes(needle);
-        });
-        return `
-          <div class="workspace-page-header">
-            <h1>${this.title}</h1>
-            <p>${this.subtitle}</p>
-          </div>
-          <div class="workspace-page-tools">
-            <label class="workspace-mini-search">
-              ${icons.search}
-              <input data-page-search value="${escapeHtml(state.search)}" placeholder="ابحث عن اختبار">
-            </label>
-          </div>
-          <div class="test-metrics">
-            <div class="test-summary">
-              ${state.metrics.map((item) => `
-                <article class="metric-box">
-                  <strong>${item.value}</strong>
-                  <span>${item.label}</span>
-                </article>
-              `).join("")}
-            </div>
-            <section class="workspace-panel notes-panel">
-              ${list.map((item) => `
-                <div class="test-row">
-                  <span class="test-icon note-icon purple">${icons.spark}</span>
-                  <span class="test-copy">
-                    <strong>${escapeHtml(item.title)}</strong>
-                    <p>${escapeHtml(item.time)}</p>
-                  </span>
-                  <span class="test-score-pill">${item.score}</span>
-                  <button class="workspace-inline-btn" type="button" data-start-test="${item.id}">عرض النتيجة</button>
-                </div>
-              `).join("") || '<div class="empty-state">لا توجد اختبارات مطابقة الآن.</div>'}
-            </section>
-          </div>
-        `;
-      },
-      bind(root, state, setState) {
-        $("[data-page-search]", root)?.addEventListener("input", (event) => {
-          setState({ ...state, search: event.target.value }, false);
-        });
-        $$("[data-start-test]", root).forEach((button) => {
-          button.addEventListener("click", () => {
-            const test = state.tests.find((item) => item.id === button.dataset.startTest);
-            toast(`تم فتح نتيجة "${test?.title || "الاختبار"}".`);
-          });
-        });
-      }
-    },
-    settings: {
-      title: "الإعدادات",
-      subtitle: "بطاقات إعدادات فعلية مع منطقة تفاصيل قابلة للتبديل.",
-      searchPlaceholder: "ابحث في الإعدادات...",
-      primaryLabel: "تخصيص سريع",
-      defaults: {
-        search: "",
-        active: "profile",
-        settings: [
-          { id: "profile", title: "الملف الشخصي", desc: "إدارة معلوماتك الشخصية", icon: "users", tone: "purple", detail: "يمكنك هنا تعديل الاسم، الصورة، والبيانات الأساسية الخاصة بحسابك." },
-          { id: "security", title: "الأمان والخصوصية", desc: "إدارة الأمان والخصوصية", icon: "shield", tone: "mint", detail: "اضبط الحماية وتحقق من خيارات الأمان والخصوصية المرتبطة بالحساب." },
-          { id: "alerts", title: "الإشعارات", desc: "إدارة الإشعارات والتنبيهات", icon: "bell", tone: "orange", detail: "خصص رسائل التنبيه، التنبيهات الذكية، وقنوات الإشعار المفضلة لديك." },
-          { id: "appearance", title: "المظهر", desc: "تخصيص مظهر التطبيق", icon: "spark", tone: "pink", detail: "بدّل بين أنماط الواجهة ونظم عرض العناصر لتلائم استخدامك اليومي." },
-          { id: "language", title: "اللغة والمنطقة", desc: "إعدادات اللغة والمنطقة", icon: "globe", tone: "blue", detail: "اختر اللغة، المنطقة الزمنية، وطريقة عرض التنسيقات داخل المنصة." },
-          { id: "integrations", title: "التكاملات", desc: "إدارة التطبيقات المتصلة", icon: "projects", tone: "purple", detail: "استعرض التكاملات النشطة واربط الخدمات الخارجية التي تحتاجها." }
-        ]
-      },
-      render(state) {
-        const list = state.settings.filter((item) => {
-          const needle = state.search.trim().toLowerCase();
-          if (!needle) return true;
-          return `${item.title} ${item.desc}`.toLowerCase().includes(needle);
-        });
-        const active = state.settings.find((item) => item.id === state.active) || list[0] || state.settings[0];
-        return `
-          <div class="workspace-page-header">
-            <h1>${this.title}</h1>
-            <p>${this.subtitle}</p>
-          </div>
-          <div class="workspace-page-tools">
-            <label class="workspace-mini-search">
-              ${icons.search}
-              <input data-page-search value="${escapeHtml(state.search)}" placeholder="ابحث في الإعدادات">
-            </label>
-          </div>
-          <div class="workspace-grid-settings">
-            ${list.map((item) => `
-              <button class="setting-card" type="button" data-setting="${item.id}">
-                <div class="card-icon ${item.tone}">${icons[item.icon]}</div>
-                <strong>${escapeHtml(item.title)}</strong>
-                <span>${escapeHtml(item.desc)}</span>
-              </button>
-            `).join("") || '<div class="empty-state">لا توجد إعدادات مطابقة الآن.</div>'}
-          </div>
-          <section class="workspace-panel settings-detail">
-            <strong>${escapeHtml(active?.title || "الإعدادات")}</strong>
-            <p>${escapeHtml(active?.detail || "اختر إحدى البطاقات لعرض التفاصيل هنا.")}</p>
-          </section>
-        `;
-      },
-      bind(root, state, setState) {
-        $("[data-page-search]", root)?.addEventListener("input", (event) => {
-          setState({ ...state, search: event.target.value }, false);
-        });
-        $$("[data-setting]", root).forEach((button) => {
-          button.addEventListener("click", () => setState({ ...state, active: button.dataset.setting }, false));
-        });
-      }
+        </article>
+      `;
     }
-  };
 
-  function guestUrl(sectionKey) {
-    return `guest.html?section=${encodeURIComponent(sectionKey)}`;
-  }
-
-  if (!window.location.pathname.toLowerCase().endsWith("guest.html")) {
-    window.location.replace(guestUrl(initialPageKey));
-    return;
-  }
-
-  function resolvePageKey() {
-    const urlSection = new URLSearchParams(window.location.search).get("section");
-    if (urlSection && pageMap[urlSection]) return urlSection;
-    if (pageMap[initialPageKey]) return initialPageKey;
-    return "messages";
-  }
-
-  let currentPageKey = resolvePageKey();
-  let state = clone(pageMap[currentPageKey].defaults);
-
-  function syncGuestUrl(replace = false) {
-    const method = replace ? "replaceState" : "pushState";
-    window.history[method]({}, "", guestUrl(currentPageKey));
-  }
-
-  syncGuestUrl(true);
-
-  function persist() {}
-
-  function setState(next, shouldPersist = true) {
-    state = next;
-    if (shouldPersist) persist();
-    render();
-  }
-
-  function renderSidebarNav() {
-    return navItems
-      .map((item) => {
-        const active = item.key === currentPageKey ? "is-active" : "";
-        return `
-          <button class="workspace-nav-link ${active}" type="button" data-section-nav="${item.key}">
-            <span>${item.label}</span>
-            <i>${icons[item.icon]}</i>
-          </button>
-        `;
-      })
-      .join("");
-  }
-
-  function shell(content, pageConfig) {
     return `
-      <div class="workspace-shell">
-        <aside class="workspace-sidebar" aria-label="التنقل">
-          <nav class="workspace-nav">${renderSidebarNav()}</nav>
-        </aside>
-        <section class="workspace-main">
-          <header class="workspace-topbar">
-            <div class="workspace-topbar-meta">نسخة استعراض عامة</div>
-            <div class="workspace-topbar-actions">
-              <label class="workspace-search">
-                <span class="workspace-chip">⌘ K</span>
-                <input data-global-search value="${escapeHtml(state.search || "")}" placeholder="${escapeHtml(pageConfig.searchPlaceholder)}">
-                ${icons.search}
-              </label>
-              <button class="workspace-icon-btn" type="button" aria-label="الإشعارات">${icons.bell}</button>
-              <button class="workspace-icon-btn" type="button" aria-label="الملف الشخصي">${icons.users}</button>
-            </div>
-          </header>
-          <div data-page-content>${content}</div>
-        </section>
+      <div class="guest-message user">
+        <span>${escapeHtml(message.body)}</span>
       </div>
     `;
   }
 
-  function handlePrimaryAction() {
-    window.location.href = LOGIN_URL;
+  function renderConversation(profile) {
+    const thread = getActiveThread();
+    const messages = thread?.messages || [];
+    return `
+      <section class="guest-conversation-card">
+        <header class="guest-conversation-head">
+          <div>
+            <strong>${escapeHtml(profile.heroTitle)}</strong>
+            <p>${escapeHtml(profile.heroSubtitle)}</p>
+          </div>
+          <span class="guest-conversation-status">${isAuthenticated() ? "جاهز للإرسال" : "وضع الاستعراض"}</span>
+        </header>
+        <div class="guest-messages">
+          ${messages.map(renderMessage).join("")}
+        </div>
+      </section>
+    `;
   }
 
-  function redirectToLogin() {
-    window.location.href = LOGIN_URL;
+  function renderAttachmentPills() {
+    if (!state.selectedFiles.length) return "";
+    return `
+      <div class="guest-attachment-pills">
+        ${state.selectedFiles.map((file, index) => `
+          <span class="guest-attachment-pill">
+            ${escapeHtml(file.name)}
+            <button type="button" data-remove-file="${index}" aria-label="إزالة ${escapeHtml(file.name)}">×</button>
+          </span>
+        `).join("")}
+      </div>
+    `;
   }
 
-  function setSection(nextSectionKey, replace = false) {
-    if (!pageMap[nextSectionKey] || nextSectionKey === currentPageKey) return;
-    currentPageKey = nextSectionKey;
-    state = clone(pageMap[currentPageKey].defaults);
-    syncGuestUrl(replace);
+  function renderRightPanel(profile) {
+    const thread = getActiveThread();
+    const settings = state.settings[state.section];
+    const files = [
+      ...(thread?.fileLabel ? [{ name: thread.fileLabel, size: "2.4 MB" }] : []),
+      ...state.selectedFiles.map((file) => ({ name: file.name, size: `${Math.max(1, Math.round((file.size || 1024) / 1024))} KB` }))
+    ];
+
+    return `
+      <aside class="guest-sidepanel">
+        <div class="guest-sidepanel-top">
+          <button class="ghost-balance ${isAuthenticated() ? "" : "requires-auth"}" type="button" data-balance>
+            ${icons.sparkle}
+            <span>الرصيد: ${formatNumber(getPreviewBalance())} نقطة</span>
+          </button>
+          <button class="circle-control ${isAuthenticated() ? "" : "requires-auth"}" type="button" aria-label="الإشعارات">${icons.bell}</button>
+          <button class="circle-control" type="button" aria-label="تبديل الثيم" data-theme-toggle>${icons.moon}</button>
+        </div>
+
+        <section class="side-card ai-card">
+          <div class="ai-card-brand">
+            <span class="ai-card-mark">${icons.logo}</span>
+            <div>
+              <strong>Orlixor AI</strong>
+              <span>${isAuthenticated() ? "متصل الآن" : "استعراض آمن"}</span>
+            </div>
+          </div>
+          <div class="ai-card-model">Orlixor GPT-4</div>
+        </section>
+
+        <section class="side-card settings-card">
+          <h3>إعدادات المحادثة</h3>
+          <label class="side-select">
+            <span>نمط الرد</span>
+            <select data-setting="responseMode" ${isAuthenticated() ? "" : 'data-auth-focus="1"'}>
+              ${["شرح", "مرن", "مختصر", "احترافي", "تنفيذي", "تعليمي", "تقييمي", "منظم"].map((item) => `
+                <option value="${escapeHtml(item)}" ${settings.responseMode === item ? "selected" : ""}>${escapeHtml(item)}</option>
+              `).join("")}
+            </select>
+          </label>
+          <label class="side-select">
+            <span>اللغة</span>
+            <select data-setting="language" ${isAuthenticated() ? "" : 'data-auth-focus="1"'}>
+              ${["العربية", "English"].map((item) => `
+                <option value="${escapeHtml(item)}" ${settings.language === item ? "selected" : ""}>${escapeHtml(item)}</option>
+              `).join("")}
+            </select>
+          </label>
+          <label class="side-select">
+            <span>طول الرد</span>
+            <select data-setting="responseLength" ${isAuthenticated() ? "" : 'data-auth-focus="1"'}>
+              ${["قصير", "متوازن", "مفصل"].map((item) => `
+                <option value="${escapeHtml(item)}" ${settings.responseLength === item ? "selected" : ""}>${escapeHtml(item)}</option>
+              `).join("")}
+            </select>
+          </label>
+          <button class="side-toggle ${settings.webEnabled ? "is-on" : ""} ${isAuthenticated() ? "" : "requires-auth"}" type="button" data-toggle-web>
+            <span class="side-toggle-track"><b></b></span>
+            <span>البحث في الإنترنت</span>
+          </button>
+        </section>
+
+        <section class="side-card files-card">
+          <h3>الملفات</h3>
+          <button class="file-dropzone ${isAuthenticated() ? "" : "requires-auth"}" type="button" data-pick-file>
+            اسحب وأفلت الملفات هنا<br>أو اضغط للاختيار
+          </button>
+          <div class="file-list">
+            ${files.map((file) => `
+              <div class="file-row">
+                <span class="file-row-icon">${icons.filePdf}</span>
+                <div>
+                  <strong>${escapeHtml(file.name)}</strong>
+                  <span>${escapeHtml(file.size)}</span>
+                </div>
+              </div>
+            `).join("") || '<div class="side-empty">لا توجد ملفات بعد.</div>'}
+          </div>
+        </section>
+
+        <section class="side-card stats-card">
+          <h3>المحادثة الحالية</h3>
+          <div class="stat-row"><span>تم إنشاء المحادثة</span><strong>${escapeHtml(thread?.stats?.created || "اليوم")}</strong></div>
+          <div class="stat-row"><span>عدد الرسائل</span><strong>${escapeHtml(thread?.stats?.messages || "2 رسائل")}</strong></div>
+          <div class="stat-row"><span>آخر تحديث</span><strong>${escapeHtml(thread?.stats?.updated || "الآن")}</strong></div>
+        </section>
+
+        <button class="delete-chat-btn ${isAuthenticated() ? "" : "requires-auth"}" type="button" data-delete-thread>
+          ${icons.delete}
+          حذف المحادثة
+        </button>
+
+      </aside>
+    `;
+  }
+
+  function renderMain(profile) {
+    return `
+      <section class="guest-main">
+        <header class="guest-main-topbar">
+          <button class="ai-switcher" type="button">
+            <span class="ai-switcher-mark">${icons.logo}</span>
+            <span>Orlixor AI</span>
+          </button>
+          <div class="guest-hero-copy">
+            <h1>${escapeHtml(profile.heroTitle)}</h1>
+            <p>${escapeHtml(profile.heroSubtitle)}</p>
+          </div>
+        </header>
+
+        <section class="guest-quick-grid">
+          ${renderQuickCards(profile)}
+        </section>
+
+        ${renderConversation(profile)}
+
+        ${renderAttachmentPills()}
+
+        <form class="guest-compose" data-compose-form>
+          <button class="compose-attach ${isAuthenticated() ? "" : "requires-auth"}" type="button" data-pick-file aria-label="إضافة ملف">
+            ${icons.attach}
+          </button>
+          <input
+            class="compose-input"
+            data-compose-input
+            value="${escapeHtml(getComposerValue())}"
+            placeholder="اكتب رسالتك هنا..."
+            ${isAuthenticated() ? "" : 'data-auth-focus="1"'}
+          >
+          <button class="compose-send ${isAuthenticated() ? "" : "requires-auth"}" type="submit" ${state.sending ? "disabled" : ""} aria-label="إرسال">
+            ${icons.send}
+          </button>
+        </form>
+        <p class="guest-compose-note">قد يخطئ Orlixor في بعض المعلومات، تحقّق من المعلومات المهمة.</p>
+      </section>
+    `;
+  }
+
+  function renderSidebar() {
+    const userCard = getUserCardMeta();
+    return `
+      <aside class="guest-sidebar">
+        <a class="guest-brand" href="${GUEST_URL}?${SEARCH_PARAM}=dashboard" aria-label="Orlixor">
+          <img src="orlixor-brand.png" alt="Orlixor">
+        </a>
+
+        <button class="guest-new-chat ${isAuthenticated() ? "" : "requires-auth"}" type="button" data-new-chat>
+          <span>محادثة جديدة</span>
+          <i aria-hidden="true">${icons.plus}</i>
+        </button>
+
+        <label class="guest-search-box">
+          <input type="search" value="${escapeHtml(getSearchValue())}" placeholder="بحث في المحادثات" data-history-search>
+          <span>${icons.search}</span>
+        </label>
+
+        <nav class="guest-nav" aria-label="أقسام المنصة">
+          ${renderNav()}
+        </nav>
+
+        <div class="guest-history-wrap">
+          ${renderHistory()}
+        </div>
+
+        <section class="guest-upgrade-card">
+          <div class="upgrade-mark">${icons.crown}</div>
+          <div>
+            <strong>الترقية إلى Pro</strong>
+            <span>استمتع بمزايا إضافية وتجربة أفضل</span>
+          </div>
+        </section>
+
+        <button class="guest-user-card ${userCard.guest ? "is-guest" : "is-member"}" type="button" data-open-account>
+          <span class="guest-user-avatar">${userCard.guest ? "ض" : escapeHtml(userCard.title.slice(0, 1))}</span>
+          <span class="guest-user-copy">
+            <strong>${escapeHtml(userCard.title)}</strong>
+            <small>${escapeHtml(userCard.subtitle)}</small>
+          </span>
+          <span class="guest-user-action">${escapeHtml(userCard.action)}</span>
+        </button>
+      </aside>
+    `;
+  }
+
+  function renderAuthModal() {
+    return `
+      <div class="auth-gate ${state.authModalOpen ? "is-open" : ""}" ${state.authModalOpen ? "" : "hidden"}>
+        <button class="auth-gate-backdrop" type="button" data-close-auth aria-label="إغلاق نافذة الدخول"></button>
+        <div class="auth-gate-panel" role="dialog" aria-modal="true" aria-label="تسجيل الدخول">
+          <div class="auth-gate-head">
+            <div>
+              <strong>سجّل دخولك أولًا</strong>
+              <span>${escapeHtml(state.authReason || "استخدم حسابك للوصول إلى الشات والأدوات.")}</span>
+            </div>
+            <button class="auth-gate-close" type="button" data-close-auth aria-label="إغلاق">×</button>
+          </div>
+          <iframe class="auth-gate-frame" src="${LOGIN_FRAME_URL}" title="تسجيل الدخول"></iframe>
+          <div class="auth-gate-footer">
+            <button class="auth-gate-link" type="button" data-open-full-login>فتح صفحة الدخول الكاملة</button>
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
+  function renderShell() {
+    const profile = getProfile();
+    app.innerHTML = `
+      <div class="guest-shell ${state.theme === "dark" ? "theme-dark" : ""}">
+        ${renderSidebar()}
+        ${renderMain(profile)}
+        ${renderRightPanel(profile)}
+        <input type="file" id="guestFilePicker" hidden multiple accept=".pdf,.doc,.docx,.png,.jpg,.jpeg,.txt,.md,.ppt,.pptx">
+      </div>
+      ${renderAuthModal()}
+      <div class="guest-toast-stack" aria-live="polite"></div>
+    `;
+  }
+
+  function showToast(message) {
+    const stack = app.querySelector(".guest-toast-stack");
+    if (!stack) return;
+    const node = document.createElement("div");
+    node.className = "guest-toast";
+    node.textContent = message;
+    stack.appendChild(node);
+    window.setTimeout(() => node.remove(), 2400);
+  }
+
+  function openAuthModal(reason) {
+    state.authReason = reason || "سجّل الدخول لاستخدام هذه الميزة.";
+    state.authModalOpen = true;
     render();
   }
-  function bindAuthPreviewGate() {
-    app.addEventListener("click", (event) => {
-      if (event.target.closest(".workspace-nav-link, .workspace-brand, [data-section-nav]")) return;
-      if (
-        event.target.closest(
-          "[data-primary-action], .workspace-icon-btn, .workspace-search, [data-page-content] button, [data-page-content] input, [data-page-content] textarea, [data-page-content] select, [data-page-content] a"
-        )
-      ) {
-        event.preventDefault();
-        event.stopPropagation();
-        redirectToLogin();
-      }
-    }, true);
 
-    app.addEventListener("submit", (event) => {
-      if (!event.target.closest("[data-page-content] form")) return;
-      event.preventDefault();
-      event.stopPropagation();
-      redirectToLogin();
-    }, true);
-
-    app.addEventListener("focusin", (event) => {
-      if (
-        event.target.closest(".workspace-search input, [data-page-content] input, [data-page-content] textarea, [data-page-content] select")
-      ) {
-        redirectToLogin();
-      }
-    }, true);
+  function closeAuthModal() {
+    state.authModalOpen = false;
+    render();
   }
 
-  function bindGlobal() {
-    $("[data-primary-action]", app)?.addEventListener("click", redirectToLogin);
-    $$("[data-section-nav]", app).forEach((button) => {
-      button.addEventListener("click", () => setSection(button.dataset.sectionNav));
+  function setSection(sectionKey, replace = false) {
+    if (!sectionProfiles[sectionKey]) return;
+    state.section = sectionKey;
+    ensureThreadState(sectionKey);
+    updateUrl(replace);
+    render();
+  }
+
+  function getFileInput() {
+    return app.querySelector("#guestFilePicker");
+  }
+
+  function createNewThreadFromDraft(title = "محادثة جديدة") {
+    const sectionKey = state.section;
+    const newThread = thread(
+      `thread-${Date.now()}`,
+      title,
+      "الآن",
+      "ابدأ سؤالك الجديد هنا.",
+      assistantReply("هذه مساحة محادثة جديدة.", [
+        "اكتب أول طلب لك وسأرتبه لك مباشرة.",
+        "يمكنك استخدام الملفات أو تغيير إعدادات الرد من الجانب.",
+        "بعد الدخول يصبح الإرسال الفعلي مرتبطًا بحسابك."
+      ]),
+      "بدون ملف",
+      { created: "الآن", messages: "0 رسائل", updated: "الآن" }
+    );
+
+    const todayGroup = state.threadState[sectionKey][0];
+    if (todayGroup) {
+      todayGroup.items.unshift(newThread);
+    } else {
+      state.threadState[sectionKey].unshift(group("اليوم", [newThread]));
+    }
+    state.activeThreadId[sectionKey] = newThread.id;
+    setComposerValue("", sectionKey);
+  }
+
+  function removeSelectedFile(index) {
+    if (index < 0 || index >= state.selectedFiles.length) return;
+    state.selectedFiles.splice(index, 1);
+    render();
+  }
+
+  function pickFiles() {
+    if (!isAuthenticated()) {
+      openAuthModal("أضف الملفات بعد تسجيل الدخول.");
+      return;
+    }
+    getFileInput()?.click();
+  }
+
+  async function submitMessage() {
+    const input = (getComposerValue() || "").trim();
+    if (!input && !state.selectedFiles.length) return;
+
+    if (!isAuthenticated()) {
+      openAuthModal("أرسل رسالتك بعد تسجيل الدخول.");
+      return;
+    }
+
+    const apiClient = getApiClient();
+    if (!apiClient) {
+      showToast("خدمة الشات غير جاهزة الآن.");
+      return;
+    }
+
+    ensureThreadState();
+    let threadEntry = getActiveThread();
+    if (!threadEntry) {
+      createNewThreadFromDraft(input.slice(0, 28) || "محادثة جديدة");
+      threadEntry = getActiveThread();
+    }
+
+    const outgoingFiles = [...state.selectedFiles];
+    const newUserMessage = { role: "user", body: input };
+    const pendingAssistant = {
+      role: "assistant",
+      body: assistantReply("جاري تجهيز الرد...", ["نعالج رسالتك الآن ونرتب الإجابة من الخادم."])
+    };
+
+    threadEntry.messages.push(newUserMessage, pendingAssistant);
+    threadEntry.time = "الآن";
+    threadEntry.stats = {
+      ...(threadEntry.stats || {}),
+      updated: "الآن",
+      messages: `${Math.max(1, threadEntry.messages.length)} رسالة`
+    };
+    state.sending = true;
+    render();
+
+    try {
+      const result = await apiClient.sendChat({
+        conversation_id: state.conversationIds[threadEntry.id] || undefined,
+        message: input,
+        subject: state.currentUser?.subject || "",
+        grade: state.currentUser?.grade || "",
+        stage: state.currentUser?.stage || "",
+        stream: false,
+        has_attachment: outgoingFiles.length > 0,
+        attachment_count: outgoingFiles.length,
+        attachment_names: outgoingFiles.map((file) => file.name).slice(0, 8)
+      });
+
+      threadEntry.messages.pop();
+      if (!result.ok || !result.data?.assistant_message?.body) {
+        threadEntry.messages.push({
+          role: "assistant",
+          body: assistantReply("تعذر الوصول إلى خدمة الشات الآن.", [
+            result.message || "أعد المحاولة بعد قليل أو تحقق من جاهزية الخادم."
+          ])
+        });
+      } else {
+        if (result.data.conversation_id) {
+          state.conversationIds[threadEntry.id] = String(result.data.conversation_id);
+        }
+        threadEntry.messages.push({
+          role: "assistant",
+          body: assistantReply("تم توليد الرد بنجاح.", splitReplyToBullets(result.data.assistant_message.body))
+        });
+        if (input) {
+          threadEntry.title = threadEntry.title === "محادثة جديدة" ? input.slice(0, 32) : threadEntry.title;
+        }
+      }
+    } catch (_) {
+      threadEntry.messages.pop();
+      threadEntry.messages.push({
+        role: "assistant",
+        body: assistantReply("تعذر الوصول إلى خدمة الشات الآن.", [
+          "تحقق من جاهزية الخادم ثم أعد المحاولة بعد قليل."
+        ])
+      });
+    } finally {
+      state.sending = false;
+      state.selectedFiles = [];
+      setComposerValue("");
+      render();
+    }
+  }
+
+  function splitReplyToBullets(text) {
+    const cleaned = String(text || "").trim();
+    if (!cleaned) return ["لم يصلنا نص واضح من الخدمة."];
+    const lines = cleaned
+      .replace(/\r/g, "")
+      .split(/\n+/)
+      .map((line) => line.replace(/^[•*\-\d\.\)\s]+/, "").trim())
+      .filter(Boolean);
+    if (lines.length >= 2) return lines.slice(0, 6);
+    const sentences = cleaned.split(/(?<=[.!؟])\s+/).map((item) => item.trim()).filter(Boolean);
+    return (sentences.length ? sentences : [cleaned]).slice(0, 6);
+  }
+
+  function bindEvents() {
+    const fileInput = getFileInput();
+    fileInput?.addEventListener("change", (event) => {
+      const files = Array.from(event.target.files || []);
+      state.selectedFiles = files;
+      render();
     });
-    $$(".workspace-icon-btn", app).forEach((button) => {
-      button.addEventListener("click", redirectToLogin);
+
+    app.addEventListener("click", (event) => {
+      const navButton = event.target.closest("[data-nav]");
+      if (navButton) {
+        setSection(navButton.getAttribute("data-nav"));
+        return;
+      }
+
+      const threadButton = event.target.closest("[data-thread]");
+      if (threadButton) {
+        state.activeThreadId[state.section] = threadButton.getAttribute("data-thread") || "";
+        render();
+        return;
+      }
+
+      if (event.target.closest("[data-close-auth]")) {
+        closeAuthModal();
+        return;
+      }
+
+      if (event.target.closest("[data-open-full-login]")) {
+        window.location.href = LOGIN_PAGE_URL;
+        return;
+      }
+
+      if (event.target.closest("[data-theme-toggle]")) {
+        state.theme = state.theme === "dark" ? "light" : "dark";
+        setStoredTheme(state.theme);
+        render();
+        return;
+      }
+
+      if (event.target.closest("[data-open-account]")) {
+        if (isAuthenticated()) {
+          window.location.href = STUDENT_PAGE_URL;
+        } else {
+          openAuthModal("افتح حسابك للوصول إلى التجربة الكاملة.");
+        }
+        return;
+      }
+
+      if (event.target.closest("[data-new-chat]")) {
+        if (!isAuthenticated()) {
+          openAuthModal("أنشئ محادثة جديدة بعد تسجيل الدخول.");
+          return;
+        }
+        createNewThreadFromDraft("محادثة جديدة");
+        render();
+        return;
+      }
+
+      if (event.target.closest("[data-pick-file]")) {
+        pickFiles();
+        return;
+      }
+
+      const removeFile = event.target.closest("[data-remove-file]");
+      if (removeFile) {
+        removeSelectedFile(Number(removeFile.getAttribute("data-remove-file")));
+        return;
+      }
+
+      const cardButton = event.target.closest("[data-card]");
+      if (cardButton) {
+        const label = cardButton.getAttribute("data-card") || "";
+        if (!isAuthenticated()) {
+          openAuthModal(`استخدم "${label}" بعد تسجيل الدخول.`);
+          return;
+        }
+        setComposerValue(`ساعدني في ${label}`);
+        render();
+        return;
+      }
+
+      if (event.target.closest("[data-toggle-web]")) {
+        if (!isAuthenticated()) {
+          openAuthModal("فعّل هذه الإعدادات بعد تسجيل الدخول.");
+          return;
+        }
+        state.settings[state.section].webEnabled = !state.settings[state.section].webEnabled;
+        render();
+        return;
+      }
+
+      if (event.target.closest("[data-delete-thread]")) {
+        if (!isAuthenticated()) {
+          openAuthModal("احذف المحادثة بعد تسجيل الدخول.");
+          return;
+        }
+        const sectionKey = state.section;
+        const currentId = getActiveThread(sectionKey)?.id;
+        state.threadState[sectionKey] = state.threadState[sectionKey]
+          .map((groupEntry) => ({
+            ...groupEntry,
+            items: groupEntry.items.filter((item) => item.id !== currentId)
+          }))
+          .filter((groupEntry) => groupEntry.items.length);
+        state.activeThreadId[sectionKey] = getAllThreads(sectionKey)[0]?.id || "";
+        render();
+        return;
+      }
+
+      if (event.target.closest("[data-copy-reply]")) {
+        if (!isAuthenticated()) {
+          openAuthModal("انسخ الرد بعد تسجيل الدخول.");
+          return;
+        }
+        const assistant = [...(getActiveThread()?.messages || [])].reverse().find((message) => message.role === "assistant");
+        const text = assistant?.body?.bullets?.join("\n") || "";
+        navigator.clipboard?.writeText(text).then(() => {
+          showToast("تم نسخ الرد.");
+        }).catch(() => {
+          showToast("تعذر نسخ الرد حاليًا.");
+        });
+        return;
+      }
+
+      if (event.target.closest("[data-refresh-reply]") || event.target.closest("[data-like-reply]")) {
+        if (!isAuthenticated()) {
+          openAuthModal("أكمل التفاعل بعد تسجيل الدخول.");
+          return;
+        }
+        showToast("تم حفظ تفاعلك بنجاح.");
+      }
     });
-    bindAuthPreviewGate();
+
+    app.addEventListener("input", (event) => {
+      const searchInput = event.target.closest("[data-history-search]");
+      if (searchInput) {
+        state.historySearch[state.section] = searchInput.value;
+        render();
+        return;
+      }
+
+      const composeInput = event.target.closest("[data-compose-input]");
+      if (composeInput) {
+        if (!isAuthenticated()) {
+          openAuthModal("اكتب رسالتك بعد تسجيل الدخول.");
+          return;
+        }
+        setComposerValue(composeInput.value);
+      }
+    });
+
+    app.addEventListener("change", (event) => {
+      const select = event.target.closest("[data-setting]");
+      if (!select) return;
+      if (!isAuthenticated()) {
+        openAuthModal("عدّل الإعدادات بعد تسجيل الدخول.");
+        return;
+      }
+      state.settings[state.section][select.getAttribute("data-setting")] = select.value;
+    });
+
+    app.addEventListener("focusin", (event) => {
+      if (event.target.closest("[data-auth-focus]") && !isAuthenticated()) {
+        openAuthModal("هذه الأداة تحتاج إلى تسجيل الدخول أولًا.");
+      }
+    });
+
+    app.addEventListener("submit", (event) => {
+      const composeForm = event.target.closest("[data-compose-form]");
+      if (!composeForm) return;
+      event.preventDefault();
+      submitMessage();
+    });
+
+    window.addEventListener("message", (event) => {
+      if (event.origin !== window.location.origin) return;
+      if (event.data?.type !== "mullem-auth-success") return;
+      state.currentUser = getActiveUser();
+      state.authModalOpen = false;
+      render();
+      showToast(`مرحبًا ${state.currentUser?.name || "بك"}، تم تسجيل الدخول بنجاح.`);
+    });
   }
 
   function render() {
-    const pageConfig = pageMap[currentPageKey];
-    if (!pageConfig) return;
-    app.innerHTML = `<div class="workspace-app">${shell(pageConfig.render(state), pageConfig)}</div>`;
-    bindGlobal();
-    pageConfig.bind(app, state, setState);
+    state.currentUser = getActiveUser();
+    ensureThreadState();
+    renderShell();
   }
 
   window.addEventListener("popstate", () => {
-    const nextPageKey = resolvePageKey();
-    if (!pageMap[nextPageKey] || nextPageKey === currentPageKey) return;
-    currentPageKey = nextPageKey;
-    state = clone(pageMap[currentPageKey].defaults);
+    state.section = resolveSection();
+    ensureThreadState();
     render();
   });
 
+  updateUrl(true);
+  bindEvents();
   render();
 })();
