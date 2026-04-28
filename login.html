@@ -59,23 +59,14 @@
 
     .login-shell {
       min-height: 100vh;
-      display: grid;
-      grid-template-columns: 280px minmax(0, 1fr);
+      display: block;
       background:
         radial-gradient(circle at center, rgba(122, 103, 255, 0.08), transparent 38%),
         linear-gradient(180deg, rgba(255, 255, 255, 0.66), rgba(247, 244, 255, 0.92));
     }
 
     .login-sidebar {
-      position: relative;
-      display: flex;
-      flex-direction: column;
-      gap: 22px;
-      padding: 30px 22px;
-      background: rgba(255, 255, 255, 0.78);
-      border-left: 1px solid rgba(111, 76, 255, 0.08);
-      backdrop-filter: blur(16px);
-      overflow: hidden;
+      display: none !important;
     }
 
     .login-sidebar::before {
@@ -235,7 +226,9 @@
     .login-main {
       position: relative;
       min-width: 0;
-      padding: 26px 30px 40px;
+      width: min(1180px, calc(100% - 36px));
+      margin: 0 auto;
+      padding: 26px 18px 40px;
       overflow: hidden;
     }
 
@@ -257,83 +250,41 @@
 
     .login-topbar {
       display: flex;
-      justify-content: flex-start;
+      justify-content: flex-end;
       margin-bottom: 28px;
     }
 
-    .topbar-actions {
+    .topbar-links {
       display: flex;
       align-items: center;
       gap: 14px;
     }
 
-    .circle-icon-btn,
-    .avatar-btn {
-      width: 48px;
-      height: 48px;
-      border: 1px solid rgba(111, 76, 255, 0.12);
-      border-radius: 50%;
-      background: rgba(255, 255, 255, 0.86);
-      box-shadow: var(--shadow-soft);
-      cursor: pointer;
-      color: var(--text);
-    }
-
-    .circle-icon-btn {
-      display: grid;
-      place-items: center;
-      padding: 0;
-    }
-
-    .circle-icon-btn svg {
-      width: 22px;
-      height: 22px;
-      fill: none;
-      stroke: currentColor;
-      stroke-width: 1.8;
-      stroke-linecap: round;
-      stroke-linejoin: round;
-    }
-
-    .avatar-btn {
-      display: grid;
-      place-items: center;
-      color: var(--primary);
-      font-weight: 800;
-      font-size: 19px;
-      background: linear-gradient(180deg, rgba(124, 92, 255, 0.14), rgba(124, 92, 255, 0.08));
-    }
-
-    .topbar-search {
-      display: flex;
-      align-items: center;
-      gap: 14px;
-      min-width: 272px;
+    .topbar-link {
+      min-height: 48px;
       padding: 0 18px;
       border: 1px solid rgba(111, 76, 255, 0.12);
       border-radius: 18px;
-      background: rgba(255, 255, 255, 0.88);
+      background: rgba(255, 255, 255, 0.9);
       box-shadow: var(--shadow-soft);
-    }
-
-    .topbar-search input {
-      flex: 1;
-      height: 48px;
-      border: 0;
-      outline: 0;
-      background: transparent;
       color: var(--text);
+      align-items: center;
+      justify-content: center;
       font-size: 14px;
+      font-weight: 800;
+      transition: transform 160ms ease, box-shadow 160ms ease, border-color 160ms ease;
     }
 
-    .topbar-search span {
-      flex: 0 0 auto;
-      padding: 6px 9px;
-      border-radius: 10px;
-      background: rgba(111, 76, 255, 0.08);
-      color: var(--muted);
-      font-size: 12px;
-      font-weight: 700;
+    .topbar-link:hover {
+      transform: translateY(-1px);
+      border-color: rgba(111, 76, 255, 0.2);
+      box-shadow: 0 18px 34px rgba(109, 78, 255, 0.12);
+    }
+
+    .topbar-link.is-primary {
+      color: #fff;
+      border-color: transparent;
+      background: linear-gradient(135deg, #7a5bff, #5d37ff);
     }
 
     .login-main-content {
@@ -781,16 +732,14 @@
     }
 
     @media (max-width: 760px) {
-      .topbar-actions {
+      .topbar-links {
         width: 100%;
         flex-wrap: wrap;
         justify-content: center;
       }
 
-      .topbar-search {
-        order: 3;
+      .topbar-link {
         width: 100%;
-        min-width: 0;
       }
 
       .hero-copy {
@@ -836,7 +785,7 @@
 </head>
 <body>
   <main class="login-shell">
-    <aside class="login-sidebar" aria-label="التنقل الجانبي قبل تسجيل الدخول">
+    <aside class="login-sidebar" hidden aria-hidden="true" aria-label="التنقل الجانبي قبل تسجيل الدخول">
       <a class="sidebar-brand" href="index.html" aria-label="العودة إلى الرئيسية">
         <img src="orlixor-brand.png" alt="Orlixor">
       </a>
@@ -909,15 +858,9 @@
       <img class="hero-mark" src="orlixor-mark.png" alt="" aria-hidden="true">
 
       <header class="login-topbar">
-        <div class="topbar-actions">
-          <button class="avatar-btn" type="button" aria-label="الملف الشخصي">م</button>
-          <button class="circle-icon-btn" type="button" aria-label="الإشعارات">
-            <svg viewBox="0 0 24 24"><path d="M15 18H5.5a1.5 1.5 0 0 1-1.2-2.4l1.2-1.6V10a6.5 6.5 0 1 1 13 0v4l1.2 1.6a1.5 1.5 0 0 1-1.2 2.4H9"/><path d="M10 18a2 2 0 0 0 4 0"/></svg>
-          </button>
-          <label class="topbar-search">
-            <span>⌘ K</span>
-            <input type="search" placeholder="ابحث عن أي شيء..." aria-label="ابحث عن أي شيء">
-          </label>
+        <div class="topbar-links">
+          <a class="topbar-link" href="subscriptions.html">الباقات</a>
+          <a class="topbar-link is-primary" href="index.html">العودة للرئيسية</a>
         </div>
       </header>
 
