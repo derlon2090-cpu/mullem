@@ -428,6 +428,17 @@ body[data-workspace-mode="home"] .guest-root {
   border-radius: 12px;
 }
 
+.guest-shell.is-home-workspace .guest-user-card.is-member {
+  min-height: 58px;
+  padding: 8px 10px;
+  border: 0;
+  border-radius: 0;
+  grid-template-columns: 34px minmax(0, 1fr) 22px;
+  gap: 8px;
+  box-shadow: none;
+  background: transparent;
+}
+
 .guest-shell.is-home-workspace .guest-upgrade-card {
   min-height: 58px;
   padding: 8px 10px;
@@ -466,6 +477,19 @@ body[data-workspace-mode="home"] .guest-root {
   padding: 5px 8px;
   font-size: 0.68rem;
   white-space: nowrap;
+}
+
+.guest-user-menu {
+  width: 22px;
+  height: 22px;
+  display: grid;
+  place-items: center;
+  color: #8b92ae;
+}
+
+.guest-user-menu svg {
+  width: 16px;
+  height: 16px;
 }
 
 .upgrade-mark {
@@ -1898,17 +1922,27 @@ body[data-workspace-mode="home"] .guest-root {
 
 .settings-modal-card {
   position: relative;
-  width: min(980px, calc(100vw - 42px));
-  min-height: 610px;
+  width: min(930px, calc(100vw - 72px));
+  min-height: 560px;
   max-height: calc(100vh - 48px);
   display: grid;
-  grid-template-columns: 300px minmax(0, 1fr);
+  grid-template-columns: 280px minmax(0, 1fr);
   direction: ltr;
   overflow: hidden;
   border-radius: 20px;
   border: 1px solid rgba(111, 76, 255, 0.1);
   background: rgba(255, 255, 255, 0.98);
   box-shadow: 0 34px 90px rgba(20, 24, 50, 0.22);
+}
+
+.settings-modal-card svg {
+  width: 18px;
+  height: 18px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.9;
+  stroke-linecap: round;
+  stroke-linejoin: round;
 }
 
 .settings-close-btn {
@@ -1928,11 +1962,11 @@ body[data-workspace-mode="home"] .guest-root {
 
 .settings-modal-side {
   direction: rtl;
-  padding: 58px 28px 28px;
+  padding: 60px 28px 24px;
   border-left: 1px solid rgba(111, 76, 255, 0.1);
   display: flex;
   flex-direction: column;
-  gap: 22px;
+  gap: 18px;
 }
 
 .settings-profile {
@@ -2012,14 +2046,14 @@ body[data-workspace-mode="home"] .guest-root {
 
 .settings-logout-btn {
   margin-top: auto;
-  min-height: 45px;
+  min-height: 48px;
   border: 0;
   border-top: 1px solid rgba(111, 76, 255, 0.1);
-  padding-top: 18px;
+  padding: 18px 12px 0;
   display: flex;
   align-items: center;
   gap: 12px;
-  justify-content: flex-start;
+  justify-content: flex-end;
   color: #f24555;
   background: transparent;
   font-weight: 800;
@@ -2028,7 +2062,7 @@ body[data-workspace-mode="home"] .guest-root {
 
 .settings-modal-main {
   direction: rtl;
-  padding: 70px 38px 36px;
+  padding: 72px 34px 32px;
   overflow: auto;
 }
 
@@ -2268,7 +2302,7 @@ body[data-workspace-mode="home"] .guest-root {
 
   .settings-modal-card {
     grid-template-columns: 260px minmax(0, 1fr);
-    width: min(940px, calc(100vw - 24px));
+    width: min(900px, calc(100vw - 24px));
   }
 
   .settings-modal-main {

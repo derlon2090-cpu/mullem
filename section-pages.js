@@ -580,8 +580,8 @@
     if (isAuthenticated()) {
       return {
         title: state.currentUser.name,
-        subtitle: "عضو مميز داخل المنصة",
-        action: "الدخول إلى اللوحة",
+        subtitle: "عضو مميز",
+        action: "الإعدادات",
         guest: false
       };
     }
@@ -1110,7 +1110,7 @@
             <strong>${escapeHtml(userCard.title)}</strong>
             <small>${escapeHtml(userCard.subtitle)}</small>
           </span>
-          <span class="guest-user-action">${escapeHtml(userCard.action)}</span>
+          <span class="guest-user-menu" aria-hidden="true">${icons.menu}</span>
         </button>
       `;
     return `
@@ -1217,10 +1217,8 @@
   function scrollConversationToLatest() {
     window.requestAnimationFrame(() => {
       const conversation = app.querySelector(".guest-conversation-card");
-      const lastMessage = conversation?.querySelector(".guest-message:last-child");
       if (!conversation) return;
       conversation.scrollTop = conversation.scrollHeight;
-      lastMessage?.scrollIntoView({ block: "end", behavior: "smooth" });
     });
   }
 
@@ -1451,6 +1449,8 @@
 
       if (event.target.closest("[data-logout]")) {
         const apiClient = getApiClient();
+        event.preventDefault();
+        event.stopPropagation();
         const finishLogout = () => {
           localStorage.removeItem(legacyStorageKeys.currentUser);
           state.currentUser = getActiveUser();
@@ -1597,8 +1597,9 @@
     window.addEventListener("message", (event) => {
       if (event.origin !== window.location.origin) return;
       if (event.data?.type !== "mullem-auth-success") return;
-      state.currentUser = getActiveUser();
+      state.currentUser = normalizeUser(event.data?.payload?.user) || getActiveUser();
       state.authModalOpen = false;
+      state.settingsModalOpen = false;
       render();
       window.requestAnimationFrame(() => {
         const composeInput = app.querySelector("[data-compose-input]");
