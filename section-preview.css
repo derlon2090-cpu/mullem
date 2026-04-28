@@ -507,20 +507,13 @@ body[data-workspace-mode="home"] .guest-root {
 
 .guest-user-card.is-orlixor-guest {
   position: relative;
-  min-height: 118px;
-  padding: 13px 10px;
+  min-height: 128px;
+  padding: 14px;
   border: 0;
   border-radius: 16px;
   overflow: hidden;
   direction: ltr;
-  display: grid;
-  grid-template-columns: 92px minmax(50px, 1fr) 46px;
-  grid-template-rows: auto 1fr;
-  grid-template-areas:
-    "action head avatar"
-    "action lines avatar";
-  align-items: center;
-  gap: 5px 6px;
+  display: block;
   background:
     radial-gradient(circle at 18% 20%, rgba(123, 92, 255, 0.075) 0 2px, transparent 2.5px),
     linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(250, 248, 255, 0.98));
@@ -531,8 +524,8 @@ body[data-workspace-mode="home"] .guest-root {
 .guest-user-card.is-orlixor-guest::after {
   content: "";
   position: absolute;
-  inset-inline-end: 28px;
-  inset-block-start: 30px;
+  right: 18px;
+  top: 40px;
   width: 66px;
   height: 66px;
   border: 1px solid rgba(123, 92, 255, 0.08);
@@ -541,7 +534,10 @@ body[data-workspace-mode="home"] .guest-root {
 }
 
 .guest-user-card.is-orlixor-guest .guest-user-head {
-  grid-area: head;
+  position: absolute;
+  top: 12px;
+  left: 106px;
+  right: 56px;
   z-index: 1;
   display: grid;
   justify-items: center;
@@ -570,10 +566,13 @@ body[data-workspace-mode="home"] .guest-root {
 }
 
 .guest-user-card.is-orlixor-guest .guest-user-lines {
-  grid-area: lines;
+  position: absolute;
+  top: 40px;
+  left: 108px;
+  right: 58px;
   z-index: 1;
   display: grid;
-  gap: 1px;
+  gap: 2px;
   direction: rtl;
 }
 
@@ -606,7 +605,9 @@ body[data-workspace-mode="home"] .guest-root {
 }
 
 .guest-user-card.is-orlixor-guest .guest-user-avatar {
-  grid-area: avatar;
+  position: absolute;
+  right: 14px;
+  top: 58px;
   z-index: 1;
   width: 46px;
   height: 46px;
@@ -627,11 +628,13 @@ body[data-workspace-mode="home"] .guest-root {
 }
 
 .guest-user-card.is-orlixor-guest .guest-user-action {
-  grid-area: action;
+  position: absolute;
+  left: 14px;
+  top: 61px;
   z-index: 1;
-  min-height: 46px;
-  width: 92px;
-  max-width: 92px;
+  min-height: 44px;
+  width: 102px;
+  max-width: 102px;
   border-radius: 15px;
   padding: 0 6px;
   display: inline-flex;
@@ -651,12 +654,10 @@ body[data-workspace-mode="home"] .guest-root {
 }
 
 .guest-shell.is-home-workspace .guest-user-card.is-orlixor-guest {
-  min-height: 118px;
-  padding: 13px 10px;
+  min-height: 128px;
+  padding: 14px;
   border-radius: 16px;
-  display: grid;
-  grid-template-columns: 92px minmax(50px, 1fr) 46px;
-  gap: 5px 6px;
+  display: block;
 }
 
 .guest-main {
