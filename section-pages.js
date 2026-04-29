@@ -466,6 +466,9 @@
   }
 
   function persistEmbeddedUser(user) {
+    const apiClient = getApiClient();
+    if (!apiClient?.hasToken?.()) return null;
+
     const normalized = normalizeUser(user);
     if (!normalized?.id || normalized.role === "admin") return null;
     try {
@@ -491,8 +494,21 @@
 
   function getActiveUser() {
     syncSessionFromCookies();
-    const apiUser = normalizeUser(getApiClient()?.getSessionUser?.());
+    const apiClient = getApiClient();
+    const hasServerSession = Boolean(apiClient?.hasToken?.());
+    if (!hasServerSession) {
+      try {
+        localStorage.removeItem(legacyStorageKeys.currentUser);
+        localStorage.removeItem("mlm_admin_session");
+      } catch (_) {
+        // Ignore cleanup issues.
+      }
+      return null;
+    }
+
+    const apiUser = normalizeUser(apiClient?.getSessionUser?.());
     if (apiUser && apiUser.role !== "admin") return apiUser;
+
     const currentId = String(localStorage.getItem(legacyStorageKeys.currentUser) || "").trim();
     if (!currentId) return null;
     const users = loadJson(legacyStorageKeys.users, []);
@@ -1177,6 +1193,8 @@
   }
 
   function renderAuthModal() {
+    if (!state.authModalOpen) return "";
+
     return `
       <div class="auth-gate ${state.authModalOpen ? "is-open" : ""}" ${state.authModalOpen ? "" : "hidden"}>
         <button class="auth-gate-backdrop" type="button" data-close-auth aria-label="إغلاق نافذة الدخول"></button>
@@ -1345,6 +1363,8 @@
     render();
     scrollConversationToLatest();
 
+    let shouldKeepDraft = false;
+
     try {
       const result = await apiClient.sendChat({
         conversation_id: state.conversationIds[threadEntry.id] || undefined,
@@ -1359,6 +1379,23 @@
       });
 
       threadEntry.messages.pop();
+      const authMessage = String(result.message || "");
+      if (result.status === 401 || result.status === 403 || /authentication is required/i.test(authMessage)) {
+        apiClient.clearSession?.();
+        try {
+          localStorage.removeItem(legacyStorageKeys.currentUser);
+          localStorage.removeItem("mlm_admin_session");
+        } catch (_) {
+          // Ignore cleanup issues.
+        }
+        state.currentUser = null;
+        shouldKeepDraft = true;
+        setComposerValue(input);
+        state.authReason = "انتهت الجلسة أو لم تكتمل. سجّل دخولك مرة أخرى حتى يعمل الشات من حسابك.";
+        state.authModalOpen = true;
+        return;
+      }
+
       if (!result.ok || !result.data?.assistant_message?.body) {
         threadEntry.messages.push({
           role: "assistant",
@@ -1388,7 +1425,11 @@
       });
     } finally {
       state.sending = false;
-      state.selectedFiles = [];
+      if (!shouldKeepDraft) {
+        state.selectedFiles = [];
+      } else {
+        state.selectedFiles = outgoingFiles;
+      }
       render();
       scrollConversationToLatest();
     }
@@ -1623,6 +1664,7 @@
     window.addEventListener("message", (event) => {
       if (event.origin !== window.location.origin) return;
       if (event.data?.type !== "mullem-auth-success") return;
+      if (!state.authModalOpen) return;
       state.currentUser = persistEmbeddedUser(event.data?.payload?.user) || getActiveUser();
       state.authModalOpen = false;
       state.settingsModalOpen = false;

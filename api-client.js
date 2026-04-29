@@ -268,6 +268,18 @@
       const cookieUser = getCookie(cookieKeys.user);
       const cookieCurrentUser = getCookie(cookieKeys.currentUser);
       const cookieAdminSession = getCookie(cookieKeys.adminSession);
+      const storedToken = localStorage.getItem(storageKeys.token) || "";
+
+      if (!cookieToken && !storedToken) {
+        localStorage.removeItem(storageKeys.token);
+        localStorage.removeItem(storageKeys.user);
+        localStorage.removeItem("mlm_current_user");
+        localStorage.removeItem("mlm_admin_session");
+        deleteCookie(cookieKeys.user);
+        deleteCookie(cookieKeys.currentUser);
+        deleteCookie(cookieKeys.adminSession);
+        return;
+      }
 
       if (cookieToken && !localStorage.getItem(storageKeys.token)) {
         localStorage.setItem(storageKeys.token, cookieToken);
@@ -300,17 +312,7 @@
 
   function isAuthenticatedStudent() {
     const sessionUser = getSessionUser();
-    if (hasToken() && sessionUser && String(sessionUser.role || "").toLowerCase() !== "admin") {
-      return true;
-    }
-
-    try {
-      const currentUser = localStorage.getItem("mlm_current_user");
-      const isAdmin = localStorage.getItem("mlm_admin_session") === "1";
-      return Boolean(currentUser) && !isAdmin;
-    } catch (_) {
-      return false;
-    }
+    return Boolean(hasToken() && sessionUser && String(sessionUser.role || "").toLowerCase() !== "admin");
   }
 
   function isPublicLandingPage() {
@@ -372,6 +374,7 @@
   }
 
   function syncLegacySessionUser() {
+    if (!hasToken()) return;
     const sessionUser = getSessionUser();
     if (!sessionUser?.id) return;
 
@@ -402,24 +405,20 @@
       const token = localStorage.getItem(storageKeys.token) || "";
       const sessionUser = getSessionUser();
 
-      if (token) {
-        setCookie(cookieKeys.token, token, 45);
-      } else {
+      if (!token) {
         deleteCookie(cookieKeys.token);
+        deleteCookie(cookieKeys.currentUser);
+        deleteCookie(cookieKeys.user);
+        deleteCookie(cookieKeys.adminSession);
+        return;
       }
+
+      setCookie(cookieKeys.token, token, 45);
 
       if (sessionUser) {
         setCookie(cookieKeys.user, JSON.stringify(normalizeCookieUser(sessionUser)), 45);
       } else {
-        const legacyUsers = loadJson("mlm_users", []);
-        const legacyUser = currentUser
-          ? legacyUsers.find((user) => String(user.id) === String(currentUser))
-          : null;
-        if (legacyUser) {
-          setCookie(cookieKeys.user, JSON.stringify(normalizeCookieUser(legacyUser)), 45);
-        } else {
-          deleteCookie(cookieKeys.user);
-        }
+        deleteCookie(cookieKeys.user);
       }
 
       if (currentUser) {
@@ -434,10 +433,8 @@
         deleteCookie(cookieKeys.adminSession);
       }
 
-      if (token || currentUser || adminSession === "1") {
-        localStorage.removeItem(storageKeys.logoutMarker);
-        deleteCookie(cookieKeys.logoutMarker);
-      }
+      localStorage.removeItem(storageKeys.logoutMarker);
+      deleteCookie(cookieKeys.logoutMarker);
     } catch (_) {
       // Ignore cookie persistence issues.
     }

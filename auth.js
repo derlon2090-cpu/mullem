@@ -184,7 +184,7 @@ function completeAdminApiLogin(message) {
 }
 
 function shouldFallbackToLocalAuth(result) {
-  return !result || result.serverUnavailable;
+  return false;
 }
 
 function handleLocalLoginFallback(email, password) {
@@ -537,7 +537,8 @@ loginForm?.addEventListener("submit", async (event) => {
   }
 
   if (!apiClient) {
-    handleLocalLoginFallback(email, password);
+    setInlineError(loginError, "خدمة تسجيل الدخول غير جاهزة الآن. أعد المحاولة بعد قليل.");
+    setState("خدمة تسجيل الدخول غير جاهزة الآن. أعد المحاولة بعد قليل.");
     return;
   }
 
@@ -631,7 +632,8 @@ registerForm?.addEventListener("submit", async (event) => {
   }
 
   if (!apiClient) {
-    handleLocalRegisterFallback(name, email, password, grade);
+    setInlineError(registerError, "خدمة إنشاء الحساب غير جاهزة الآن. أعد المحاولة بعد قليل.");
+    setState("خدمة إنشاء الحساب غير جاهزة الآن. أعد المحاولة بعد قليل.");
     return;
   }
 
