@@ -69,7 +69,7 @@ try {
   if (!isEmbeddedAuth && activeAdminSession === "1") {
     window.location.href = "admin.html";
   } else if (!isEmbeddedAuth && activeUserId && !window.location.pathname.endsWith("admin.html")) {
-    window.location.href = "student.html";
+    window.location.href = "index.html";
   }
 } catch (_) {
   // Ignore storage access issues on auth bootstrap.
@@ -113,7 +113,7 @@ function notifyEmbeddedAuthSuccess(payload = {}) {
   }
 }
 
-function finishAuthSuccess(payload = {}, redirectUrl = "student.html") {
+function finishAuthSuccess(payload = {}, redirectUrl = "index.html") {
   if (notifyEmbeddedAuthSuccess(payload)) return true;
   window.setTimeout(() => {
     window.location.href = redirectUrl;
@@ -171,7 +171,7 @@ function completeStudentApiLogin(user, message, passwordOverride = "") {
   ensureUserWorkspace(normalizedUser.id);
   clearPendingAuth();
   setSuccessState(message || `أهلًا ${normalizedUser.name}، تم تسجيل الدخول بنجاح عبر الخادم.`);
-  finishAuthSuccess({ role: "student", user: normalizedUser }, "student.html");
+  finishAuthSuccess({ role: "student", user: normalizedUser }, "index.html");
 }
 
 function completeAdminApiLogin(message) {
@@ -484,7 +484,7 @@ function redirectToStudent() {
       return;
     }
   }
-  window.location.href = "student.html";
+  window.location.href = "index.html";
 }
 
 function bindPasswordToggles() {
@@ -820,7 +820,7 @@ verifyForm?.addEventListener("submit", (event) => {
     ensureUserWorkspace(newUser.id);
     clearPendingAuth();
     setSuccessState(`تم إنشاء الحساب بنجاح يا ${newUser.name}.`);
-    finishAuthSuccess({ role: "student", user: newUser }, "student.html");
+    finishAuthSuccess({ role: "student", user: newUser }, "index.html");
     return;
   }
 
@@ -845,7 +845,7 @@ verifyForm?.addEventListener("submit", (event) => {
   ensureUserWorkspace(user.id);
   clearPendingAuth();
   setSuccessState(`أهلًا ${user.name}، تم تسجيل الدخول بنجاح.`);
-  finishAuthSuccess({ role: "student", user }, "student.html");
+  finishAuthSuccess({ role: "student", user }, "index.html");
 });
 
 googleButton?.addEventListener("click", () => {

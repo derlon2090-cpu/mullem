@@ -319,24 +319,11 @@
   }
 
   function redirectAuthenticatedUserFromLanding() {
-    if (!isAuthenticatedStudent() || !isPublicLandingPage()) return;
-
-    const search = String(window.location?.search || "");
-    const hash = String(window.location?.hash || "");
-    if (search.includes("public=1") || hash === "#public") return;
-
-    window.location.replace("student.html");
+    return;
   }
 
   function upgradeHomeLinksForAuthenticatedUser() {
-    if (!isAuthenticatedStudent()) return;
-
-    document
-      .querySelectorAll('a[href="index.html"], a[href="./index.html"], a[href="/index.html"], a[href="#home"]')
-      .forEach((link) => {
-        if (link.hasAttribute("data-public-home")) return;
-        link.setAttribute("href", "student.html");
-      });
+    return;
   }
 
   function normalizeLegacyUser(user, existingUser = null) {

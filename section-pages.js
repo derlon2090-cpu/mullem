@@ -1134,7 +1134,7 @@
             <strong>${escapeHtml(userCard.title)}</strong>
             <small>${escapeHtml(userCard.subtitle)}</small>
           </span>
-          <span class="guest-user-menu" aria-hidden="true">${icons.menu}</span>
+          <button class="guest-user-menu" type="button" data-open-account aria-label="إعدادات الحساب">${icons.menu}</button>
         </div>
       `;
     return `

@@ -502,9 +502,19 @@ body[data-workspace-mode="home"] .guest-root {
 .guest-user-menu {
   width: 22px;
   height: 22px;
+  border: 0;
+  padding: 0;
   display: grid;
   place-items: center;
+  border-radius: 8px;
+  background: transparent;
   color: #8b92ae;
+  cursor: pointer;
+}
+
+.guest-user-menu:hover {
+  color: #6547ff;
+  background: rgba(111, 76, 255, 0.1);
 }
 
 .guest-user-menu svg {
