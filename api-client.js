@@ -644,6 +644,16 @@
     };
   }
 
+  function extractAuthSession(result) {
+    const data = result?.data || result?.payload?.data || result?.payload || {};
+    const token = data.token || data.access_token || data.auth_token || data.plainTextToken || "";
+    const user = data.user || data.account || data.student || null;
+    return {
+      token: String(token || "").trim(),
+      user
+    };
+  }
+
   async function login(payload) {
     const result = await request("/auth/login", {
       method: "POST",
@@ -651,10 +661,11 @@
       skipAuth: true
     });
 
-    if (result.ok && result.data?.token && result.data?.user) {
+    const session = extractAuthSession(result);
+    if (result.ok && session.token && session.user) {
       setSession({
-        token: result.data.token,
-        user: result.data.user
+        token: session.token,
+        user: session.user
       });
     }
 
@@ -668,10 +679,11 @@
       skipAuth: true
     });
 
-    if (result.ok && result.data?.token && result.data?.user) {
+    const session = extractAuthSession(result);
+    if (result.ok && session.token && session.user) {
       setSession({
-        token: result.data.token,
-        user: result.data.user
+        token: session.token,
+        user: session.user
       });
     }
 

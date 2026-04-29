@@ -12,6 +12,7 @@
   const isHomeWorkspace = workspaceMode === "home";
   const shellBaseUrl = isHomeWorkspace ? HOME_URL : GUEST_URL;
   const themeKey = "orlixor_guest_theme";
+  const authBridgeKey = "mlm_auth_bridge";
   const legacyStorageKeys = {
     users: "mlm_users",
     currentUser: "mlm_current_user"
@@ -492,7 +493,39 @@
     return normalized;
   }
 
+  function consumeAuthBridge() {
+    let payload = null;
+    try {
+      const raw = localStorage.getItem(authBridgeKey);
+      if (!raw) return null;
+      payload = JSON.parse(raw);
+      localStorage.removeItem(authBridgeKey);
+    } catch (_) {
+      try {
+        localStorage.removeItem(authBridgeKey);
+      } catch (__) {
+        // Ignore cleanup issues.
+      }
+      return null;
+    }
+
+    const createdAt = Number(payload?.createdAt || 0);
+    const isFresh = !createdAt || Date.now() - createdAt < 10 * 60 * 1000;
+    if (!isFresh || !payload?.token || !payload?.user) return null;
+
+    const apiClient = getApiClient();
+    apiClient?.setSession?.({
+      token: payload.token,
+      user: payload.user
+    });
+
+    return persistEmbeddedUser(payload.user);
+  }
+
   function getActiveUser() {
+    const bridgedUser = consumeAuthBridge();
+    if (bridgedUser) return bridgedUser;
+
     syncSessionFromCookies();
     const apiClient = getApiClient();
     const hasServerSession = Boolean(apiClient?.hasToken?.());
@@ -1256,6 +1289,26 @@
     render();
   }
 
+  function focusComposerSoon() {
+    window.requestAnimationFrame(() => {
+      const composeInput = app.querySelector("[data-compose-input]");
+      if (composeInput && typeof composeInput.focus === "function") {
+        composeInput.focus({ preventScroll: true });
+      }
+    });
+  }
+
+  function applyBridgedAuthSession() {
+    const bridgedUser = consumeAuthBridge();
+    if (!bridgedUser) return false;
+    state.currentUser = bridgedUser;
+    state.authModalOpen = false;
+    state.settingsModalOpen = false;
+    render();
+    focusComposerSoon();
+    return true;
+  }
+
   function scrollConversationToLatest() {
     window.requestAnimationFrame(() => {
       const conversation = app.querySelector(".guest-conversation-card");
@@ -1677,12 +1730,7 @@
       state.authModalOpen = false;
       state.settingsModalOpen = false;
       render();
-      window.requestAnimationFrame(() => {
-        const composeInput = app.querySelector("[data-compose-input]");
-        if (composeInput && typeof composeInput.focus === "function") {
-          composeInput.focus({ preventScroll: true });
-        }
-      });
+      focusComposerSoon();
     });
   }
 
@@ -1701,4 +1749,9 @@
   updateUrl(true);
   bindEvents();
   render();
+  window.setInterval(() => {
+    if (state.authModalOpen) {
+      applyBridgedAuthSession();
+    }
+  }, 700);
 })();

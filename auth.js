@@ -54,6 +54,7 @@ const adminCredentials = {
 };
 
 const isEmbeddedAuth = new URLSearchParams(window.location.search).get("embed") === "1";
+const authBridgeKey = "mlm_auth_bridge";
 
 try {
   window.mullemApiClient?.restorePersistentAuthFromCookies?.();
@@ -97,19 +98,13 @@ function persistClientAuthState() {
 function notifyEmbeddedAuthSuccess(payload = {}) {
   if (!isEmbeddedAuth || window.parent === window) return false;
   try {
-    const sessionPayload = { ...payload };
-    const token = window.mullemApiClient?.getToken?.();
-    if (token && sessionPayload.user && !sessionPayload.token) {
-      sessionPayload.token = token;
-    }
-
     const targetOrigin = window.location.origin && window.location.origin !== "null"
       ? window.location.origin
       : "*";
     window.parent.postMessage(
       {
         type: "mullem-auth-success",
-        payload: sessionPayload
+        payload
       },
       targetOrigin
     );
@@ -119,8 +114,32 @@ function notifyEmbeddedAuthSuccess(payload = {}) {
   }
 }
 
+function buildSessionPayload(payload = {}) {
+  const sessionPayload = { ...payload };
+  const token = window.mullemApiClient?.getToken?.();
+  if (token && sessionPayload.user && !sessionPayload.token) {
+    sessionPayload.token = token;
+  }
+  return sessionPayload;
+}
+
+function persistAuthBridge(payload = {}) {
+  const sessionPayload = buildSessionPayload(payload);
+  if (!sessionPayload.token || !sessionPayload.user) return sessionPayload;
+  try {
+    localStorage.setItem(authBridgeKey, JSON.stringify({
+      ...sessionPayload,
+      createdAt: Date.now()
+    }));
+  } catch (_) {
+    // Ignore bridge storage issues.
+  }
+  return sessionPayload;
+}
+
 function finishAuthSuccess(payload = {}, redirectUrl = "index.html") {
-  if (notifyEmbeddedAuthSuccess(payload)) return true;
+  const sessionPayload = persistAuthBridge(payload);
+  if (notifyEmbeddedAuthSuccess(sessionPayload)) return true;
   window.setTimeout(() => {
     window.location.href = redirectUrl;
   }, 650);
