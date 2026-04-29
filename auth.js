@@ -197,7 +197,6 @@ function normalizeApiUserForLocal(user) {
 
 function upsertApiUserLocally(user, passwordOverride = "") {
   const normalizedUser = normalizeApiUserForLocal(user);
-  if (passwordOverride) normalizedUser.password = passwordOverride;
   const nextUsers = [
     normalizedUser,
     ...loadUsers().filter((entry) => String(entry.id) !== String(normalizedUser.id))
@@ -630,18 +629,6 @@ loginForm?.addEventListener("submit", async (event) => {
 
   const loginMessage = apiResult.message || "تعذر تسجيل الدخول. تحقق من البيانات ثم حاول مرة أخرى.";
   if (/invalid email or password/i.test(loginMessage) || /كلمة المرور/i.test(loginMessage)) {
-    const localUser = loadUsers().find((entry) => entry.email.toLowerCase() === email && entry.password === password);
-    if (localUser) {
-      localStorage.removeItem(storageKeys.adminSession);
-      startAuthVerification({
-        flow: "login",
-        userId: localUser.id,
-        name: localUser.name,
-        email: localUser.email,
-        code: generateVerificationCode()
-      });
-      return;
-    }
     setInlineError(loginError, "كلمة المرور غير صحيحة.");
     setFieldError(loginPassword, true);
   } else {

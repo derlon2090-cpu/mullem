@@ -560,6 +560,7 @@
 
     const requestInitBase = {
       method: options.method || "GET",
+      credentials: options.credentials || "include",
       headers,
       body: bodyIsFormData
         ? options.body
@@ -687,6 +688,51 @@
     };
   }
 
+  async function verifyAuthSessionAfterLogin(result, session) {
+    if (!result?.ok || !session?.token || !session?.user) return result;
+
+    setSession({
+      token: session.token,
+      user: session.user
+    });
+
+    const verified = await request("/auth/me", {
+      method: "GET",
+      timeoutMs: 15000
+    });
+
+    if (verified.ok && verified.data?.user) {
+      setSession({
+        token: session.token,
+        user: verified.data.user
+      });
+
+      return {
+        ...result,
+        data: {
+          ...(result.data || {}),
+          user: verified.data.user,
+          token: session.token
+        },
+        sessionVerified: true
+      };
+    }
+
+    if (verified.status === 401 || verified.status === 403 || verified.networkError || verified.serverUnavailable) {
+      clearSession();
+      return {
+        ...result,
+        ok: false,
+        status: verified.status || result.status || 0,
+        message: verified.message || "تعذر تثبيت جلسة تسجيل الدخول. أعد المحاولة بعد قليل.",
+        errors: verified.errors || result.errors || {},
+        sessionVerified: false
+      };
+    }
+
+    return result;
+  }
+
   async function login(payload) {
     const result = await request("/auth/login", {
       method: "POST",
@@ -696,10 +742,7 @@
 
     const session = extractAuthSession(result);
     if (result.ok && session.token && session.user) {
-      setSession({
-        token: session.token,
-        user: session.user
-      });
+      return verifyAuthSessionAfterLogin(result, session);
     }
 
     return result;
@@ -714,10 +757,7 @@
 
     const session = extractAuthSession(result);
     if (result.ok && session.token && session.user) {
-      setSession({
-        token: session.token,
-        user: session.user
-      });
+      return verifyAuthSessionAfterLogin(result, session);
     }
 
     return result;
