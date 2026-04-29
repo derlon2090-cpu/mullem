@@ -1665,7 +1665,15 @@
       if (event.origin !== window.location.origin) return;
       if (event.data?.type !== "mullem-auth-success") return;
       if (!state.authModalOpen) return;
-      state.currentUser = persistEmbeddedUser(event.data?.payload?.user) || getActiveUser();
+      const payload = event.data?.payload || {};
+      const apiClient = getApiClient();
+      if (payload.token && payload.user) {
+        apiClient?.setSession?.({
+          token: payload.token,
+          user: payload.user
+        });
+      }
+      state.currentUser = persistEmbeddedUser(payload.user) || getActiveUser();
       state.authModalOpen = false;
       state.settingsModalOpen = false;
       render();

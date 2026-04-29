@@ -97,13 +97,19 @@ function persistClientAuthState() {
 function notifyEmbeddedAuthSuccess(payload = {}) {
   if (!isEmbeddedAuth || window.parent === window) return false;
   try {
+    const sessionPayload = { ...payload };
+    const token = window.mullemApiClient?.getToken?.();
+    if (token && sessionPayload.user && !sessionPayload.token) {
+      sessionPayload.token = token;
+    }
+
     const targetOrigin = window.location.origin && window.location.origin !== "null"
       ? window.location.origin
       : "*";
     window.parent.postMessage(
       {
         type: "mullem-auth-success",
-        payload
+        payload: sessionPayload
       },
       targetOrigin
     );
