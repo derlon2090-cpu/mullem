@@ -1128,14 +1128,14 @@
         </button>
       `
       : `
-        <button class="guest-user-card is-member" type="button" data-open-account>
+        <div class="guest-user-card is-member">
           <span class="guest-user-avatar">${escapeHtml(userCard.title.slice(0, 1))}</span>
           <span class="guest-user-copy">
             <strong>${escapeHtml(userCard.title)}</strong>
             <small>${escapeHtml(userCard.subtitle)}</small>
           </span>
           <span class="guest-user-menu" aria-hidden="true">${icons.menu}</span>
-        </button>
+        </div>
       `;
     return `
       <aside class="guest-sidebar">

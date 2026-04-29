@@ -437,6 +437,7 @@ body[data-workspace-mode="home"] .guest-root {
   gap: 8px;
   box-shadow: none;
   background: transparent;
+  cursor: default;
 }
 
 .guest-shell.is-home-workspace .guest-user-card.is-member .guest-user-avatar {
