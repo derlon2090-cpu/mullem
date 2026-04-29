@@ -186,7 +186,7 @@ function normalizeApiUserForLocal(user) {
     grade: user?.grade || existing?.grade || "",
     subject: existing?.subject || "الرياضيات",
     package: existing?.package || "API Connected",
-    xp: Number.isFinite(Number(existing?.xp)) ? Number(existing.xp) : 100,
+    xp: Number.isFinite(Number(user?.xp)) ? Number(user.xp) : (Number.isFinite(Number(existing?.xp)) ? Number(existing.xp) : 50),
     streakDays: Number.isFinite(Number(existing?.streakDays)) ? Number(existing.streakDays) : 0,
     lastActiveDate: existing?.lastActiveDate || "",
     achievements: Array.isArray(existing?.achievements) ? existing.achievements : [],

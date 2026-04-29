@@ -123,6 +123,8 @@ body[data-workspace-mode="home"] .guest-root {
 }
 
 .guest-shell.is-home-workspace .guest-sidebar {
+  position: sticky;
+  left: 0;
   gap: 10px;
   overflow: hidden;
   top: 0;
@@ -137,13 +139,15 @@ body[data-workspace-mode="home"] .guest-root {
   border-radius: 0;
   box-shadow: none;
   background: rgba(255, 255, 255, 0.94);
+  box-sizing: border-box;
 }
 
 .guest-shell.is-home-workspace .guest-main {
   height: 100vh;
   min-height: 100vh;
   max-height: 100vh;
-  overflow: hidden;
+  overflow-x: hidden;
+  overflow-y: auto;
   border: 0;
   border-radius: 0;
   box-shadow: none;
@@ -291,6 +295,8 @@ body[data-workspace-mode="home"] .guest-root {
 }
 
 .guest-shell.is-home-workspace .guest-history-wrap {
+  flex: 1 1 auto;
+  min-height: 0;
   margin-top: 2px;
   gap: 8px;
   overflow-y: auto;
@@ -2432,7 +2438,7 @@ body[data-workspace-mode="home"] .guest-root {
 
 @media (max-width: 1320px) {
   .guest-shell.is-home-workspace {
-    grid-template-columns: 250px minmax(900px, 1fr);
+    grid-template-columns: 236px minmax(0, 1fr);
   }
 
   .guest-shell.is-home-workspace .guest-sidepanel {
@@ -2447,8 +2453,8 @@ body[data-workspace-mode="home"] .guest-root {
 
   .guest-shell.is-home-workspace {
     width: 100%;
-    grid-template-columns: 250px minmax(900px, 1fr);
-    overflow-x: auto;
+    grid-template-columns: 220px minmax(0, 1fr);
+    overflow-x: hidden;
     overflow-y: hidden;
   }
 
@@ -2468,6 +2474,8 @@ body[data-workspace-mode="home"] .guest-root {
 
   .guest-shell.is-home-workspace .guest-main {
     order: initial;
+    padding-inline: 24px;
+    grid-template-rows: 54px auto auto minmax(240px, 1fr) 150px 30px;
   }
 
   .guest-shell.is-home-workspace .guest-sidepanel {
@@ -2475,7 +2483,7 @@ body[data-workspace-mode="home"] .guest-root {
   }
 
   .guest-shell.is-home-workspace .guest-quick-grid {
-    grid-template-columns: repeat(6, minmax(0, 1fr));
+    grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 }
 
@@ -2483,7 +2491,8 @@ body[data-workspace-mode="home"] .guest-root {
   .guest-shell.is-home-workspace {
     width: 100%;
     padding: 0;
-    grid-template-columns: 250px minmax(900px, 1fr);
+    grid-template-columns: 78px minmax(0, 1fr);
+    overflow: hidden;
   }
 
   .guest-shell.is-home-workspace .guest-sidebar,
@@ -2494,11 +2503,53 @@ body[data-workspace-mode="home"] .guest-root {
   }
 
   .guest-shell.is-home-workspace .guest-sidebar {
-    padding-inline: 12px;
+    padding: 12px 8px;
+    gap: 10px;
+  }
+
+  .guest-shell.is-home-workspace .guest-brand {
+    justify-content: center;
+  }
+
+  .guest-shell.is-home-workspace .guest-brand img {
+    width: 46px;
+    height: 46px;
+    object-fit: cover;
+    object-position: left center;
+  }
+
+  .guest-shell.is-home-workspace .guest-new-chat {
+    min-height: 48px;
+    justify-content: center;
+    padding: 0;
+  }
+
+  .guest-shell.is-home-workspace .guest-new-chat span,
+  .guest-shell.is-home-workspace .guest-search-box input,
+  .guest-shell.is-home-workspace .guest-history-copy,
+  .guest-shell.is-home-workspace .guest-history-group h3,
+  .guest-shell.is-home-workspace .guest-upgrade-card div,
+  .guest-shell.is-home-workspace .guest-user-copy,
+  .guest-shell.is-home-workspace .guest-user-head,
+  .guest-shell.is-home-workspace .guest-user-lines,
+  .guest-shell.is-home-workspace .guest-user-action,
+  .guest-shell.is-home-workspace .guest-history-badge {
+    display: none;
+  }
+
+  .guest-shell.is-home-workspace .guest-search-box,
+  .guest-shell.is-home-workspace .guest-history-item,
+  .guest-shell.is-home-workspace .guest-upgrade-card,
+  .guest-shell.is-home-workspace .guest-user-card {
+    min-height: 46px;
+    padding: 0;
+    display: grid;
+    place-items: center;
   }
 
   .guest-shell.is-home-workspace .guest-main {
-    padding-inline: 18px;
+    padding: 14px 12px;
+    grid-template-rows: 46px auto auto minmax(240px, 1fr) 142px 28px;
   }
 
   .guest-shell.is-home-workspace .guest-sidepanel {
@@ -2516,6 +2567,6 @@ body[data-workspace-mode="home"] .guest-root {
   }
 
   .guest-shell.is-home-workspace .guest-quick-grid {
-    grid-template-columns: repeat(6, minmax(0, 1fr));
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }

@@ -301,7 +301,7 @@ function createFallbackDatabaseClient() {
       stage: String(payload.stage || "").trim(),
       grade: String(payload.grade || "").trim(),
       subject: String(payload.subject || "").trim(),
-      xp: Number(payload.xp || 0),
+      xp: Number.isFinite(Number(payload.xp)) ? Number(payload.xp) : 50,
       streak_days: Number(payload.streak_days || 0),
       motivation_score: Number(payload.motivation_score || 0),
       last_active_date: payload.last_active_date || null,

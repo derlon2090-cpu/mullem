@@ -81,8 +81,8 @@ const DEFAULT_ADMIN_NAME = String(process.env.DEFAULT_ADMIN_NAME || "مدير ا
 const DEFAULT_STUDENT_EMAIL = String(process.env.DEFAULT_STUDENT_EMAIL || "student@mullem.sa").trim().toLowerCase();
 const DEFAULT_STUDENT_PASSWORD = String(process.env.DEFAULT_STUDENT_PASSWORD || "Student@2026").trim();
 const DEFAULT_STUDENT_NAME = String(process.env.DEFAULT_STUDENT_NAME || "طالب").trim();
-const TEXT_MESSAGE_XP_REWARD = Math.max(1, Number(process.env.TEXT_MESSAGE_XP_REWARD || 10));
-const IMAGE_MESSAGE_XP_REWARD = Math.max(TEXT_MESSAGE_XP_REWARD, Number(process.env.IMAGE_MESSAGE_XP_REWARD || 15));
+const TEXT_MESSAGE_XP_COST = Math.max(1, Number(process.env.TEXT_MESSAGE_XP_COST || process.env.TEXT_MESSAGE_XP_REWARD || 10));
+const ATTACHMENT_XP_COST = Math.max(1, Number(process.env.ATTACHMENT_XP_COST || process.env.IMAGE_MESSAGE_XP_COST || process.env.IMAGE_MESSAGE_XP_REWARD || 15));
 const DAILY_LOGIN_XP_REWARD = Math.max(0, Number(process.env.DAILY_LOGIN_XP_REWARD || 5));
 const DAILY_MOTIVATION_BONUS = Math.max(1, Number(process.env.DAILY_MOTIVATION_BONUS || 5));
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -588,14 +588,20 @@ async function syncUserDailyProgress(user, activityText = "") {
   });
 }
 
-async function rewardUserForMessage(user, amount, activityText) {
-  if (!user || !isDatabaseReady() || !amount) {
+function getMessageXpCost(attachmentCount = 0) {
+  const normalizedAttachmentCount = Math.max(0, Math.round(Number(attachmentCount) || 0));
+  return TEXT_MESSAGE_XP_COST + (normalizedAttachmentCount * ATTACHMENT_XP_COST);
+}
+
+async function chargeUserForMessage(user, cost, activityText) {
+  if (!user || !isDatabaseReady() || !cost) {
     return user;
   }
 
+  const xpCost = Math.max(0, Math.round(Number(cost) || 0));
   return databaseClient.updateUser(user.id, {
-    xp: Number(user.xp || 0) + Math.max(0, Number(amount) || 0),
-    activity: activityText || "تمت إضافة نقاط على الرسالة"
+    xp: Math.max(0, Math.max(0, Number(user.xp || 0)) - xpCost),
+    activity: activityText || `تم خصم ${xpCost} XP مقابل استخدام الشات`
   });
 }
 
@@ -1273,6 +1279,8 @@ async function handleRegister(req, res) {
     grade,
     package_name: "مجاني محدود",
     xp: 50,
+    streak_days: 1,
+    last_active_date: getTodayStamp(),
     status: "active",
     activity: "أنشأ حسابًا جديدًا"
   });
@@ -1883,6 +1891,12 @@ async function handleChatSend(req, res) {
     throw createHttpError(401, "Authentication is required to use chat.");
   }
 
+  const xpCost = getMessageXpCost(attachmentCount);
+  const currentXp = Math.max(0, Number(activeUser.xp || 0));
+  if (currentXp < xpCost) {
+    throw createHttpError(402, `Insufficient XP balance. This request needs ${xpCost} XP.`);
+  }
+
   let project = null;
   if (activeUser && projectId && isDatabaseReady()) {
     project = await databaseClient.findProjectById(projectId, activeUser.id);
@@ -1924,12 +1938,11 @@ async function handleChatSend(req, res) {
   await persistConversationMessage(conversation, "user", message, "web");
   await persistConversationMessage(conversation, "assistant", assistantText, "openai");
 
-  let rewardedUser = activeUser || null;
+  let chargedUser = activeUser || null;
   if (activeUser && isDatabaseReady()) {
-    const rewardAmount = hasAttachment ? IMAGE_MESSAGE_XP_REWARD : TEXT_MESSAGE_XP_REWARD;
-    rewardedUser = await rewardUserForMessage(
+    chargedUser = await chargeUserForMessage(
       activeUser,
-      rewardAmount,
+      xpCost,
       hasAttachment ? "أرسل رسالة مع صورة/ملف" : "أرسل رسالة نصية"
     );
   }
@@ -1943,10 +1956,11 @@ async function handleChatSend(req, res) {
         body: assistantText,
         source: "openai"
       },
-      rewards: activeUser ? {
-        xp_earned: hasAttachment ? IMAGE_MESSAGE_XP_REWARD : TEXT_MESSAGE_XP_REWARD
+      usage: activeUser ? {
+        xp_spent: xpCost,
+        xp_remaining: Math.max(0, Number(chargedUser?.xp || 0))
       } : null,
-      user: rewardedUser ? buildApiUser(rewardedUser) : null,
+      user: chargedUser ? buildApiUser(chargedUser) : null,
       guest: null
     }
   });

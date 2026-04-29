@@ -1506,6 +1506,13 @@
         if (result.data.conversation_id) {
           state.conversationIds[threadEntry.id] = String(result.data.conversation_id);
         }
+        if (result.data.user) {
+          const token = apiClient.getToken?.();
+          if (token) {
+            apiClient.setSession?.({ token, user: result.data.user });
+          }
+          state.currentUser = persistEmbeddedUser(result.data.user) || normalizeUser(result.data.user) || state.currentUser;
+        }
         threadEntry.messages.push({
           role: "assistant",
           body: assistantReply("تم توليد الرد بنجاح.", splitReplyToBullets(result.data.assistant_message.body))
