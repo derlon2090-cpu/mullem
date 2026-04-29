@@ -22,10 +22,24 @@
 
     function deleteCookie(name) {
       try {
-        document.cookie = `${encodeURIComponent(name)}=; path=/; max-age=0; SameSite=Lax`;
+        const encoded = `${encodeURIComponent(name)}=`;
+        const secure = window.location?.protocol === "https:" ? "; Secure" : "";
+        document.cookie = `${encoded}; path=/; max-age=0; SameSite=Lax${secure}`;
+        const rootDomain = getRootCookieDomain();
+        if (rootDomain) {
+          document.cookie = `${encoded}; path=/; max-age=0; SameSite=Lax${secure}; domain=${rootDomain}`;
+        }
       } catch (_) {
         // Ignore cookie cleanup issues during early bootstrap.
       }
+    }
+
+    function getRootCookieDomain() {
+      const host = String(window.location?.hostname || "").toLowerCase();
+      if (!host || host === "localhost" || /^\d+\.\d+\.\d+\.\d+$/.test(host)) return "";
+      const parts = host.split(".").filter(Boolean);
+      if (parts.length < 2) return "";
+      return `.${parts.slice(-2).join(".")}`;
     }
 
     function loadJson(key, fallback) {

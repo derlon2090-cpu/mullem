@@ -543,11 +543,9 @@
     const apiUser = normalizeUser(apiClient?.getSessionUser?.());
     if (apiUser && apiUser.role !== "admin") return apiUser;
 
-    const currentId = String(localStorage.getItem(legacyStorageKeys.currentUser) || "").trim();
-    if (!currentId) return null;
-    const users = loadJson(legacyStorageKeys.users, []);
-    const user = users.find((entry) => String(entry.id) === currentId);
-    return normalizeUser(user);
+    // Do not trust legacy local users without a verified API session user.
+    // This prevents stale "guest/member" cards from unlocking UI after logout or expired tokens.
+    return null;
   }
 
   function isAuthenticated() {
@@ -556,7 +554,7 @@
 
   async function refreshSessionUser() {
     const apiClient = getApiClient();
-    if (!apiClient?.hasToken?.() || state.currentUser || sessionRefreshPromise) {
+    if (!apiClient?.hasToken?.() || sessionRefreshPromise) {
       return sessionRefreshPromise;
     }
 
