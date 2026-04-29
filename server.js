@@ -51,6 +51,13 @@ const RATE_LIMIT_CHAT_MAX = Math.max(1, Number(process.env.RATE_LIMIT_CHAT_MAX |
 const RATE_LIMIT_SOLVE_MAX = Math.max(1, Number(process.env.RATE_LIMIT_SOLVE_MAX || 20));
 const RATE_LIMIT_GENERAL_MAX = Math.max(1, Number(process.env.RATE_LIMIT_GENERAL_MAX || 60));
 const CORS_ALLOWED_ORIGINS = String(process.env.CORS_ALLOWED_ORIGINS || "*").trim();
+const DEFAULT_ALLOWED_FRONTEND_ORIGINS = [
+  "https://orlixor.com",
+  "https://www.orlixor.com",
+  "https://chatmullem.com",
+  "https://www.chatmullem.com",
+  "https://mullem.onrender.com"
+];
 const DB_HOST = readEnvValue(
   ["DB_HOST", "MYSQLHOST", "MY_SQL_HOST", "DATABASE_HOST"],
   IS_CLOUD_RUNTIME ? "" : "127.0.0.1"
@@ -184,20 +191,22 @@ function parseAllowedOrigins() {
 
   return {
     allowAll: false,
-    values
+    values: Array.from(new Set([...values, ...DEFAULT_ALLOWED_FRONTEND_ORIGINS]))
   };
 }
 
 function isOriginAllowed(origin) {
   const policy = parseAllowedOrigins();
   if (policy.allowAll) return true;
-  return policy.values.includes(String(origin || "").trim());
+  const normalizedOrigin = String(origin || "").trim().replace(/\/+$/, "");
+  return policy.values.some((value) => value.replace(/\/+$/, "") === normalizedOrigin);
 }
 
 function setCorsHeaders(req, res) {
   const origin = String(req.headers.origin || "").trim();
   if (origin && isOriginAllowed(origin)) {
     res.setHeader("Access-Control-Allow-Origin", origin);
+    res.setHeader("Access-Control-Allow-Credentials", "true");
     res.setHeader("Vary", "Origin");
   } else if (!origin) {
     res.setHeader("Access-Control-Allow-Origin", "*");
