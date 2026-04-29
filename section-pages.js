@@ -465,6 +465,30 @@
     };
   }
 
+  function persistEmbeddedUser(user) {
+    const normalized = normalizeUser(user);
+    if (!normalized?.id || normalized.role === "admin") return null;
+    try {
+      const users = loadJson(legacyStorageKeys.users, []);
+      const existing = users.find((entry) => String(entry.id) === normalized.id) || {};
+      const nextUser = {
+        ...existing,
+        ...normalized,
+        role: existing.role || "Student",
+        status: existing.status || "نشط"
+      };
+      const nextUsers = [
+        nextUser,
+        ...users.filter((entry) => String(entry.id) !== normalized.id)
+      ];
+      localStorage.setItem(legacyStorageKeys.users, JSON.stringify(nextUsers));
+      localStorage.setItem(legacyStorageKeys.currentUser, normalized.id);
+    } catch (_) {
+      // Keep the authenticated UI usable even if localStorage is restricted.
+    }
+    return normalized;
+  }
+
   function getActiveUser() {
     syncSessionFromCookies();
     const apiUser = normalizeUser(getApiClient()?.getSessionUser?.());
@@ -1276,6 +1300,7 @@
   }
 
   async function submitMessage() {
+    state.currentUser = getActiveUser() || state.currentUser;
     const input = (getComposerValue() || "").trim();
     if (!input && !state.selectedFiles.length) return;
 
@@ -1429,6 +1454,7 @@
       }
 
       if (event.target.closest("[data-open-account]")) {
+        state.currentUser = getActiveUser() || state.currentUser;
         if (isAuthenticated()) {
           state.settingsModalOpen = true;
           render();
@@ -1597,7 +1623,7 @@
     window.addEventListener("message", (event) => {
       if (event.origin !== window.location.origin) return;
       if (event.data?.type !== "mullem-auth-success") return;
-      state.currentUser = normalizeUser(event.data?.payload?.user) || getActiveUser();
+      state.currentUser = persistEmbeddedUser(event.data?.payload?.user) || getActiveUser();
       state.authModalOpen = false;
       state.settingsModalOpen = false;
       render();

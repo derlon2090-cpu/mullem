@@ -439,6 +439,25 @@ body[data-workspace-mode="home"] .guest-root {
   background: transparent;
 }
 
+.guest-shell.is-home-workspace .guest-user-card.is-member .guest-user-avatar {
+  position: relative;
+  border-radius: 50%;
+  color: #674cff;
+  background: rgba(111, 76, 255, 0.12);
+}
+
+.guest-shell.is-home-workspace .guest-user-card.is-member .guest-user-avatar::after {
+  content: "";
+  position: absolute;
+  right: -1px;
+  bottom: -1px;
+  width: 8px;
+  height: 8px;
+  border: 2px solid #fff;
+  border-radius: 50%;
+  background: #25c76f;
+}
+
 .guest-shell.is-home-workspace .guest-upgrade-card {
   min-height: 58px;
   padding: 8px 10px;
