@@ -856,6 +856,77 @@
         width: 230px;
       }
     }
+
+    /* Standalone auth page: keep login isolated from the old app/sidebar shell. */
+    body {
+      min-height: 100vh;
+      overflow-x: hidden;
+    }
+
+    .login-shell {
+      width: 100%;
+      min-height: 100vh;
+      margin: 0;
+      padding: clamp(18px, 4vw, 46px);
+      display: grid;
+      grid-template-columns: 1fr;
+      place-items: center;
+      gap: 0;
+      direction: rtl;
+      background:
+        radial-gradient(circle at 50% 16%, rgba(111, 76, 255, 0.16), transparent 28%),
+        radial-gradient(circle at 12% 90%, rgba(111, 76, 255, 0.1), transparent 26%),
+        linear-gradient(180deg, #fdfcff 0%, #f7f4ff 100%);
+    }
+
+    .login-sidebar,
+    .login-topbar,
+    .hero-copy,
+    .hero-mark {
+      display: none !important;
+    }
+
+    .login-main {
+      width: min(100%, 540px);
+      min-height: auto;
+      margin: 0;
+      padding: 0;
+      overflow: visible;
+      border: 0;
+      border-radius: 0;
+      background: transparent;
+      box-shadow: none;
+      backdrop-filter: none;
+    }
+
+    .login-main::before {
+      display: none;
+    }
+
+    .login-main-content {
+      min-height: auto;
+      padding: 0;
+      display: grid;
+      place-items: center;
+    }
+
+    .auth-card {
+      width: min(100%, 470px);
+      margin: 0 auto;
+    }
+
+    @media (max-width: 560px) {
+      .login-shell {
+        padding: 14px;
+        place-items: start center;
+      }
+
+      .auth-card {
+        border-radius: 26px;
+        padding: 20px 16px 18px;
+      }
+    }
+
     html[data-auth-embed="1"],
     html[data-auth-embed="1"] body {
       min-height: auto;
@@ -1262,8 +1333,8 @@
   </main>
 
   <script src="mullem-config.js"></script>
-  <script src="api-client.js?v=20260429-7"></script>
-  <script src="auth.js?v=20260429-7"></script>
+  <script src="api-client.js?v=20260429-8"></script>
+  <script src="auth.js?v=20260429-8"></script>
   <script>
     (() => {
       const title = document.getElementById("authHeroTitle");

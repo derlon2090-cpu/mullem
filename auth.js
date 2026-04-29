@@ -66,10 +66,13 @@ try {
 
 try {
   const activeAdminSession = localStorage.getItem(storageKeys.adminSession);
-  const activeUserId = localStorage.getItem(storageKeys.currentUser);
-  if (!isEmbeddedAuth && activeAdminSession === "1") {
+  const apiClient = getApiClient();
+  const hasApiSession = Boolean(apiClient?.hasToken?.());
+  const sessionUser = apiClient?.getSessionUser?.();
+  const isStudentSession = Boolean(hasApiSession && sessionUser && String(sessionUser.role || "").toLowerCase() !== "admin");
+  if (!isEmbeddedAuth && activeAdminSession === "1" && hasApiSession) {
     window.location.href = "admin.html";
-  } else if (!isEmbeddedAuth && activeUserId && !window.location.pathname.endsWith("admin.html")) {
+  } else if (!isEmbeddedAuth && isStudentSession && !window.location.pathname.endsWith("admin.html")) {
     window.location.href = "index.html";
   }
 } catch (_) {
@@ -157,7 +160,7 @@ function finishAuthSuccess(payload = {}, redirectUrl = "index.html") {
   const nextUrl = getAuthReturnUrl(redirectUrl);
   window.setTimeout(() => {
     window.location.href = nextUrl;
-  }, 650);
+  }, 120);
   return false;
 }
 
@@ -913,13 +916,14 @@ if (pendingAuth) {
 }
 
 if (isEmbeddedAuth) {
+  const apiClient = getApiClient();
+  const sessionUser = apiClient?.getSessionUser?.();
+  const hasApiSession = Boolean(apiClient?.hasToken?.() && sessionUser);
   const activeAdminSession = localStorage.getItem(storageKeys.adminSession);
-  const activeUserId = localStorage.getItem(storageKeys.currentUser);
-  if (activeAdminSession === "1") {
+  if (activeAdminSession === "1" && hasApiSession) {
     notifyEmbeddedAuthSuccess({ role: "admin" });
-  } else if (activeUserId) {
-    const activeUser = loadUsers().find((entry) => String(entry.id) === String(activeUserId));
-    notifyEmbeddedAuthSuccess({ role: "student", user: activeUser || null });
+  } else if (hasApiSession && String(sessionUser.role || "").toLowerCase() !== "admin") {
+    notifyEmbeddedAuthSuccess(buildSessionPayload({ role: "student", user: sessionUser }));
   }
 }
 

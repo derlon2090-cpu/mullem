@@ -17,6 +17,7 @@
     users: "mlm_users",
     currentUser: "mlm_current_user"
   };
+  let sessionRefreshPromise = null;
 
   const icons = {
     logo: '<img src="orlixor-mark.png" alt="" aria-hidden="true">',
@@ -551,6 +552,33 @@
 
   function isAuthenticated() {
     return Boolean(state.currentUser);
+  }
+
+  async function refreshSessionUser() {
+    const apiClient = getApiClient();
+    if (!apiClient?.hasToken?.() || state.currentUser || sessionRefreshPromise) {
+      return sessionRefreshPromise;
+    }
+
+    sessionRefreshPromise = apiClient.me()
+      .then((result) => {
+        if (result?.ok && result.data?.user) {
+          state.currentUser = persistEmbeddedUser(result.data.user) || getActiveUser();
+          render();
+        } else if (result?.status === 401 || result?.status === 403) {
+          apiClient.clearSession?.();
+          state.currentUser = null;
+          render();
+        }
+      })
+      .catch(() => {
+        // Keep the page usable if the session refresh request fails.
+      })
+      .finally(() => {
+        sessionRefreshPromise = null;
+      });
+
+    return sessionRefreshPromise;
   }
 
   function getDefaultSection() {
@@ -1769,6 +1797,7 @@
   updateUrl(true);
   bindEvents();
   render();
+  refreshSessionUser();
   window.setInterval(() => {
     if (state.authModalOpen) {
       applyBridgedAuthSession();
