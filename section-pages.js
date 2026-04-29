@@ -349,6 +349,7 @@
     theme: loadStoredTheme(),
     authModalOpen: false,
     settingsModalOpen: false,
+    upgradeModalOpen: false,
     authReason: "",
     conversationIds: {},
     settings: {}
@@ -1243,13 +1244,13 @@
           ${renderHistory()}
         </div>
 
-        <section class="guest-upgrade-card">
+        <button class="guest-upgrade-card" type="button" data-open-upgrade>
           <div class="upgrade-mark">${icons.crown}</div>
           <div>
             <strong>الترقية إلى Pro</strong>
             <span>استمتع بمزايا إضافية وتجربة أفضل</span>
           </div>
-        </section>
+        </button>
 
         ${userAccountCard}
       </aside>
@@ -1279,6 +1280,120 @@
     `;
   }
 
+  function renderUpgradeModal() {
+    if (!state.upgradeModalOpen) return "";
+
+    const plans = [
+      {
+        key: "basic",
+        title: "إمكانيات أساسية",
+        subtitle: "لبداية ذكية وسريعة",
+        price: "35",
+        unit: "ر.س / شهر",
+        icon: icons.sparkle,
+        action: "الترقية إلى إمكانيات أساسية",
+        note: "",
+        benefits: [
+          "الوصول إلى النماذج الأساسية",
+          "رسائل وتحليلات غير محدودة",
+          "إنشاء الصور الأساسية",
+          "ذاكرة قياسية للمحادثات",
+          "إجابات دقيقة وسريعة"
+        ]
+      },
+      {
+        key: "plus",
+        title: "إمكانيات بلس",
+        subtitle: "تجربة متكاملة لكل احتياجاتك",
+        price: "90",
+        unit: "ر.س / شهر",
+        icon: icons.document,
+        action: "خطتك الحالية",
+        note: "current",
+        benefits: [
+          "الوصول إلى جميع النماذج المتقدمة",
+          "إنشاء صور متقدم باستخدام الذكاء الاصطناعي",
+          "ذاكرة موسعة للمحادثات",
+          "كتابة الأكواد وتحليلها باحترافية",
+          "بحث أعمق عبر البحث المتعمق",
+          "أولوية في الأداء والاستجابة"
+        ]
+      },
+      {
+        key: "pro",
+        title: "إمكانيات Pro",
+        subtitle: "لمن يريد تجربة بلا حدود",
+        price: "430",
+        unit: "ر.س / شهر",
+        icon: icons.star,
+        action: "الترقية إلى إمكانيات Pro",
+        featured: true,
+        benefits: [
+          "استخدام غير محدود لجميع النماذج المتقدمة",
+          "إنشاء صور متقدمة بجودة عالية وسرعة أكبر",
+          "وصول إلى أقصى قدر من الإنتاجية",
+          "بحث أعمق ونتائج أدق من البحث المتعمق",
+          "سياق أطول وذاكرة أكبر للمحادثات",
+          "أولوية في الأداء والدعم والاستجابة"
+        ]
+      }
+    ];
+
+    return `
+      <div class="upgrade-gate is-open">
+        <button class="upgrade-gate-backdrop" type="button" data-close-upgrade aria-label="إغلاق نافذة الترقية"></button>
+        <section class="upgrade-modal-card" role="dialog" aria-modal="true" aria-label="الترقية إلى Pro">
+          <button class="upgrade-close-btn" type="button" data-close-upgrade aria-label="إغلاق">×</button>
+          <header class="upgrade-modal-head">
+            <div class="upgrade-title-mark">${icons.crown}</div>
+            <div>
+              <h2>الترقية إلى <span>Pro</span></h2>
+              <p>استمتع بمزايا إضافية وتجربة أفضل</p>
+            </div>
+          </header>
+
+          <div class="upgrade-period-tabs" aria-label="مدة الاشتراك">
+            <button type="button">شهري</button>
+            <button type="button" class="active">سنوي</button>
+            <span>خصم 20%</span>
+            <b>توفير أكبر</b>
+          </div>
+
+          <div class="upgrade-plans">
+            ${plans.map((plan) => `
+              <article class="upgrade-plan ${plan.featured ? "is-featured" : ""}">
+                ${plan.featured ? '<strong class="upgrade-best">الأفضل قيمة ★</strong>' : ""}
+                <div class="upgrade-plan-head">
+                  <span class="upgrade-plan-icon">${plan.icon}</span>
+                  <div>
+                    <h3>${escapeHtml(plan.title)}</h3>
+                    <p>${escapeHtml(plan.subtitle)}</p>
+                  </div>
+                </div>
+                <div class="upgrade-price">
+                  <strong>${escapeHtml(plan.price)}</strong>
+                  <span>${escapeHtml(plan.unit)}</span>
+                </div>
+                <button class="upgrade-plan-action ${plan.note === "current" ? "is-current" : ""}" type="button" data-select-plan="${escapeHtml(plan.key)}">
+                  ${escapeHtml(plan.action)}
+                </button>
+                <ul>
+                  ${plan.benefits.map((item) => `<li>${icons.sparkle}<span>${escapeHtml(item)}</span></li>`).join("")}
+                </ul>
+              </article>
+            `).join("")}
+          </div>
+
+          <footer class="upgrade-modal-foot">
+            <span>${icons.lock}<b>ضمان استرداد الأموال خلال 7 أيام</b><small>تجربة خالية من المخاطر</small></span>
+            <span>${icons.shield || icons.star}<b>ترقية آمنة وموثوقة</b><small>بياناتك محمية دائمًا</small></span>
+            <span>${icons.sparkle}<b>إلغاء في أي وقت</b><small>بدون أي رسوم خفية</small></span>
+          </footer>
+        </section>
+      </div>
+    `;
+  }
+
   function renderShell() {
     const profile = getProfile();
     app.innerHTML = `
@@ -1289,6 +1404,7 @@
         <input type="file" id="guestFilePicker" hidden multiple accept=".pdf,.doc,.docx,.png,.jpg,.jpeg,.txt,.md,.ppt,.pptx">
       </div>
       ${renderAuthModal()}
+      ${renderUpgradeModal()}
       ${renderSettingsModal()}
       <div class="guest-toast-stack" aria-live="polite"></div>
     `;
@@ -1332,6 +1448,11 @@
 
   function closeSettingsModal() {
     state.settingsModalOpen = false;
+    render();
+  }
+
+  function closeUpgradeModal() {
+    state.upgradeModalOpen = false;
     render();
   }
 
@@ -1588,6 +1709,29 @@
         return;
       }
 
+      if (event.target.closest("[data-close-upgrade]")) {
+        closeUpgradeModal();
+        return;
+      }
+
+      if (event.target.closest("[data-open-upgrade]")) {
+        state.upgradeModalOpen = true;
+        render();
+        return;
+      }
+
+      const selectedPlan = event.target.closest("[data-select-plan]");
+      if (selectedPlan) {
+        const planName = selectedPlan.getAttribute("data-select-plan") || "pro";
+        if (!isAuthenticated()) {
+          state.upgradeModalOpen = false;
+          openAuthModal("سجّل دخولك أولًا حتى تتمكن من اختيار الباقة المناسبة.");
+          return;
+        }
+        showToast(`تم اختيار باقة ${planName}. سيتم تفعيل الطلب عبر المتجر قريبًا.`);
+        return;
+      }
+
       if (event.target.closest("[data-open-full-login]")) {
         window.location.href = LOGIN_PAGE_URL;
         return;
@@ -1629,6 +1773,7 @@
           state.currentUser = getActiveUser();
           state.settingsModalOpen = false;
           state.authModalOpen = false;
+          state.upgradeModalOpen = false;
           state.homeConversationOpen = false;
           render();
         };

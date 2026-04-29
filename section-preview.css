@@ -422,6 +422,12 @@ body[data-workspace-mode="home"] .guest-root {
 }
 
 .guest-upgrade-card {
+  width: 100%;
+  border: 1px solid rgba(111, 76, 255, 0.08);
+  font-family: inherit;
+  text-align: right;
+  color: inherit;
+  cursor: pointer;
   padding: 18px 16px;
   display: grid;
   grid-template-columns: 52px 1fr;
@@ -2213,6 +2219,329 @@ body[data-workspace-mode="home"] .guest-root {
   background: rgba(111, 76, 255, 0.13);
 }
 
+.upgrade-gate {
+  position: fixed;
+  inset: 0;
+  z-index: 1450;
+  display: grid;
+  place-items: center;
+  padding: 26px;
+}
+
+.upgrade-gate-backdrop {
+  position: absolute;
+  inset: 0;
+  border: 0;
+  background:
+    radial-gradient(circle at 18% 18%, rgba(111, 76, 255, 0.18), transparent 32%),
+    rgba(23, 24, 42, 0.38);
+  backdrop-filter: blur(10px);
+}
+
+.upgrade-modal-card {
+  position: relative;
+  width: min(1180px, calc(100vw - 58px));
+  max-height: calc(100vh - 58px);
+  overflow: auto;
+  padding: 42px 38px 0;
+  border: 1px solid rgba(111, 76, 255, 0.14);
+  border-radius: 22px;
+  background:
+    radial-gradient(circle at 84% 14%, rgba(111, 76, 255, 0.1), transparent 34%),
+    rgba(255, 255, 255, 0.98);
+  box-shadow: 0 38px 110px rgba(23, 24, 42, 0.24);
+  direction: rtl;
+}
+
+.upgrade-close-btn {
+  position: absolute;
+  top: 26px;
+  left: 26px;
+  width: 48px;
+  height: 48px;
+  border: 1px solid rgba(111, 76, 255, 0.14);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.86);
+  color: #171936;
+  font-size: 1.65rem;
+  cursor: pointer;
+}
+
+.upgrade-modal-head {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 18px;
+  margin: 0 0 28px;
+}
+
+.upgrade-title-mark {
+  width: 58px;
+  height: 58px;
+  display: grid;
+  place-items: center;
+  border-radius: 17px;
+  color: #684cff;
+  background: rgba(111, 76, 255, 0.12);
+}
+
+.upgrade-modal-head h2 {
+  margin: 0;
+  color: #171936;
+  font-size: clamp(1.75rem, 3vw, 2.55rem);
+  line-height: 1.15;
+  font-weight: 900;
+}
+
+.upgrade-modal-head h2 span {
+  color: #684cff;
+}
+
+.upgrade-modal-head p {
+  margin: 8px 0 0;
+  color: #8b92ad;
+  font-size: 0.98rem;
+  font-weight: 700;
+}
+
+.upgrade-period-tabs {
+  width: max-content;
+  max-width: 100%;
+  min-height: 48px;
+  margin: -10px auto 28px;
+  padding: 5px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  border: 1px solid rgba(111, 76, 255, 0.1);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.86);
+  box-shadow: 0 14px 32px rgba(31, 44, 93, 0.08);
+}
+
+.upgrade-period-tabs button,
+.upgrade-period-tabs span,
+.upgrade-period-tabs b {
+  min-width: 92px;
+  min-height: 36px;
+  padding: 0 16px;
+  border: 0;
+  border-radius: 999px;
+  display: inline-grid;
+  place-items: center;
+  color: #7f86a4;
+  background: transparent;
+  font: inherit;
+  font-size: 0.78rem;
+  font-weight: 900;
+}
+
+.upgrade-period-tabs button.active {
+  color: #684cff;
+  background: rgba(111, 76, 255, 0.12);
+}
+
+.upgrade-period-tabs span {
+  min-width: 70px;
+  color: #684cff;
+  background: rgba(111, 76, 255, 0.1);
+  font-size: 0.7rem;
+}
+
+.upgrade-period-tabs b {
+  color: #138d76;
+  background: rgba(38, 199, 143, 0.1);
+}
+
+.upgrade-plans {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 26px;
+  direction: ltr;
+}
+
+.upgrade-plan {
+  position: relative;
+  direction: rtl;
+  min-height: 560px;
+  padding: 28px;
+  border: 1px solid rgba(111, 76, 255, 0.12);
+  border-radius: 20px;
+  background: rgba(255, 255, 255, 0.92);
+  box-shadow: 0 22px 48px rgba(31, 44, 93, 0.05);
+}
+
+.upgrade-plan.is-featured {
+  border-color: rgba(111, 76, 255, 0.75);
+  background:
+    radial-gradient(circle at 92% 18%, rgba(111, 76, 255, 0.18), transparent 36%),
+    linear-gradient(145deg, rgba(255, 255, 255, 0.98), rgba(247, 244, 255, 0.95));
+  box-shadow: 0 26px 70px rgba(111, 76, 255, 0.18);
+}
+
+.upgrade-best {
+  position: absolute;
+  top: 18px;
+  left: 18px;
+  min-height: 28px;
+  padding: 0 14px;
+  border: 1px solid rgba(111, 76, 255, 0.18);
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  color: #684cff;
+  background: rgba(255, 255, 255, 0.82);
+  font-size: 0.72rem;
+}
+
+.upgrade-plan-head {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+}
+
+.upgrade-plan-icon {
+  width: 66px;
+  height: 66px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  color: #684cff;
+  background: rgba(111, 76, 255, 0.12);
+}
+
+.upgrade-plan:first-child .upgrade-plan-icon {
+  color: #14936f;
+  background: rgba(37, 199, 111, 0.12);
+}
+
+.upgrade-plan:nth-child(2) .upgrade-plan-icon {
+  color: #3289f4;
+  background: rgba(50, 137, 244, 0.12);
+}
+
+.upgrade-plan h3 {
+  margin: 0;
+  color: #171936;
+  font-size: 1.45rem;
+  font-weight: 900;
+}
+
+.upgrade-plan p {
+  margin: 8px 0 0;
+  color: #8d93b3;
+  font-size: 0.86rem;
+  font-weight: 700;
+}
+
+.upgrade-price {
+  margin: 38px 0 26px;
+  color: #6a728f;
+}
+
+.upgrade-price strong {
+  margin-inline-end: 10px;
+  color: #684cff;
+  font-size: clamp(2.3rem, 4vw, 3.5rem);
+  line-height: 1;
+  font-weight: 900;
+}
+
+.upgrade-plan:first-child .upgrade-price strong {
+  color: #188464;
+}
+
+.upgrade-plan:nth-child(2) .upgrade-price strong {
+  color: #3289f4;
+}
+
+.upgrade-plan-action {
+  width: 100%;
+  min-height: 48px;
+  border: 1px solid rgba(111, 76, 255, 0.16);
+  border-radius: 999px;
+  color: #684cff;
+  background: rgba(255, 255, 255, 0.9);
+  font-family: inherit;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.upgrade-plan.is-featured .upgrade-plan-action {
+  border: 0;
+  color: #fff;
+  background: linear-gradient(135deg, #7b5cff, #684cff);
+  box-shadow: 0 18px 38px rgba(111, 76, 255, 0.22);
+}
+
+.upgrade-plan-action.is-current {
+  color: #9aa0b8;
+  background: rgba(245, 246, 252, 0.95);
+  cursor: default;
+}
+
+.upgrade-plan ul {
+  margin: 26px 0 0;
+  padding: 0;
+  display: grid;
+  gap: 17px;
+  list-style: none;
+}
+
+.upgrade-plan li {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  color: #3d4567;
+  font-size: 0.9rem;
+  line-height: 1.55;
+  font-weight: 700;
+}
+
+.upgrade-plan li svg {
+  width: 18px;
+  height: 18px;
+  color: #684cff;
+  flex: 0 0 auto;
+}
+
+.upgrade-modal-foot {
+  margin: 34px -38px 0;
+  padding: 22px 38px;
+  border-top: 1px solid rgba(111, 76, 255, 0.08);
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 18px;
+  background: rgba(249, 248, 255, 0.72);
+}
+
+.upgrade-modal-foot span {
+  display: grid;
+  grid-template-columns: 44px 1fr;
+  gap: 5px 12px;
+  align-items: center;
+  color: #202747;
+}
+
+.upgrade-modal-foot svg {
+  grid-row: span 2;
+  width: 44px;
+  height: 44px;
+  padding: 12px;
+  border-radius: 50%;
+  color: #684cff;
+  background: rgba(111, 76, 255, 0.1);
+}
+
+.upgrade-modal-foot b {
+  font-size: 0.88rem;
+}
+
+.upgrade-modal-foot small {
+  color: #8b92ad;
+  font-size: 0.78rem;
+}
+
 .auth-gate {
   position: fixed;
   inset: 0;
@@ -2293,6 +2622,93 @@ body[data-workspace-mode="home"] .guest-root {
   background: rgba(255, 255, 255, 0.96);
   color: #684cff;
   font-weight: 800;
+}
+
+@media (max-width: 980px) {
+  .upgrade-modal-card {
+    width: min(100%, calc(100vw - 28px));
+    max-height: calc(100vh - 28px);
+    padding: 30px 20px 0;
+  }
+
+  .upgrade-close-btn {
+    top: 18px;
+    left: 18px;
+  }
+
+  .upgrade-modal-head {
+    padding-inline-start: 56px;
+  }
+
+  .upgrade-period-tabs {
+    overflow-x: auto;
+    width: 100%;
+    justify-content: flex-start;
+  }
+
+  .upgrade-plans {
+    grid-template-columns: 1fr;
+    gap: 16px;
+  }
+
+  .upgrade-plan {
+    min-height: auto;
+    padding: 22px;
+  }
+
+  .upgrade-modal-foot {
+    margin-inline: -20px;
+    padding-inline: 20px;
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 560px) {
+  .upgrade-gate {
+    padding: 10px;
+  }
+
+  .upgrade-modal-card {
+    width: 100%;
+    max-height: calc(100vh - 20px);
+    border-radius: 18px;
+    padding: 24px 14px 0;
+  }
+
+  .upgrade-modal-head {
+    padding-inline-start: 50px;
+    align-items: flex-start;
+  }
+
+  .upgrade-title-mark {
+    width: 46px;
+    height: 46px;
+    border-radius: 14px;
+  }
+
+  .upgrade-modal-head h2 {
+    font-size: 1.55rem;
+  }
+
+  .upgrade-period-tabs button,
+  .upgrade-period-tabs span,
+  .upgrade-period-tabs b {
+    min-width: 78px;
+    padding: 0 12px;
+  }
+
+  .upgrade-plan-head {
+    gap: 12px;
+  }
+
+  .upgrade-plan-icon {
+    width: 52px;
+    height: 52px;
+  }
+
+  .upgrade-price {
+    margin: 24px 0 20px;
+  }
 }
 
 @media (max-width: 1320px) {
