@@ -137,11 +137,26 @@ function persistAuthBridge(payload = {}) {
   return sessionPayload;
 }
 
+function getAuthReturnUrl(defaultUrl) {
+  if (defaultUrl === "admin.html") return defaultUrl;
+  const requested = new URLSearchParams(window.location.search).get("return") || "";
+  if (!requested) return defaultUrl;
+
+  try {
+    const target = new URL(requested, window.location.href);
+    if (target.origin !== window.location.origin) return defaultUrl;
+    return `${target.pathname}${target.search}${target.hash}` || defaultUrl;
+  } catch (_) {
+    return defaultUrl;
+  }
+}
+
 function finishAuthSuccess(payload = {}, redirectUrl = "index.html") {
   const sessionPayload = persistAuthBridge(payload);
   if (notifyEmbeddedAuthSuccess(sessionPayload)) return true;
+  const nextUrl = getAuthReturnUrl(redirectUrl);
   window.setTimeout(() => {
-    window.location.href = redirectUrl;
+    window.location.href = nextUrl;
   }, 650);
   return false;
 }

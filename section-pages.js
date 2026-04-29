@@ -905,7 +905,15 @@
   function renderHomeTopActions() {
     const userInitial = isAuthenticated()
       ? String(state.currentUser?.name || "م").trim().slice(0, 1)
-      : "ض";
+      : "";
+    const accountButton = isAuthenticated()
+      ? `
+        <button class="home-avatar-button" type="button" data-open-account aria-label="الحساب">
+          <span>${escapeHtml(userInitial)}</span>
+          <i aria-hidden="true"></i>
+        </button>
+      `
+      : "";
 
     return `
       <div class="home-top-actions">
@@ -915,10 +923,7 @@
         </button>
         <button class="circle-control ${isAuthenticated() ? "" : "requires-auth"}" type="button" aria-label="الإشعارات">${icons.bell}</button>
         <button class="circle-control" type="button" aria-label="تبديل الثيم" data-theme-toggle>${icons.moon}</button>
-        <button class="home-avatar-button" type="button" data-open-account aria-label="الحساب">
-          <span>${escapeHtml(userInitial)}</span>
-          <i aria-hidden="true"></i>
-        </button>
+        ${accountButton}
       </div>
     `;
   }
@@ -1273,10 +1278,25 @@
     window.setTimeout(() => node.remove(), duration);
   }
 
+  function buildFullLoginUrl() {
+    const returnPath = `${window.location.pathname || "/index.html"}${window.location.search || ""}${window.location.hash || ""}`;
+    const loginUrl = new URL(LOGIN_PAGE_URL, window.location.href);
+    loginUrl.searchParams.set("mode", "login");
+    loginUrl.searchParams.set("return", returnPath);
+    return loginUrl.href;
+  }
+
   function openAuthModal(reason) {
     state.authReason = reason || "سجّل الدخول لاستخدام هذه الميزة.";
-    state.authModalOpen = true;
-    render();
+    try {
+      const draft = getComposerValue();
+      if (draft) {
+        localStorage.setItem("mlm_resume_prompt", draft);
+      }
+    } catch (_) {
+      // Ignore draft persistence issues.
+    }
+    window.location.href = buildFullLoginUrl();
   }
 
   function closeAuthModal() {
