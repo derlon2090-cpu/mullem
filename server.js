@@ -152,6 +152,35 @@ let databaseState = {
   message: "PostgreSQL/Neon has not been initialized yet."
 };
 
+function buildDatabaseEnvDiagnostics() {
+  const connectionEnvNames = [
+    "DATABASE_URL",
+    "POSTGRES_URL",
+    "POSTGRES_PRISMA_URL",
+    "POSTGRES_URL_NON_POOLING",
+    "POSTGRES_URL_UNPOOLED",
+    "DATABASE_URL_UNPOOLED",
+    "NEON_DATABASE_URL",
+    "NEON_POSTGRES_URL",
+    "DATABASE_PRIVATE_URL"
+  ];
+  const discreteEnvNames = ["PGHOST", "PGDATABASE", "PGUSER", "POSTGRES_HOST", "POSTGRES_DATABASE", "POSTGRES_USER"];
+  const detectedConnectionEnv = connectionEnvNames.find((name) => readEnvValue(name, ""));
+  const detectedDiscreteEnv = discreteEnvNames.filter((name) => readEnvValue(name, ""));
+
+  return {
+    connection_env_present: Boolean(detectedConnectionEnv),
+    connection_env_name: detectedConnectionEnv || null,
+    discrete_env_present: detectedDiscreteEnv.length > 0,
+    discrete_env_names: detectedDiscreteEnv,
+    configured: Boolean(DATABASE_URL || (DB_HOST && DB_DATABASE && DB_USERNAME)),
+    host_present: Boolean(DB_HOST),
+    database_present: Boolean(DB_DATABASE),
+    user_present: Boolean(DB_USERNAME),
+    password_present: Boolean(DB_PASSWORD)
+  };
+}
+
 function ensureDatabaseRuntimeDependency() {
   try {
     require.resolve("pg");
@@ -310,6 +339,7 @@ function buildPublicDatabaseState() {
     host: databaseState?.host || DB_HOST,
     port: databaseState?.port || DB_PORT,
     database: databaseState?.database || DB_DATABASE,
+    env: buildDatabaseEnvDiagnostics(),
     message: databaseState?.connected
       ? String(databaseState?.message || "PostgreSQL/Neon connected successfully.")
       : getPublicDatabaseMessage("حفظ البيانات")
