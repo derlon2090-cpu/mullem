@@ -352,6 +352,11 @@
     upgradeModalOpen: false,
     authReason: "",
     conversationIds: {},
+    conversationUserId: "",
+    savedConversationsLoaded: false,
+    savedConversationsLoading: false,
+    hydratedConversationIds: {},
+    hydratingConversationIds: {},
     settings: {}
   };
 
@@ -436,6 +441,27 @@
       return raw ? JSON.parse(raw) : fallback;
     } catch (_) {
       return fallback;
+    }
+  }
+
+  function getAccountStorageKey(suffix, userId = state.currentUser?.id) {
+    const safeUserId = String(userId || "").trim();
+    return safeUserId ? `orlixor_${suffix}_${safeUserId}` : "";
+  }
+
+  function loadConversationIdsForUser(userId = state.currentUser?.id) {
+    const key = getAccountStorageKey("conversation_ids", userId);
+    if (!key) return {};
+    return loadJson(key, {});
+  }
+
+  function saveConversationIdsForCurrentUser() {
+    const key = getAccountStorageKey("conversation_ids");
+    if (!key) return;
+    try {
+      localStorage.setItem(key, JSON.stringify(state.conversationIds || {}));
+    } catch (_) {
+      // Keep the chat usable if storage is restricted.
     }
   }
 
@@ -563,10 +589,13 @@
       .then((result) => {
         if (result?.ok && result.data?.user) {
           state.currentUser = persistEmbeddedUser(result.data.user) || getActiveUser();
+          ensureAccountConversationState();
           render();
+          scheduleSavedConversationSync();
         } else if (result?.status === 401 || result?.status === 403) {
           apiClient.clearSession?.();
           state.currentUser = null;
+          ensureAccountConversationState();
           render();
         }
       })
@@ -657,6 +686,133 @@
       responseLength: getProfile(sectionKey).responseLength,
       webEnabled: getProfile(sectionKey).webEnabled
     };
+  }
+
+  function resetAccountConversationThreads() {
+    const mappedThreadIds = new Set(Object.keys(state.conversationIds || {}));
+    Object.keys(state.threadState || {}).forEach((sectionKey) => {
+      state.threadState[sectionKey] = (state.threadState[sectionKey] || [])
+        .map((groupEntry) => ({
+          ...groupEntry,
+          items: (groupEntry.items || []).filter((item) =>
+            !item.fromServer && !mappedThreadIds.has(item.id)
+          )
+        }))
+        .filter((groupEntry) => groupEntry.items.length && !groupEntry.savedAccountGroup);
+      if (state.activeThreadId?.[sectionKey] && !getAllThreads(sectionKey).some((item) => item.id === state.activeThreadId[sectionKey])) {
+        state.activeThreadId[sectionKey] = getAllThreads(sectionKey)[0]?.id || "";
+      }
+    });
+  }
+
+  function ensureAccountConversationState() {
+    const userId = isAuthenticated() ? String(state.currentUser.id || "") : "";
+    if (!userId) {
+      if (state.conversationUserId || Object.keys(state.conversationIds || {}).length) {
+        resetAccountConversationThreads();
+      }
+      state.conversationIds = {};
+      state.conversationUserId = "";
+      state.savedConversationsLoaded = false;
+      state.savedConversationsLoading = false;
+      state.hydratedConversationIds = {};
+      state.hydratingConversationIds = {};
+      return;
+    }
+
+    if (state.conversationUserId !== userId) {
+      resetAccountConversationThreads();
+      state.conversationIds = loadConversationIdsForUser(userId);
+      state.conversationUserId = userId;
+      state.savedConversationsLoaded = false;
+      state.savedConversationsLoading = false;
+      state.hydratedConversationIds = {};
+      state.hydratingConversationIds = {};
+    }
+  }
+
+  function getSavedConversationSections() {
+    const primary = isHomeWorkspace ? "messages" : state.section;
+    return Array.from(new Set([primary, "messages"].filter((key) => state.threadState[key])));
+  }
+
+  function getSavedConversationGroup(sectionKey) {
+    state.threadState[sectionKey] = state.threadState[sectionKey] || [];
+    let savedGroup = state.threadState[sectionKey].find((entry) => entry.savedAccountGroup);
+    if (!savedGroup) {
+      savedGroup = { title: "محفوظة في حسابك", items: [], savedAccountGroup: true };
+      state.threadState[sectionKey].unshift(savedGroup);
+    }
+    return savedGroup;
+  }
+
+  function formatConversationTime(value) {
+    const date = value ? new Date(value) : null;
+    if (!date || Number.isNaN(date.getTime())) return "محفوظ";
+    const now = new Date();
+    const sameDay = date.toDateString() === now.toDateString();
+    if (sameDay) {
+      return date.toLocaleTimeString("ar-SA", { hour: "2-digit", minute: "2-digit" });
+    }
+    return date.toLocaleDateString("ar-SA", { month: "short", day: "numeric" });
+  }
+
+  function normalizeApiMessages(messages) {
+    return (Array.isArray(messages) ? messages : [])
+      .map((message) => {
+        const role = String(message.role || "").toLowerCase() === "assistant" ? "assistant" : "user";
+        const text = String(message.text || message.body || message.content || "").trim();
+        if (!text) return null;
+        if (role === "assistant") {
+          return { role, body: assistantReply("رد محفوظ", splitReplyToBullets(text)) };
+        }
+        return { role, body: text };
+      })
+      .filter(Boolean);
+  }
+
+  function getThreadTitleFromMessages(messages, fallback) {
+    const firstUserMessage = (messages || []).find((message) => message.role === "user" && message.body);
+    return String(fallback || firstUserMessage?.body || "محادثة محفوظة").trim().slice(0, 48);
+  }
+
+  function upsertSavedConversationThread(summary, messages = []) {
+    const apiId = String(summary?.id || "").trim();
+    if (!apiId) return null;
+    const normalizedMessages = normalizeApiMessages(messages);
+    const updatedAt = summary.last_message_at || summary.updated_at || summary.created_at;
+    const stats = {
+      created: formatConversationTime(summary.created_at),
+      messages: normalizedMessages.length ? `${normalizedMessages.length} رسالة` : "محفوظة",
+      updated: formatConversationTime(updatedAt)
+    };
+    let primaryThread = null;
+
+    getSavedConversationSections().forEach((sectionKey) => {
+      const existing = getAllThreads(sectionKey).find((item) => state.conversationIds[item.id] === apiId);
+      const threadId = existing?.id || `server-${apiId}`;
+      const nextThread = existing || {
+        id: threadId,
+        fromServer: true,
+        messages: []
+      };
+      nextThread.title = getThreadTitleFromMessages(normalizedMessages, summary.title);
+      nextThread.time = formatConversationTime(updatedAt);
+      nextThread.fileLabel = summary.project_id ? "مشروع محفوظ" : "محفوظ في حسابك";
+      nextThread.stats = stats;
+      if (normalizedMessages.length || !nextThread.messages?.length) {
+        nextThread.messages = normalizedMessages;
+      }
+      state.conversationIds[threadId] = apiId;
+      if (!existing) {
+        getSavedConversationGroup(sectionKey).items.unshift(nextThread);
+      }
+      if (sectionKey === state.section || !primaryThread) {
+        primaryThread = nextThread;
+      }
+    });
+
+    return primaryThread;
   }
 
   function filterGroups(sectionKey = state.section) {
@@ -1469,9 +1625,11 @@
     const bridgedUser = consumeAuthBridge();
     if (!bridgedUser) return false;
     state.currentUser = bridgedUser;
+    ensureAccountConversationState();
     state.authModalOpen = false;
     state.settingsModalOpen = false;
     render();
+    scheduleSavedConversationSync();
     focusComposerSoon();
     return true;
   }
@@ -1484,10 +1642,66 @@
     });
   }
 
+  async function hydrateSavedConversation(threadId) {
+    const apiClient = getApiClient();
+    const conversationId = state.conversationIds?.[threadId];
+    if (!apiClient?.getChatSession || !conversationId) return;
+    if (state.hydratedConversationIds[conversationId] || state.hydratingConversationIds[conversationId]) return;
+
+    state.hydratingConversationIds[conversationId] = true;
+    try {
+      const result = await apiClient.getChatSession(conversationId);
+      if (result?.ok && result.data?.conversation) {
+        upsertSavedConversationThread(result.data.conversation, result.data.messages || []);
+        state.hydratedConversationIds[conversationId] = true;
+        saveConversationIdsForCurrentUser();
+        render();
+        scrollConversationToLatest();
+      }
+    } finally {
+      delete state.hydratingConversationIds[conversationId];
+    }
+  }
+
+  async function syncSavedConversations() {
+    ensureAccountConversationState();
+    const apiClient = getApiClient();
+    if (!isAuthenticated() || !apiClient?.getStudentConversations) return;
+    if (state.savedConversationsLoaded || state.savedConversationsLoading) return;
+
+    state.savedConversationsLoading = true;
+    try {
+      const result = await apiClient.getStudentConversations({ limit: 60 });
+      if (result?.ok) {
+        const items = Array.isArray(result.data?.items) ? result.data.items : [];
+        items.forEach((item) => upsertSavedConversationThread(item));
+        state.savedConversationsLoaded = true;
+        saveConversationIdsForCurrentUser();
+        const activeThread = getActiveThread();
+        if (activeThread?.fromServer || state.conversationIds[activeThread?.id]) {
+          hydrateSavedConversation(activeThread.id);
+        }
+        render();
+      }
+    } finally {
+      state.savedConversationsLoading = false;
+    }
+  }
+
+  function scheduleSavedConversationSync() {
+    window.setTimeout(() => {
+      syncSavedConversations();
+    }, 0);
+  }
+
   function setSection(sectionKey, replace = false) {
     if (!sectionProfiles[sectionKey]) return;
     state.section = sectionKey;
     ensureThreadState(sectionKey);
+    if (isAuthenticated()) {
+      state.savedConversationsLoaded = false;
+      scheduleSavedConversationSync();
+    }
     updateUrl(replace);
     render();
   }
@@ -1626,6 +1840,7 @@
       } else {
         if (result.data.conversation_id) {
           state.conversationIds[threadEntry.id] = String(result.data.conversation_id);
+          saveConversationIdsForCurrentUser();
         }
         if (result.data.user) {
           const token = apiClient.getToken?.();
@@ -1638,6 +1853,16 @@
           role: "assistant",
           body: assistantReply("تم توليد الرد بنجاح.", splitReplyToBullets(result.data.assistant_message.body))
         });
+        if (result.data.conversation_id) {
+          upsertSavedConversationThread({
+            id: String(result.data.conversation_id),
+            title: input || threadEntry.title,
+            last_message_at: new Date().toISOString(),
+            created_at: threadEntry.stats?.created || new Date().toISOString()
+          }, threadEntry.messages);
+          state.hydratedConversationIds[String(result.data.conversation_id)] = true;
+          saveConversationIdsForCurrentUser();
+        }
         if (input) {
           threadEntry.title = threadEntry.title === "محادثة جديدة" ? input.slice(0, 32) : threadEntry.title;
         }
@@ -1692,9 +1917,11 @@
 
       const threadButton = event.target.closest("[data-thread]");
       if (threadButton) {
-        state.activeThreadId[state.section] = threadButton.getAttribute("data-thread") || "";
+        const threadId = threadButton.getAttribute("data-thread") || "";
+        state.activeThreadId[state.section] = threadId;
         state.homeConversationOpen = true;
         render();
+        hydrateSavedConversation(threadId);
         scrollConversationToLatest();
         return;
       }
@@ -1769,8 +1996,15 @@
         event.preventDefault();
         event.stopPropagation();
         const finishLogout = () => {
+          resetAccountConversationThreads();
           localStorage.removeItem(legacyStorageKeys.currentUser);
           state.currentUser = getActiveUser();
+          state.conversationIds = {};
+          state.conversationUserId = "";
+          state.savedConversationsLoaded = false;
+          state.savedConversationsLoading = false;
+          state.hydratedConversationIds = {};
+          state.hydratingConversationIds = {};
           state.settingsModalOpen = false;
           state.authModalOpen = false;
           state.upgradeModalOpen = false;
@@ -1836,6 +2070,10 @@
         }
         const sectionKey = state.section;
         const currentId = getActiveThread(sectionKey)?.id;
+        if (currentId && state.conversationIds[currentId]) {
+          delete state.conversationIds[currentId];
+          saveConversationIdsForCurrentUser();
+        }
         state.threadState[sectionKey] = state.threadState[sectionKey]
           .map((groupEntry) => ({
             ...groupEntry,
@@ -1925,17 +2163,21 @@
         });
       }
       state.currentUser = persistEmbeddedUser(payload.user) || getActiveUser();
+      ensureAccountConversationState();
       state.authModalOpen = false;
       state.settingsModalOpen = false;
       render();
+      scheduleSavedConversationSync();
       focusComposerSoon();
     });
   }
 
   function render() {
     state.currentUser = getActiveUser();
+    ensureAccountConversationState();
     ensureThreadState();
     renderShell();
+    scheduleSavedConversationSync();
   }
 
   window.addEventListener("popstate", () => {

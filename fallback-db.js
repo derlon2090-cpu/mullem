@@ -473,18 +473,36 @@ function createFallbackDatabaseClient() {
   }
 
   async function getOrCreateConversation(payload = {}) {
-    const conversationId = String(payload.id || payload.conversation_id || "").trim() || crypto.randomUUID();
-    const requestedGuestId = String(payload.guest_session_id || "").trim();
+    let conversationId = String(payload.id || payload.conversation_id || "").trim() || crypto.randomUUID();
+    let requestedGuestId = String(payload.guest_session_id || "").trim();
+    const requestedUserId = payload.user_id != null ? Number(payload.user_id) : null;
     let existing = findConversationSync(conversationId);
     if (!existing && requestedGuestId) {
       existing = data.conversations.find((item) => String(item.guest_session_id || "") === requestedGuestId) || null;
     }
-    if (existing) return enrichConversation(existing);
+    if (existing) {
+      const belongsToAnotherUser = requestedUserId && existing.user_id && Number(existing.user_id) !== requestedUserId;
+      if (belongsToAnotherUser) {
+        conversationId = crypto.randomUUID();
+        requestedGuestId = "";
+        existing = null;
+      } else {
+        if (requestedUserId && !existing.user_id) existing.user_id = requestedUserId;
+        if (payload.project_id != null && !existing.project_id) existing.project_id = Number(payload.project_id);
+        if (payload.subject && !existing.subject) existing.subject = String(payload.subject).trim();
+        if (payload.stage && !existing.stage) existing.stage = String(payload.stage).trim();
+        if (payload.grade && !existing.grade) existing.grade = String(payload.grade).trim();
+        if (payload.term && !existing.term) existing.term = String(payload.term).trim();
+        existing.updated_at = nowIso();
+        persist();
+        return enrichConversation(existing);
+      }
+    }
 
     const conversation = {
       id: conversationId,
       guest_session_id: requestedGuestId || null,
-      user_id: payload.user_id != null ? Number(payload.user_id) : null,
+      user_id: requestedUserId,
       project_id: payload.project_id != null ? Number(payload.project_id) : null,
       title: String(payload.title || payload.message || "").trim() || null,
       subject: String(payload.subject || "").trim() || null,

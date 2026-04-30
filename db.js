@@ -1,3 +1,5 @@
+const crypto = require("crypto");
+
 let mysqlModule = null;
 
 function getMysqlModule() {
@@ -856,7 +858,7 @@ function createDatabaseClient(rawConfig = {}) {
 
   async function createConversation(payload = {}) {
     const conversation = {
-      id: String(payload.id || "").trim(),
+      id: String(payload.id || payload.conversation_id || crypto.randomUUID()).trim(),
       guest_session_id: String(payload.guest_session_id || "").trim() || null,
       user_id: payload.user_id ? Number(payload.user_id) : null,
       project_id: payload.project_id ? Number(payload.project_id) : null,
@@ -932,10 +934,21 @@ function createDatabaseClient(rawConfig = {}) {
     const conversationId = String(payload.conversation_id || "").trim();
     const guestSessionId = String(payload.guest_session_id || "").trim();
     const userId = payload.user_id ? Number(payload.user_id) : null;
+    const createFreshConversation = () => createConversation({
+      ...payload,
+      id: "",
+      conversation_id: "",
+      guest_session_id: ""
+    });
+    const isOwnedByAnotherUser = (conversation) =>
+      Boolean(userId && conversation?.user_id && Number(conversation.user_id) !== Number(userId));
 
     if (conversationId) {
       const existing = await getConversationById(conversationId);
       if (existing) {
+        if (isOwnedByAnotherUser(existing)) {
+          return createFreshConversation();
+        }
         const nextChanges = {};
         if (userId && !existing.user_id) nextChanges.user_id = userId;
         if (payload.project_id && String(existing.project_id || "") !== String(payload.project_id)) {
@@ -957,6 +970,9 @@ function createDatabaseClient(rawConfig = {}) {
     if (guestSessionId) {
       const existing = await getConversationByGuestSessionId(guestSessionId);
       if (existing) {
+        if (isOwnedByAnotherUser(existing)) {
+          return createFreshConversation();
+        }
         const nextChanges = {};
         if (userId && !existing.user_id) nextChanges.user_id = userId;
         if (payload.project_id && String(existing.project_id || "") !== String(payload.project_id)) {

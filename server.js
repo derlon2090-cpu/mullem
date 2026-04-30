@@ -2047,11 +2047,16 @@ async function handleSolveQuestion(req, res) {
 }
 
 async function handleListChatSessions(req, res) {
+  const auth = await requireAuthenticatedUser(req);
   const url = new URL(req.url, `http://${req.headers.host || "127.0.0.1"}`);
   const limit = Number(url.searchParams.get("limit") || 20);
+  const projectId = sanitizeOptionalText(url.searchParams.get("project_id"), MAX_METADATA_LENGTH);
 
   if (isDatabaseReady()) {
-    const items = await databaseClient.listRecentConversations(limit);
+    const items = await databaseClient.listUserConversations(auth.user.id, {
+      limit,
+      project_id: projectId || null
+    });
     sendJson(req, res, 200, {
       success: true,
       data: {
@@ -2062,6 +2067,7 @@ async function handleListChatSessions(req, res) {
   }
 
   const items = Array.from(conversations.values())
+    .filter((item) => String(item.user_id || "") === String(auth.user.id))
     .slice(-Math.max(1, Math.min(limit || 20, 100)))
     .reverse()
     .map(buildConversationSummary);
@@ -2073,9 +2079,15 @@ async function handleListChatSessions(req, res) {
 }
 
 async function handleGetChatSession(req, res, conversationId) {
+  const auth = await requireAuthenticatedUser(req);
   const safeConversationId = sanitizeOptionalText(conversationId, MAX_METADATA_LENGTH);
   const url = new URL(req.url, `http://${req.headers.host || "127.0.0.1"}`);
   const messagesLimit = Math.max(1, Math.min(Number(url.searchParams.get("messages_limit") || 50), 100));
+  const canAccessConversation = (conversation) => {
+    if (!conversation) return false;
+    if (normalizeUserRole(auth.user.role) === "admin") return true;
+    return Boolean(conversation.user_id && String(conversation.user_id) === String(auth.user.id));
+  };
 
   if (!safeConversationId) {
     throw createHttpError(404, "Conversation not found.");
@@ -2087,6 +2099,9 @@ async function handleGetChatSession(req, res, conversationId) {
       await databaseClient.getConversationByGuestSessionId(safeConversationId);
 
     if (!conversation) {
+      throw createHttpError(404, "Conversation not found.");
+    }
+    if (!canAccessConversation(conversation)) {
       throw createHttpError(404, "Conversation not found.");
     }
     const messages = await databaseClient.listMessages(conversation.id, messagesLimit);
@@ -2105,6 +2120,9 @@ async function handleGetChatSession(req, res, conversationId) {
     conversations.get(guestConversationMap.get(safeConversationId));
 
   if (!conversation) {
+    throw createHttpError(404, "Conversation not found.");
+  }
+  if (!canAccessConversation(conversation)) {
     throw createHttpError(404, "Conversation not found.");
   }
 
