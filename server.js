@@ -64,7 +64,8 @@ const DEFAULT_ALLOWED_FRONTEND_ORIGINS = [
   "https://www.orlixor.com",
   "https://chatmullem.com",
   "https://www.chatmullem.com",
-  "https://mullem.onrender.com"
+  "https://mullem.onrender.com",
+  "https://mullem-spdu.onrender.com"
 ];
 const DATABASE_URL = readEnvValue(
   [

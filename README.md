@@ -13,6 +13,12 @@ Example:
 window.MULLEM_API_BASE = "https://your-backend-domain.com";
 ```
 
+Current Render backend:
+
+```js
+window.MULLEM_API_BASE = "https://mullem-spdu.onrender.com";
+```
+
 You can also temporarily override the backend URL by opening the site with:
 
 ```text

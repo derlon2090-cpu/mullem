@@ -1,7 +1,7 @@
 (() => {
   const STORAGE_KEY = "mlm_api_base_url";
   const STATIC_HOST_SUFFIXES = [".github.io", ".pages.dev", ".netlify.app"];
-  const DEFAULT_BACKEND_URL = "https://mullem.onrender.com";
+  const DEFAULT_BACKEND_URL = "https://mullem-spdu.onrender.com";
 
   function sanitizeBaseUrl(value) {
     return String(value || "").trim().replace(/\/+$/, "");
