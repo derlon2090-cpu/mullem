@@ -1,35 +1,35 @@
 const { execSync } = require("child_process");
 
-function hasMysql2() {
+function hasPg() {
   try {
-    require.resolve("mysql2/promise");
+    require.resolve("pg");
     return true;
   } catch (_) {
     return false;
   }
 }
 
-if (hasMysql2()) {
-  console.log("[render-runtime] mysql2 is available.");
+if (hasPg()) {
+  console.log("[render-runtime] pg is available for Neon/PostgreSQL.");
   process.exit(0);
 }
 
-console.warn("[render-runtime] mysql2 is missing. Attempting runtime install...");
+console.warn("[render-runtime] pg is missing. Attempting runtime install...");
 
 try {
-  execSync("npm install mysql2 --no-save", {
+  execSync("npm install pg --no-save", {
     stdio: "inherit",
     env: process.env
   });
 } catch (error) {
-  console.error("[render-runtime] Failed to install mysql2 automatically.");
+  console.error("[render-runtime] Failed to install pg automatically.");
   console.error(String(error?.message || error));
   process.exit(1);
 }
 
-if (!hasMysql2()) {
-  console.error("[render-runtime] mysql2 still unavailable after runtime install.");
+if (!hasPg()) {
+  console.error("[render-runtime] pg still unavailable after runtime install.");
   process.exit(1);
 }
 
-console.log("[render-runtime] mysql2 installed successfully.");
+console.log("[render-runtime] pg installed successfully.");

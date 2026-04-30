@@ -38,19 +38,22 @@ The frontend expects these routes to exist:
 PORT=3000
 OPENAI_API_KEY=your_real_key
 OPENAI_MODEL=gpt-5.4-mini
-DB_HOST=127.0.0.1
-DB_PORT=3306
-DB_DATABASE=mullem
-DB_USERNAME=root
-DB_PASSWORD=
+OPENAI_MAX_OUTPUT_TOKENS=500
+DB_CLIENT=postgres
+DATABASE_URL=postgresql://user:password@host/database?sslmode=require
 CORS_ALLOWED_ORIGINS=*
+MAX_HISTORY_MESSAGES=5
+TEXT_MESSAGE_XP_COST=10
+IMAGE_GENERATION_XP_COST=15
+ATTACHMENT_ANALYSIS_XP_COST=20
+DAILY_LOGIN_XP_REWARD=5
 ```
 
 3. Install and run:
 
 ```bash
 npm install
-node server.js
+npm run dev
 ```
 
 4. Open:
@@ -67,8 +70,8 @@ Recommended setup:
 
 - Create a new Render Web Service from the repository root
 - Runtime: Node
-- Build command: `npm install`
-- Start command: `node server.js`
+- Build command: `npm run render:build`
+- Start command: `npm run render:start`
 - Health check path: `/api/health`
 
 Set these environment variables in Render:
@@ -76,13 +79,42 @@ Set these environment variables in Render:
 ```env
 OPENAI_API_KEY=your_real_key
 OPENAI_MODEL=gpt-5.4-mini
-DB_HOST=your_mysql_host
-DB_PORT=3306
-DB_DATABASE=mullem
-DB_USERNAME=your_mysql_user
-DB_PASSWORD=your_mysql_password
+DB_CLIENT=postgres
+DATABASE_URL=your_neon_postgres_connection_string
 CORS_ALLOWED_ORIGINS=https://your-frontend-domain.com
 ```
+
+Production storage is Neon/PostgreSQL only. Use `DATABASE_URL` from Neon.
+
+## XP and package rules
+
+- New student accounts start with `50 XP`.
+- Free accounts receive `5 XP` once per new login day.
+- Paid packages reset the daily balance to the package daily XP amount.
+- Text chat requests cost `10 XP`.
+- Image attachments cost `15 XP`.
+- File/document analysis costs `20 XP`.
+- OpenAI responses are capped with `OPENAI_MAX_OUTPUT_TOKENS=500` by default.
+- Conversation context is limited with `MAX_HISTORY_MESSAGES=5` to keep responses fast and costs controlled.
+
+Default paid packages inserted into Neon:
+
+- `شرارة`: `80 XP` daily, `9 SAR` monthly.
+- `طويق`: `250 XP` daily, `29 SAR` monthly.
+- `الرائد`: `600 XP` daily, `59 SAR` monthly.
+
+## Neon database schema
+
+The Node backend creates and maintains these PostgreSQL tables automatically on startup:
+
+- `app_users`: accounts, auth profile, role, XP balance, streak, and current plan fields.
+- `app_packages`: editable packages with name, daily XP, price, duration, summary, and benefits.
+- `app_subscriptions`: subscription history for each user, including active package, price, XP, start, and expiry.
+- `app_api_tokens`: persistent login tokens used to keep users signed in across refreshes and page changes.
+- `app_projects`: student projects and folders.
+- `conversations`: saved chats attached to the logged-in user and optionally to a project.
+- `messages`: all user/assistant messages for saved conversation history.
+- `app_guest_usage`: guest usage tracking when guest mode is enabled.
 
 ## Deploy on Railway
 
@@ -113,7 +145,7 @@ If the browser shows `The page could not be found`, then you deployed only the s
 Do not commit these files or folders publicly:
 
 - `.env`
-- `mysql-data`
+- local database data folders
 - `node_modules`
 - `laravel-api/vendor`
-- local PHP/MySQL binaries
+- local runtime binaries

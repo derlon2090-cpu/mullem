@@ -332,7 +332,7 @@ const packagePlans = [
 
 const usageCosts = {
   chat: 10,
-  image: 20
+  image: 15
 };
 
 const LOGIN_REQUIRED_DAILY_XP = 5;

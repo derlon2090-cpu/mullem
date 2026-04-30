@@ -4366,7 +4366,7 @@
 
   function spendRuntimePoints(hasAttachments) {
     if (typeof spendPoints !== "function") return { ok: true };
-    return spendPoints(hasAttachments ? 20 : 10, hasAttachments ? "تحليل صورة/ملف" : "استخدام الشات");
+    return spendPoints(hasAttachments ? 15 : 10, hasAttachments ? "تحليل صورة" : "استخدام الشات");
   }
 
   function appendSessionMessage(role, author, body, options = {}) {
@@ -4820,6 +4820,12 @@
     }
 
     setRuntimeApiConversationId(result.data.conversation_id);
+    if (result.data.user && typeof apiClient.setSession === "function" && typeof apiClient.getToken === "function") {
+      apiClient.setSession({
+        token: apiClient.getToken(),
+        user: result.data.user
+      });
+    }
     if (result.data.project) {
       const savedProject = upsertRuntimeProject(result.data.project);
       if (savedProject?.id) {
@@ -6525,21 +6531,16 @@
 
     const pendingNode = addMessage("assistant", "ملم يحل", createLoadingCopy(), { pending: true });
 
-    let responseForLog = null;
-    if (hasAttachments) {
-      responseForLog = buildRuntimeApiUnavailableResponse(question, route, "attachment_not_supported");
-    } else {
-      responseForLog = await buildAcademicResponseWithBackend(
-        question || route.extracted_text || "",
-        route,
-        {
-          questionType: route?.question_type || "",
-          subject: route?.detected_subject || subjectSelect?.value || ""
-        },
-        {},
-        { action: "answer", confidence: 1 }
-      );
-    }
+    const responseForLog = await buildAcademicResponseWithBackend(
+      question || route.extracted_text || "أرفقت ملفًا أو صورة. ساعدني في فهمها حسب الوصف والاسم المرفق.",
+      route,
+      {
+        questionType: route?.question_type || "",
+        subject: route?.detected_subject || subjectSelect?.value || ""
+      },
+      {},
+      { action: "answer", confidence: 1 }
+    );
 
     const body = finalRuntimeSafetyGate(
       question || route.extracted_text || "",

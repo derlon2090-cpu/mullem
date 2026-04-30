@@ -14,7 +14,8 @@ function verifyModule(specifier) {
 }
 
 const checks = [
-  "mysql2/promise",
+  "pg",
+  path.join(process.cwd(), "postgres-db.js"),
   path.join(process.cwd(), "server.js")
 ];
 

@@ -60,20 +60,30 @@ const DEFAULT_ALLOWED_FRONTEND_ORIGINS = [
   "https://www.chatmullem.com",
   "https://mullem.onrender.com"
 ];
-const DB_HOST = readEnvValue(
-  ["DB_HOST", "MYSQLHOST", "MY_SQL_HOST", "DATABASE_HOST"],
-  IS_CLOUD_RUNTIME ? "" : "127.0.0.1"
+const DATABASE_URL = readEnvValue(
+  ["DATABASE_URL", "POSTGRES_URL", "POSTGRES_PRISMA_URL", "POSTGRES_URL_NON_POOLING"],
+  ""
 );
-const DB_PORT = readEnvNumber(["DB_PORT", "MYSQLPORT", "DATABASE_PORT"], 3306);
+const DB_HOST = readEnvValue(
+  ["PGHOST", "POSTGRES_HOST", "DATABASE_HOST"],
+  ""
+);
+const DB_PORT = readEnvNumber(
+  ["PGPORT", "POSTGRES_PORT", "DATABASE_PORT"],
+  5432
+);
 const DB_DATABASE = readEnvValue(
-  ["DB_DATABASE", "MYSQLDATABASE", "DATABASE_NAME"],
-  IS_CLOUD_RUNTIME ? "" : "mullem"
+  ["PGDATABASE", "POSTGRES_DATABASE", "DATABASE_NAME"],
+  ""
 );
 const DB_USERNAME = readEnvValue(
-  ["DB_USERNAME", "DB_USER", "MYSQLUSER", "DATABASE_USER"],
-  IS_CLOUD_RUNTIME ? "" : "root"
+  ["PGUSER", "POSTGRES_USER", "DATABASE_USER"],
+  ""
 );
-const DB_PASSWORD = readEnvValue(["DB_PASSWORD", "MYSQLPASSWORD", "DATABASE_PASSWORD"], "");
+const DB_PASSWORD = readEnvValue(
+  ["PGPASSWORD", "POSTGRES_PASSWORD", "DATABASE_PASSWORD"],
+  ""
+);
 const MAX_NAME_LENGTH = Math.max(20, Number(process.env.MAX_NAME_LENGTH || 160));
 const MIN_PASSWORD_LENGTH = Math.max(6, Number(process.env.MIN_PASSWORD_LENGTH || 6));
 const PASSWORD_HASH_ITERATIONS = Math.max(60000, Number(process.env.PASSWORD_HASH_ITERATIONS || 120000));
@@ -117,33 +127,34 @@ const guestConversationMap = new Map();
 const rateLimitStore = new Map();
 let databaseClient = null;
 let databaseState = {
-  configured: Boolean(DB_HOST && DB_DATABASE && DB_USERNAME),
+  configured: Boolean(DATABASE_URL || (DB_HOST && DB_DATABASE && DB_USERNAME)),
   connected: false,
+  driver: "postgres",
   host: DB_HOST,
   port: DB_PORT,
   database: DB_DATABASE,
-  message: "MySQL has not been initialized yet."
+  message: "PostgreSQL/Neon has not been initialized yet."
 };
 
-function ensureMysql2RuntimeDependency() {
+function ensureDatabaseRuntimeDependency() {
   try {
-    require.resolve("mysql2/promise");
+    require.resolve("pg");
     return true;
   } catch (_) {
     // Continue to installation attempt below.
   }
 
   try {
-    console.warn("[mullem] mysql2 is missing. Attempting runtime install...");
-    execSync("npm install mysql2 --no-save", {
+    console.warn("[mullem] pg is missing. Attempting runtime install...");
+    execSync("npm install pg --no-save", {
       stdio: "inherit",
       env: process.env
     });
-    require.resolve("mysql2/promise");
-    console.warn("[mullem] mysql2 installed successfully at runtime.");
+    require.resolve("pg");
+    console.warn("[mullem] pg installed successfully at runtime.");
     return true;
   } catch (error) {
-    console.error("[mullem] mysql2 runtime installation failed.");
+    console.error("[mullem] pg runtime installation failed.");
     console.error(String(error?.message || error));
     return false;
   }
@@ -279,11 +290,12 @@ function buildPublicDatabaseState() {
   return {
     configured: Boolean(databaseState?.configured),
     connected: Boolean(databaseState?.connected),
+    driver: databaseState?.driver || "postgres",
     host: databaseState?.host || DB_HOST,
     port: databaseState?.port || DB_PORT,
     database: databaseState?.database || DB_DATABASE,
     message: databaseState?.connected
-      ? String(databaseState?.message || "MySQL connected successfully.")
+      ? String(databaseState?.message || "PostgreSQL/Neon connected successfully.")
       : getPublicDatabaseMessage("حفظ البيانات")
   };
 }
@@ -444,7 +456,7 @@ function requirePassword(value, fieldName = "password") {
 
 function requireDatabaseConnection() {
   if (!isDatabaseReady()) {
-    throw createHttpError(503, databaseState.message || "MySQL is not connected.");
+    throw createHttpError(503, databaseState.message || "PostgreSQL/Neon is not connected.");
   }
 }
 
@@ -476,9 +488,9 @@ function formatUserStatus(status) {
 function inferStageFromGrade(grade) {
   const value = String(grade || "").trim();
   if (!value) return "";
-  if (value.includes("ط§ط¨طھط¯ط§ط¦ظٹ")) return "ط§ط¨طھط¯ط§ط¦ظٹ";
-  if (value.includes("ظ…طھظˆط³ط·")) return "ظ…طھظˆط³ط·";
-  if (value.includes("ط«ط§ظ†ظˆظٹ")) return "ط«ط§ظ†ظˆظٹ";
+  if (value.includes("ابتدائي")) return "ابتدائي";
+  if (value.includes("متوسط")) return "متوسط";
+  if (value.includes("ثانوي")) return "ثانوي";
   return "";
 }
 
@@ -597,9 +609,19 @@ async function syncUserDailyProgress(user, activityText = "") {
   });
 }
 
-function getMessageXpCost(attachmentCount = 0) {
+function isImageAttachmentName(value) {
+  return /\.(png|jpe?g|webp|gif|bmp|heic|heif|svg)$/i.test(String(value || "").trim());
+}
+
+function getMessageXpCost(attachmentCount = 0, attachmentNames = []) {
   const normalizedAttachmentCount = Math.max(0, Math.round(Number(attachmentCount) || 0));
-  return normalizedAttachmentCount > 0 ? ATTACHMENT_ANALYSIS_XP_COST : TEXT_MESSAGE_XP_COST;
+  if (!normalizedAttachmentCount) {
+    return TEXT_MESSAGE_XP_COST;
+  }
+
+  const names = Array.isArray(attachmentNames) ? attachmentNames.filter(Boolean) : [];
+  const hasOnlyImages = names.length > 0 && names.every(isImageAttachmentName);
+  return hasOnlyImages ? IMAGE_GENERATION_XP_COST : ATTACHMENT_ANALYSIS_XP_COST;
 }
 
 async function chargeUserForMessage(user, cost, activityText) {
@@ -789,11 +811,12 @@ async function requireAdminUser(req) {
 
 async function initializeDatabaseLayer() {
   try {
-    if (!ensureMysql2RuntimeDependency()) {
-      throw new Error("MySQL runtime dependency is unavailable.");
+    if (!ensureDatabaseRuntimeDependency()) {
+      throw new Error("PostgreSQL runtime dependency is unavailable.");
     }
-    const { createDatabaseClient } = require("./db");
-    databaseClient = createDatabaseClient({
+    const { createPostgresDatabaseClient } = require("./postgres-db");
+    databaseClient = createPostgresDatabaseClient({
+      connectionString: DATABASE_URL,
       host: DB_HOST,
       port: DB_PORT,
       database: DB_DATABASE,
@@ -801,16 +824,33 @@ async function initializeDatabaseLayer() {
       password: DB_PASSWORD
     });
     await databaseClient.initialize();
+    if (!databaseClient.isReady()) {
+      throw new Error("DATABASE_URL for Neon/PostgreSQL is missing or incomplete.");
+    }
     await ensureDefaultUsers();
     databaseState = databaseClient.getState();
   } catch (error) {
     console.error(`[mullem] primary database init warning: ${String(error?.message || error)}`);
+    if (IS_CLOUD_RUNTIME) {
+      databaseClient = null;
+      databaseState = {
+        configured: Boolean(DATABASE_URL || (DB_HOST && DB_DATABASE && DB_USERNAME)),
+        connected: false,
+        driver: "postgres",
+        host: DB_HOST,
+        port: DB_PORT,
+        database: DB_DATABASE,
+        message: String(error?.message || "Failed to initialize PostgreSQL/Neon.")
+      };
+      return;
+    }
     const { createFallbackDatabaseClient } = require("./fallback-db");
     databaseClient = createFallbackDatabaseClient();
     await databaseClient.initialize();
     await ensureDefaultUsers();
     databaseState = {
       ...databaseClient.getState(),
+      driver: "fallback-file",
       host: DB_HOST || "fallback",
       port: DB_PORT || 0,
       database: DB_DATABASE || "fallback"
@@ -1910,6 +1950,7 @@ async function handleChatSend(req, res) {
     Number(payload.attachment_count || payload.attachmentCount || 0) || 0
   );
   const hasAttachment = Boolean(payload.has_attachment || payload.hasAttachment || attachmentCount > 0);
+  const hasOnlyImageAttachments = attachmentNames.length > 0 && attachmentNames.every(isImageAttachmentName);
   const auth = await getAuthContext(req);
   const activeUser = auth?.user ? await syncUserDailyProgress(auth.user, "بدأ جلسة شات جديدة") : null;
 
@@ -1917,7 +1958,7 @@ async function handleChatSend(req, res) {
     throw createHttpError(401, "Authentication is required to use chat.");
   }
 
-  const xpCost = getMessageXpCost(attachmentCount);
+  const xpCost = getMessageXpCost(attachmentCount, attachmentNames);
   const currentXp = Math.max(0, Number(activeUser.xp || 0));
   if (currentXp < xpCost) {
     throw createHttpError(402, `Insufficient XP balance. This request needs ${xpCost} XP.`);
@@ -1949,7 +1990,9 @@ async function handleChatSend(req, res) {
     chargedUser = await chargeUserForMessage(
       activeUser,
       xpCost,
-      hasAttachment ? "أرسل رسالة مع صورة/ملف" : "أرسل رسالة نصية"
+      hasAttachment
+        ? (hasOnlyImageAttachments ? "أرسل رسالة مع صورة" : "أرسل رسالة مع ملف")
+        : "أرسل رسالة نصية"
     );
   }
 
@@ -2000,7 +2043,12 @@ async function handleSolveQuestion(req, res) {
   const subject = sanitizeOptionalText(payload.subject, MAX_METADATA_LENGTH);
   const term = sanitizeOptionalText(payload.term, MAX_METADATA_LENGTH);
   const lesson = sanitizeOptionalText(payload.lesson, 180);
-  const attachmentCount = Math.max(0, Number(payload.attachment_count || payload.attachmentCount || 0) || 0);
+  const attachmentNames = sanitizeAttachmentNames(payload.attachment_names || payload.attachmentNames);
+  const attachmentCount = Math.max(
+    attachmentNames.length,
+    Number(payload.attachment_count || payload.attachmentCount || 0) || 0
+  );
+  const hasOnlyImageAttachments = attachmentNames.length > 0 && attachmentNames.every(isImageAttachmentName);
   const auth = await getAuthContext(req);
   const activeUser = auth?.user ? await syncUserDailyProgress(auth.user, "بدأ حل سؤال دقيق") : null;
 
@@ -2008,14 +2056,20 @@ async function handleSolveQuestion(req, res) {
     throw createHttpError(401, "Authentication is required to solve questions.");
   }
 
-  const xpCost = getMessageXpCost(attachmentCount);
+  const xpCost = getMessageXpCost(attachmentCount, attachmentNames);
   const currentXp = Math.max(0, Number(activeUser.xp || 0));
   if (currentXp < xpCost) {
     throw createHttpError(402, `Insufficient XP balance. This request needs ${xpCost} XP.`);
   }
 
   const chargedUser = isDatabaseReady()
-    ? await chargeUserForMessage(activeUser, xpCost, attachmentCount > 0 ? "حل سؤال مع صورة/ملف" : "حل سؤال نصي")
+    ? await chargeUserForMessage(
+      activeUser,
+      xpCost,
+      attachmentCount > 0
+        ? (hasOnlyImageAttachments ? "حل سؤال مع صورة" : "حل سؤال مع ملف")
+        : "حل سؤال نصي"
+    )
     : activeUser;
 
   const result = await callOpenAI({
@@ -2324,7 +2378,7 @@ async function routeRequest(req, res) {
       sendJson(req, res, 503, {
         success: false,
         request_id: requestId,
-        message: databaseState.message || "MySQL is not connected."
+        message: databaseState.message || "PostgreSQL/Neon is not connected."
       });
       return;
     }
@@ -2426,7 +2480,7 @@ function startServer(port = PORT) {
       const handleListening = () => {
         server.off("error", handleError);
         console.log(`Mullem server running on http://127.0.0.1:${port}`);
-        console.log(`MySQL status: ${databaseState.connected ? "connected" : databaseState.message}`);
+        console.log(`Database status (${databaseState.driver || "postgres"}): ${databaseState.connected ? "connected" : databaseState.message}`);
         resolve(server);
       };
 
@@ -2480,19 +2534,20 @@ async function initializeDatabaseLayerWithTimeout() {
       initializeDatabaseLayer(),
       new Promise((_, reject) => {
         timeoutId = setTimeout(() => {
-          reject(new Error(`MySQL initialization timed out after ${DB_INIT_TIMEOUT_MS}ms.`));
+          reject(new Error(`PostgreSQL/Neon initialization timed out after ${DB_INIT_TIMEOUT_MS}ms.`));
         }, DB_INIT_TIMEOUT_MS);
       })
     ]);
   } catch (error) {
     databaseClient = null;
     databaseState = {
-      configured: Boolean(DB_HOST && DB_DATABASE && DB_USERNAME),
+      configured: Boolean(DATABASE_URL || (DB_HOST && DB_DATABASE && DB_USERNAME)),
       connected: false,
+      driver: "postgres",
       host: DB_HOST,
       port: DB_PORT,
       database: DB_DATABASE,
-      message: String(error?.message || "Failed to initialize MySQL.")
+      message: String(error?.message || "Failed to initialize PostgreSQL/Neon.")
     };
     console.error(`[mullem] database init warning: ${databaseState.message}`);
   } finally {
