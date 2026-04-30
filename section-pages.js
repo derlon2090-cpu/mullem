@@ -835,11 +835,33 @@
     return isAuthenticated() ? Math.max(0, Number(state.currentUser.xp || 0)) : 2450;
   }
 
+  function getUserPackageLabel(user = state.currentUser) {
+    if (!user) return "الباقة المجانية";
+    const values = [
+      user.packageKey,
+      user.planType,
+      user.plan_type,
+      user.package,
+      user.package_name,
+      user.packageName
+    ].map((value) => String(value || "").trim()).filter(Boolean);
+    const normalized = values.join(" ").toLowerCase();
+    if (/pro[_\s-]?max|pioneer|الرائد/.test(normalized)) return "باقة الرائد";
+    if (/pro[_\s-]?plus|plus|tuwaiq|طويق|بلس/.test(normalized)) return "باقة طويق";
+    if (/(^|\s)pro(\s|$)|spark|شرارة|nano|نانو/.test(normalized)) return "باقة شرارة";
+    if (/starter|free|مجاني|مجانية|محدود/.test(normalized)) return "الباقة المجانية";
+
+    const displayName = String(user.package || user.package_name || user.packageName || "").trim();
+    if (!displayName) return "الباقة المجانية";
+    if (/^باقة|^الباقة/.test(displayName)) return displayName;
+    return `باقة ${displayName}`;
+  }
+
   function getUserCardMeta() {
     if (isAuthenticated()) {
       return {
         title: state.currentUser.name,
-        subtitle: "عضو مميز",
+        subtitle: getUserPackageLabel(state.currentUser),
         action: "الإعدادات",
         guest: false
       };
@@ -1117,6 +1139,7 @@
   function renderSettingsModal() {
     const userName = String(state.currentUser?.name || "ضيف").trim() || "ضيف";
     const firstLetter = userName.slice(0, 1);
+    const packageLabel = getUserPackageLabel(state.currentUser);
     const settings = state.settings[state.section] || {};
     const modalTabs = [
       ["عام", "settings"],
@@ -1140,7 +1163,7 @@
               <span class="settings-avatar">${escapeHtml(firstLetter)}</span>
               <div>
                 <strong>${escapeHtml(userName)}</strong>
-                <span>عضو مميز</span>
+                <span>${escapeHtml(packageLabel)}</span>
               </div>
             </div>
 
