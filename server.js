@@ -1290,7 +1290,7 @@ async function handleRegister(req, res) {
 
   const existing = await databaseClient.findUserByEmail(email);
   if (existing) {
-    throw createHttpError(422, "This email is already registered.");
+    throw createHttpError(422, "الحساب موجود من قبل، يلزم تسجيل الدخول لدخول الحساب.");
   }
 
   const user = await databaseClient.createUser({

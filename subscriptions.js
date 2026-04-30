@@ -71,7 +71,7 @@ function getFallbackPackagesCatalog() {
   return [
     {
       id: "fallback-pro",
-      name: "نانو",
+      name: "شرارة",
       daily_xp: 80,
       price_sar: 9,
       duration_days: 30,
@@ -80,37 +80,37 @@ function getFallbackPackagesCatalog() {
       summary: "بداية ذكية وسعر بسيط للاستخدام اليومي الخفيف.",
       benefits: [
         "80 XP يوميًا لمدة شهر",
-        "مناسب للأسئلة اليومية القصيرة",
+        "9 ريال شهريًا",
         "حفظ المحادثات والمشروعات داخل الحساب"
       ]
     },
     {
       id: "fallback-pro-plus",
-      name: "بلس",
+      name: "طويق",
       daily_xp: 250,
       price_sar: 29,
       duration_days: 30,
       is_active: 1,
       is_default: 0,
-      summary: "الخطة الأكثر توازنًا بين الرصيد اليومي والسعر.",
+      summary: "ثبات وقوة للاستخدام المتوازن والمذاكرة اليومية.",
       benefits: [
         "250 XP يوميًا لمدة شهر",
-        "أفضل للمراجعة المتكررة والملفات المتوسطة",
+        "29 ريال شهريًا",
         "توازن أفضل بين السعر والاستخدام"
       ]
     },
     {
       id: "fallback-pro-max",
-      name: "برو",
+      name: "الرائد",
       daily_xp: 600,
       price_sar: 59,
       duration_days: 30,
       is_active: 1,
       is_default: 0,
-      summary: "أعلى رصيد يومي لتجربة مكثفة ومشروعات أكثر.",
+      summary: "لمن يريد الوصول لكل شيء بأعلى سرعة ورصيد يومي أكبر.",
       benefits: [
         "600 XP يوميًا لمدة شهر",
-        "مثالية للاستخدام المكثف ورفع الملفات",
+        "59 ريال شهريًا",
         "أفضل خيار للمواد الثقيلة والمشروعات"
       ]
     }

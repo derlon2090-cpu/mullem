@@ -2225,7 +2225,7 @@ body[data-workspace-mode="home"] .guest-root {
   z-index: 1450;
   display: grid;
   place-items: center;
-  padding: 26px;
+  padding: 28px;
 }
 
 .upgrade-gate-backdrop {
@@ -2240,14 +2240,14 @@ body[data-workspace-mode="home"] .guest-root {
 
 .upgrade-modal-card {
   position: relative;
-  width: min(1180px, calc(100vw - 58px));
+  width: min(1250px, calc(100vw - 58px));
   max-height: calc(100vh - 58px);
   overflow: auto;
-  padding: 42px 38px 0;
-  border: 1px solid rgba(111, 76, 255, 0.14);
-  border-radius: 22px;
+  padding: 36px 44px 0;
+  border: 1px solid rgba(111, 76, 255, 0.12);
+  border-radius: 24px;
   background:
-    radial-gradient(circle at 84% 14%, rgba(111, 76, 255, 0.1), transparent 34%),
+    radial-gradient(circle at 84% 12%, rgba(111, 76, 255, 0.12), transparent 32%),
     rgba(255, 255, 255, 0.98);
   box-shadow: 0 38px 110px rgba(23, 24, 42, 0.24);
   direction: rtl;
@@ -2272,7 +2272,7 @@ body[data-workspace-mode="home"] .guest-root {
   align-items: center;
   justify-content: flex-start;
   gap: 18px;
-  margin: 0 0 28px;
+  margin: 0 0 18px;
 }
 
 .upgrade-title-mark {
@@ -2288,7 +2288,7 @@ body[data-workspace-mode="home"] .guest-root {
 .upgrade-modal-head h2 {
   margin: 0;
   color: #171936;
-  font-size: clamp(1.75rem, 3vw, 2.55rem);
+  font-size: clamp(2rem, 3vw, 2.85rem);
   line-height: 1.15;
   font-weight: 900;
 }
@@ -2308,7 +2308,7 @@ body[data-workspace-mode="home"] .guest-root {
   width: max-content;
   max-width: 100%;
   min-height: 48px;
-  margin: -10px auto 28px;
+  margin: 8px auto 28px;
   padding: 5px;
   display: flex;
   align-items: center;
@@ -2363,9 +2363,9 @@ body[data-workspace-mode="home"] .guest-root {
 .upgrade-plan {
   position: relative;
   direction: rtl;
-  min-height: 560px;
-  padding: 28px;
-  border: 1px solid rgba(111, 76, 255, 0.12);
+  min-height: 520px;
+  padding: 30px 28px;
+  border: 1px solid rgba(111, 76, 255, 0.13);
   border-radius: 20px;
   background: rgba(255, 255, 255, 0.92);
   box-shadow: 0 22px 48px rgba(31, 44, 93, 0.05);
@@ -2398,6 +2398,7 @@ body[data-workspace-mode="home"] .guest-root {
   display: flex;
   align-items: center;
   gap: 18px;
+  min-height: 84px;
 }
 
 .upgrade-plan-icon {
@@ -2423,8 +2424,16 @@ body[data-workspace-mode="home"] .guest-root {
 .upgrade-plan h3 {
   margin: 0;
   color: #171936;
-  font-size: 1.45rem;
+  font-size: 1.58rem;
   font-weight: 900;
+}
+
+.upgrade-plan h3 small {
+  margin-inline-start: 6px;
+  color: inherit;
+  font-size: 0.84rem;
+  font-weight: 900;
+  opacity: 0.8;
 }
 
 .upgrade-plan p {
@@ -2435,7 +2444,7 @@ body[data-workspace-mode="home"] .guest-root {
 }
 
 .upgrade-price {
-  margin: 38px 0 26px;
+  margin: 26px 0 8px;
   color: #6a728f;
 }
 
@@ -2453,6 +2462,29 @@ body[data-workspace-mode="home"] .guest-root {
 
 .upgrade-plan:nth-child(2) .upgrade-price strong {
   color: #3289f4;
+}
+
+.upgrade-plan-xp {
+  display: inline-flex;
+  align-items: center;
+  min-height: 34px;
+  margin: 0 0 22px !important;
+  padding: 0 14px;
+  border-radius: 999px;
+  color: #684cff !important;
+  background: rgba(111, 76, 255, 0.09);
+  font-size: 0.84rem !important;
+  font-weight: 900 !important;
+}
+
+.upgrade-plan.is-green .upgrade-plan-xp {
+  color: #138d76 !important;
+  background: rgba(38, 199, 143, 0.11);
+}
+
+.upgrade-plan.is-blue .upgrade-plan-xp {
+  color: #3289f4 !important;
+  background: rgba(50, 137, 244, 0.1);
 }
 
 .upgrade-plan-action {
@@ -2481,7 +2513,7 @@ body[data-workspace-mode="home"] .guest-root {
 }
 
 .upgrade-plan ul {
-  margin: 26px 0 0;
+  margin: 24px 0 0;
   padding: 0;
   display: grid;
   gap: 17px;
@@ -2506,8 +2538,8 @@ body[data-workspace-mode="home"] .guest-root {
 }
 
 .upgrade-modal-foot {
-  margin: 34px -38px 0;
-  padding: 22px 38px;
+  margin: 34px -44px 0;
+  padding: 22px 44px;
   border-top: 1px solid rgba(111, 76, 255, 0.08);
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));

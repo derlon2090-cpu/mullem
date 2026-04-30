@@ -1438,59 +1438,64 @@
 
   function renderUpgradeModal() {
     if (!state.upgradeModalOpen) return "";
+    const currentPlanKey = String(state.currentUser?.packageKey || state.currentUser?.planType || state.currentUser?.plan_type || "").trim();
 
     const plans = [
       {
-        key: "basic",
-        title: "إمكانيات أساسية",
-        subtitle: "لبداية ذكية وسريعة",
-        price: "35",
-        unit: "ر.س / شهر",
-        icon: icons.sparkle,
-        action: "الترقية إلى إمكانيات أساسية",
-        note: "",
-        benefits: [
-          "الوصول إلى النماذج الأساسية",
-          "رسائل وتحليلات غير محدودة",
-          "إنشاء الصور الأساسية",
-          "ذاكرة قياسية للمحادثات",
-          "إجابات دقيقة وسريعة"
-        ]
-      },
-      {
-        key: "plus",
-        title: "إمكانيات بلس",
-        subtitle: "تجربة متكاملة لكل احتياجاتك",
-        price: "90",
-        unit: "ر.س / شهر",
-        icon: icons.document,
-        action: "خطتك الحالية",
-        note: "current",
-        benefits: [
-          "الوصول إلى جميع النماذج المتقدمة",
-          "إنشاء صور متقدم باستخدام الذكاء الاصطناعي",
-          "ذاكرة موسعة للمحادثات",
-          "كتابة الأكواد وتحليلها باحترافية",
-          "بحث أعمق عبر البحث المتعمق",
-          "أولوية في الأداء والاستجابة"
-        ]
-      },
-      {
         key: "pro",
-        title: "إمكانيات Pro",
-        subtitle: "لمن يريد تجربة بلا حدود",
-        price: "430",
+        title: "شرارة",
+        english: "Spark",
+        subtitle: "بداية ذكية وسعر بسيط",
+        price: "9",
         unit: "ر.س / شهر",
+        xp: "80 XP يوميًا",
+        icon: icons.sparkle,
+        action: "اختيار باقة شرارة",
+        accent: "green",
+        benefits: [
+          "80 XP يتجدد يوميًا لمدة شهر",
+          "9 ريال شهريًا فقط",
+          "مناسبة للبداية والأسئلة اليومية",
+          "حفظ الدردشات داخل حسابك",
+          "خصم 10 XP للرسالة و15 XP للصورة"
+        ]
+      },
+      {
+        key: "pro_plus",
+        title: "طويق",
+        english: "Tuwaiq",
+        subtitle: "ثبات وقوة وطموح",
+        price: "29",
+        unit: "ر.س / شهر",
+        xp: "250 XP يوميًا",
+        icon: icons.document,
+        action: "اختيار باقة طويق",
+        accent: "blue",
+        benefits: [
+          "250 XP يتجدد يوميًا لمدة شهر",
+          "29 ريال شهريًا",
+          "مناسبة للمذاكرة والمواد المتعددة",
+          "ذاكرة أفضل للمحادثات المحفوظة",
+          "توازن ممتاز بين السعر والاستخدام"
+        ]
+      },
+      {
+        key: "pro_max",
+        title: "الرائد",
+        english: "Pioneer",
+        subtitle: "لمن يريد الوصول لكل شيء",
+        price: "59",
+        unit: "ر.س / شهر",
+        xp: "600 XP يوميًا",
         icon: icons.star,
-        action: "الترقية إلى إمكانيات Pro",
+        action: "اختيار باقة الرائد",
         featured: true,
         benefits: [
-          "استخدام غير محدود لجميع النماذج المتقدمة",
-          "إنشاء صور متقدمة بجودة عالية وسرعة أكبر",
-          "وصول إلى أقصى قدر من الإنتاجية",
-          "بحث أعمق ونتائج أدق من البحث المتعمق",
-          "سياق أطول وذاكرة أكبر للمحادثات",
-          "أولوية في الأداء والدعم والاستجابة"
+          "600 XP يتجدد يوميًا لمدة شهر",
+          "59 ريال شهريًا",
+          "أعلى سرعة ورصيد يومي أكبر",
+          "مناسب للمشروعات والملفات الثقيلة",
+          "أفضل خيار للاستخدام المكثف"
         ]
       }
     ];
@@ -1517,12 +1522,12 @@
 
           <div class="upgrade-plans">
             ${plans.map((plan) => `
-              <article class="upgrade-plan ${plan.featured ? "is-featured" : ""}">
-                ${plan.featured ? '<strong class="upgrade-best">الأفضل قيمة ★</strong>' : ""}
+              <article class="upgrade-plan ${plan.featured ? "is-featured" : ""} ${plan.accent ? `is-${plan.accent}` : ""}">
+                ${plan.featured ? '<strong class="upgrade-best">الأكثر شعبية ★</strong>' : ""}
                 <div class="upgrade-plan-head">
-                  <span class="upgrade-plan-icon">${plan.icon}</span>
+                  <span class="upgrade-plan-icon" aria-hidden="true">${plan.icon}</span>
                   <div>
-                    <h3>${escapeHtml(plan.title)}</h3>
+                    <h3>${escapeHtml(plan.title)} <small>${escapeHtml(plan.english)}</small></h3>
                     <p>${escapeHtml(plan.subtitle)}</p>
                   </div>
                 </div>
@@ -1530,8 +1535,9 @@
                   <strong>${escapeHtml(plan.price)}</strong>
                   <span>${escapeHtml(plan.unit)}</span>
                 </div>
-                <button class="upgrade-plan-action ${plan.note === "current" ? "is-current" : ""}" type="button" data-select-plan="${escapeHtml(plan.key)}">
-                  ${escapeHtml(plan.action)}
+                <p class="upgrade-plan-xp">${escapeHtml(plan.xp)}</p>
+                <button class="upgrade-plan-action ${currentPlanKey === plan.key ? "is-current" : ""}" type="button" data-select-plan="${escapeHtml(plan.key)}">
+                  ${currentPlanKey === plan.key ? "خطتك الحالية" : escapeHtml(plan.action)}
                 </button>
                 <ul>
                   ${plan.benefits.map((item) => `<li>${icons.sparkle}<span>${escapeHtml(item)}</span></li>`).join("")}
@@ -1541,9 +1547,9 @@
           </div>
 
           <footer class="upgrade-modal-foot">
-            <span>${icons.lock}<b>ضمان استرداد الأموال خلال 7 أيام</b><small>تجربة خالية من المخاطر</small></span>
+            <span>${icons.lock}<b>ضمان استرداد خلال 24 ساعة</b><small>في حال وجود خلل تقني فقط</small></span>
             <span>${icons.shield || icons.star}<b>ترقية آمنة وموثوقة</b><small>بياناتك محمية دائمًا</small></span>
-            <span>${icons.sparkle}<b>إلغاء في أي وقت</b><small>بدون أي رسوم خفية</small></span>
+            <span>${icons.sparkle}<b>تجدد يومي للرصيد</b><small>كل باقة تمنح XP يوميًا حسب حدها</small></span>
           </footer>
         </section>
       </div>

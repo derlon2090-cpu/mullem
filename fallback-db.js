@@ -21,12 +21,12 @@ const DEFAULT_PACKAGES = [
   {
     id: 2,
     package_key: "pro",
-    display_name: "نانو",
+    display_name: "شرارة",
     daily_xp: 80,
     price_sar: 9,
     duration_days: 30,
-    summary: "باقة شهرية خفيفة لبداية ذكية وسعر بسيط.",
-    benefits: ["80 XP يوميًا", "مناسبة للأسئلة اليومية القصيرة", "تجديد يومي للرصيد"],
+    summary: "بداية ذكية وسعر بسيط للاستخدام اليومي الخفيف.",
+    benefits: ["80 XP يوميًا", "9 ريال شهريًا", "حفظ المحادثات والمشروعات داخل الحساب"],
     is_active: 1,
     is_default: 0,
     sort_order: 2
@@ -34,12 +34,12 @@ const DEFAULT_PACKAGES = [
   {
     id: 3,
     package_key: "pro_plus",
-    display_name: "بلس",
+    display_name: "طويق",
     daily_xp: 250,
     price_sar: 29,
     duration_days: 30,
-    summary: "باقة متوازنة للمذاكرة اليومية والمشروعات.",
-    benefits: ["250 XP يوميًا", "مناسبة للمذاكرة والملفات المتوسطة", "تجديد يومي للرصيد"],
+    summary: "ثبات وقوة للاستخدام المتوازن والمذاكرة اليومية.",
+    benefits: ["250 XP يوميًا", "29 ريال شهريًا", "توازن أفضل بين السعر والاستخدام"],
     is_active: 1,
     is_default: 0,
     sort_order: 3
@@ -47,12 +47,12 @@ const DEFAULT_PACKAGES = [
   {
     id: 4,
     package_key: "pro_max",
-    display_name: "برو",
+    display_name: "الرائد",
     daily_xp: 600,
     price_sar: 59,
     duration_days: 30,
-    summary: "أعلى باقة شهرية لمن يريد استخدامًا مكثفًا وسرعة أكبر.",
-    benefits: ["600 XP يوميًا", "أفضل خيار للاستخدام المكثف", "مناسبة للمشروعات الكبيرة"],
+    summary: "لمن يريد الوصول لكل شيء بأعلى سرعة ورصيد يومي أكبر.",
+    benefits: ["600 XP يوميًا", "59 ريال شهريًا", "مناسبة للمشروعات والمواد المتعددة"],
     is_active: 1,
     is_default: 0,
     sort_order: 4
@@ -131,6 +131,7 @@ function createFallbackDatabaseClient() {
         ...parsed,
         counters: { ...createEmptyState().counters, ...(parsed.counters || {}) }
       };
+      syncDefaultPackages();
     } catch (_) {
       data = createEmptyState();
       persist();
@@ -139,6 +140,34 @@ function createFallbackDatabaseClient() {
 
   function persist() {
     fs.writeFileSync(FALLBACK_FILE, toJson(data), "utf8");
+  }
+
+  function syncDefaultPackages() {
+    const existingPackages = Array.isArray(data.packages) ? data.packages : [];
+    const nextPackages = [...existingPackages];
+    for (const defaultPackage of DEFAULT_PACKAGES) {
+      const index = nextPackages.findIndex((item) =>
+        String(item.package_key || "").trim().toLowerCase() === String(defaultPackage.package_key).toLowerCase()
+      );
+      if (index === -1) {
+        nextPackages.push(clone(defaultPackage));
+      } else {
+        nextPackages[index] = {
+          ...nextPackages[index],
+          ...clone(defaultPackage),
+          id: nextPackages[index].id || defaultPackage.id
+        };
+      }
+    }
+    data.packages = nextPackages.sort((a, b) =>
+      Number(a.sort_order || 0) - Number(b.sort_order || 0) ||
+      Number(a.id || 0) - Number(b.id || 0)
+    );
+    data.counters.packages = Math.max(
+      Number(data.counters.packages || 1),
+      ...data.packages.map((item) => Number(item.id || 0) + 1)
+    );
+    persist();
   }
 
   function nextId(key) {
@@ -164,9 +193,15 @@ function createFallbackDatabaseClient() {
     const aliasMap = {
       "نانو": "pro",
       nano: "pro",
+      "شرارة": "pro",
+      spark: "pro",
       "بلس": "pro_plus",
+      "طويق": "pro_plus",
+      tuwaiq: "pro_plus",
       plus: "pro_plus",
       "برو": "pro_max",
+      "الرائد": "pro_max",
+      pioneer: "pro_max",
       "برو بلس": "pro_plus",
       "برو ماكس": "pro_max"
     };

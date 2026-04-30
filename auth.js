@@ -710,7 +710,7 @@ registerForm?.addEventListener("submit", async (event) => {
   }
 
   const registerMessage = apiResult.message || "تعذر إنشاء الحساب الآن. تحقق من البيانات ثم حاول مرة أخرى.";
-  if (/already registered|مسجل مسبق/i.test(registerMessage)) {
+  if (/already registered|مسجل مسبق|الحساب موجود/i.test(registerMessage)) {
     const message = "الحساب موجود من قبل، يلزم تسجيل الدخول لدخول الحساب.";
     setInlineError(registerError, message);
     setState(message);

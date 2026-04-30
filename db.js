@@ -200,14 +200,14 @@ const DEFAULT_PACKAGE_CATALOG = [
   },
   {
     package_key: "pro",
-    display_name: "نانو",
+    display_name: "شرارة",
     daily_xp: 80,
     price_sar: 9,
     duration_days: 30,
-    summary: "باقة شهرية خفيفة لبداية ذكية وسعر بسيط.",
+    summary: "بداية ذكية وسعر بسيط للاستخدام اليومي الخفيف.",
     benefits: [
       "80 XP يتجدد يوميًا",
-      "مناسبة للأسئلة اليومية القصيرة",
+      "9 ريال شهريًا",
       "حفظ المحادثات والمشروعات داخل الحساب"
     ],
     is_active: 1,
@@ -216,14 +216,14 @@ const DEFAULT_PACKAGE_CATALOG = [
   },
   {
     package_key: "pro_plus",
-    display_name: "بلس",
+    display_name: "طويق",
     daily_xp: 250,
     price_sar: 29,
     duration_days: 30,
-    summary: "باقة متوازنة للمذاكرة اليومية والمشروعات.",
+    summary: "ثبات وقوة للاستخدام المتوازن والمذاكرة اليومية.",
     benefits: [
       "250 XP يتجدد يوميًا",
-      "مناسبة للمذاكرة والملفات المتوسطة",
+      "29 ريال شهريًا",
       "توازن أفضل بين السعر والاستخدام"
     ],
     is_active: 1,
@@ -232,14 +232,14 @@ const DEFAULT_PACKAGE_CATALOG = [
   },
   {
     package_key: "pro_max",
-    display_name: "برو",
+    display_name: "الرائد",
     daily_xp: 600,
     price_sar: 59,
     duration_days: 30,
-    summary: "أعلى باقة شهرية لمن يريد استخدامًا مكثفًا وسرعة أكبر.",
+    summary: "لمن يريد الوصول لكل شيء بأعلى سرعة ورصيد يومي أكبر.",
     benefits: [
       "600 XP يتجدد يوميًا",
-      "أفضل خيار للاستخدام المكثف",
+      "59 ريال شهريًا",
       "مناسبة للمشروعات والمواد المتعددة"
     ],
     is_active: 1,
@@ -1140,13 +1140,19 @@ function createDatabaseClient(rawConfig = {}) {
       starter: "starter",
       "نانو": "pro",
       "nano": "pro",
+      "شرارة": "pro",
+      "spark": "pro",
       pro: "pro",
       "بلس": "pro_plus",
+      "طويق": "pro_plus",
+      "tuwaiq": "pro_plus",
       "plus": "pro_plus",
       "برو بلس": "pro_plus",
       "pro plus": "pro_plus",
       pro_plus: "pro_plus",
       "برو": "pro_max",
+      "الرائد": "pro_max",
+      "pioneer": "pro_max",
       "برو ماكس": "pro_max",
       "pro max": "pro_max",
       pro_max: "pro_max"
