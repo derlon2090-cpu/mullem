@@ -2743,6 +2743,318 @@ body[data-workspace-mode="home"] .guest-root {
   }
 }
 
+@media (min-width: 981px) {
+  .upgrade-gate {
+    padding: 22px;
+  }
+
+  .upgrade-modal-card {
+    width: min(1180px, calc(100vw - 44px));
+    height: min(760px, calc(100dvh - 44px));
+    max-height: calc(100dvh - 44px);
+    overflow: hidden;
+    padding: 24px 26px 0;
+    border-radius: 22px;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .upgrade-close-btn {
+    top: 24px;
+    left: 24px;
+    width: 42px;
+    height: 42px;
+    border-radius: 12px;
+    font-size: 1.35rem;
+  }
+
+  .upgrade-modal-head {
+    min-height: 58px;
+    margin: 0 0 10px;
+    padding-inline-start: 64px;
+  }
+
+  .upgrade-title-mark {
+    width: 48px;
+    height: 48px;
+    border-radius: 15px;
+  }
+
+  .upgrade-title-mark svg,
+  .upgrade-plan-icon svg,
+  .upgrade-modal-foot svg {
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 1.9;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+
+  .upgrade-modal-head h2 {
+    font-size: clamp(1.9rem, 2.5vw, 2.35rem);
+  }
+
+  .upgrade-modal-head p {
+    margin-top: 4px;
+    font-size: 0.86rem;
+  }
+
+  .upgrade-period-tabs {
+    min-height: 40px;
+    margin: 6px auto 18px;
+    padding: 4px;
+  }
+
+  .upgrade-period-tabs button,
+  .upgrade-period-tabs span,
+  .upgrade-period-tabs b {
+    min-width: 82px;
+    min-height: 30px;
+    padding: 0 12px;
+    font-size: 0.72rem;
+  }
+
+  .upgrade-period-tabs span {
+    min-width: 62px;
+  }
+
+  .upgrade-plans {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 12px;
+    flex: 1 1 auto;
+    min-height: 0;
+  }
+
+  .upgrade-plan {
+    min-height: 0;
+    padding: 18px 18px 16px;
+    border-radius: 18px;
+    display: flex;
+    flex-direction: column;
+    box-shadow: 0 18px 44px rgba(31, 44, 93, 0.045);
+  }
+
+  .upgrade-best {
+    top: 14px;
+    left: 14px;
+    min-height: 24px;
+    padding: 0 10px;
+    font-size: 0.62rem;
+  }
+
+  .upgrade-plan-head {
+    min-height: 56px;
+    gap: 12px;
+  }
+
+  .upgrade-plan-icon {
+    width: 50px;
+    height: 50px;
+  }
+
+  .upgrade-plan.is-free .upgrade-plan-icon {
+    color: #16a77b;
+    background: rgba(38, 199, 143, 0.12);
+  }
+
+  .upgrade-plan.is-green .upgrade-plan-icon {
+    color: #15946c;
+    background: rgba(37, 199, 111, 0.13);
+  }
+
+  .upgrade-plan.is-blue .upgrade-plan-icon {
+    color: #3289f4;
+    background: rgba(50, 137, 244, 0.12);
+  }
+
+  .upgrade-plan.is-featured .upgrade-plan-icon {
+    color: #684cff;
+    background: rgba(111, 76, 255, 0.14);
+  }
+
+  .upgrade-plan h3 {
+    font-size: 1.18rem;
+  }
+
+  .upgrade-plan h3 small {
+    display: block;
+    margin: 2px 0 0;
+    font-size: 0.66rem;
+  }
+
+  .upgrade-plan p {
+    margin-top: 4px;
+    font-size: 0.72rem;
+    line-height: 1.45;
+  }
+
+  .upgrade-price {
+    margin: 16px 0 6px;
+  }
+
+  .upgrade-price strong {
+    font-size: clamp(2.2rem, 3.2vw, 3rem);
+  }
+
+  .upgrade-plan.is-free .upgrade-price strong,
+  .upgrade-plan.is-green .upgrade-price strong {
+    color: #148968;
+  }
+
+  .upgrade-plan.is-blue .upgrade-price strong {
+    color: #3289f4;
+  }
+
+  .upgrade-plan-xp {
+    min-height: 30px;
+    margin-bottom: 12px !important;
+    padding: 0 12px;
+    font-size: 0.72rem !important;
+  }
+
+  .upgrade-plan.is-free .upgrade-plan-xp,
+  .upgrade-plan.is-green .upgrade-plan-xp {
+    color: #138d76 !important;
+    background: rgba(38, 199, 143, 0.11);
+  }
+
+  .upgrade-plan-action {
+    min-height: 40px;
+    font-size: 0.78rem;
+  }
+
+  .upgrade-plan ul {
+    margin: 14px 0 0;
+    gap: 7px;
+  }
+
+  .upgrade-plan li {
+    gap: 8px;
+    font-size: 0.72rem;
+    line-height: 1.35;
+  }
+
+  .upgrade-plan li svg {
+    width: 15px;
+    height: 15px;
+  }
+
+  .upgrade-modal-foot {
+    margin: 16px -26px 0;
+    padding: 12px 26px;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 12px;
+  }
+
+  .upgrade-modal-foot span {
+    grid-template-columns: 34px 1fr;
+    gap: 2px 10px;
+  }
+
+  .upgrade-modal-foot svg {
+    width: 34px;
+    height: 34px;
+    padding: 9px;
+  }
+
+  .upgrade-modal-foot b {
+    font-size: 0.76rem;
+  }
+
+  .upgrade-modal-foot small {
+    font-size: 0.68rem;
+  }
+}
+
+@media (min-width: 981px) and (max-height: 790px) {
+  .upgrade-gate {
+    padding: 12px;
+  }
+
+  .upgrade-modal-card {
+    width: min(1160px, calc(100vw - 24px));
+    height: calc(100dvh - 24px);
+    max-height: calc(100dvh - 24px);
+    padding: 18px 22px 0;
+  }
+
+  .upgrade-modal-head {
+    min-height: 48px;
+    margin-bottom: 6px;
+  }
+
+  .upgrade-title-mark {
+    width: 42px;
+    height: 42px;
+  }
+
+  .upgrade-modal-head h2 {
+    font-size: 1.8rem;
+  }
+
+  .upgrade-modal-head p {
+    font-size: 0.78rem;
+  }
+
+  .upgrade-period-tabs {
+    margin-bottom: 12px;
+  }
+
+  .upgrade-plan {
+    padding: 14px 14px 12px;
+  }
+
+  .upgrade-plan-head {
+    min-height: 48px;
+  }
+
+  .upgrade-plan-icon {
+    width: 44px;
+    height: 44px;
+  }
+
+  .upgrade-plan h3 {
+    font-size: 1.02rem;
+  }
+
+  .upgrade-plan p {
+    font-size: 0.66rem;
+  }
+
+  .upgrade-price {
+    margin-top: 10px;
+  }
+
+  .upgrade-price strong {
+    font-size: 2.25rem;
+  }
+
+  .upgrade-plan-xp {
+    min-height: 27px;
+    margin-bottom: 9px !important;
+    font-size: 0.66rem !important;
+  }
+
+  .upgrade-plan-action {
+    min-height: 36px;
+  }
+
+  .upgrade-plan ul {
+    margin-top: 10px;
+    gap: 5px;
+  }
+
+  .upgrade-plan li {
+    font-size: 0.66rem;
+    line-height: 1.28;
+  }
+
+  .upgrade-modal-foot {
+    margin: 10px -22px 0;
+    padding: 9px 22px;
+  }
+}
+
 @media (max-width: 1320px) {
   .guest-shell {
     grid-template-columns: 248px minmax(0, 1fr);
