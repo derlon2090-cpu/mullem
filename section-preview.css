@@ -1016,39 +1016,90 @@ body[data-workspace-mode="home"] .guest-root {
 }
 
 .guest-shell.is-home-workspace .guest-messages {
-  gap: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 28px;
+  min-height: 100%;
 }
 
 .guest-shell.is-home-workspace .guest-message.user {
-  max-width: min(62%, 620px);
-  padding: 13px 16px;
-  border-radius: 11px;
-  font-size: 0.88rem;
+  align-self: flex-end;
+  min-width: 52px;
+  width: fit-content;
+  max-width: min(70%, 560px);
+  min-height: 52px;
+  padding: 0 18px;
+  border-radius: 999px;
+  border-top-left-radius: 999px;
+  display: inline-grid;
+  place-items: center;
+  background: #f2f2f4;
+  color: #111827;
+  box-shadow: none;
+  font-size: 0.94rem;
+  font-weight: 700;
+  line-height: 1.6;
 }
 
 .guest-shell.is-home-workspace .guest-message.assistant {
-  grid-template-columns: 30px minmax(0, 1fr);
-  gap: 12px;
+  grid-template-columns: 34px minmax(0, 1fr);
+  gap: 16px;
+  align-self: stretch;
+  max-width: 100%;
 }
 
 .guest-shell.is-home-workspace .guest-message-mark {
-  width: 30px;
-  height: 30px;
+  width: 34px;
+  height: 34px;
 }
 
 .guest-shell.is-home-workspace .guest-message-body {
-  border-radius: 10px;
-  padding: 18px 20px 16px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  padding: 2px 0 0;
 }
 
 .guest-shell.is-home-workspace .guest-message-body h3 {
-  margin-bottom: 10px;
-  font-size: 0.98rem;
+  display: none;
 }
 
 .guest-shell.is-home-workspace .guest-message-body ul {
-  font-size: 0.86rem;
-  line-height: 1.9;
+  color: #111827;
+  font-size: 1rem;
+  line-height: 1.85;
+  padding-inline-start: 1.25rem;
+  max-width: 820px;
+}
+
+.guest-shell.is-home-workspace .guest-message-actions {
+  justify-content: flex-end;
+  margin-top: 18px;
+  max-width: 820px;
+}
+
+.guest-shell.is-home-workspace .ghost-action {
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+  color: #616161;
+}
+
+.guest-shell.theme-dark.is-home-workspace .guest-message.user {
+  background: rgba(255, 255, 255, 0.1);
+  color: #f7f7ff;
+}
+
+.guest-shell.theme-dark.is-home-workspace .guest-message-body,
+.guest-shell.theme-dark.is-home-workspace .guest-conversation-card,
+.guest-shell.theme-dark.is-home-workspace .guest-conversation-card.is-home-conversation {
+  background: transparent;
+  border-color: transparent;
+}
+
+.guest-shell.theme-dark.is-home-workspace .guest-message-body ul {
+  color: #f4f5ff;
 }
 
 .guest-shell.is-home-workspace .guest-compose {
@@ -1240,8 +1291,11 @@ body[data-workspace-mode="home"] .guest-root {
   max-width: 1080px;
   width: min(100%, 1080px);
   align-self: stretch;
-  border-radius: 18px;
-  padding: 20px 22px 18px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  padding: 8px clamp(18px, 4vw, 54px) 18px;
 }
 
 .guest-shell.is-home-workspace .home-orlixor-main.is-chatting .home-compose {
@@ -1308,6 +1362,12 @@ body[data-workspace-mode="home"] .guest-root {
 .guest-shell.is-home-workspace .guest-conversation-card {
   grid-row: 4;
   align-self: stretch;
+}
+
+.guest-shell.is-home-workspace .guest-conversation-card.is-home-conversation {
+  border: 0;
+  background: transparent;
+  box-shadow: none;
 }
 
 .guest-shell.is-home-workspace .guest-attachment-pills {
