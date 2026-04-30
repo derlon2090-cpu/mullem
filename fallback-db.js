@@ -21,12 +21,12 @@ const DEFAULT_PACKAGES = [
   {
     id: 2,
     package_key: "pro",
-    display_name: "برو",
-    daily_xp: 200,
-    price_sar: 30,
+    display_name: "نانو",
+    daily_xp: 80,
+    price_sar: 9,
     duration_days: 30,
-    summary: "باقة شهرية خفيفة للاستخدام المنتظم.",
-    benefits: ["200 XP يوميًا", "مناسبة للمذاكرة اليومية", "تجديد يومي للرصيد"],
+    summary: "باقة شهرية خفيفة لبداية ذكية وسعر بسيط.",
+    benefits: ["80 XP يوميًا", "مناسبة للأسئلة اليومية القصيرة", "تجديد يومي للرصيد"],
     is_active: 1,
     is_default: 0,
     sort_order: 2
@@ -34,12 +34,12 @@ const DEFAULT_PACKAGES = [
   {
     id: 3,
     package_key: "pro_plus",
-    display_name: "برو بلس",
-    daily_xp: 500,
-    price_sar: 60,
+    display_name: "بلس",
+    daily_xp: 250,
+    price_sar: 29,
     duration_days: 30,
-    summary: "باقة شهرية أوسع للاستخدام المكثف.",
-    benefits: ["500 XP يوميًا", "مناسبة للمشروعات والمواد المتعددة", "تجديد يومي للرصيد"],
+    summary: "باقة متوازنة للمذاكرة اليومية والمشروعات.",
+    benefits: ["250 XP يوميًا", "مناسبة للمذاكرة والملفات المتوسطة", "تجديد يومي للرصيد"],
     is_active: 1,
     is_default: 0,
     sort_order: 3
@@ -47,12 +47,12 @@ const DEFAULT_PACKAGES = [
   {
     id: 4,
     package_key: "pro_max",
-    display_name: "برو ماكس",
-    daily_xp: 1000,
-    price_sar: 100,
+    display_name: "برو",
+    daily_xp: 600,
+    price_sar: 59,
     duration_days: 30,
-    summary: "أعلى باقة شهرية للاستخدام المكثف والدعم اليومي.",
-    benefits: ["1000 XP يوميًا", "أفضل خيار للاستخدام المكثف", "مناسبة للمشروعات الكبيرة"],
+    summary: "أعلى باقة شهرية لمن يريد استخدامًا مكثفًا وسرعة أكبر.",
+    benefits: ["600 XP يوميًا", "أفضل خيار للاستخدام المكثف", "مناسبة للمشروعات الكبيرة"],
     is_active: 1,
     is_default: 0,
     sort_order: 4
@@ -161,8 +161,18 @@ function createFallbackDatabaseClient() {
   function findPackageByKeyOrNameSync(value) {
     const normalized = String(value || "").trim().toLowerCase();
     if (!normalized) return null;
+    const aliasMap = {
+      "نانو": "pro",
+      nano: "pro",
+      "بلس": "pro_plus",
+      plus: "pro_plus",
+      "برو": "pro_max",
+      "برو بلس": "pro_plus",
+      "برو ماكس": "pro_max"
+    };
+    const packageKey = aliasMap[normalized] || normalized;
     return listPackagesSync(true).find((item) => {
-      return String(item.package_key || "").trim().toLowerCase() === normalized
+      return String(item.package_key || "").trim().toLowerCase() === packageKey
         || String(item.display_name || "").trim().toLowerCase() === normalized;
     }) || null;
   }
@@ -192,6 +202,7 @@ function createFallbackDatabaseClient() {
       package_id: targetPackage.id,
       package_key: targetPackage.package_key,
       package_name: targetPackage.display_name,
+      plan_type: targetPackage.package_key,
       package_daily_xp: Number(targetPackage.daily_xp || 0),
       package_price_sar: Number(targetPackage.price_sar || 0),
       package_duration_days: Number(targetPackage.duration_days || 0),
@@ -302,9 +313,11 @@ function createFallbackDatabaseClient() {
       grade: String(payload.grade || "").trim(),
       subject: String(payload.subject || "").trim(),
       xp: Number.isFinite(Number(payload.xp)) ? Number(payload.xp) : 50,
+      total_xp: Number.isFinite(Number(payload.total_xp ?? payload.xp)) ? Number(payload.total_xp ?? payload.xp) : 50,
       streak_days: Number(payload.streak_days || 0),
       motivation_score: Number(payload.motivation_score || 0),
       last_active_date: payload.last_active_date || null,
+      last_reset: payload.last_reset || payload.last_active_date || null,
       achievements: Array.isArray(payload.achievements) ? payload.achievements : [],
       status: String(payload.status || "active").trim().toLowerCase() || "active",
       activity: String(payload.activity || "").trim(),
@@ -334,6 +347,9 @@ function createFallbackDatabaseClient() {
       ...changes,
       updated_at: nowIso()
     };
+    if ("xp" in changes && !("total_xp" in changes)) next.total_xp = changes.xp;
+    if ("total_xp" in changes && !("xp" in changes)) next.xp = changes.total_xp;
+    if ("last_active_date" in changes && !("last_reset" in changes)) next.last_reset = changes.last_active_date;
     if ("package_id" in changes || "package_key" in changes || "package_name" in changes) {
       const pkg = changes.package_id
         ? findPackageByIdSync(changes.package_id)

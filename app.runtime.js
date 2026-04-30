@@ -86,39 +86,39 @@
   const fallbackRuntimePackages = [
     {
       key: "pro",
-      name: "برو",
-      daily_xp: 200,
-      price_sar: 30,
+      name: "نانو",
+      daily_xp: 80,
+      price_sar: 9,
       duration_days: 30,
-      summary: "مناسبة للاستخدام اليومي الخفيف مع رصيد ثابت كل يوم.",
+      summary: "بداية ذكية وسعر بسيط للاستخدام اليومي الخفيف.",
       benefits: [
-        "200 XP يوميًا لمدة شهر",
-        "أفضل للحل السريع والمتابعة المستمرة",
-        "مناسبة لطالب يعتمد على الشات يوميًا"
+        "80 XP يوميًا لمدة شهر",
+        "مناسبة للأسئلة اليومية القصيرة",
+        "حفظ المحادثات والمشروعات داخل الحساب"
       ]
     },
     {
       key: "pro_plus",
-      name: "برو بلس",
-      daily_xp: 500,
-      price_sar: 60,
+      name: "بلس",
+      daily_xp: 250,
+      price_sar: 29,
       duration_days: 30,
       summary: "الخطة الأكثر توازنًا بين الرصيد اليومي والسعر.",
       benefits: [
-        "500 XP يوميًا لمدة شهر",
+        "250 XP يوميًا لمدة شهر",
         "مريحة للدروس والمراجعات المتكررة",
-        "الأفضل لمعظم الطلاب"
+        "توازن أفضل بين السعر والاستخدام"
       ]
     },
     {
       key: "pro_max",
-      name: "برو ماكس",
-      daily_xp: 1000,
-      price_sar: 100,
+      name: "برو",
+      daily_xp: 600,
+      price_sar: 59,
       duration_days: 30,
       summary: "أعلى رصيد يومي لتجربة مكثفة ومشروعات أكثر.",
       benefits: [
-        "1000 XP يوميًا لمدة شهر",
+        "600 XP يوميًا لمدة شهر",
         "مناسبة للاستخدام المكثف والملفات والصور",
         "أفضل خيار للمواد الكثيفة والمشروعات"
       ]
@@ -4366,7 +4366,7 @@
 
   function spendRuntimePoints(hasAttachments) {
     if (typeof spendPoints !== "function") return { ok: true };
-    return spendPoints(hasAttachments ? 15 : 10, hasAttachments ? "تحليل صورة" : "استخدام الشات");
+    return spendPoints(hasAttachments ? 20 : 10, hasAttachments ? "تحليل صورة/ملف" : "استخدام الشات");
   }
 
   function appendSessionMessage(role, author, body, options = {}) {
@@ -5375,7 +5375,7 @@
     if (shouldCharge) {
       const pointsResult = spendRuntimePoints(hasAttachments);
       if (!pointsResult.ok) {
-        addMessage("assistant", "ملم يحل", formatSimpleReply(`رصيدك الحالي ${pointsResult.remaining} نقطة، وهذا لا يكفي لهذه العملية. تحتاج ${hasAttachments ? 15 : 10} نقطة. يمكنك شراء نقاط إضافية من <a class="top-link" href="subscriptions.html">صفحة الباقات</a>.`));
+        addMessage("assistant", "ملم يحل", formatSimpleReply(`رصيدك الحالي ${pointsResult.remaining} نقطة، وهذا لا يكفي لهذه العملية. تحتاج ${hasAttachments ? 20 : 10} نقطة. يمكنك شراء نقاط إضافية من <a class="top-link" href="subscriptions.html">صفحة الباقات</a>.`));
         return;
       }
     }

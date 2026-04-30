@@ -37,15 +37,17 @@ function readEnvNumber(keys, fallback) {
 }
 
 const OPENAI_API_KEY = String(process.env.OPENAI_API_KEY || "").trim();
-const OPENAI_MODEL = String(process.env.OPENAI_MODEL || "gpt-5.4-mini").trim();
+const OPENAI_MODEL = String(process.env.OPENAI_MODEL || "gpt-4o-mini").trim();
+const OPENAI_IMAGE_MODEL = String(process.env.OPENAI_IMAGE_MODEL || "dall-e-3").trim();
 const OPENAI_RESPONSES_ENDPOINT = String(process.env.OPENAI_RESPONSES_ENDPOINT || "https://api.openai.com/v1/responses").trim();
 const OPENAI_TIMEOUT_MS = Number(process.env.OPENAI_TIMEOUT_MS || 25000);
+const OPENAI_MAX_OUTPUT_TOKENS = Math.max(120, Math.min(Number(process.env.OPENAI_MAX_OUTPUT_TOKENS || 500), 1200));
 const DB_INIT_TIMEOUT_MS = Math.max(1000, Number(process.env.DB_INIT_TIMEOUT_MS || 8000));
 const MAX_BODY_BYTES = Math.max(10_000, Number(process.env.MAX_BODY_BYTES || 1_000_000));
 const MAX_MESSAGE_LENGTH = Math.max(200, Number(process.env.MAX_MESSAGE_LENGTH || 4000));
 const MAX_QUESTION_LENGTH = Math.max(200, Number(process.env.MAX_QUESTION_LENGTH || 4000));
 const MAX_METADATA_LENGTH = Math.max(40, Number(process.env.MAX_METADATA_LENGTH || 120));
-const MAX_HISTORY_MESSAGES = Math.max(1, Math.min(Number(process.env.MAX_HISTORY_MESSAGES || 10), 30));
+const MAX_HISTORY_MESSAGES = Math.max(1, Math.min(Number(process.env.MAX_HISTORY_MESSAGES || 5), 30));
 const RATE_LIMIT_WINDOW_MS = Math.max(1000, Number(process.env.RATE_LIMIT_WINDOW_MS || 60_000));
 const RATE_LIMIT_CHAT_MAX = Math.max(1, Number(process.env.RATE_LIMIT_CHAT_MAX || 20));
 const RATE_LIMIT_SOLVE_MAX = Math.max(1, Number(process.env.RATE_LIMIT_SOLVE_MAX || 20));
@@ -82,7 +84,8 @@ const DEFAULT_STUDENT_EMAIL = String(process.env.DEFAULT_STUDENT_EMAIL || "stude
 const DEFAULT_STUDENT_PASSWORD = String(process.env.DEFAULT_STUDENT_PASSWORD || "Student@2026").trim();
 const DEFAULT_STUDENT_NAME = String(process.env.DEFAULT_STUDENT_NAME || "طالب").trim();
 const TEXT_MESSAGE_XP_COST = Math.max(1, Number(process.env.TEXT_MESSAGE_XP_COST || process.env.TEXT_MESSAGE_XP_REWARD || 10));
-const ATTACHMENT_XP_COST = Math.max(1, Number(process.env.ATTACHMENT_XP_COST || process.env.IMAGE_MESSAGE_XP_COST || process.env.IMAGE_MESSAGE_XP_REWARD || 15));
+const IMAGE_GENERATION_XP_COST = Math.max(1, Number(process.env.IMAGE_GENERATION_XP_COST || process.env.IMAGE_MESSAGE_XP_COST || process.env.IMAGE_MESSAGE_XP_REWARD || 15));
+const ATTACHMENT_ANALYSIS_XP_COST = Math.max(1, Number(process.env.ATTACHMENT_ANALYSIS_XP_COST || process.env.ATTACHMENT_XP_COST || 20));
 const DAILY_LOGIN_XP_REWARD = Math.max(0, Number(process.env.DAILY_LOGIN_XP_REWARD || 5));
 const DAILY_MOTIVATION_BONUS = Math.max(1, Number(process.env.DAILY_MOTIVATION_BONUS || 5));
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -536,6 +539,7 @@ async function ensureUserPackageLifecycle(user) {
   return databaseClient.updateUser(user.id, {
     package_id: defaultPackage.id,
     package_name: defaultPackage.display_name,
+    plan_type: defaultPackage.package_key || "starter",
     package_started_at: null,
     package_expires_at: null,
     activity: `انتهت مدة باقة ${String(user.package_name || user.package || "الحالية").trim()} وعاد الحساب إلى ${defaultPackage.display_name}`
@@ -575,14 +579,19 @@ async function syncUserDailyProgress(user, activityText = "") {
   if (streakDays >= 30 && !achievements.includes("30_days_streak")) achievements.push("30_days_streak");
 
   const packageDailyXp = Math.max(0, Number(effectiveUser.package_daily_xp || 0));
-  const dailyXpAward = packageDailyXp + DAILY_LOGIN_XP_REWARD;
+  const isPaidPackage = packageDailyXp > 0;
+  const dailyXpAward = isPaidPackage ? packageDailyXp : DAILY_LOGIN_XP_REWARD;
+  const nextXp = isPaidPackage ? packageDailyXp : Number(effectiveUser.xp || 0) + DAILY_LOGIN_XP_REWARD;
   const packageLabel = String(effectiveUser.package_name || effectiveUser.package || "التمهيدية").trim() || "التمهيدية";
 
   return databaseClient.updateUser(effectiveUser.id, {
     last_active_date: today,
+    last_reset: today,
     streak_days: streakDays,
     motivation_score: Number(effectiveUser.motivation_score || 0) + DAILY_MOTIVATION_BONUS,
-    xp: Number(effectiveUser.xp || 0) + dailyXpAward,
+    xp: nextXp,
+    total_xp: nextXp,
+    plan_type: String(effectiveUser.package_key || effectiveUser.plan_type || effectiveUser.package_name || "starter").trim() || "starter",
     achievements,
     activity: activityText || `تجددت باقته اليومية (${packageLabel}) وحصل على ${dailyXpAward} XP`
   });
@@ -590,7 +599,7 @@ async function syncUserDailyProgress(user, activityText = "") {
 
 function getMessageXpCost(attachmentCount = 0) {
   const normalizedAttachmentCount = Math.max(0, Math.round(Number(attachmentCount) || 0));
-  return TEXT_MESSAGE_XP_COST + (normalizedAttachmentCount * ATTACHMENT_XP_COST);
+  return normalizedAttachmentCount > 0 ? ATTACHMENT_ANALYSIS_XP_COST : TEXT_MESSAGE_XP_COST;
 }
 
 async function chargeUserForMessage(user, cost, activityText) {
@@ -599,8 +608,10 @@ async function chargeUserForMessage(user, cost, activityText) {
   }
 
   const xpCost = Math.max(0, Math.round(Number(cost) || 0));
+  const nextXp = Math.max(0, Math.max(0, Number(user.xp || 0)) - xpCost);
   return databaseClient.updateUser(user.id, {
-    xp: Math.max(0, Math.max(0, Number(user.xp || 0)) - xpCost),
+    xp: nextXp,
+    total_xp: nextXp,
     activity: activityText || `تم خصم ${xpCost} XP مقابل استخدام الشات`
   });
 }
@@ -665,9 +676,15 @@ function buildApiUser(user) {
     packageDaysRemaining: calculateRemainingDays(user.package_expires_at),
     package: String(user.package_name || user.package || "مجاني محدود").trim() || "مجاني محدود",
     xp: Number.isFinite(Number(user.xp)) ? Number(user.xp) : 0,
+    total_xp: Number.isFinite(Number(user.total_xp ?? user.xp)) ? Number(user.total_xp ?? user.xp) : 0,
+    totalXp: Number.isFinite(Number(user.total_xp ?? user.xp)) ? Number(user.total_xp ?? user.xp) : 0,
+    plan_type: String(user.plan_type || user.package_key || user.package_name || user.package || "starter").trim() || "starter",
+    planType: String(user.plan_type || user.package_key || user.package_name || user.package || "starter").trim() || "starter",
     streakDays: Number.isFinite(Number(user.streak_days)) ? Number(user.streak_days) : 0,
     motivationScore: Number.isFinite(Number(user.motivation_score)) ? Number(user.motivation_score) : 0,
     lastActiveDate: user.last_active_date || null,
+    last_reset: user.last_reset || user.last_active_date || null,
+    lastReset: user.last_reset || user.last_active_date || null,
     achievements: Array.isArray(user.achievements) ? user.achievements : [],
     status: formatUserStatus(user.status),
     activity: String(user.activity || "").trim(),
@@ -872,6 +889,8 @@ function buildChatSystemPrompt(meta) {
   const contextLines = [
     "أنت مساعد منصة ملم التعليمية.",
     "أجب بالعربية الواضحة والمباشرة.",
+    "أنت مساعد ذكي ومختصر. لا تتجاوز 150 كلمة إلا إذا طلب المستخدم التفصيل صراحة.",
+    "إذا احتاج المستخدم تفاصيل أكثر فاقترح عليه طلب: وضّح أكثر أو أكمل.",
     "قدّم الجواب النهائي أولًا ثم شرحًا مختصرًا عند الحاجة.",
     "إذا كان السؤال أكاديميًا فحلّه بدقة، وإذا كان طلب بحث فاعرضه بشكل منظم وواضح.",
     "لا تذكر أي تفاصيل داخلية عن النظام أو المسارات أو الـ API.",
@@ -891,6 +910,8 @@ function buildAudienceAwareChatPrompt(meta) {
   const contextLines = [
     "أنت مساعد منصة ملم التعليمية.",
     "أجب بالعربية الواضحة والمباشرة.",
+    "أنت مساعد ذكي ومختصر. لا تتجاوز 150 كلمة إلا إذا طلب المستخدم التفصيل صراحة.",
+    "إذا احتاج المستخدم تفاصيل أكثر فاقترح عليه طلب: وضّح أكثر أو أكمل.",
     "ابدأ بالجواب المفيد مباشرة ثم أضف شرحًا قصيرًا ومنظمًا عند الحاجة.",
     "لا تذكر أي تفاصيل داخلية عن النظام أو الـ API.",
     "لا تستخدم markdown مثل ** أو __ أو # أو ``` في الرد.",
@@ -1033,6 +1054,8 @@ function buildSolveSystemPrompt(payload) {
     "لا تستخدم markdown داخل answer أو explanation أو display_text.",
     "ممنوع استخدام ** أو __ أو # أو ``` أو القوائم العشوائية داخل display_text.",
     "اكتب display_text كنص عربي مرتب ونظيف يصلح للعرض مباشرة للمستخدم.",
+    "اجعل display_text مختصرًا ولا يتجاوز 150 كلمة إلا إذا كان السؤال يطلب شرحًا مفصلًا صراحة.",
+    "إذا احتاج المستخدم تفاصيل أكثر فاختم بجملة قصيرة تقترح عليه طلب: وضّح أكثر أو أكمل.",
     "اختر question_type من هذه القيم فقط: multiple_choice, true_false, fill_blank, matching, direct_math, definition, compound, general.",
     "إذا كان السؤال بحثًا أو شرحًا عامًا فاجعل question_type = general أو definition حسب الأنسب.",
     "answer يجب أن يكون الجواب النهائي.",
@@ -1126,7 +1149,8 @@ async function callOpenAI({ input }) {
       },
       body: JSON.stringify({
         model: OPENAI_MODEL,
-        input: String(input || "").trim()
+        input: String(input || "").trim(),
+        max_output_tokens: OPENAI_MAX_OUTPUT_TOKENS
       }),
       signal: controller.signal
     });
@@ -1769,9 +1793,11 @@ async function handleAdminUpdateUser(req, res, userId) {
     if (selectedPackage) {
       changes.package_id = selectedPackage.id;
       changes.package_name = selectedPackage.display_name;
+      changes.plan_type = selectedPackage.package_key;
       Object.assign(changes, buildPackagePeriodWindow(selectedPackage));
     } else {
       changes.package_id = null;
+      changes.plan_type = "starter";
       changes.package_started_at = null;
       changes.package_expires_at = null;
       changes.package_name = sanitizeOptionalText(payload.package_name || payload.package, 150) || "التمهيدية";
@@ -1917,6 +1943,16 @@ async function handleChatSend(req, res) {
     grade,
     term
   });
+
+  let chargedUser = activeUser || null;
+  if (activeUser && isDatabaseReady()) {
+    chargedUser = await chargeUserForMessage(
+      activeUser,
+      xpCost,
+      hasAttachment ? "أرسل رسالة مع صورة/ملف" : "أرسل رسالة نصية"
+    );
+  }
+
   const result = await callOpenAI({
     input: buildResponsesInput(await buildChatMessages(conversation, {
       ...payload,
@@ -1937,15 +1973,6 @@ async function handleChatSend(req, res) {
 
   await persistConversationMessage(conversation, "user", message, "web");
   await persistConversationMessage(conversation, "assistant", assistantText, "openai");
-
-  let chargedUser = activeUser || null;
-  if (activeUser && isDatabaseReady()) {
-    chargedUser = await chargeUserForMessage(
-      activeUser,
-      xpCost,
-      hasAttachment ? "أرسل رسالة مع صورة/ملف" : "أرسل رسالة نصية"
-    );
-  }
 
   sendJson(req, res, 200, {
     success: true,
@@ -1973,6 +2000,23 @@ async function handleSolveQuestion(req, res) {
   const subject = sanitizeOptionalText(payload.subject, MAX_METADATA_LENGTH);
   const term = sanitizeOptionalText(payload.term, MAX_METADATA_LENGTH);
   const lesson = sanitizeOptionalText(payload.lesson, 180);
+  const attachmentCount = Math.max(0, Number(payload.attachment_count || payload.attachmentCount || 0) || 0);
+  const auth = await getAuthContext(req);
+  const activeUser = auth?.user ? await syncUserDailyProgress(auth.user, "بدأ حل سؤال دقيق") : null;
+
+  if (!activeUser) {
+    throw createHttpError(401, "Authentication is required to solve questions.");
+  }
+
+  const xpCost = getMessageXpCost(attachmentCount);
+  const currentXp = Math.max(0, Number(activeUser.xp || 0));
+  if (currentXp < xpCost) {
+    throw createHttpError(402, `Insufficient XP balance. This request needs ${xpCost} XP.`);
+  }
+
+  const chargedUser = isDatabaseReady()
+    ? await chargeUserForMessage(activeUser, xpCost, attachmentCount > 0 ? "حل سؤال مع صورة/ملف" : "حل سؤال نصي")
+    : activeUser;
 
   const result = await callOpenAI({
     input: buildSolveSystemPrompt({
@@ -1995,7 +2039,11 @@ async function handleSolveQuestion(req, res) {
     confidence: 0.72
   });
 
-  sendJson(req, res, 200, normalized);
+  sendJson(req, res, 200, {
+    ...normalized,
+    xp_spent: xpCost,
+    remaining_xp: Number(chargedUser?.xp ?? activeUser.xp ?? 0)
+  });
 }
 
 async function handleListChatSessions(req, res) {
@@ -2124,11 +2172,17 @@ async function routeRequest(req, res) {
       provider: "openai",
       ai_configured: Boolean(OPENAI_API_KEY),
       model: OPENAI_MODEL,
+      image_model: OPENAI_IMAGE_MODEL,
       db: buildPublicDatabaseState(),
       limits: {
         max_body_bytes: MAX_BODY_BYTES,
         max_message_length: MAX_MESSAGE_LENGTH,
         max_question_length: MAX_QUESTION_LENGTH,
+        max_history_messages: MAX_HISTORY_MESSAGES,
+        max_output_tokens: OPENAI_MAX_OUTPUT_TOKENS,
+        text_message_xp_cost: TEXT_MESSAGE_XP_COST,
+        image_generation_xp_cost: IMAGE_GENERATION_XP_COST,
+        attachment_analysis_xp_cost: ATTACHMENT_ANALYSIS_XP_COST,
         rate_limit_window_ms: RATE_LIMIT_WINDOW_MS,
         rate_limit_chat_max: RATE_LIMIT_CHAT_MAX,
         rate_limit_solve_max: RATE_LIMIT_SOLVE_MAX

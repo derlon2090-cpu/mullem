@@ -324,14 +324,15 @@ const questionBankItems = [
 ];
 
 const packagePlans = [
-  { name: "الباقة المجانية", points: 100, price: "0 ريال", note: "للبداية وتجربة الشات النصي" },
-  { name: "باقة الطالب", points: 300, price: "19 ريال", note: "أسئلة أكثر وتحليل صور أكثر" },
-  { name: "باقة المتقدم", points: 700, price: "39 ريال", note: "مناسبة للمراجعات الكثيفة والاختبارات" }
+  { name: "الباقة المجانية", points: 50, price: "0 ريال", note: "50 XP عند التسجيل و5 XP يوميًا عند الدخول" },
+  { name: "نانو", points: 80, price: "9 ريال", note: "بداية ذكية وسعر بسيط" },
+  { name: "بلس", points: 250, price: "29 ريال", note: "للمذاكرة اليومية والملفات المتوسطة" },
+  { name: "برو", points: 600, price: "59 ريال", note: "للاستخدام المكثف والمشروعات" }
 ];
 
 const usageCosts = {
   chat: 10,
-  image: 15
+  image: 20
 };
 
 const LOGIN_REQUIRED_DAILY_XP = 5;

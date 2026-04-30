@@ -131,7 +131,10 @@ function hydrateUserRow(row) {
     streak_days: Number(row.streak_days || 0),
     motivation_score: Number(row.motivation_score || 0),
     package_started_at: row.package_started_at || null,
-    package_expires_at: row.package_expires_at || null
+    package_expires_at: row.package_expires_at || null,
+    total_xp: Number(row.total_xp ?? row.xp ?? 0),
+    plan_type: String(row.plan_type || row.package_key || row.package_name || "starter").trim() || "starter",
+    last_reset: row.last_reset || row.last_active_date || null
   };
 }
 
@@ -149,9 +152,12 @@ function buildUserUpdateStatement(changes = {}) {
     package_started_at: "package_started_at",
     package_expires_at: "package_expires_at",
     xp: "xp",
+    total_xp: "total_xp",
+    plan_type: "plan_type",
     streak_days: "streak_days",
     motivation_score: "motivation_score",
     last_active_date: "last_active_date",
+    last_reset: "last_reset",
     achievements: "achievements",
     status: "status",
     activity: "activity"
@@ -192,15 +198,15 @@ const DEFAULT_PACKAGE_CATALOG = [
   },
   {
     package_key: "pro",
-    display_name: "برو",
-    daily_xp: 200,
-    price_sar: 30,
+    display_name: "نانو",
+    daily_xp: 80,
+    price_sar: 9,
     duration_days: 30,
-    summary: "باقة شهرية خفيفة للمذاكرة اليومية المنتظمة.",
+    summary: "باقة شهرية خفيفة لبداية ذكية وسعر بسيط.",
     benefits: [
-      "200 XP يتجدد يوميًا",
-      "مناسبة للمراجعة اليومية",
-      "تدعم الدروس والمشاريع الأساسية"
+      "80 XP يتجدد يوميًا",
+      "مناسبة للأسئلة اليومية القصيرة",
+      "حفظ المحادثات والمشروعات داخل الحساب"
     ],
     is_active: 1,
     is_default: 0,
@@ -208,15 +214,15 @@ const DEFAULT_PACKAGE_CATALOG = [
   },
   {
     package_key: "pro_plus",
-    display_name: "برو بلس",
-    daily_xp: 500,
-    price_sar: 60,
+    display_name: "بلس",
+    daily_xp: 250,
+    price_sar: 29,
     duration_days: 30,
-    summary: "باقة شهرية أوسع للاستخدام المكثف والصور والمشاريع.",
+    summary: "باقة متوازنة للمذاكرة اليومية والمشروعات.",
     benefits: [
-      "500 XP يتجدد يوميًا",
-      "أنسب للأسئلة الكثيرة والصور",
-      "مرونة أكبر مع المشاريع الدراسية"
+      "250 XP يتجدد يوميًا",
+      "مناسبة للمذاكرة والملفات المتوسطة",
+      "توازن أفضل بين السعر والاستخدام"
     ],
     is_active: 1,
     is_default: 0,
@@ -224,15 +230,15 @@ const DEFAULT_PACKAGE_CATALOG = [
   },
   {
     package_key: "pro_max",
-    display_name: "برو ماكس",
-    daily_xp: 1000,
-    price_sar: 100,
+    display_name: "برو",
+    daily_xp: 600,
+    price_sar: 59,
     duration_days: 30,
-    summary: "أعلى باقة شهرية للاستخدام الثقيل والدعم اليومي المكثف.",
+    summary: "أعلى باقة شهرية لمن يريد استخدامًا مكثفًا وسرعة أكبر.",
     benefits: [
-      "1000 XP يتجدد يوميًا",
+      "600 XP يتجدد يوميًا",
       "أفضل خيار للاستخدام المكثف",
-      "مثالية للمشاريع والمواد المتعددة"
+      "مناسبة للمشروعات والمواد المتعددة"
     ],
     is_active: 1,
     is_default: 0,
@@ -327,12 +333,15 @@ function createDatabaseClient(rawConfig = {}) {
         subject VARCHAR(100) NULL,
         package_id BIGINT UNSIGNED NULL,
         package_name VARCHAR(150) NOT NULL DEFAULT 'مجاني محدود',
+        plan_type VARCHAR(80) NOT NULL DEFAULT 'starter',
         package_started_at DATETIME NULL,
         package_expires_at DATETIME NULL,
         xp INT UNSIGNED NOT NULL DEFAULT 50,
+        total_xp INT UNSIGNED NOT NULL DEFAULT 50,
         streak_days INT UNSIGNED NOT NULL DEFAULT 0,
         motivation_score INT UNSIGNED NOT NULL DEFAULT 0,
         last_active_date DATE NULL,
+        last_reset DATE NULL,
         achievements JSON NULL,
         status VARCHAR(20) NOT NULL DEFAULT 'active',
         activity VARCHAR(255) NULL,
@@ -345,6 +354,7 @@ function createDatabaseClient(rawConfig = {}) {
 
     await ensureUserPackageColumn();
     await ensureUserMotivationColumn();
+    await ensureUserXpPlanColumns();
     await ensurePackageCatalogColumns();
     await ensureUserPackageWindowColumns();
     await ensureDefaultPackages();
@@ -451,6 +461,65 @@ function createDatabaseClient(rawConfig = {}) {
         ALTER TABLE app_users
         ADD COLUMN motivation_score INT UNSIGNED NOT NULL DEFAULT 0 AFTER streak_days
       `);
+    }
+  }
+
+  async function ensureUserXpPlanColumns() {
+    const userColumns = [
+      {
+        name: "plan_type",
+        sql: `
+          ALTER TABLE app_users
+          ADD COLUMN plan_type VARCHAR(80) NOT NULL DEFAULT 'starter' AFTER package_name
+        `,
+        backfill: `
+          UPDATE app_users u
+          LEFT JOIN app_packages p ON p.id = u.package_id
+          SET u.plan_type = COALESCE(NULLIF(p.package_key, ''), NULLIF(u.package_name, ''), 'starter')
+          WHERE u.plan_type IS NULL OR u.plan_type = ''
+        `
+      },
+      {
+        name: "total_xp",
+        sql: `
+          ALTER TABLE app_users
+          ADD COLUMN total_xp INT UNSIGNED NOT NULL DEFAULT 50 AFTER xp
+        `,
+        backfill: `
+          UPDATE app_users
+          SET total_xp = xp
+          WHERE total_xp IS NULL OR total_xp = 50
+        `
+      },
+      {
+        name: "last_reset",
+        sql: `
+          ALTER TABLE app_users
+          ADD COLUMN last_reset DATE NULL AFTER last_active_date
+        `,
+        backfill: `
+          UPDATE app_users
+          SET last_reset = last_active_date
+          WHERE last_reset IS NULL AND last_active_date IS NOT NULL
+        `
+      }
+    ];
+
+    for (const column of userColumns) {
+      const [rows] = await pool.execute(
+        `
+          SELECT COUNT(*) AS total
+          FROM information_schema.COLUMNS
+          WHERE TABLE_SCHEMA = ? AND TABLE_NAME = 'app_users' AND COLUMN_NAME = ?
+        `,
+        [config.database, column.name]
+      );
+
+      if (!Number(rows?.[0]?.total || 0)) {
+        await pool.query(column.sql);
+      }
+
+      await pool.query(column.backfill);
     }
   }
 
@@ -1053,11 +1122,15 @@ function createDatabaseClient(rawConfig = {}) {
       "التمهيدية": "starter",
       free: "starter",
       starter: "starter",
-      "برو": "pro",
+      "نانو": "pro",
+      "nano": "pro",
       pro: "pro",
+      "بلس": "pro_plus",
+      "plus": "pro_plus",
       "برو بلس": "pro_plus",
       "pro plus": "pro_plus",
       pro_plus: "pro_plus",
+      "برو": "pro_max",
       "برو ماكس": "pro_max",
       "pro max": "pro_max",
       pro_max: "pro_max"
@@ -1217,12 +1290,15 @@ function createDatabaseClient(rawConfig = {}) {
         payload.package ||
         (String(payload.role || "").trim().toLowerCase() === "student" ? "التمهيدية" : "إدارة المنصة")
       ).trim(),
+      plan_type: String(selectedPackage?.package_key || payload.plan_type || payload.package_key || "starter").trim() || "starter",
       package_started_at: assignmentWindow.package_started_at,
       package_expires_at: assignmentWindow.package_expires_at,
       xp: Number.isFinite(Number(payload.xp)) ? Number(payload.xp) : 50,
+      total_xp: Number.isFinite(Number(payload.total_xp ?? payload.xp)) ? Number(payload.total_xp ?? payload.xp) : 50,
       streak_days: Number.isFinite(Number(payload.streak_days)) ? Number(payload.streak_days) : 0,
       motivation_score: Number.isFinite(Number(payload.motivation_score)) ? Number(payload.motivation_score) : 0,
       last_active_date: payload.last_active_date || null,
+      last_reset: payload.last_reset || payload.last_active_date || null,
       achievements: JSON.stringify(normalizeAchievements(payload.achievements)),
       status: String(payload.status || "active").trim().toLowerCase() || "active",
       activity: String(payload.activity || "").trim() || null
@@ -1231,9 +1307,9 @@ function createDatabaseClient(rawConfig = {}) {
     const [result] = await pool.execute(
       `
         INSERT INTO app_users (
-          name, email, password_hash, role, stage, grade, subject, package_id, package_name, package_started_at, package_expires_at,
-          xp, streak_days, motivation_score, last_active_date, achievements, status, activity
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          name, email, password_hash, role, stage, grade, subject, package_id, package_name, plan_type, package_started_at, package_expires_at,
+          xp, total_xp, streak_days, motivation_score, last_active_date, last_reset, achievements, status, activity
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `,
       [
         insertPayload.name,
@@ -1245,12 +1321,15 @@ function createDatabaseClient(rawConfig = {}) {
         insertPayload.subject,
         insertPayload.package_id,
         insertPayload.package_name,
+        insertPayload.plan_type,
         insertPayload.package_started_at,
         insertPayload.package_expires_at,
         insertPayload.xp,
+        insertPayload.total_xp,
         insertPayload.streak_days,
         insertPayload.motivation_score,
         insertPayload.last_active_date,
+        insertPayload.last_reset,
         insertPayload.achievements,
         insertPayload.status,
         insertPayload.activity
@@ -1282,6 +1361,19 @@ function createDatabaseClient(rawConfig = {}) {
     }
     if ("last_active_date" in nextChanges) {
       nextChanges.last_active_date = nextChanges.last_active_date || null;
+    }
+    if ("last_reset" in nextChanges) {
+      nextChanges.last_reset = nextChanges.last_reset || null;
+    }
+    if ("xp" in nextChanges && !("total_xp" in nextChanges)) {
+      nextChanges.total_xp = nextChanges.xp;
+    }
+    if ("total_xp" in nextChanges && !("xp" in nextChanges)) {
+      nextChanges.xp = nextChanges.total_xp;
+    }
+    if (("package_id" in nextChanges || "package_key" in nextChanges || "package_name" in nextChanges) && !("plan_type" in nextChanges)) {
+      const packageKeySource = nextChanges.package_key || current.package_key || current.plan_type || "starter";
+      nextChanges.plan_type = String(packageKeySource || "starter").trim() || "starter";
     }
     if ("package_started_at" in nextChanges) {
       nextChanges.package_started_at = toSqlDateTime(nextChanges.package_started_at);
