@@ -2762,6 +2762,36 @@
       .replace(/'/g, "&#39;");
   }
 
+  function coerceRuntimeDisplayText(value, depth = 0, seen = new WeakSet()) {
+    if (value == null || depth > 8) return "";
+    if (typeof value === "string") return value.trim();
+    if (typeof value === "number" || typeof value === "boolean") return String(value);
+    if (Array.isArray(value)) {
+      return value
+        .map((item) => coerceRuntimeDisplayText(item, depth + 1, seen))
+        .filter(Boolean)
+        .join("\n\n")
+        .trim();
+    }
+    if (typeof value !== "object") return "";
+    if (seen.has(value)) return "";
+    seen.add(value);
+
+    const preferredKeys = ["body", "text", "content", "output_text", "value", "message", "display_text", "answer", "final_answer"];
+    for (const key of preferredKeys) {
+      if (!Object.prototype.hasOwnProperty.call(value, key)) continue;
+      const text = coerceRuntimeDisplayText(value[key], depth + 1, seen);
+      if (text && text !== "[object Object]") return text;
+    }
+
+    return Object.entries(value)
+      .filter(([key]) => !["id", "type", "role", "status", "metadata", "usage", "annotations"].includes(key))
+      .map(([, item]) => coerceRuntimeDisplayText(item, depth + 1, seen))
+      .filter(Boolean)
+      .join("\n\n")
+      .trim();
+  }
+
   function formatRuntimePlanDate(value) {
     if (!value) return "غير محدد";
     const parsed = new Date(value);
@@ -4835,7 +4865,7 @@
     await fetchRuntimeProjectConversations(getSelectedRuntimeProjectId());
 
     return {
-      content: String(result.data.assistant_message.body || "").trim(),
+      content: coerceRuntimeDisplayText(result.data.assistant_message.body),
       conversationId: result.data.conversation_id || null,
       provider: result.data.assistant_message?.source || "openai"
     };
@@ -4943,8 +4973,8 @@
     const backendType = String(result?.hidden_analysis?.question_type || "");
     const questionType = mapBackendQuestionTypeToRuntime(backendType);
     const answerMode = mapBackendAnswerMode(backendType);
-    const answer = String(result.answer || "").trim();
-    const explanation = String(result.explanation || "").trim();
+    const answer = coerceRuntimeDisplayText(result.answer);
+    const explanation = coerceRuntimeDisplayText(result.explanation);
     const matchedSource = String(result.matched_source || "");
     const decisionBasis = String(result?.hidden_analysis?.decision_basis || matchedSource || "approved_bank_then_curriculum_then_web");
     const subject = route?.detected_subject || analysis?.subject || subjectSelect?.value || "عام";
@@ -4987,7 +5017,7 @@
     };
 
     if (questionType === "رسالة متعددة الأسئلة") {
-      runtimeResponse.preRenderedBody = formatSimpleReply(String(result.display_text || answer || "").trim());
+      runtimeResponse.preRenderedBody = formatSimpleReply(coerceRuntimeDisplayText(result.display_text) || answer);
     }
 
     if (!runtimeResponse.finalAnswer && runtimeResponse.answerMode === "truefalse") {
@@ -6381,7 +6411,7 @@
     await fetchRuntimeProjectConversations(getSelectedRuntimeProjectId());
 
     return {
-      content: String(result.data.assistant_message.body || "").trim(),
+      content: coerceRuntimeDisplayText(result.data.assistant_message.body),
       conversationId: result.data.conversation_id || null,
       provider: result.data.assistant_message?.source || "openai",
       failed: false

@@ -379,8 +379,9 @@ function buildAttachmentContext(payload) {
 }
 
 function sanitizeModelDisplayText(value) {
-  return String(value || "")
+  return coerceModelText(value)
     .replace(/\r\n?/g, "\n")
+    .replace(/\[object Object\]/g, "")
     .replace(/\*\*(.*?)\*\*/g, "$1")
     .replace(/__(.*?)__/g, "$1")
     .replace(/`([^`]+)`/g, "$1")
@@ -390,6 +391,61 @@ function sanitizeModelDisplayText(value) {
     .replace(/[ \t]+\n/g, "\n")
     .replace(/\n{3,}/g, "\n\n")
     .replace(/\*{2,}/g, "")
+    .trim();
+}
+
+function coerceModelText(value, depth = 0, seen = new WeakSet()) {
+  if (value == null || depth > 8) return "";
+  if (typeof value === "string") return value.trim();
+  if (typeof value === "number" || typeof value === "boolean") return String(value);
+
+  if (Array.isArray(value)) {
+    return value
+      .map((item) => coerceModelText(item, depth + 1, seen))
+      .filter(Boolean)
+      .join("\n\n")
+      .trim();
+  }
+
+  if (typeof value !== "object") return "";
+  if (seen.has(value)) return "";
+  seen.add(value);
+
+  const preferredKeys = [
+    "output_text",
+    "text",
+    "value",
+    "content",
+    "body",
+    "message",
+    "display_text",
+    "final_answer",
+    "answer",
+    "summary"
+  ];
+
+  for (const key of preferredKeys) {
+    if (!Object.prototype.hasOwnProperty.call(value, key)) continue;
+    const text = coerceModelText(value[key], depth + 1, seen);
+    if (text && text !== "[object Object]") return text;
+  }
+
+  return Object.entries(value)
+    .filter(([key]) => ![
+      "id",
+      "type",
+      "role",
+      "status",
+      "model",
+      "created_at",
+      "usage",
+      "metadata",
+      "annotations",
+      "logprobs"
+    ].includes(key))
+    .map(([, item]) => coerceModelText(item, depth + 1, seen))
+    .filter(Boolean)
+    .join("\n\n")
     .trim();
 }
 
@@ -915,8 +971,14 @@ function isDatabaseReady() {
 
 function extractResponseText(payload) {
   if (!payload) return "";
-  if (typeof payload.output_text === "string" && payload.output_text.trim()) {
-    return payload.output_text.trim();
+  const directOutput = coerceModelText(payload.output_text);
+  if (directOutput) {
+    return directOutput;
+  }
+
+  const choiceText = coerceModelText(payload.choices?.[0]?.message?.content);
+  if (choiceText) {
+    return choiceText;
   }
 
   const outputs = Array.isArray(payload.output) ? payload.output : [];
@@ -924,16 +986,21 @@ function extractResponseText(payload) {
   for (const item of outputs) {
     const content = Array.isArray(item?.content) ? item.content : [];
     for (const block of content) {
-      if (typeof block?.text === "string" && block.text.trim()) {
-        parts.push(block.text.trim());
+      const blockText = coerceModelText(block);
+      if (blockText) {
+        parts.push(blockText);
       }
-      if (typeof block?.output_text === "string" && block.output_text.trim()) {
-        parts.push(block.output_text.trim());
-      }
+    }
+    if (!content.length) {
+      const itemText = coerceModelText(item);
+      if (itemText) parts.push(itemText);
     }
   }
 
-  return parts.join("\n\n").trim();
+  const outputText = parts.join("\n\n").trim();
+  if (outputText) return outputText;
+
+  return coerceModelText(payload.message || payload.content || payload.response || "");
 }
 
 function buildResponsesInput(messages = []) {
@@ -945,7 +1012,7 @@ function buildResponsesInput(messages = []) {
         : role === "assistant"
           ? "رد المساعد"
           : "رسالة المستخدم";
-      const content = String(item?.content || "").trim();
+      const content = coerceModelText(item?.content);
       if (!content) return "";
       return `${label}:\n${content}`;
     })

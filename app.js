@@ -1072,9 +1072,40 @@ function escapeReplyHtml(value) {
     .replace(/'/g, "&#39;");
 }
 
+function coerceReplyText(value, depth = 0, seen = new WeakSet()) {
+  if (value == null || depth > 8) return "";
+  if (typeof value === "string") return value.trim();
+  if (typeof value === "number" || typeof value === "boolean") return String(value);
+  if (Array.isArray(value)) {
+    return value
+      .map((item) => coerceReplyText(item, depth + 1, seen))
+      .filter(Boolean)
+      .join("\n\n")
+      .trim();
+  }
+  if (typeof value !== "object") return "";
+  if (seen.has(value)) return "";
+  seen.add(value);
+
+  const preferredKeys = ["body", "text", "content", "output_text", "value", "message", "display_text", "answer", "final_answer"];
+  for (const key of preferredKeys) {
+    if (!Object.prototype.hasOwnProperty.call(value, key)) continue;
+    const text = coerceReplyText(value[key], depth + 1, seen);
+    if (text && text !== "[object Object]") return text;
+  }
+
+  return Object.entries(value)
+    .filter(([key]) => !["id", "type", "role", "status", "metadata", "usage", "annotations"].includes(key))
+    .map(([, item]) => coerceReplyText(item, depth + 1, seen))
+    .filter(Boolean)
+    .join("\n\n")
+    .trim();
+}
+
 function normalizeSimpleReplyText(value) {
-  return String(value || "")
+  return coerceReplyText(value)
     .replace(/\r\n?/g, "\n")
+    .replace(/\[object Object\]/g, "")
     .replace(/\*\*(.*?)\*\*/g, "$1")
     .replace(/__(.*?)__/g, "$1")
     .replace(/`([^`]+)`/g, "$1")

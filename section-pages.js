@@ -399,6 +399,36 @@
     };
   }
 
+  function coerceDisplayText(value, depth = 0, seen = new WeakSet()) {
+    if (value == null || depth > 8) return "";
+    if (typeof value === "string") return value.trim();
+    if (typeof value === "number" || typeof value === "boolean") return String(value);
+    if (Array.isArray(value)) {
+      return value
+        .map((item) => coerceDisplayText(item, depth + 1, seen))
+        .filter(Boolean)
+        .join("\n\n")
+        .trim();
+    }
+    if (typeof value !== "object") return "";
+    if (seen.has(value)) return "";
+    seen.add(value);
+
+    const preferredKeys = ["body", "text", "content", "output_text", "value", "message", "display_text", "answer", "final_answer"];
+    for (const key of preferredKeys) {
+      if (!Object.prototype.hasOwnProperty.call(value, key)) continue;
+      const text = coerceDisplayText(value[key], depth + 1, seen);
+      if (text && text !== "[object Object]") return text;
+    }
+
+    return Object.entries(value)
+      .filter(([key]) => !["id", "type", "role", "status", "metadata", "usage", "annotations"].includes(key))
+      .map(([, item]) => coerceDisplayText(item, depth + 1, seen))
+      .filter(Boolean)
+      .join("\n\n")
+      .trim();
+  }
+
   function loadStoredTheme() {
     try {
       return localStorage.getItem(themeKey) === "dark" ? "dark" : "light";
@@ -764,7 +794,7 @@
     return (Array.isArray(messages) ? messages : [])
       .map((message) => {
         const role = String(message.role || "").toLowerCase() === "assistant" ? "assistant" : "user";
-        const text = String(message.text || message.body || message.content || "").trim();
+        const text = coerceDisplayText(message.text || message.body || message.content || "");
         if (!text) return null;
         if (role === "assistant") {
           return { role, body: assistantReply("رد محفوظ", splitReplyToBullets(text)) };
@@ -776,7 +806,7 @@
 
   function getThreadTitleFromMessages(messages, fallback) {
     const firstUserMessage = (messages || []).find((message) => message.role === "user" && message.body);
-    return String(fallback || firstUserMessage?.body || "محادثة محفوظة").trim().slice(0, 48);
+    return (coerceDisplayText(fallback) || coerceDisplayText(firstUserMessage?.body) || "محادثة محفوظة").slice(0, 48);
   }
 
   function upsertSavedConversationThread(summary, messages = []) {
@@ -929,13 +959,22 @@
 
   function renderMessage(message) {
     if (message.role === "assistant") {
+      const safeBody = message.body && Array.isArray(message.body.bullets)
+        ? {
+            heading: coerceDisplayText(message.body.heading) || "رد محفوظ",
+            bullets: message.body.bullets.map((item) => coerceDisplayText(item)).filter(Boolean)
+          }
+        : assistantReply("رد محفوظ", splitReplyToBullets(message.body));
+      if (!safeBody.bullets.length) {
+        safeBody.bullets = ["لم يصلنا نص واضح من الخدمة."];
+      }
       return `
         <article class="guest-message assistant">
           <div class="guest-message-mark">${icons.logo}</div>
           <div class="guest-message-body">
-            <h3>${escapeHtml(message.body.heading)}</h3>
+            <h3>${escapeHtml(safeBody.heading)}</h3>
             <ul>
-              ${message.body.bullets.map((item) => `<li>${escapeHtml(item)}</li>`).join("")}
+              ${safeBody.bullets.map((item) => `<li>${escapeHtml(item)}</li>`).join("")}
             </ul>
             <div class="guest-message-actions">
               <button class="ghost-action ${isAuthenticated() ? "" : "requires-auth"}" type="button" data-copy-reply>${icons.copy}</button>
@@ -1940,7 +1979,7 @@
   }
 
   function splitReplyToBullets(text) {
-    const cleaned = String(text || "").trim();
+    const cleaned = coerceDisplayText(text).replace(/\[object Object\]/g, "").trim();
     if (!cleaned) return ["لم يصلنا نص واضح من الخدمة."];
     const lines = cleaned
       .replace(/\r/g, "")
