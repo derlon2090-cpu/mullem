@@ -18,38 +18,44 @@ function getPgModule() {
   }
 }
 
+function normalizeEnvString(value) {
+  let normalized = String(value || "").trim();
+  if ((normalized.startsWith('"') && normalized.endsWith('"')) || (normalized.startsWith("'") && normalized.endsWith("'"))) {
+    normalized = normalized.slice(1, -1).trim();
+  }
+  if (/^[A-Z0-9_]+\s*=\s*/i.test(normalized)) {
+    normalized = normalized.replace(/^[A-Z0-9_]+\s*=\s*/i, "").trim();
+  }
+  return normalized;
+}
+
 function readEnvValue(keys, fallback = "") {
   const list = Array.isArray(keys) ? keys : [keys];
   for (const key of list) {
-    const value = String(process.env[key] || "").trim();
+    const value = normalizeEnvString(process.env[key]);
     if (value) return value;
   }
-  return String(fallback || "").trim();
+  return normalizeEnvString(fallback);
 }
 
 function normalizeConfig(rawConfig = {}) {
   const connectionString = String(
-    rawConfig.connectionString ||
-    rawConfig.connection_string ||
-    rawConfig.DATABASE_URL ||
-    process.env.DATABASE_URL ||
-    process.env.POSTGRES_URL ||
-    process.env.POSTGRES_PRISMA_URL ||
-    process.env.POSTGRES_URL_NON_POOLING ||
-    ""
+    readEnvValue([
+      "DATABASE_URL",
+      "POSTGRES_URL",
+      "POSTGRES_PRISMA_URL",
+      "POSTGRES_URL_NON_POOLING",
+      "POSTGRES_URL_UNPOOLED",
+      "DATABASE_URL_UNPOOLED",
+      "NEON_DATABASE_URL",
+      "NEON_POSTGRES_URL",
+      "DATABASE_PRIVATE_URL"
+    ], rawConfig.connectionString || rawConfig.connection_string || rawConfig.DATABASE_URL || "")
   ).trim();
-  const host = String(rawConfig.host || rawConfig.PGHOST || process.env.PGHOST || process.env.POSTGRES_HOST || process.env.DATABASE_HOST || "").trim();
-  const database = String(rawConfig.database || rawConfig.PGDATABASE || process.env.PGDATABASE || process.env.POSTGRES_DATABASE || process.env.DATABASE_NAME || "").trim();
-  const user = String(
-    rawConfig.user ||
-    rawConfig.username ||
-    rawConfig.PGUSER ||
-    process.env.PGUSER ||
-    process.env.POSTGRES_USER ||
-    process.env.DATABASE_USER ||
-    ""
-  ).trim();
-  const password = String(rawConfig.password || rawConfig.PGPASSWORD || process.env.PGPASSWORD || process.env.POSTGRES_PASSWORD || process.env.DATABASE_PASSWORD || "").trim();
+  const host = readEnvValue(["PGHOST", "POSTGRES_HOST", "DATABASE_HOST"], rawConfig.host || rawConfig.PGHOST || "");
+  const database = readEnvValue(["PGDATABASE", "POSTGRES_DATABASE", "DATABASE_NAME"], rawConfig.database || rawConfig.PGDATABASE || "");
+  const user = readEnvValue(["PGUSER", "POSTGRES_USER", "DATABASE_USER"], rawConfig.user || rawConfig.username || rawConfig.PGUSER || "");
+  const password = readEnvValue(["PGPASSWORD", "POSTGRES_PASSWORD", "DATABASE_PASSWORD"], rawConfig.password || rawConfig.PGPASSWORD || "");
   const port = Number(rawConfig.port || rawConfig.PGPORT || process.env.PGPORT || process.env.POSTGRES_PORT || process.env.DATABASE_PORT || 5432);
   const connectTimeout = Math.max(
     1000,

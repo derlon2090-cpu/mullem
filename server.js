@@ -19,7 +19,13 @@ const IS_CLOUD_RUNTIME = Boolean(
 function readEnvValue(keys, fallback = "") {
   const list = Array.isArray(keys) ? keys : [keys];
   for (const key of list) {
-    const value = String(process.env[key] || "").trim();
+    let value = String(process.env[key] || "").trim();
+    if ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'"))) {
+      value = value.slice(1, -1).trim();
+    }
+    if (/^[A-Z0-9_]+\s*=\s*/i.test(value)) {
+      value = value.replace(/^[A-Z0-9_]+\s*=\s*/i, "").trim();
+    }
     if (value) return value;
   }
   return String(fallback || "").trim();
@@ -61,7 +67,17 @@ const DEFAULT_ALLOWED_FRONTEND_ORIGINS = [
   "https://mullem.onrender.com"
 ];
 const DATABASE_URL = readEnvValue(
-  ["DATABASE_URL", "POSTGRES_URL", "POSTGRES_PRISMA_URL", "POSTGRES_URL_NON_POOLING"],
+  [
+    "DATABASE_URL",
+    "POSTGRES_URL",
+    "POSTGRES_PRISMA_URL",
+    "POSTGRES_URL_NON_POOLING",
+    "POSTGRES_URL_UNPOOLED",
+    "DATABASE_URL_UNPOOLED",
+    "NEON_DATABASE_URL",
+    "NEON_POSTGRES_URL",
+    "DATABASE_PRIVATE_URL"
+  ],
   ""
 );
 const DB_HOST = readEnvValue(
@@ -825,7 +841,11 @@ async function initializeDatabaseLayer() {
     });
     await databaseClient.initialize();
     if (!databaseClient.isReady()) {
-      throw new Error("DATABASE_URL for Neon/PostgreSQL is missing or incomplete.");
+      const postgresState = typeof databaseClient.getState === "function" ? databaseClient.getState() : null;
+      throw new Error(
+        postgresState?.message ||
+        "Neon/PostgreSQL connection is not ready. Set DATABASE_URL or one of the supported Neon/Postgres environment variables."
+      );
     }
     await ensureDefaultUsers();
     databaseState = databaseClient.getState();

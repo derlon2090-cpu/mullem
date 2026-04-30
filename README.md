@@ -86,6 +86,10 @@ CORS_ALLOWED_ORIGINS=https://your-frontend-domain.com
 
 Production storage is Neon/PostgreSQL only. Use `DATABASE_URL` from Neon.
 
+The backend also accepts common Neon/Vercel names if your provider creates them automatically: `POSTGRES_URL`, `POSTGRES_PRISMA_URL`, `POSTGRES_URL_NON_POOLING`, `POSTGRES_URL_UNPOOLED`, `DATABASE_URL_UNPOOLED`, `NEON_DATABASE_URL`, `NEON_POSTGRES_URL`, and `DATABASE_PRIVATE_URL`.
+
+If Render is your backend, the Neon URL must be set in the Render Web Service environment, not only in Vercel. Paste only the URL value, not `DATABASE_URL=...`; the server now also tolerates that common paste mistake.
+
 ## XP and package rules
 
 - New student accounts start with `50 XP`.
