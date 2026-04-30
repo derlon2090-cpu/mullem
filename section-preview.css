@@ -2225,7 +2225,7 @@ body[data-workspace-mode="home"] .guest-root {
   z-index: 1450;
   display: grid;
   place-items: center;
-  padding: 28px;
+  padding: 48px;
 }
 
 .upgrade-gate-backdrop {
@@ -2240,30 +2240,33 @@ body[data-workspace-mode="home"] .guest-root {
 
 .upgrade-modal-card {
   position: relative;
-  width: min(1250px, calc(100vw - 58px));
-  max-height: calc(100vh - 58px);
-  overflow: auto;
-  padding: 36px 44px 0;
+  width: min(980px, calc(100vw - 96px));
+  height: min(700px, calc(100dvh - 96px));
+  max-height: calc(100dvh - 96px);
+  overflow: hidden;
+  padding: 22px 18px 0;
   border: 1px solid rgba(111, 76, 255, 0.12);
-  border-radius: 24px;
+  border-radius: 16px;
   background:
     radial-gradient(circle at 84% 12%, rgba(111, 76, 255, 0.12), transparent 32%),
     rgba(255, 255, 255, 0.98);
   box-shadow: 0 38px 110px rgba(23, 24, 42, 0.24);
   direction: rtl;
+  display: flex;
+  flex-direction: column;
 }
 
 .upgrade-close-btn {
   position: absolute;
-  top: 26px;
-  left: 26px;
-  width: 48px;
-  height: 48px;
+  top: 22px;
+  left: 22px;
+  width: 38px;
+  height: 38px;
   border: 1px solid rgba(111, 76, 255, 0.14);
-  border-radius: 14px;
+  border-radius: 10px;
   background: rgba(255, 255, 255, 0.86);
   color: #171936;
-  font-size: 1.65rem;
+  font-size: 1.2rem;
   cursor: pointer;
 }
 
@@ -2271,16 +2274,18 @@ body[data-workspace-mode="home"] .guest-root {
   display: flex;
   align-items: center;
   justify-content: flex-start;
-  gap: 18px;
-  margin: 0 0 18px;
+  gap: 14px;
+  min-height: 52px;
+  margin: 0 0 8px;
+  padding-inline-start: 56px;
 }
 
 .upgrade-title-mark {
-  width: 58px;
-  height: 58px;
+  width: 44px;
+  height: 44px;
   display: grid;
   place-items: center;
-  border-radius: 17px;
+  border-radius: 14px;
   color: #684cff;
   background: rgba(111, 76, 255, 0.12);
 }
@@ -2288,7 +2293,7 @@ body[data-workspace-mode="home"] .guest-root {
 .upgrade-modal-head h2 {
   margin: 0;
   color: #171936;
-  font-size: clamp(2rem, 3vw, 2.85rem);
+  font-size: clamp(1.65rem, 2.2vw, 2rem);
   line-height: 1.15;
   font-weight: 900;
 }
@@ -2298,18 +2303,18 @@ body[data-workspace-mode="home"] .guest-root {
 }
 
 .upgrade-modal-head p {
-  margin: 8px 0 0;
+  margin: 4px 0 0;
   color: #8b92ad;
-  font-size: 0.98rem;
+  font-size: 0.78rem;
   font-weight: 700;
 }
 
 .upgrade-period-tabs {
   width: max-content;
   max-width: 100%;
-  min-height: 48px;
-  margin: 8px auto 28px;
-  padding: 5px;
+  min-height: 36px;
+  margin: 4px auto 14px;
+  padding: 4px;
   display: flex;
   align-items: center;
   gap: 4px;
@@ -2322,9 +2327,9 @@ body[data-workspace-mode="home"] .guest-root {
 .upgrade-period-tabs button,
 .upgrade-period-tabs span,
 .upgrade-period-tabs b {
-  min-width: 92px;
-  min-height: 36px;
-  padding: 0 16px;
+  min-width: 72px;
+  min-height: 27px;
+  padding: 0 10px;
   border: 0;
   border-radius: 999px;
   display: inline-grid;
@@ -2332,7 +2337,7 @@ body[data-workspace-mode="home"] .guest-root {
   color: #7f86a4;
   background: transparent;
   font: inherit;
-  font-size: 0.78rem;
+  font-size: 0.66rem;
   font-weight: 900;
 }
 
@@ -2342,10 +2347,10 @@ body[data-workspace-mode="home"] .guest-root {
 }
 
 .upgrade-period-tabs span {
-  min-width: 70px;
+  min-width: 56px;
   color: #684cff;
   background: rgba(111, 76, 255, 0.1);
-  font-size: 0.7rem;
+  font-size: 0.62rem;
 }
 
 .upgrade-period-tabs b {
@@ -2355,20 +2360,24 @@ body[data-workspace-mode="home"] .guest-root {
 
 .upgrade-plans {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 26px;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+  flex: 1 1 auto;
+  min-height: 0;
   direction: ltr;
 }
 
 .upgrade-plan {
   position: relative;
   direction: rtl;
-  min-height: 520px;
-  padding: 30px 28px;
+  min-height: 0;
+  padding: 16px 14px 14px;
   border: 1px solid rgba(111, 76, 255, 0.13);
-  border-radius: 20px;
+  border-radius: 14px;
   background: rgba(255, 255, 255, 0.92);
   box-shadow: 0 22px 48px rgba(31, 44, 93, 0.05);
+  display: flex;
+  flex-direction: column;
 }
 
 .upgrade-plan.is-featured {
@@ -2381,29 +2390,29 @@ body[data-workspace-mode="home"] .guest-root {
 
 .upgrade-best {
   position: absolute;
-  top: 18px;
-  left: 18px;
-  min-height: 28px;
-  padding: 0 14px;
+  top: 12px;
+  left: 12px;
+  min-height: 22px;
+  padding: 0 9px;
   border: 1px solid rgba(111, 76, 255, 0.18);
   border-radius: 999px;
   display: inline-flex;
   align-items: center;
   color: #684cff;
   background: rgba(255, 255, 255, 0.82);
-  font-size: 0.72rem;
+  font-size: 0.58rem;
 }
 
 .upgrade-plan-head {
   display: flex;
   align-items: center;
-  gap: 18px;
-  min-height: 84px;
+  gap: 10px;
+  min-height: 50px;
 }
 
 .upgrade-plan-icon {
-  width: 66px;
-  height: 66px;
+  width: 44px;
+  height: 44px;
   border-radius: 50%;
   display: grid;
   place-items: center;
@@ -2424,34 +2433,36 @@ body[data-workspace-mode="home"] .guest-root {
 .upgrade-plan h3 {
   margin: 0;
   color: #171936;
-  font-size: 1.58rem;
+  font-size: 1rem;
   font-weight: 900;
 }
 
 .upgrade-plan h3 small {
-  margin-inline-start: 6px;
+  display: block;
+  margin: 2px 0 0;
   color: inherit;
-  font-size: 0.84rem;
+  font-size: 0.58rem;
   font-weight: 900;
   opacity: 0.8;
 }
 
 .upgrade-plan p {
-  margin: 8px 0 0;
+  margin: 4px 0 0;
   color: #8d93b3;
-  font-size: 0.86rem;
+  font-size: 0.64rem;
+  line-height: 1.38;
   font-weight: 700;
 }
 
 .upgrade-price {
-  margin: 26px 0 8px;
+  margin: 12px 0 5px;
   color: #6a728f;
 }
 
 .upgrade-price strong {
   margin-inline-end: 10px;
   color: #684cff;
-  font-size: clamp(2.3rem, 4vw, 3.5rem);
+  font-size: clamp(1.9rem, 2.7vw, 2.5rem);
   line-height: 1;
   font-weight: 900;
 }
@@ -2467,13 +2478,13 @@ body[data-workspace-mode="home"] .guest-root {
 .upgrade-plan-xp {
   display: inline-flex;
   align-items: center;
-  min-height: 34px;
-  margin: 0 0 22px !important;
-  padding: 0 14px;
+  min-height: 27px;
+  margin: 0 0 10px !important;
+  padding: 0 10px;
   border-radius: 999px;
   color: #684cff !important;
   background: rgba(111, 76, 255, 0.09);
-  font-size: 0.84rem !important;
+  font-size: 0.64rem !important;
   font-weight: 900 !important;
 }
 
@@ -2489,12 +2500,13 @@ body[data-workspace-mode="home"] .guest-root {
 
 .upgrade-plan-action {
   width: 100%;
-  min-height: 48px;
+  min-height: 36px;
   border: 1px solid rgba(111, 76, 255, 0.16);
   border-radius: 999px;
   color: #684cff;
   background: rgba(255, 255, 255, 0.9);
   font-family: inherit;
+  font-size: 0.7rem;
   font-weight: 900;
   cursor: pointer;
 }
@@ -2513,65 +2525,65 @@ body[data-workspace-mode="home"] .guest-root {
 }
 
 .upgrade-plan ul {
-  margin: 24px 0 0;
+  margin: 11px 0 0;
   padding: 0;
   display: grid;
-  gap: 17px;
+  gap: 6px;
   list-style: none;
 }
 
 .upgrade-plan li {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 7px;
   color: #3d4567;
-  font-size: 0.9rem;
-  line-height: 1.55;
+  font-size: 0.64rem;
+  line-height: 1.3;
   font-weight: 700;
 }
 
 .upgrade-plan li svg {
-  width: 18px;
-  height: 18px;
+  width: 13px;
+  height: 13px;
   color: #684cff;
   flex: 0 0 auto;
 }
 
 .upgrade-modal-foot {
-  margin: 34px -44px 0;
-  padding: 22px 44px;
+  margin: 12px -18px 0;
+  padding: 10px 18px;
   border-top: 1px solid rgba(111, 76, 255, 0.08);
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 18px;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
   background: rgba(249, 248, 255, 0.72);
 }
 
 .upgrade-modal-foot span {
   display: grid;
-  grid-template-columns: 44px 1fr;
-  gap: 5px 12px;
+  grid-template-columns: 30px 1fr;
+  gap: 2px 8px;
   align-items: center;
   color: #202747;
 }
 
 .upgrade-modal-foot svg {
   grid-row: span 2;
-  width: 44px;
-  height: 44px;
-  padding: 12px;
+  width: 30px;
+  height: 30px;
+  padding: 8px;
   border-radius: 50%;
   color: #684cff;
   background: rgba(111, 76, 255, 0.1);
 }
 
 .upgrade-modal-foot b {
-  font-size: 0.88rem;
+  font-size: 0.68rem;
 }
 
 .upgrade-modal-foot small {
   color: #8b92ad;
-  font-size: 0.78rem;
+  font-size: 0.6rem;
 }
 
 .auth-gate {
@@ -2754,7 +2766,7 @@ body[data-workspace-mode="home"] .guest-root {
     max-height: calc(100dvh - 96px);
     overflow: hidden;
     padding: 22px 18px 0;
-    border-radius: 20px;
+    border-radius: 16px;
     display: flex;
     flex-direction: column;
   }
@@ -2764,7 +2776,7 @@ body[data-workspace-mode="home"] .guest-root {
     left: 22px;
     width: 38px;
     height: 38px;
-    border-radius: 11px;
+    border-radius: 10px;
     font-size: 1.2rem;
   }
 
@@ -2828,7 +2840,7 @@ body[data-workspace-mode="home"] .guest-root {
   .upgrade-plan {
     min-height: 0;
     padding: 16px 14px 14px;
-    border-radius: 16px;
+    border-radius: 14px;
     display: flex;
     flex-direction: column;
     box-shadow: 0 18px 44px rgba(31, 44, 93, 0.045);
