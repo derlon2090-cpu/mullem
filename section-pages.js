@@ -51,6 +51,11 @@
     document: '<svg viewBox="0 0 24 24"><path d="M7 3h8l4 4v14H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2Z"/><path d="M15 3v5h5"/></svg>',
     internet: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14.5 14.5 0 0 1 0 18M12 3a14.5 14.5 0 0 0 0 18"/></svg>',
     menu: '<svg viewBox="0 0 24 24"><circle cx="6" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="18" cy="12" r="1.6"/></svg>',
+    share: '<svg viewBox="0 0 24 24"><path d="M18 8a3 3 0 1 0-2.8-4H15a3 3 0 0 0 3 4Z"/><path d="M6 15a3 3 0 1 0 0 6 3 3 0 0 0 0-6Z"/><path d="M18 16a3 3 0 1 0 0 6 3 3 0 0 0 0-6Z"/><path d="m8.7 15.9 6.6-3.8M8.7 8.1l6.6 3.8"/></svg>',
+    group: '<svg viewBox="0 0 24 24"><path d="M9 11a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7Z"/><path d="M2.8 20a6.2 6.2 0 0 1 12.4 0"/><path d="M17 10.5a3 3 0 1 0 0-6"/><path d="M16 14a5 5 0 0 1 5 5"/></svg>',
+    edit: '<svg viewBox="0 0 24 24"><path d="m4 20 4.5-1 10-10a2.2 2.2 0 0 0-3.1-3.1l-10 10Z"/><path d="M13.5 7.5 16.5 10.5"/></svg>',
+    pin: '<svg viewBox="0 0 24 24"><path d="m15 4 5 5-4 1.5-3 3V18l-2 2-3.5-3.5L4 13l2-2h4.5l3-3Z"/><path d="m8 16-4 4"/></svg>',
+    archive: '<svg viewBox="0 0 24 24"><path d="M4 7h16v13H4z"/><path d="M3 4h18v3H3z"/><path d="M9 11h6"/></svg>',
     code: '<svg viewBox="0 0 24 24"><path d="m8 8-4 4 4 4"/><path d="m16 8 4 4-4 4"/><path d="m14 5-4 14"/></svg>',
     delete: '<svg viewBox="0 0 24 24"><path d="M4 7h16"/><path d="M10 11v6M14 11v6"/><path d="M6 7 7 20a1 1 0 0 0 1 .9h8a1 1 0 0 0 1-.9L18 7"/><path d="M9 7V4h6v3"/></svg>',
     copy: '<svg viewBox="0 0 24 24"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V6a2 2 0 0 1 2-2h9"/></svg>',
@@ -357,6 +362,7 @@
     settingsModalOpen: false,
     upgradeModalOpen: false,
     balancePanelOpen: false,
+    openThreadMenuId: "",
     authReason: "",
     conversationIds: {},
     conversationUserId: "",
@@ -1043,6 +1049,38 @@
     `).join("");
   }
 
+  function renderThreadMenu(item) {
+    const threadId = escapeHtml(item.id);
+    return `
+      <div class="thread-actions-menu" data-thread-menu-panel>
+        <button type="button" data-thread-action="share" data-thread-id="${threadId}">
+          <span>مشاركة</span>
+          <i>${icons.share}</i>
+        </button>
+        <button type="button" data-thread-action="group" data-thread-id="${threadId}">
+          <span>بدء دردشة جماعية</span>
+          <i>${icons.group}</i>
+        </button>
+        <button type="button" data-thread-action="rename" data-thread-id="${threadId}">
+          <span>إعادة التسمية</span>
+          <i>${icons.edit}</i>
+        </button>
+        <button type="button" data-thread-action="pin" data-thread-id="${threadId}">
+          <span>${item.pinned ? "إلغاء التثبيت" : "تثبيت لدردشة"}</span>
+          <i>${icons.pin}</i>
+        </button>
+        <button type="button" data-thread-action="archive" data-thread-id="${threadId}">
+          <span>أرشفة</span>
+          <i>${icons.archive}</i>
+        </button>
+        <button class="danger" type="button" data-thread-action="delete" data-thread-id="${threadId}">
+          <span>حذف</span>
+          <i>${icons.delete}</i>
+        </button>
+      </div>
+    `;
+  }
+
   function renderHistory() {
     const groups = filterGroups();
     const activeThread = getActiveThread();
@@ -1051,18 +1089,91 @@
         <h3>${escapeHtml(groupEntry.title)}</h3>
         <div class="guest-history-list">
           ${groupEntry.items.map((item) => `
-            <button class="guest-history-item ${activeThread?.id === item.id ? "is-active" : ""}" type="button" data-thread="${item.id}">
-              <span class="guest-history-dot">${icons.chat}</span>
-              <div class="guest-history-copy">
-                <strong>${escapeHtml(item.title)}</strong>
-                <small>${escapeHtml(item.time)}</small>
-              </div>
-              <span class="guest-history-badge">${icons.menu}</span>
-            </button>
+            <div class="guest-history-item-wrap ${activeThread?.id === item.id ? "is-active" : ""} ${state.openThreadMenuId === item.id ? "menu-open" : ""}">
+              <button class="guest-history-item" type="button" data-thread="${item.id}">
+                <span class="guest-history-dot">${icons.chat}</span>
+                <div class="guest-history-copy">
+                  <strong>${escapeHtml(item.title)}</strong>
+                  <small>${escapeHtml(item.time)}</small>
+                </div>
+              </button>
+              <button class="guest-history-more" type="button" data-thread-menu="${item.id}" aria-label="خيارات المحادثة" aria-expanded="${state.openThreadMenuId === item.id ? "true" : "false"}">${icons.menu}</button>
+              ${state.openThreadMenuId === item.id ? renderThreadMenu(item) : ""}
+            </div>
           `).join("")}
         </div>
       </section>
     `).join("") || '<div class="guest-empty-side">لا توجد عناصر مطابقة لبحثك الآن.</div>';
+  }
+
+  function updateThreadById(threadId, updater, sectionKey = state.section) {
+    let updatedThread = null;
+    state.threadState[sectionKey] = (state.threadState[sectionKey] || []).map((groupEntry) => ({
+      ...groupEntry,
+      items: groupEntry.items.map((item) => {
+        if (item.id !== threadId) return item;
+        updatedThread = updater(item);
+        return updatedThread;
+      })
+    }));
+    return updatedThread;
+  }
+
+  function removeThreadById(threadId, sectionKey = state.section) {
+    if (!threadId) return false;
+    if (state.conversationIds[threadId]) {
+      delete state.conversationIds[threadId];
+      saveConversationIdsForCurrentUser();
+    }
+
+    let removed = false;
+    state.threadState[sectionKey] = (state.threadState[sectionKey] || [])
+      .map((groupEntry) => ({
+        ...groupEntry,
+        items: groupEntry.items.filter((item) => {
+          const keep = item.id !== threadId;
+          removed = removed || !keep;
+          return keep;
+        })
+      }))
+      .filter((groupEntry) => groupEntry.items.length);
+
+    if (state.activeThreadId?.[sectionKey] === threadId) {
+      state.activeThreadId[sectionKey] = getAllThreads(sectionKey)[0]?.id || "";
+    }
+    return removed;
+  }
+
+  function pinThreadById(threadId, sectionKey = state.section) {
+    let target = null;
+    state.threadState[sectionKey] = (state.threadState[sectionKey] || [])
+      .map((groupEntry) => ({
+        ...groupEntry,
+        items: groupEntry.items.filter((item) => {
+          if (item.id !== threadId) return true;
+          target = { ...item, pinned: !item.pinned };
+          return false;
+        })
+      }))
+      .filter((groupEntry) => groupEntry.items.length);
+
+    if (!target) return null;
+    const nextGroups = state.threadState[sectionKey] || [];
+    if (!nextGroups.length) {
+      state.threadState[sectionKey] = [group(target.pinned ? "مثبتة" : "اليوم", [target])];
+      return target;
+    }
+    nextGroups[0] = {
+      ...nextGroups[0],
+      items: target.pinned ? [target, ...nextGroups[0].items] : [...nextGroups[0].items, target]
+    };
+    state.threadState[sectionKey] = nextGroups;
+    return target;
+  }
+
+  function getThreadShareText(thread) {
+    const title = thread?.title || "محادثة Orlixor";
+    return `${title}\n${window.location.href}`;
   }
 
   function renderQuickCards(profile) {
@@ -2154,16 +2265,123 @@
       if (shouldCloseBalance) {
         state.balancePanelOpen = false;
       }
+      const shouldCloseThreadMenu = state.openThreadMenuId
+        && !event.target.closest("[data-thread-menu]")
+        && !event.target.closest("[data-thread-menu-panel]");
+      if (shouldCloseThreadMenu) {
+        state.openThreadMenuId = "";
+      }
 
       const navButton = event.target.closest("[data-nav]");
       if (navButton) {
+        state.openThreadMenuId = "";
         setSection(navButton.getAttribute("data-nav"));
         return;
+      }
+
+      const menuButton = event.target.closest("[data-thread-menu]");
+      if (menuButton) {
+        event.preventDefault();
+        event.stopPropagation();
+        const threadId = menuButton.getAttribute("data-thread-menu") || "";
+        state.openThreadMenuId = state.openThreadMenuId === threadId ? "" : threadId;
+        render();
+        return;
+      }
+
+      const threadAction = event.target.closest("[data-thread-action]");
+      if (threadAction) {
+        event.preventDefault();
+        event.stopPropagation();
+        const action = threadAction.getAttribute("data-thread-action") || "";
+        const threadId = threadAction.getAttribute("data-thread-id") || "";
+        const thread = getAllThreads().find((item) => item.id === threadId);
+        state.openThreadMenuId = "";
+
+        if (!thread) {
+          render();
+          return;
+        }
+
+        if (action === "share") {
+          const text = getThreadShareText(thread);
+          if (navigator.share) {
+            navigator.share({ title: thread.title, text }).catch(() => {});
+          } else {
+            navigator.clipboard?.writeText(text);
+            showToast("تم نسخ رابط المشاركة.");
+          }
+          render();
+          return;
+        }
+
+        if (action === "group") {
+          if (!isAuthenticated()) {
+            openAuthModal("سجّل دخولك لبدء دردشة جماعية.");
+            return;
+          }
+          state.activeThreadId[state.section] = threadId;
+          state.homeConversationOpen = true;
+          setComposerValue(`ابدأ دردشة جماعية حول: ${thread.title}`);
+          showToast("تم تجهيز دردشة جماعية لهذه المحادثة.");
+          render();
+          return;
+        }
+
+        if (action === "rename") {
+          if (!isAuthenticated()) {
+            openAuthModal("سجّل دخولك لإعادة تسمية المحادثة.");
+            return;
+          }
+          const nextTitle = window.prompt("اكتب الاسم الجديد للمحادثة", thread.title);
+          if (nextTitle && nextTitle.trim()) {
+            updateThreadById(threadId, (item) => ({ ...item, title: nextTitle.trim().slice(0, 60) }));
+            showToast("تمت إعادة تسمية المحادثة.");
+          }
+          render();
+          return;
+        }
+
+        if (action === "pin") {
+          if (!isAuthenticated()) {
+            openAuthModal("سجّل دخولك لتثبيت المحادثة.");
+            return;
+          }
+          const pinnedThread = pinThreadById(threadId);
+          showToast(pinnedThread?.pinned ? "تم تثبيت المحادثة." : "تم إلغاء تثبيت المحادثة.");
+          render();
+          return;
+        }
+
+        if (action === "archive") {
+          if (!isAuthenticated()) {
+            openAuthModal("سجّل دخولك لأرشفة المحادثة.");
+            return;
+          }
+          removeThreadById(threadId);
+          showToast("تمت أرشفة المحادثة.");
+          render();
+          return;
+        }
+
+        if (action === "delete") {
+          if (!isAuthenticated()) {
+            openAuthModal("سجّل دخولك لحذف المحادثة.");
+            return;
+          }
+          if (window.confirm("هل تريد حذف هذه المحادثة؟")) {
+            removeThreadById(threadId);
+            showToast("تم حذف المحادثة.");
+          }
+          render();
+          return;
+        }
       }
 
       const threadButton = event.target.closest("[data-thread]");
       if (threadButton) {
         const threadId = threadButton.getAttribute("data-thread") || "";
+        state.openThreadMenuId = "";
         state.activeThreadId[state.section] = threadId;
         state.homeConversationOpen = true;
         render();
@@ -2365,7 +2583,7 @@
         showToast("تم حفظ تفاعلك بنجاح.");
       }
 
-      if (shouldCloseBalance) {
+      if (shouldCloseBalance || shouldCloseThreadMenu) {
         render();
       }
     });
