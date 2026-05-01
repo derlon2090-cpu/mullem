@@ -1517,16 +1517,15 @@
         </button>
         <div class="model-menu ${state.modelMenuOpen ? "is-open" : ""}" data-model-menu-panel ${state.modelMenuOpen ? "" : "hidden"}>
           <div class="model-menu-head">
-            <span>${icons.logo}</span>
+            <span>${icons.sparkle}</span>
             <div>
               <strong>اختر النموذج</strong>
               <small>كل نموذج مصمم لمهام مختلفة</small>
             </div>
-            <b>PRO</b>
           </div>
           <div class="model-menu-list">
             ${Object.values(modelProfiles).map((profile) => `
-              <button class="model-option ${state.selectedModel === profile.key ? "active" : ""} ${profile.disabled ? "is-disabled" : ""}" type="button" data-select-model="${escapeHtml(profile.key)}" ${profile.disabled ? "disabled aria-disabled=\"true\"" : ""}>
+              <button class="model-option model-${escapeHtml(profile.key)} ${state.selectedModel === profile.key ? "active" : ""} ${profile.disabled ? "is-disabled" : ""}" type="button" data-select-model="${escapeHtml(profile.key)}" ${profile.disabled ? "disabled aria-disabled=\"true\"" : ""}>
                 <span class="model-option-radio"></span>
                 <span class="model-option-copy">
                   <strong>${escapeHtml(profile.label)}${profile.badge ? ` <b class="model-option-badge">${escapeHtml(profile.badge)}</b>` : ""}</strong>
