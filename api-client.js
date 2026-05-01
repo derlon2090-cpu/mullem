@@ -94,6 +94,15 @@
       grade: user.grade || "",
       subject: user.subject || "",
       package: user.package || "",
+      packageKey: user.packageKey || user.package_key || "",
+      packageDailyXp: Number.isFinite(Number(user.packageDailyXp || user.package_daily_xp))
+        ? Number(user.packageDailyXp || user.package_daily_xp)
+        : 0,
+      packageStartedAt: user.packageStartedAt || user.package_started_at || null,
+      packageExpiresAt: user.packageExpiresAt || user.package_expires_at || null,
+      lastActiveDate: user.lastActiveDate || user.last_active_date || "",
+      lastReset: user.lastReset || user.last_reset || user.lastActiveDate || user.last_active_date || "",
+      last_reset: user.last_reset || user.lastReset || user.lastActiveDate || user.last_active_date || "",
       xp: Number.isFinite(Number(user.xp)) ? Number(user.xp) : 0
     };
   }
@@ -378,8 +387,8 @@
       package: user?.package || existing.package || "API Connected",
       packageId: user?.packageId ?? existing.packageId ?? null,
       packageKey: user?.packageKey || existing.packageKey || "",
-      packageDailyXp: Number.isFinite(Number(user?.packageDailyXp))
-        ? Number(user.packageDailyXp)
+      packageDailyXp: Number.isFinite(Number(user?.packageDailyXp || user?.package_daily_xp))
+        ? Number(user.packageDailyXp || user.package_daily_xp)
         : Number(existing.packageDailyXp || 0),
       packagePriceSar: Number.isFinite(Number(user?.packagePriceSar))
         ? Number(user.packagePriceSar)
@@ -399,7 +408,9 @@
       xp: Number.isFinite(Number(user?.xp)) ? Number(user.xp) : (Number.isFinite(Number(existing.xp)) ? Number(existing.xp) : 50),
       streakDays: Number.isFinite(Number(user?.streakDays)) ? Number(user.streakDays) : (Number.isFinite(Number(existing.streakDays)) ? Number(existing.streakDays) : 0),
       motivationScore: Number.isFinite(Number(user?.motivationScore)) ? Number(user.motivationScore) : Number(existing.motivationScore || 0),
-      lastActiveDate: user?.lastActiveDate || existing.lastActiveDate || "",
+      lastActiveDate: user?.lastActiveDate || user?.last_active_date || existing.lastActiveDate || existing.last_active_date || "",
+      lastReset: user?.lastReset || user?.last_reset || existing.lastReset || existing.last_reset || user?.lastActiveDate || user?.last_active_date || existing.lastActiveDate || "",
+      last_reset: user?.last_reset || user?.lastReset || existing.last_reset || existing.lastReset || user?.lastActiveDate || user?.last_active_date || existing.lastActiveDate || "",
       achievements: Array.isArray(user?.achievements) ? user.achievements : (Array.isArray(existing.achievements) ? existing.achievements : []),
       status: user?.status || existing.status || (status === "active" ? "نشط" : status),
       activity: user?.activity || existing.activity || "تمت مزامنة الحساب مع الخادم"

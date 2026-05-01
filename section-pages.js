@@ -13,6 +13,7 @@
   const shellBaseUrl = isHomeWorkspace ? HOME_URL : GUEST_URL;
   const themeKey = "orlixor_guest_theme";
   const avatarStoragePrefix = "orlixor_user_avatar_";
+  const xpClaimStoragePrefix = "orlixor_xp_claimed_at_";
   const authBridgeKey = "mlm_auth_bridge";
   const legacyStorageKeys = {
     users: "mlm_users",
@@ -354,6 +355,7 @@
     authModalOpen: false,
     settingsModalOpen: false,
     upgradeModalOpen: false,
+    balancePanelOpen: false,
     authReason: "",
     conversationIds: {},
     conversationUserId: "",
@@ -524,7 +526,15 @@
       stage: String(user.stage || "").trim(),
       grade: String(user.grade || "").trim(),
       subject: String(user.subject || "").trim(),
+      package: String(user.package || user.package_name || user.packageName || "").trim(),
+      packageName: String(user.packageName || user.package_name || user.package || "").trim(),
+      packageKey: String(user.packageKey || user.package_key || user.planType || user.plan_type || "").trim(),
+      planType: String(user.planType || user.plan_type || user.packageKey || user.package_key || "").trim(),
+      plan_type: String(user.plan_type || user.planType || user.package_key || user.packageKey || "").trim(),
       avatar: String(user.avatar || user.avatar_url || user.avatarUrl || user.photo || user.picture || "").trim(),
+      lastActiveDate: user.lastActiveDate || user.last_active_date || null,
+      lastReset: user.lastReset || user.last_reset || user.lastActiveDate || user.last_active_date || null,
+      packageDailyXp: Number.isFinite(Number(user.packageDailyXp || user.package_daily_xp)) ? Number(user.packageDailyXp || user.package_daily_xp) : 0,
       xp: Number.isFinite(Number(user.xp)) ? Number(user.xp) : 50
     };
   }
@@ -630,6 +640,7 @@
         } else if (result?.status === 401 || result?.status === 403) {
           apiClient.clearSession?.();
           state.currentUser = null;
+          state.balancePanelOpen = false;
           ensureAccountConversationState();
           render();
         }
@@ -680,6 +691,11 @@
     return `${avatarStoragePrefix}${userId}`;
   }
 
+  function getXpClaimStorageKey(user = state.currentUser) {
+    const userId = String(user?.id || user?.email || "guest").trim() || "guest";
+    return `${xpClaimStoragePrefix}${userId}`;
+  }
+
   function getUserAvatar(user = state.currentUser) {
     const embeddedAvatar = String(user?.avatar || user?.avatar_url || user?.avatarUrl || user?.photo || user?.picture || "").trim();
     if (embeddedAvatar) return embeddedAvatar;
@@ -698,6 +714,92 @@
       return `<span class="${className} has-image"><img src="${escapeHtml(avatar)}" alt="${escapeHtml(userName)}"></span>`;
     }
     return `<span class="${className}">${escapeHtml(initial)}</span>`;
+  }
+
+  function getTodayIsoDate() {
+    return new Date().toISOString().slice(0, 10);
+  }
+
+  function getCurrentXpDailyReward() {
+    const paidDaily = Number(state.currentUser?.packageDailyXp || state.currentUser?.package_daily_xp || 0);
+    return paidDaily > 0 ? paidDaily : 5;
+  }
+
+  function getXpClaimInfo() {
+    if (!isAuthenticated()) {
+      return { claimedAt: 0, nextAt: 0, remainingMs: 0 };
+    }
+
+    const key = getXpClaimStorageKey();
+    const today = getTodayIsoDate();
+    const lastReset = String(state.currentUser?.lastReset || state.currentUser?.last_reset || state.currentUser?.lastActiveDate || "").slice(0, 10);
+    const resetDate = lastReset || today;
+    let saved = null;
+    try {
+      saved = JSON.parse(localStorage.getItem(key) || "null");
+    } catch (_) {
+      saved = null;
+    }
+
+    if (!saved || saved.resetDate !== resetDate) {
+      saved = {
+        resetDate,
+        claimedAt: Date.now()
+      };
+      try {
+        localStorage.setItem(key, JSON.stringify(saved));
+      } catch (_) {
+        // Keep countdown best-effort if storage is unavailable.
+      }
+    }
+
+    const claimedAt = Number(saved.claimedAt || Date.now());
+    const nextAt = claimedAt + 24 * 60 * 60 * 1000;
+    return {
+      claimedAt,
+      nextAt,
+      remainingMs: Math.max(0, nextAt - Date.now())
+    };
+  }
+
+  function formatCountdown(ms) {
+    const totalSeconds = Math.max(0, Math.floor(Number(ms || 0) / 1000));
+    const hours = Math.floor(totalSeconds / 3600);
+    const minutes = Math.floor((totalSeconds % 3600) / 60);
+    const seconds = totalSeconds % 60;
+    return {
+      hours: String(hours).padStart(2, "0"),
+      minutes: String(minutes).padStart(2, "0"),
+      seconds: String(seconds).padStart(2, "0")
+    };
+  }
+
+  function renderBalancePanel() {
+    if (!isAuthenticated() || !state.balancePanelOpen) return "";
+    const balance = getPreviewBalance();
+    const dailyReward = getCurrentXpDailyReward();
+    const countdown = formatCountdown(getXpClaimInfo().remainingMs);
+
+    return `
+      <div class="balance-popover" data-balance-panel>
+        <span class="balance-popover-label">رصيدك الحالي</span>
+        <strong>${formatNumber(balance)} نقطة</strong>
+        <span class="balance-popover-hint">يتجدد رصيدك اليومي بعد</span>
+        <div class="balance-timer" aria-label="وقت تجدد الرصيد">
+          <b>${countdown.hours}</b>
+          <i>:</i>
+          <b>${countdown.minutes}</b>
+          <i>:</i>
+          <b>${countdown.seconds}</b>
+        </div>
+        <div class="balance-timer-labels">
+          <span>ساعة</span>
+          <span>دقيقة</span>
+          <span>ثانية</span>
+        </div>
+        <p>يتم تجديد ${formatNumber(dailyReward)} XP عند دخولك اليومي. لا يتراكم الرصيد أثناء غيابك.</p>
+      </div>
+    `;
   }
 
   function formatNumber(value) {
@@ -1190,9 +1292,6 @@
   }
 
   function renderHomeTopActions() {
-    const userInitial = isAuthenticated()
-      ? String(state.currentUser?.name || "م").trim().slice(0, 1)
-      : "";
     const accountButton = isAuthenticated()
       ? `
         <button class="home-avatar-button" type="button" data-open-account aria-label="الحساب">
@@ -1204,10 +1303,14 @@
 
     return `
       <div class="home-top-actions">
-        <button class="ghost-balance ${isAuthenticated() ? "" : "requires-auth"}" type="button" data-balance>
-          <span>الرصيد: ${formatNumber(getPreviewBalance())} نقطة</span>
-          ${icons.sparkle}
-        </button>
+        <div class="balance-menu-wrap">
+          <button class="ghost-balance ${isAuthenticated() ? "" : "requires-auth"}" type="button" data-balance aria-expanded="${state.balancePanelOpen ? "true" : "false"}">
+            <span class="balance-caret">⌄</span>
+            <span>الرصيد: ${formatNumber(getPreviewBalance())} نقطة</span>
+            ${icons.sparkle}
+          </button>
+          ${renderBalancePanel()}
+        </div>
         <button class="circle-control ${isAuthenticated() ? "" : "requires-auth"}" type="button" aria-label="الإشعارات">${icons.bell}</button>
         <button class="circle-control" type="button" aria-label="تبديل الثيم" data-theme-toggle>${icons.moon}</button>
         ${accountButton}
@@ -2043,6 +2146,13 @@
     });
 
     app.addEventListener("click", (event) => {
+      const shouldCloseBalance = state.balancePanelOpen
+        && !event.target.closest("[data-balance]")
+        && !event.target.closest("[data-balance-panel]");
+      if (shouldCloseBalance) {
+        state.balancePanelOpen = false;
+      }
+
       const navButton = event.target.closest("[data-nav]");
       if (navButton) {
         setSection(navButton.getAttribute("data-nav"));
@@ -2072,6 +2182,16 @@
 
       if (event.target.closest("[data-close-upgrade]")) {
         closeUpgradeModal();
+        return;
+      }
+
+      if (event.target.closest("[data-balance]")) {
+        if (!isAuthenticated()) {
+          openAuthModal("سجّل دخولك لعرض رصيد XP ووقت التجدد اليومي.");
+          return;
+        }
+        state.balancePanelOpen = !state.balancePanelOpen;
+        render();
         return;
       }
 
@@ -2142,6 +2262,7 @@
           state.settingsModalOpen = false;
           state.authModalOpen = false;
           state.upgradeModalOpen = false;
+          state.balancePanelOpen = false;
           state.homeConversationOpen = false;
           render();
         };
@@ -2240,6 +2361,10 @@
           return;
         }
         showToast("تم حفظ تفاعلك بنجاح.");
+      }
+
+      if (shouldCloseBalance) {
+        render();
       }
     });
 
@@ -2366,4 +2491,9 @@
       applyBridgedAuthSession();
     }
   }, 700);
+  window.setInterval(() => {
+    if (state.balancePanelOpen) {
+      render();
+    }
+  }, 1000);
 })();
