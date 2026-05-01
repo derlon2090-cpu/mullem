@@ -142,7 +142,14 @@ function normalizeBoolean(value) {
 }
 
 function getTodayDateStamp() {
-  return new Date().toISOString().slice(0, 10);
+  const parts = new Intl.DateTimeFormat("en", {
+    timeZone: "Asia/Riyadh",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit"
+  }).formatToParts(new Date());
+  const values = Object.fromEntries(parts.map((part) => [part.type, part.value]));
+  return `${values.year}-${values.month}-${values.day}`;
 }
 
 function normalizePackageRow(row) {
@@ -181,7 +188,9 @@ function hydrateUserRow(row) {
     package_expires_at: row.package_expires_at || null,
     total_xp: Number(row.total_xp ?? row.xp ?? 0),
     plan_type: String(row.plan_type || row.package_key || row.package_name || "starter").trim() || "starter",
-    last_reset: row.last_reset || row.last_active_date || null
+    last_reset: row.last_reset || row.last_active_date || null,
+    last_daily_xp_claimed_date: row.last_daily_xp_claimed_date || row.last_reset || row.last_active_date || null,
+    signup_bonus_claimed: normalizeBoolean(row.signup_bonus_claimed)
   };
 }
 
@@ -197,7 +206,7 @@ function buildAssignments(changes = {}, mappings = {}) {
     } else if (key === "benefits") {
       sets.push(`${column} = $${values.length + 1}`);
       values.push(serializeBenefits(changes[key]));
-    } else if (key === "is_active" || key === "is_default" || key === "is_archived") {
+    } else if (key === "is_active" || key === "is_default" || key === "is_archived" || key === "signup_bonus_claimed") {
       sets.push(`${column} = $${values.length + 1}`);
       values.push(Boolean(changes[key]));
     } else if (key === "package_started_at" || key === "package_expires_at") {
@@ -365,6 +374,8 @@ function createPostgresDatabaseClient(rawConfig = {}) {
         motivation_score INTEGER NOT NULL DEFAULT 0,
         last_active_date DATE NULL,
         last_reset DATE NULL,
+        last_daily_xp_claimed_date DATE NULL,
+        signup_bonus_claimed BOOLEAN NOT NULL DEFAULT TRUE,
         achievements JSONB NULL,
         status VARCHAR(20) NOT NULL DEFAULT 'active',
         activity VARCHAR(255) NULL,
@@ -383,6 +394,8 @@ function createPostgresDatabaseClient(rawConfig = {}) {
     await ensureColumn("app_users", "package_expires_at", "package_expires_at TIMESTAMPTZ NULL");
     await ensureColumn("app_users", "total_xp", "total_xp INTEGER NOT NULL DEFAULT 50");
     await ensureColumn("app_users", "last_reset", "last_reset DATE NULL");
+    await ensureColumn("app_users", "last_daily_xp_claimed_date", "last_daily_xp_claimed_date DATE NULL");
+    await ensureColumn("app_users", "signup_bonus_claimed", "signup_bonus_claimed BOOLEAN NOT NULL DEFAULT TRUE");
     await ensureColumn("app_users", "motivation_score", "motivation_score INTEGER NOT NULL DEFAULT 0");
     await ensureColumn("app_packages", "duration_days", "duration_days INTEGER NOT NULL DEFAULT 0");
     await ensureColumn("app_packages", "benefits", "benefits TEXT NULL");
@@ -1022,6 +1035,8 @@ function createPostgresDatabaseClient(rawConfig = {}) {
       motivation_score: Number.isFinite(Number(payload.motivation_score)) ? Number(payload.motivation_score) : 0,
       last_active_date: payload.last_active_date || null,
       last_reset: payload.last_reset || payload.last_active_date || null,
+      last_daily_xp_claimed_date: payload.last_daily_xp_claimed_date || payload.last_reset || payload.last_active_date || null,
+      signup_bonus_claimed: "signup_bonus_claimed" in payload ? normalizeBoolean(payload.signup_bonus_claimed) : true,
       achievements: JSON.stringify(normalizeAchievements(payload.achievements)),
       status: String(payload.status || "active").trim().toLowerCase() || "active",
       activity: String(payload.activity || "").trim() || null
@@ -1031,10 +1046,10 @@ function createPostgresDatabaseClient(rawConfig = {}) {
       `
         INSERT INTO app_users (
           name, email, password_hash, role, stage, grade, subject, package_id, package_name, plan_type, package_started_at, package_expires_at,
-          xp, total_xp, streak_days, motivation_score, last_active_date, last_reset, achievements, status, activity
+          xp, total_xp, streak_days, motivation_score, last_active_date, last_reset, last_daily_xp_claimed_date, signup_bonus_claimed, achievements, status, activity
         ) VALUES (
           $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12,
-          $13, $14, $15, $16, $17, $18, $19::jsonb, $20, $21
+          $13, $14, $15, $16, $17, $18, $19, $20, $21::jsonb, $22, $23
         )
         RETURNING id
       `,
@@ -1057,6 +1072,8 @@ function createPostgresDatabaseClient(rawConfig = {}) {
         insertPayload.motivation_score,
         insertPayload.last_active_date,
         insertPayload.last_reset,
+        insertPayload.last_daily_xp_claimed_date,
+        insertPayload.signup_bonus_claimed,
         insertPayload.achievements,
         insertPayload.status,
         insertPayload.activity
@@ -1086,6 +1103,8 @@ function createPostgresDatabaseClient(rawConfig = {}) {
     if ("status" in nextChanges) nextChanges.status = String(nextChanges.status || "active").trim().toLowerCase() || "active";
     if ("last_active_date" in nextChanges) nextChanges.last_active_date = nextChanges.last_active_date || null;
     if ("last_reset" in nextChanges) nextChanges.last_reset = nextChanges.last_reset || null;
+    if ("last_daily_xp_claimed_date" in nextChanges) nextChanges.last_daily_xp_claimed_date = nextChanges.last_daily_xp_claimed_date || null;
+    if ("signup_bonus_claimed" in nextChanges) nextChanges.signup_bonus_claimed = normalizeBoolean(nextChanges.signup_bonus_claimed);
     if ("xp" in nextChanges && !("total_xp" in nextChanges)) nextChanges.total_xp = nextChanges.xp;
     if ("total_xp" in nextChanges && !("xp" in nextChanges)) nextChanges.xp = nextChanges.total_xp;
     if (("package_id" in nextChanges || "package_key" in nextChanges || "package_name" in nextChanges) && !("plan_type" in nextChanges)) {
@@ -1111,6 +1130,8 @@ function createPostgresDatabaseClient(rawConfig = {}) {
       motivation_score: "motivation_score",
       last_active_date: "last_active_date",
       last_reset: "last_reset",
+      last_daily_xp_claimed_date: "last_daily_xp_claimed_date",
+      signup_bonus_claimed: "signup_bonus_claimed",
       achievements: "achievements",
       status: "status",
       activity: "activity"

@@ -118,6 +118,9 @@ const TEXT_MESSAGE_XP_COST = Math.max(1, Number(process.env.TEXT_MESSAGE_XP_COST
 const IMAGE_GENERATION_XP_COST = Math.max(1, Number(process.env.IMAGE_GENERATION_XP_COST || process.env.IMAGE_MESSAGE_XP_COST || process.env.IMAGE_MESSAGE_XP_REWARD || 15));
 const ATTACHMENT_ANALYSIS_XP_COST = Math.max(1, Number(process.env.ATTACHMENT_ANALYSIS_XP_COST || process.env.ATTACHMENT_XP_COST || 20));
 const DAILY_LOGIN_XP_REWARD = Math.max(0, Number(process.env.DAILY_LOGIN_XP_REWARD || 5));
+const FIRST_SIGNUP_XP = Math.max(0, Number(process.env.FIRST_SIGNUP_XP || 50));
+const FREE_MAX_OUTPUT_TOKENS = Math.max(120, Math.min(Number(process.env.FREE_MAX_OUTPUT_TOKENS || 800), 1200));
+const FREE_MAX_CONTEXT_TOKENS = Math.max(500, Math.min(Number(process.env.FREE_MAX_CONTEXT_TOKENS || 1500), 6000));
 const DAILY_MOTIVATION_BONUS = Math.max(1, Number(process.env.DAILY_MOTIVATION_BONUS || 5));
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const ACCOUNT_MEMORY_LIMIT = Math.max(1, Math.min(Number(process.env.ACCOUNT_MEMORY_LIMIT || 5), 8));
@@ -128,9 +131,10 @@ const modelProfiles = {
     name: "Orlixor AI",
     openaiModel: OPENAI_MODEL_DEFAULT || OPENAI_MODEL,
     temperature: 0.5,
-    minXpCost: 8,
-    maxXpCost: 15,
-    maxOutputTokens: Math.min(650, OPENAI_MAX_OUTPUT_TOKENS),
+    minXpCost: TEXT_MESSAGE_XP_COST,
+    maxXpCost: TEXT_MESSAGE_XP_COST,
+    maxOutputTokens: Math.min(FREE_MAX_OUTPUT_TOKENS, OPENAI_MAX_OUTPUT_TOKENS),
+    maxContextTokens: FREE_MAX_CONTEXT_TOKENS,
     systemPrompt: "أنت مساعد Orlixor العام. أجب بوضوح وبدقة وبأسلوب عربي احترافي."
   },
   turbo: {
@@ -141,6 +145,7 @@ const modelProfiles = {
     minXpCost: 5,
     maxXpCost: 10,
     maxOutputTokens: Math.min(360, OPENAI_MAX_OUTPUT_TOKENS),
+    maxContextTokens: Math.min(FREE_MAX_CONTEXT_TOKENS, 1200),
     systemPrompt: "أنت مساعد سريع. أعط إجابات مختصرة ومباشرة، ولا تطل إلا إذا طلب المستخدم ذلك صراحة."
   },
   pro: {
@@ -149,8 +154,9 @@ const modelProfiles = {
     openaiModel: OPENAI_MODEL_PRO || OPENAI_MODEL,
     temperature: 0.4,
     minXpCost: 10,
-    maxXpCost: 18,
+    maxXpCost: 15,
     maxOutputTokens: Math.min(900, Math.max(OPENAI_MAX_OUTPUT_TOKENS, 900)),
+    maxContextTokens: Math.max(FREE_MAX_CONTEXT_TOKENS, 5000),
     systemPrompt: "أنت مساعد متقدم للتحليل العميق والمهام المعقدة والبرمجة والملفات. قدم إجابات منظمة ودقيقة."
   },
   creative: {
@@ -161,6 +167,7 @@ const modelProfiles = {
     minXpCost: 10,
     maxXpCost: 15,
     maxOutputTokens: Math.min(760, Math.max(OPENAI_MAX_OUTPUT_TOKENS, 760)),
+    maxContextTokens: Math.max(FREE_MAX_CONTEXT_TOKENS, 3000),
     systemPrompt: "أنت مساعد إبداعي متخصص في الكتابة والتسويق وصناعة المحتوى والأفكار والعناوين والسكربتات."
   }
 };
@@ -644,7 +651,32 @@ function inferStageFromGrade(grade) {
 }
 
 function getTodayStamp() {
-  return new Date().toISOString().slice(0, 10);
+  return getMakkahDateKey();
+}
+
+function getMakkahDateKey(date = new Date()) {
+  const parts = new Intl.DateTimeFormat("en", {
+    timeZone: "Asia/Riyadh",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit"
+  }).formatToParts(date);
+  const values = Object.fromEntries(parts.map((part) => [part.type, part.value]));
+  return `${values.year}-${values.month}-${values.day}`;
+}
+
+function limitPromptContext(input, maxTokens = FREE_MAX_CONTEXT_TOKENS) {
+  const text = String(input || "").trim();
+  const safeMaxTokens = Math.max(500, Number(maxTokens) || FREE_MAX_CONTEXT_TOKENS);
+  const maxChars = Math.max(1000, Math.round(safeMaxTokens * 4));
+  if (text.length <= maxChars) {
+    return text;
+  }
+
+  return [
+    "System note: The earlier context was shortened to control XP usage. Answer the latest user request clearly and concisely.",
+    text.slice(-maxChars)
+  ].join("\n\n");
 }
 
 function diffDays(fromStamp, toStamp) {
@@ -716,9 +748,12 @@ async function syncUserDailyProgress(user, activityText = "") {
 
   const today = getTodayStamp();
   const lastActiveDate = String(effectiveUser.last_active_date || "");
-  if (lastActiveDate === today) {
+  const lastDailyClaimDate = String(effectiveUser.last_daily_xp_claimed_date || effectiveUser.last_reset || "");
+  const signupBonusClaimed = effectiveUser.signup_bonus_claimed !== false;
+  if (lastDailyClaimDate === today && signupBonusClaimed) {
     if (activityText) {
       return databaseClient.updateUser(effectiveUser.id, {
+        last_active_date: today,
         activity: activityText
       });
     }
@@ -741,13 +776,18 @@ async function syncUserDailyProgress(user, activityText = "") {
 
   const packageDailyXp = Math.max(0, Number(effectiveUser.package_daily_xp || 0));
   const isPaidPackage = packageDailyXp > 0;
-  const dailyXpAward = isPaidPackage ? packageDailyXp : DAILY_LOGIN_XP_REWARD;
-  const nextXp = isPaidPackage ? packageDailyXp : Number(effectiveUser.xp || 0) + DAILY_LOGIN_XP_REWARD;
+  const shouldGrantDailyXp = lastDailyClaimDate !== today;
+  const dailyXpAward = shouldGrantDailyXp ? (isPaidPackage ? packageDailyXp : DAILY_LOGIN_XP_REWARD) : 0;
+  const currentXp = Number(effectiveUser.xp || 0);
+  const baseXp = signupBonusClaimed ? currentXp : currentXp + FIRST_SIGNUP_XP;
+  const nextXp = isPaidPackage && shouldGrantDailyXp ? packageDailyXp : baseXp + dailyXpAward;
   const packageLabel = String(effectiveUser.package_name || effectiveUser.package || "التمهيدية").trim() || "التمهيدية";
 
   return databaseClient.updateUser(effectiveUser.id, {
     last_active_date: today,
     last_reset: today,
+    last_daily_xp_claimed_date: today,
+    signup_bonus_claimed: true,
     streak_days: streakDays,
     motivation_score: Number(effectiveUser.motivation_score || 0) + DAILY_MOTIVATION_BONUS,
     xp: nextXp,
@@ -892,6 +932,10 @@ function buildApiUser(user) {
     lastActiveDate: user.last_active_date || null,
     last_reset: user.last_reset || user.last_active_date || null,
     lastReset: user.last_reset || user.last_active_date || null,
+    last_daily_xp_claimed_date: user.last_daily_xp_claimed_date || user.last_reset || user.last_active_date || null,
+    lastDailyXpClaimedDate: user.last_daily_xp_claimed_date || user.last_reset || user.last_active_date || null,
+    signup_bonus_claimed: user.signup_bonus_claimed !== false,
+    signupBonusClaimed: user.signup_bonus_claimed !== false,
     achievements: Array.isArray(user.achievements) ? user.achievements : [],
     status: formatUserStatus(user.status),
     activity: String(user.activity || "").trim(),
@@ -935,7 +979,12 @@ async function ensureDefaultUsers() {
     grade: "الثاني الثانوي",
     subject: "الرياضيات",
     package_name: "مجاني محدود",
-    xp: 50,
+    xp: FIRST_SIGNUP_XP,
+    total_xp: FIRST_SIGNUP_XP,
+    last_active_date: getTodayStamp(),
+    last_reset: getTodayStamp(),
+    last_daily_xp_claimed_date: getTodayStamp(),
+    signup_bonus_claimed: true,
     motivation_score: 0,
     status: "active",
     activity: "حساب طالب جديد"
@@ -1393,7 +1442,7 @@ async function callOpenAI({ input, modelProfile }) {
       },
       body: JSON.stringify({
         model: profile.openaiModel || OPENAI_MODEL,
-        input: String(input || "").trim(),
+        input: limitPromptContext(input, profile.maxContextTokens || FREE_MAX_CONTEXT_TOKENS),
         temperature: Number(profile.temperature ?? 0.5),
         max_output_tokens: Math.max(120, Math.min(Number(profile.maxOutputTokens || OPENAI_MAX_OUTPUT_TOKENS), 1200))
       }),
@@ -1547,9 +1596,13 @@ async function handleRegister(req, res) {
     stage,
     grade,
     package_name: "مجاني محدود",
-    xp: 50,
+    xp: FIRST_SIGNUP_XP,
+    total_xp: FIRST_SIGNUP_XP,
     streak_days: 1,
     last_active_date: getTodayStamp(),
+    last_reset: getTodayStamp(),
+    last_daily_xp_claimed_date: getTodayStamp(),
+    signup_bonus_claimed: true,
     status: "active",
     activity: "أنشأ حسابًا جديدًا"
   });
