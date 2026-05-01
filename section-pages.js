@@ -12,6 +12,7 @@
   const isHomeWorkspace = workspaceMode === "home";
   const shellBaseUrl = isHomeWorkspace ? HOME_URL : GUEST_URL;
   const themeKey = "orlixor_guest_theme";
+  const avatarStoragePrefix = "orlixor_user_avatar_";
   const authBridgeKey = "mlm_auth_bridge";
   const legacyStorageKeys = {
     users: "mlm_users",
@@ -523,6 +524,7 @@
       stage: String(user.stage || "").trim(),
       grade: String(user.grade || "").trim(),
       subject: String(user.subject || "").trim(),
+      avatar: String(user.avatar || user.avatar_url || user.avatarUrl || user.photo || user.picture || "").trim(),
       xp: Number.isFinite(Number(user.xp)) ? Number(user.xp) : 50
     };
   }
@@ -671,6 +673,31 @@
       .replaceAll(">", "&gt;")
       .replaceAll('"', "&quot;")
       .replaceAll("'", "&#39;");
+  }
+
+  function getUserAvatarStorageKey(user = state.currentUser) {
+    const userId = String(user?.id || user?.email || "guest").trim() || "guest";
+    return `${avatarStoragePrefix}${userId}`;
+  }
+
+  function getUserAvatar(user = state.currentUser) {
+    const embeddedAvatar = String(user?.avatar || user?.avatar_url || user?.avatarUrl || user?.photo || user?.picture || "").trim();
+    if (embeddedAvatar) return embeddedAvatar;
+    try {
+      return String(localStorage.getItem(getUserAvatarStorageKey(user)) || "").trim();
+    } catch (_) {
+      return "";
+    }
+  }
+
+  function renderUserAvatar(className = "guest-user-avatar", user = state.currentUser) {
+    const userName = String(user?.name || user?.email || "ضيف").trim() || "ضيف";
+    const initial = userName.slice(0, 1);
+    const avatar = getUserAvatar(user);
+    if (avatar) {
+      return `<span class="${className} has-image"><img src="${escapeHtml(avatar)}" alt="${escapeHtml(userName)}"></span>`;
+    }
+    return `<span class="${className}">${escapeHtml(initial)}</span>`;
   }
 
   function formatNumber(value) {
@@ -986,6 +1013,19 @@
       `;
     }
 
+    if (isHomeWorkspace) {
+      const messageTime = message.time || getActiveThread()?.time || "الآن";
+      return `
+        <div class="guest-message-row user">
+          <div class="guest-message user">
+            <span>${escapeHtml(message.body)}</span>
+            <small>${escapeHtml(messageTime)} ✓</small>
+          </div>
+          ${renderUserAvatar("guest-message-avatar")}
+        </div>
+      `;
+    }
+
     return `
       <div class="guest-message user">
         <span>${escapeHtml(message.body)}</span>
@@ -1156,7 +1196,7 @@
     const accountButton = isAuthenticated()
       ? `
         <button class="home-avatar-button" type="button" data-open-account aria-label="الحساب">
-          <span>${escapeHtml(userInitial)}</span>
+          ${renderUserAvatar("home-avatar-image")}
           <i aria-hidden="true"></i>
         </button>
       `
@@ -1177,7 +1217,6 @@
 
   function renderSettingsModal() {
     const userName = String(state.currentUser?.name || "ضيف").trim() || "ضيف";
-    const firstLetter = userName.slice(0, 1);
     const packageLabel = getUserPackageLabel(state.currentUser);
     const settings = state.settings[state.section] || {};
     const modalTabs = [
@@ -1199,7 +1238,11 @@
 
           <aside class="settings-modal-side">
             <div class="settings-profile">
-              <span class="settings-avatar">${escapeHtml(firstLetter)}</span>
+              <label class="settings-avatar-upload">
+                ${renderUserAvatar("settings-avatar")}
+                <input type="file" accept="image/*" data-avatar-upload>
+                <small>تغيير الصورة</small>
+              </label>
               <div>
                 <strong>${escapeHtml(userName)}</strong>
                 <span>${escapeHtml(packageLabel)}</span>
@@ -1431,7 +1474,7 @@
       `
       : `
         <div class="guest-user-card is-member">
-          <span class="guest-user-avatar">${escapeHtml(userCard.title.slice(0, 1))}</span>
+          ${renderUserAvatar("guest-user-avatar")}
           <span class="guest-user-copy">
             <strong>${escapeHtml(userCard.title)}</strong>
             <small>${escapeHtml(userCard.subtitle)}</small>
@@ -2219,6 +2262,43 @@
     });
 
     app.addEventListener("change", (event) => {
+      const avatarInput = event.target.closest("[data-avatar-upload]");
+      if (avatarInput) {
+        if (!isAuthenticated()) {
+          openAuthModal("حدّث صورة حسابك بعد تسجيل الدخول.");
+          avatarInput.value = "";
+          return;
+        }
+        const file = avatarInput.files?.[0];
+        if (!file) return;
+        if (!file.type.startsWith("image/")) {
+          showToast("اختر ملف صورة فقط.");
+          avatarInput.value = "";
+          return;
+        }
+        if (file.size > 1024 * 1024) {
+          showToast("حجم الصورة كبير. اختر صورة أقل من 1MB.");
+          avatarInput.value = "";
+          return;
+        }
+        const reader = new FileReader();
+        reader.onload = () => {
+          const avatar = String(reader.result || "");
+          try {
+            localStorage.setItem(getUserAvatarStorageKey(), avatar);
+          } catch (_) {
+            showToast("تعذر حفظ الصورة في هذا المتصفح.");
+            return;
+          }
+          state.currentUser = { ...state.currentUser, avatar };
+          showToast("تم تحديث صورة الحساب.");
+          render();
+        };
+        reader.onerror = () => showToast("تعذر قراءة الصورة.");
+        reader.readAsDataURL(file);
+        return;
+      }
+
       const select = event.target.closest("[data-setting]");
       if (!select) return;
       if (!isAuthenticated()) {
