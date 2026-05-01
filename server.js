@@ -44,6 +44,10 @@ function readEnvNumber(keys, fallback) {
 
 const OPENAI_API_KEY = String(process.env.OPENAI_API_KEY || "").trim();
 const OPENAI_MODEL = String(process.env.OPENAI_MODEL || "gpt-4o-mini").trim();
+const OPENAI_MODEL_DEFAULT = String(process.env.OPENAI_MODEL_DEFAULT || process.env.OPENAI_MODEL_ORLIXOR || "gpt-4.1-mini").trim();
+const OPENAI_MODEL_TURBO = String(process.env.OPENAI_MODEL_TURBO || "gpt-4.1-mini").trim();
+const OPENAI_MODEL_PRO = String(process.env.OPENAI_MODEL_PRO || "gpt-4.1").trim();
+const OPENAI_MODEL_CREATIVE = String(process.env.OPENAI_MODEL_CREATIVE || "gpt-4.1").trim();
 const OPENAI_IMAGE_MODEL = String(process.env.OPENAI_IMAGE_MODEL || "dall-e-3").trim();
 const OPENAI_RESPONSES_ENDPOINT = String(process.env.OPENAI_RESPONSES_ENDPOINT || "https://api.openai.com/v1/responses").trim();
 const OPENAI_TIMEOUT_MS = Number(process.env.OPENAI_TIMEOUT_MS || 25000);
@@ -118,6 +122,48 @@ const DAILY_MOTIVATION_BONUS = Math.max(1, Number(process.env.DAILY_MOTIVATION_B
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const ACCOUNT_MEMORY_LIMIT = Math.max(1, Math.min(Number(process.env.ACCOUNT_MEMORY_LIMIT || 5), 8));
 const ACCOUNT_MEMORY_CANDIDATES = Math.max(ACCOUNT_MEMORY_LIMIT, Math.min(Number(process.env.ACCOUNT_MEMORY_CANDIDATES || 28), 60));
+const modelProfiles = {
+  default: {
+    key: "default",
+    name: "Orlixor AI",
+    openaiModel: OPENAI_MODEL_DEFAULT || OPENAI_MODEL,
+    temperature: 0.5,
+    minXpCost: 8,
+    maxXpCost: 15,
+    maxOutputTokens: Math.min(650, OPENAI_MAX_OUTPUT_TOKENS),
+    systemPrompt: "أنت مساعد Orlixor العام. أجب بوضوح وبدقة وبأسلوب عربي احترافي."
+  },
+  turbo: {
+    key: "turbo",
+    name: "Orlixor AI Turbo",
+    openaiModel: OPENAI_MODEL_TURBO || OPENAI_MODEL,
+    temperature: 0.3,
+    minXpCost: 5,
+    maxXpCost: 10,
+    maxOutputTokens: Math.min(360, OPENAI_MAX_OUTPUT_TOKENS),
+    systemPrompt: "أنت مساعد سريع. أعط إجابات مختصرة ومباشرة، ولا تطل إلا إذا طلب المستخدم ذلك صراحة."
+  },
+  pro: {
+    key: "pro",
+    name: "Orlixor AI Pro",
+    openaiModel: OPENAI_MODEL_PRO || OPENAI_MODEL,
+    temperature: 0.4,
+    minXpCost: 10,
+    maxXpCost: 18,
+    maxOutputTokens: Math.min(900, Math.max(OPENAI_MAX_OUTPUT_TOKENS, 900)),
+    systemPrompt: "أنت مساعد متقدم للتحليل العميق والمهام المعقدة والبرمجة والملفات. قدم إجابات منظمة ودقيقة."
+  },
+  creative: {
+    key: "creative",
+    name: "Orlixor AI Creative",
+    openaiModel: OPENAI_MODEL_CREATIVE || OPENAI_MODEL,
+    temperature: 0.8,
+    minXpCost: 10,
+    maxXpCost: 15,
+    maxOutputTokens: Math.min(760, Math.max(OPENAI_MAX_OUTPUT_TOKENS, 760)),
+    systemPrompt: "أنت مساعد إبداعي متخصص في الكتابة والتسويق وصناعة المحتوى والأفكار والعناوين والسكربتات."
+  }
+};
 const MEMORY_STOP_WORDS = new Set([
   "هذا", "هذه", "ذلك", "تلك", "هناك", "هنا", "الذي", "التي", "الى", "إلى", "على", "من", "عن", "في", "مع",
   "ثم", "او", "أو", "كما", "بعد", "قبل", "لقد", "كان", "كانت", "يكون", "يمكن", "عندي", "عندك", "عنده",
@@ -716,6 +762,18 @@ function isImageAttachmentName(value) {
   return /\.(png|jpe?g|webp|gif|bmp|heic|heif|svg)$/i.test(String(value || "").trim());
 }
 
+function normalizeSelectedModel(value) {
+  const raw = String(value || "").trim().toLowerCase();
+  if (raw.includes("turbo")) return "turbo";
+  if (raw.includes("creative")) return "creative";
+  if (raw.includes("pro")) return "pro";
+  return modelProfiles[raw] ? raw : "default";
+}
+
+function getModelProfile(value) {
+  return modelProfiles[normalizeSelectedModel(value)] || modelProfiles.default;
+}
+
 function getMessageXpCost(attachmentCount = 0, attachmentNames = []) {
   const normalizedAttachmentCount = Math.max(0, Math.round(Number(attachmentCount) || 0));
   if (!normalizedAttachmentCount) {
@@ -725,6 +783,30 @@ function getMessageXpCost(attachmentCount = 0, attachmentNames = []) {
   const names = Array.isArray(attachmentNames) ? attachmentNames.filter(Boolean) : [];
   const hasOnlyImages = names.length > 0 && names.every(isImageAttachmentName);
   return hasOnlyImages ? IMAGE_GENERATION_XP_COST : ATTACHMENT_ANALYSIS_XP_COST;
+}
+
+function getPreflightXpCost(profile, attachmentCount = 0, attachmentNames = []) {
+  const attachmentCost = getMessageXpCost(attachmentCount, attachmentNames);
+  if (Math.max(0, Number(attachmentCount) || 0) > 0) {
+    return Math.max(attachmentCost, Number(profile.maxXpCost || attachmentCost));
+  }
+  return Math.max(1, Number(profile.maxXpCost || TEXT_MESSAGE_XP_COST));
+}
+
+function calculateFinalXpCost(profile, assistantText = "", attachmentCount = 0, attachmentNames = []) {
+  const normalizedAttachmentCount = Math.max(0, Math.round(Number(attachmentCount) || 0));
+  const minCost = Math.max(1, Number(profile.minXpCost || TEXT_MESSAGE_XP_COST));
+  const maxCost = Math.max(minCost, Number(profile.maxXpCost || TEXT_MESSAGE_XP_COST));
+  const textLength = String(assistantText || "").trim().length;
+  const textUnits = Math.min(maxCost - minCost, Math.floor(textLength / 450));
+  let cost = minCost + textUnits;
+
+  if (normalizedAttachmentCount > 0) {
+    cost = Math.max(cost, getMessageXpCost(attachmentCount, attachmentNames));
+    if (normalizedAttachmentCount > 1) cost += Math.min(5, normalizedAttachmentCount - 1);
+  }
+
+  return Math.max(1, Math.min(Math.round(cost), Math.max(maxCost, cost)));
 }
 
 async function chargeUserForMessage(user, cost, activityText) {
@@ -1206,7 +1288,10 @@ async function getAccountMemoryMessages(payload = {}) {
 }
 
 function buildSolveSystemPrompt(payload) {
+  const modelProfile = payload.modelProfile || getModelProfile(payload.selected_model || payload.selectedModel || payload.model);
   return [
+    modelProfile.systemPrompt,
+    `النموذج المختار: ${modelProfile.name}.`,
     "أنت محرك حل أسئلة تعليمية عربي لمنصة ملم.",
     "أعد JSON فقط بدون markdown أو أي نص زائد.",
     "لا تستخدم markdown داخل answer أو explanation أو display_text.",
@@ -1289,11 +1374,12 @@ function normalizeQuestionType(value) {
   return allowed.has(String(value || "").trim()) ? String(value).trim() : "general";
 }
 
-async function callOpenAI({ input }) {
+async function callOpenAI({ input, modelProfile }) {
   if (!OPENAI_API_KEY) {
     throw createHttpError(503, "OPENAI_API_KEY is not configured on the server.");
   }
 
+  const profile = modelProfile || modelProfiles.default;
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), OPENAI_TIMEOUT_MS);
 
@@ -1306,9 +1392,10 @@ async function callOpenAI({ input }) {
         "Content-Type": "application/json"
       },
       body: JSON.stringify({
-        model: OPENAI_MODEL,
+        model: profile.openaiModel || OPENAI_MODEL,
         input: String(input || "").trim(),
-        max_output_tokens: OPENAI_MAX_OUTPUT_TOKENS
+        temperature: Number(profile.temperature ?? 0.5),
+        max_output_tokens: Math.max(120, Math.min(Number(profile.maxOutputTokens || OPENAI_MAX_OUTPUT_TOKENS), 1200))
       }),
       signal: controller.signal
     });
@@ -2014,7 +2101,12 @@ async function handleAdminUpdateUser(req, res, userId) {
 }
 
 async function buildChatMessages(conversation, payload) {
-  const systemPrompt = buildAudienceAwareChatPrompt(payload);
+  const modelProfile = payload.modelProfile || getModelProfile(payload.selected_model || payload.selectedModel || payload.model);
+  const systemPrompt = [
+    modelProfile.systemPrompt,
+    `النموذج المختار: ${modelProfile.name}.`,
+    buildAudienceAwareChatPrompt(payload)
+  ].filter(Boolean).join("\n");
   const history = await listConversationHistory(conversation);
   const attachmentContext = buildAttachmentContext(payload);
   const messages = [
@@ -2069,6 +2161,8 @@ async function handleChatSend(req, res) {
   );
   const hasAttachment = Boolean(payload.has_attachment || payload.hasAttachment || attachmentCount > 0);
   const hasOnlyImageAttachments = attachmentNames.length > 0 && attachmentNames.every(isImageAttachmentName);
+  const selectedModel = normalizeSelectedModel(payload.selected_model || payload.selectedModel || payload.model || "default");
+  const modelProfile = getModelProfile(selectedModel);
   const auth = await getAuthContext(req);
   const activeUser = auth?.user ? await syncUserDailyProgress(auth.user, "بدأ جلسة شات جديدة") : null;
 
@@ -2076,10 +2170,10 @@ async function handleChatSend(req, res) {
     throw createHttpError(401, "Authentication is required to use chat.");
   }
 
-  const xpCost = getMessageXpCost(attachmentCount, attachmentNames);
+  const preflightXpCost = getPreflightXpCost(modelProfile, attachmentCount, attachmentNames);
   const currentXp = Math.max(0, Number(activeUser.xp || 0));
-  if (currentXp < xpCost) {
-    throw createHttpError(402, `Insufficient XP balance. This request needs ${xpCost} XP.`);
+  if (currentXp < preflightXpCost) {
+    throw createHttpError(402, `Insufficient XP balance. This request needs ${preflightXpCost} XP.`);
   }
 
   let project = null;
@@ -2104,20 +2198,14 @@ async function handleChatSend(req, res) {
   });
 
   let chargedUser = activeUser || null;
-  if (activeUser && isDatabaseReady()) {
-    chargedUser = await chargeUserForMessage(
-      activeUser,
-      xpCost,
-      hasAttachment
-        ? (hasOnlyImageAttachments ? "أرسل رسالة مع صورة" : "أرسل رسالة مع ملف")
-        : "أرسل رسالة نصية"
-    );
-  }
 
   const result = await callOpenAI({
+    modelProfile,
     input: buildResponsesInput(await buildChatMessages(conversation, {
       ...payload,
       message,
+      selected_model: selectedModel,
+      modelProfile,
       attachment_count: attachmentCount,
       attachment_names: attachmentNames,
       user_id: activeUser?.id || null,
@@ -2131,6 +2219,17 @@ async function handleChatSend(req, res) {
     }))
   });
   const assistantText = sanitizeModelDisplayText(result.text);
+  const xpCost = calculateFinalXpCost(modelProfile, assistantText, attachmentCount, attachmentNames);
+
+  if (activeUser && isDatabaseReady()) {
+    chargedUser = await chargeUserForMessage(
+      activeUser,
+      xpCost,
+      hasAttachment
+        ? (hasOnlyImageAttachments ? `استخدم ${modelProfile.name} مع صورة` : `استخدم ${modelProfile.name} مع ملف`)
+        : `استخدم ${modelProfile.name}`
+    );
+  }
 
   await persistConversationMessage(conversation, "user", message, "web");
   await persistConversationMessage(conversation, "assistant", assistantText, "openai");
@@ -2142,7 +2241,13 @@ async function handleChatSend(req, res) {
       project: project ? buildProjectSummary(project) : null,
       assistant_message: {
         body: assistantText,
-        source: "openai"
+        source: "openai",
+        model: modelProfile.name
+      },
+      model: {
+        key: selectedModel,
+        name: modelProfile.name,
+        openai_model: modelProfile.openaiModel
       },
       usage: activeUser ? {
         xp_spent: xpCost,
@@ -2167,6 +2272,8 @@ async function handleSolveQuestion(req, res) {
     Number(payload.attachment_count || payload.attachmentCount || 0) || 0
   );
   const hasOnlyImageAttachments = attachmentNames.length > 0 && attachmentNames.every(isImageAttachmentName);
+  const selectedModel = normalizeSelectedModel(payload.selected_model || payload.selectedModel || payload.model || "default");
+  const modelProfile = getModelProfile(selectedModel);
   const auth = await getAuthContext(req);
   const activeUser = auth?.user ? await syncUserDailyProgress(auth.user, "بدأ حل سؤال دقيق") : null;
 
@@ -2174,25 +2281,18 @@ async function handleSolveQuestion(req, res) {
     throw createHttpError(401, "Authentication is required to solve questions.");
   }
 
-  const xpCost = getMessageXpCost(attachmentCount, attachmentNames);
+  const preflightXpCost = getPreflightXpCost(modelProfile, attachmentCount, attachmentNames);
   const currentXp = Math.max(0, Number(activeUser.xp || 0));
-  if (currentXp < xpCost) {
-    throw createHttpError(402, `Insufficient XP balance. This request needs ${xpCost} XP.`);
+  if (currentXp < preflightXpCost) {
+    throw createHttpError(402, `Insufficient XP balance. This request needs ${preflightXpCost} XP.`);
   }
 
-  const chargedUser = isDatabaseReady()
-    ? await chargeUserForMessage(
-      activeUser,
-      xpCost,
-      attachmentCount > 0
-        ? (hasOnlyImageAttachments ? "حل سؤال مع صورة" : "حل سؤال مع ملف")
-        : "حل سؤال نصي"
-    )
-    : activeUser;
-
   const result = await callOpenAI({
+    modelProfile,
     input: buildSolveSystemPrompt({
       ...payload,
+      selected_model: selectedModel,
+      modelProfile,
       question,
       grade,
       subject,
@@ -2210,9 +2310,24 @@ async function handleSolveQuestion(req, res) {
     question_type: "general",
     confidence: 0.72
   });
+  const xpCost = calculateFinalXpCost(modelProfile, normalized.display_text || cleanedSolveText, attachmentCount, attachmentNames);
+  const chargedUser = isDatabaseReady()
+    ? await chargeUserForMessage(
+      activeUser,
+      xpCost,
+      attachmentCount > 0
+        ? (hasOnlyImageAttachments ? `استخدم ${modelProfile.name} لحل سؤال مع صورة` : `استخدم ${modelProfile.name} لحل سؤال مع ملف`)
+        : `استخدم ${modelProfile.name} لحل سؤال نصي`
+    )
+    : activeUser;
 
   sendJson(req, res, 200, {
     ...normalized,
+    model: {
+      key: selectedModel,
+      name: modelProfile.name,
+      openai_model: modelProfile.openaiModel
+    },
     xp_spent: xpCost,
     remaining_xp: Number(chargedUser?.xp ?? activeUser.xp ?? 0)
   });

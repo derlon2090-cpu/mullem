@@ -12,6 +12,7 @@
   const isHomeWorkspace = workspaceMode === "home";
   const shellBaseUrl = isHomeWorkspace ? HOME_URL : GUEST_URL;
   const themeKey = "orlixor_guest_theme";
+  const modelStorageKey = "orlixor_selected_model";
   const avatarStoragePrefix = "orlixor_user_avatar_";
   const xpClaimStoragePrefix = "orlixor_xp_claimed_at_";
   const authBridgeKey = "mlm_auth_bridge";
@@ -348,6 +349,41 @@
     })
   };
 
+  const modelProfiles = {
+    default: {
+      key: "default",
+      name: "Orlixor AI",
+      label: "Orlixor AI (الموصى به)",
+      description: "النموذج المتوازن للشرح والكتابة والأسئلة العامة.",
+      icon: "logo",
+      xp: "حتى 15 XP لكل رسالة"
+    },
+    turbo: {
+      key: "turbo",
+      name: "Orlixor AI Turbo",
+      label: "Orlixor AI Turbo",
+      description: "أسرع استجابة للمهام اليومية والردود المختصرة.",
+      icon: "bolt",
+      xp: "حتى 10 XP لكل رسالة"
+    },
+    pro: {
+      key: "pro",
+      name: "Orlixor AI Pro",
+      label: "Orlixor AI Pro",
+      description: "للتحليل العميق، الملفات، البرمجة والخطط الطويلة.",
+      icon: "star",
+      xp: "حتى 15 XP أو أكثر حسب الاستهلاك"
+    },
+    creative: {
+      key: "creative",
+      name: "Orlixor AI Creative",
+      label: "Orlixor AI Creative",
+      description: "أفضل للكتابة الإبداعية والتسويق وصناعة المحتوى.",
+      icon: "edit",
+      xp: "حتى 15 XP حسب طول النص"
+    }
+  };
+
   const state = {
     section: resolveSection(),
     currentUser: null,
@@ -361,6 +397,8 @@
     authModalOpen: false,
     settingsModalOpen: false,
     settingsModalTab: "general",
+    modelMenuOpen: false,
+    selectedModel: loadSelectedModel(),
     upgradeModalOpen: false,
     balancePanelOpen: false,
     openThreadMenuId: "",
@@ -454,6 +492,29 @@
     } catch (_) {
       // Ignore storage issues.
     }
+  }
+
+  function loadSelectedModel() {
+    try {
+      const stored = localStorage.getItem(modelStorageKey);
+      return modelProfiles[stored] ? stored : "default";
+    } catch (_) {
+      return "default";
+    }
+  }
+
+  function setSelectedModel(value) {
+    const next = modelProfiles[value] ? value : "default";
+    state.selectedModel = next;
+    try {
+      localStorage.setItem(modelStorageKey, next);
+    } catch (_) {
+      // Ignore storage issues.
+    }
+  }
+
+  function getSelectedModelProfile() {
+    return modelProfiles[state.selectedModel] || modelProfiles.default;
   }
 
   function cloneThreadState() {
@@ -1431,6 +1492,43 @@
     `;
   }
 
+  function renderModelSwitcher() {
+    const activeProfile = getSelectedModelProfile();
+    return `
+      <div class="model-switcher-wrap">
+        <button class="ai-switcher" type="button" data-model-menu aria-expanded="${state.modelMenuOpen ? "true" : "false"}">
+          <span class="ai-switcher-mark">${icons.logo}</span>
+          <span>${escapeHtml(activeProfile.name)}</span>
+          <i aria-hidden="true">⌄</i>
+        </button>
+        <div class="model-menu ${state.modelMenuOpen ? "is-open" : ""}" data-model-menu-panel ${state.modelMenuOpen ? "" : "hidden"}>
+          <div class="model-menu-head">
+            <span>${icons.logo}</span>
+            <div>
+              <strong>Orlixor AI</strong>
+              <small>اختر النموذج المناسب لك</small>
+            </div>
+            <b>PRO</b>
+          </div>
+          <div class="model-menu-list">
+            ${Object.values(modelProfiles).map((profile) => `
+              <button class="model-option ${state.selectedModel === profile.key ? "active" : ""}" type="button" data-select-model="${escapeHtml(profile.key)}">
+                <span class="model-option-radio"></span>
+                <span class="model-option-copy">
+                  <strong>${escapeHtml(profile.label)}</strong>
+                  <small>${escapeHtml(profile.description)}</small>
+                  <em>${escapeHtml(profile.xp)}</em>
+                </span>
+                <span class="model-option-icon">${icons[profile.icon] || icons.logo}</span>
+              </button>
+            `).join("")}
+          </div>
+          <p class="model-menu-note">${icons.internet} كل نموذج يستخدم إعدادات مختلفة حسب نوع المهمة.</p>
+        </div>
+      </div>
+    `;
+  }
+
   function renderSettingsContent(tabKey, settings) {
     if (tabKey === "notifications") {
       return `
@@ -1821,11 +1919,7 @@
     return `
       <section class="guest-main home-orlixor-main ${isChatting ? "is-chatting" : ""}">
         <header class="guest-main-topbar home-main-topbar">
-          <button class="ai-switcher" type="button">
-            <span class="ai-switcher-mark">${icons.logo}</span>
-            <span>Orlixor AI</span>
-            <i aria-hidden="true">⌄</i>
-          </button>
+          ${renderModelSwitcher()}
           ${renderHomeTopActions()}
         </header>
 
@@ -1879,10 +1973,7 @@
     return `
       <section class="guest-main">
         <header class="guest-main-topbar">
-          <button class="ai-switcher" type="button">
-            <span class="ai-switcher-mark">${icons.logo}</span>
-            <span>Orlixor AI</span>
-          </button>
+          ${renderModelSwitcher()}
           <div class="guest-hero-copy">
             <h1>${escapeHtml(hero.title)}</h1>
             <p>${escapeHtml(hero.subtitle)}</p>
@@ -2400,6 +2491,7 @@
     try {
       const result = await apiClient.sendChat({
         conversation_id: state.conversationIds[threadEntry.id] || undefined,
+        selected_model: state.selectedModel || "default",
         message: input,
         subject: state.currentUser?.subject || "",
         grade: state.currentUser?.grade || "",
@@ -2518,6 +2610,29 @@
         && !event.target.closest("[data-thread-menu-panel]");
       if (shouldCloseThreadMenu) {
         state.openThreadMenuId = "";
+      }
+      const shouldCloseModelMenu = state.modelMenuOpen
+        && !event.target.closest("[data-model-menu]")
+        && !event.target.closest("[data-model-menu-panel]");
+      if (shouldCloseModelMenu) {
+        state.modelMenuOpen = false;
+      }
+
+      const modelMenuButton = event.target.closest("[data-model-menu]");
+      if (modelMenuButton) {
+        event.preventDefault();
+        state.modelMenuOpen = !state.modelMenuOpen;
+        render();
+        return;
+      }
+
+      const modelOption = event.target.closest("[data-select-model]");
+      if (modelOption) {
+        event.preventDefault();
+        setSelectedModel(modelOption.getAttribute("data-select-model") || "default");
+        state.modelMenuOpen = false;
+        render();
+        return;
       }
 
       const navButton = event.target.closest("[data-nav]");
