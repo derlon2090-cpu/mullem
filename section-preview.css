@@ -1022,6 +1022,7 @@ body[data-workspace-mode="home"] .guest-root {
   gap: 30px;
   min-height: 100%;
   padding-top: 2px;
+  direction: ltr;
 }
 
 .guest-shell.is-home-workspace .guest-message-row.user {
@@ -1031,7 +1032,8 @@ body[data-workspace-mode="home"] .guest-root {
   justify-content: flex-end;
   gap: 14px;
   width: min(44vw, 460px);
-  margin-inline-end: clamp(40px, 7vw, 118px);
+  margin-left: auto;
+  margin-right: clamp(40px, 7vw, 118px);
   direction: ltr;
 }
 
@@ -1090,7 +1092,8 @@ body[data-workspace-mode="home"] .guest-root {
   align-self: flex-start;
   width: min(46vw, 560px);
   max-width: calc(100% - 72px);
-  margin-inline-start: clamp(38px, 6vw, 104px);
+  margin-left: clamp(38px, 6vw, 104px);
+  margin-right: auto;
   direction: ltr;
 }
 
@@ -1337,25 +1340,36 @@ body[data-workspace-mode="home"] .guest-root {
 
 .home-avatar-button {
   position: relative;
-  overflow: hidden;
+  overflow: visible;
   font-weight: 900;
   color: #684cff;
-  background: rgba(255, 255, 255, 0.98);
-  box-shadow: 0 14px 32px rgba(88, 70, 180, 0.06);
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  box-shadow: none;
 }
 
 .home-avatar-image {
-  width: 100%;
-  height: 100%;
+  width: 42px;
+  height: 42px;
   border-radius: 50%;
   display: grid;
   place-items: center;
   overflow: hidden;
-  background: transparent;
+  background: rgba(111, 76, 255, 0.12);
+  box-shadow: 0 12px 28px rgba(111, 76, 255, 0.08);
 }
 
 .home-avatar-button i {
-  display: none;
+  position: absolute;
+  right: 2px;
+  bottom: 2px;
+  width: 9px;
+  height: 9px;
+  border: 2px solid #fff;
+  border-radius: 50%;
+  display: block;
+  background: #25c76f;
 }
 
 .home-hero-panel {
@@ -2171,7 +2185,7 @@ body[data-workspace-mode="home"] .guest-root {
   z-index: 1500;
   display: grid;
   place-items: center;
-  padding: 24px;
+  padding: 18px;
 }
 
 .settings-gate[hidden] {
@@ -2188,14 +2202,14 @@ body[data-workspace-mode="home"] .guest-root {
 
 .settings-modal-card {
   position: relative;
-  width: min(930px, calc(100vw - 72px));
-  min-height: 560px;
-  max-height: calc(100vh - 48px);
+  width: min(860px, calc(100vw - 44px));
+  min-height: 0;
+  max-height: min(620px, calc(100vh - 36px));
   display: grid;
-  grid-template-columns: 280px minmax(0, 1fr);
+  grid-template-columns: 240px minmax(0, 1fr);
   direction: ltr;
   overflow: hidden;
-  border-radius: 20px;
+  border-radius: 18px;
   border: 1px solid rgba(111, 76, 255, 0.1);
   background: rgba(255, 255, 255, 0.98);
   box-shadow: 0 34px 90px rgba(20, 24, 50, 0.22);
@@ -2213,8 +2227,8 @@ body[data-workspace-mode="home"] .guest-root {
 
 .settings-close-btn {
   position: absolute;
-  top: 18px;
-  right: 20px;
+  top: 16px;
+  right: 18px;
   z-index: 3;
   width: 34px;
   height: 34px;
@@ -2228,7 +2242,7 @@ body[data-workspace-mode="home"] .guest-root {
 
 .settings-modal-side {
   direction: rtl;
-  padding: 60px 28px 24px;
+  padding: 48px 24px 20px;
   border-left: 1px solid rgba(111, 76, 255, 0.1);
   display: flex;
   flex-direction: column;
@@ -2242,8 +2256,8 @@ body[data-workspace-mode="home"] .guest-root {
 }
 
 .settings-avatar {
-  width: 58px;
-  height: 58px;
+  width: 52px;
+  height: 52px;
   border-radius: 50%;
   display: grid;
   place-items: center;
@@ -2296,7 +2310,7 @@ body[data-workspace-mode="home"] .guest-root {
 }
 
 .settings-modal-nav button {
-  min-height: 43px;
+  min-height: 39px;
   border: 0;
   border-radius: 9px;
   padding: 0 14px;
@@ -2350,18 +2364,18 @@ body[data-workspace-mode="home"] .guest-root {
 
 .settings-modal-main {
   direction: rtl;
-  padding: 72px 34px 32px;
+  padding: 58px 28px 24px;
   overflow: auto;
 }
 
 .settings-modal-main header {
-  margin-bottom: 28px;
+  margin-bottom: 22px;
 }
 
 .settings-modal-main h2 {
   margin: 0 0 6px;
   color: #151936;
-  font-size: 1.45rem;
+  font-size: 1.32rem;
   font-weight: 900;
 }
 
@@ -2372,7 +2386,7 @@ body[data-workspace-mode="home"] .guest-root {
 }
 
 .settings-general-head {
-  margin-bottom: 18px;
+  margin-bottom: 14px;
   display: flex;
   align-items: center;
   gap: 14px;
@@ -2380,9 +2394,9 @@ body[data-workspace-mode="home"] .guest-root {
 
 .settings-general-head > span,
 .settings-option-icon {
-  width: 42px;
-  height: 42px;
-  border-radius: 13px;
+  width: 38px;
+  height: 38px;
+  border-radius: 12px;
   display: grid;
   place-items: center;
   color: #6547ff;
@@ -2398,18 +2412,18 @@ body[data-workspace-mode="home"] .guest-root {
 
 .settings-option-list {
   display: grid;
-  gap: 12px;
+  gap: 10px;
 }
 
 .settings-option-row {
-  min-height: 76px;
+  min-height: 66px;
   border: 1px solid rgba(111, 76, 255, 0.1);
   border-radius: 14px;
-  padding: 12px 14px;
+  padding: 10px 12px;
   display: grid;
-  grid-template-columns: 42px minmax(0, 1fr) minmax(170px, auto);
+  grid-template-columns: 38px minmax(0, 1fr) minmax(150px, auto);
   align-items: center;
-  gap: 14px;
+  gap: 12px;
   background: #fff;
 }
 
@@ -2420,18 +2434,18 @@ body[data-workspace-mode="home"] .guest-root {
 
 .settings-option-copy strong {
   color: #151936;
-  font-size: 0.9rem;
+  font-size: 0.84rem;
   margin-bottom: 4px;
 }
 
 .settings-option-copy small {
   color: #8c94ad;
-  font-size: 0.74rem;
+  font-size: 0.68rem;
 }
 
 .settings-option-row select {
-  min-width: 154px;
-  min-height: 42px;
+  min-width: 144px;
+  min-height: 38px;
   border: 1px solid rgba(111, 76, 255, 0.12);
   border-radius: 10px;
   padding: 0 14px;
@@ -2441,7 +2455,7 @@ body[data-workspace-mode="home"] .guest-root {
 }
 
 .settings-segmented {
-  min-height: 42px;
+  min-height: 38px;
   padding: 4px;
   border: 1px solid rgba(111, 76, 255, 0.12);
   border-radius: 10px;
@@ -2451,7 +2465,7 @@ body[data-workspace-mode="home"] .guest-root {
 }
 
 .settings-segmented button {
-  min-width: 68px;
+  min-width: 62px;
   border: 0;
   border-radius: 8px;
   color: #4c5578;
@@ -3399,7 +3413,8 @@ body[data-workspace-mode="home"] .guest-root {
 
   .guest-shell.is-home-workspace .guest-message-row.user {
     width: 100%;
-    margin-inline-end: 0;
+    margin-left: 0;
+    margin-right: 0;
     gap: 10px;
   }
 
@@ -3417,7 +3432,8 @@ body[data-workspace-mode="home"] .guest-root {
     grid-template-columns: 28px minmax(0, 1fr);
     width: 100%;
     max-width: 100%;
-    margin-inline-start: 0;
+    margin-left: 0;
+    margin-right: 0;
   }
 
   .guest-shell.is-home-workspace .guest-message-mark {
