@@ -451,29 +451,83 @@ function createPostgresDatabaseClient(rawConfig = {}) {
         stage VARCHAR(100) NULL,
         grade VARCHAR(100) NULL,
         term VARCHAR(100) NULL,
+        selected_model_key VARCHAR(40) NULL,
+        summary TEXT NULL,
         status VARCHAR(50) NOT NULL DEFAULT 'active',
         last_message_at TIMESTAMPTZ NULL,
         created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
         updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
       )
     `);
+    await ensureColumn("conversations", "user_id", "user_id BIGINT NULL REFERENCES app_users(id) ON DELETE SET NULL");
+    await ensureColumn("conversations", "project_id", "project_id BIGINT NULL REFERENCES app_projects(id) ON DELETE SET NULL");
+    await ensureColumn("conversations", "selected_model_key", "selected_model_key VARCHAR(40) NULL");
+    await ensureColumn("conversations", "summary", "summary TEXT NULL");
     await pool.query("CREATE UNIQUE INDEX IF NOT EXISTS uq_conversations_guest_session ON conversations (guest_session_id)");
     await pool.query("CREATE INDEX IF NOT EXISTS idx_conversations_user_id ON conversations (user_id)");
     await pool.query("CREATE INDEX IF NOT EXISTS idx_conversations_project_id ON conversations (project_id)");
-    await ensureColumn("conversations", "user_id", "user_id BIGINT NULL REFERENCES app_users(id) ON DELETE SET NULL");
-    await ensureColumn("conversations", "project_id", "project_id BIGINT NULL REFERENCES app_projects(id) ON DELETE SET NULL");
 
     await pool.query(`
       CREATE TABLE IF NOT EXISTS messages (
         id BIGSERIAL PRIMARY KEY,
         conversation_id VARCHAR(64) NOT NULL REFERENCES conversations(id) ON DELETE CASCADE,
+        user_id BIGINT NULL REFERENCES app_users(id) ON DELETE SET NULL,
         role VARCHAR(20) NOT NULL,
         body TEXT NOT NULL,
         source VARCHAR(50) NOT NULL DEFAULT 'web',
+        model_key VARCHAR(40) NULL,
+        input_tokens INTEGER NOT NULL DEFAULT 0,
+        output_tokens INTEGER NOT NULL DEFAULT 0,
+        xp_cost INTEGER NOT NULL DEFAULT 0,
         created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
       )
     `);
     await pool.query("CREATE INDEX IF NOT EXISTS idx_messages_conversation_created ON messages (conversation_id, created_at)");
+    await ensureColumn("messages", "user_id", "user_id BIGINT NULL REFERENCES app_users(id) ON DELETE SET NULL");
+    await ensureColumn("messages", "model_key", "model_key VARCHAR(40) NULL");
+    await ensureColumn("messages", "input_tokens", "input_tokens INTEGER NOT NULL DEFAULT 0");
+    await ensureColumn("messages", "output_tokens", "output_tokens INTEGER NOT NULL DEFAULT 0");
+    await ensureColumn("messages", "xp_cost", "xp_cost INTEGER NOT NULL DEFAULT 0");
+    await pool.query("CREATE INDEX IF NOT EXISTS idx_messages_user_created ON messages (user_id, created_at)");
+
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS user_memory (
+        id BIGSERIAL PRIMARY KEY,
+        user_id BIGINT NOT NULL REFERENCES app_users(id) ON DELETE CASCADE,
+        memory_type VARCHAR(40) NOT NULL DEFAULT 'fact',
+        content TEXT NOT NULL,
+        importance INTEGER NOT NULL DEFAULT 3,
+        embedding JSONB NULL,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )
+    `);
+    await pool.query("CREATE INDEX IF NOT EXISTS idx_user_memory_user_importance ON user_memory (user_id, importance DESC, updated_at DESC)");
+
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS message_embeddings (
+        id BIGSERIAL PRIMARY KEY,
+        user_id BIGINT NOT NULL REFERENCES app_users(id) ON DELETE CASCADE,
+        conversation_id VARCHAR(64) NULL REFERENCES conversations(id) ON DELETE CASCADE,
+        message_id BIGINT NULL REFERENCES messages(id) ON DELETE CASCADE,
+        embedding JSONB NULL,
+        content_preview TEXT NULL,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )
+    `);
+    await pool.query("CREATE INDEX IF NOT EXISTS idx_message_embeddings_user_created ON message_embeddings (user_id, created_at DESC)");
+
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS feedback (
+        id BIGSERIAL PRIMARY KEY,
+        user_id BIGINT NOT NULL REFERENCES app_users(id) ON DELETE CASCADE,
+        message_id BIGINT NULL REFERENCES messages(id) ON DELETE SET NULL,
+        rating VARCHAR(20) NOT NULL,
+        note TEXT NULL,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )
+    `);
+    await pool.query("CREATE INDEX IF NOT EXISTS idx_feedback_user_message ON feedback (user_id, message_id)");
 
     await pool.query(`
       CREATE TABLE IF NOT EXISTS app_api_tokens (
@@ -589,14 +643,16 @@ function createPostgresDatabaseClient(rawConfig = {}) {
       subject: String(payload.subject || "").trim() || null,
       stage: String(payload.stage || "").trim() || null,
       grade: String(payload.grade || "").trim() || null,
-      term: String(payload.term || "").trim() || null
+      term: String(payload.term || "").trim() || null,
+      selected_model_key: String(payload.selected_model_key || payload.selected_model || payload.selectedModel || payload.model || "").trim() || null,
+      summary: String(payload.summary || "").trim() || null
     };
 
     await pool.query(
       `
         INSERT INTO conversations (
-          id, guest_session_id, user_id, project_id, title, subject, stage, grade, term, status, last_message_at
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'active', NULL)
+          id, guest_session_id, user_id, project_id, title, subject, stage, grade, term, selected_model_key, summary, status, last_message_at
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, 'active', NULL)
       `,
       [
         conversation.id,
@@ -607,7 +663,9 @@ function createPostgresDatabaseClient(rawConfig = {}) {
         conversation.subject,
         conversation.stage,
         conversation.grade,
-        conversation.term
+        conversation.term,
+        conversation.selected_model_key,
+        conversation.summary
       ]
     );
 
@@ -630,7 +688,9 @@ function createPostgresDatabaseClient(rawConfig = {}) {
       subject: "subject",
       stage: "stage",
       grade: "grade",
-      term: "term"
+      term: "term",
+      selected_model_key: "selected_model_key",
+      summary: "summary"
     };
     const { sets, values } = buildAssignments(changes, mappings);
     if (!sets.length) return getConversationById(conversationId);
@@ -667,6 +727,9 @@ function createPostgresDatabaseClient(rawConfig = {}) {
         if (payload.stage && !existing.stage) nextChanges.stage = String(payload.stage).trim();
         if (payload.grade && !existing.grade) nextChanges.grade = String(payload.grade).trim();
         if (payload.term && !existing.term) nextChanges.term = String(payload.term).trim();
+        if (payload.selected_model_key || payload.selected_model || payload.selectedModel || payload.model) {
+          nextChanges.selected_model_key = String(payload.selected_model_key || payload.selected_model || payload.selectedModel || payload.model).trim();
+        }
         if (payload.title && !existing.title) nextChanges.title = String(payload.title).trim().slice(0, 255);
         if (Object.keys(nextChanges).length) return updateConversationContext(existing.id, nextChanges);
         if (userId) await assignConversationUser(existing.id, userId);
@@ -681,6 +744,9 @@ function createPostgresDatabaseClient(rawConfig = {}) {
         const nextChanges = {};
         if (userId && !existing.user_id) nextChanges.user_id = userId;
         if (payload.project_id && String(existing.project_id || "") !== String(payload.project_id)) nextChanges.project_id = Number(payload.project_id);
+        if (payload.selected_model_key || payload.selected_model || payload.selectedModel || payload.model) {
+          nextChanges.selected_model_key = String(payload.selected_model_key || payload.selected_model || payload.selectedModel || payload.model).trim();
+        }
         if (Object.keys(nextChanges).length) return updateConversationContext(existing.id, nextChanges);
         if (userId) await assignConversationUser(existing.id, userId);
         return getConversationById(existing.id);
@@ -690,23 +756,40 @@ function createPostgresDatabaseClient(rawConfig = {}) {
     return createConversation(payload);
   }
 
-  async function saveMessage(conversationId, role, body, source = "web") {
-    await pool.query(
-      "INSERT INTO messages (conversation_id, role, body, source) VALUES ($1, $2, $3, $4)",
-      [String(conversationId), String(role || ""), String(body || ""), String(source || "web")]
+  async function saveMessage(conversationId, role, body, source = "web", metadata = {}) {
+    const messageRows = await query(
+      `
+        INSERT INTO messages (
+          conversation_id, user_id, role, body, source, model_key, input_tokens, output_tokens, xp_cost
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+        RETURNING *
+      `,
+      [
+        String(conversationId),
+        metadata.user_id ? Number(metadata.user_id) : null,
+        String(role || ""),
+        String(body || ""),
+        String(source || "web"),
+        String(metadata.model_key || "").trim() || null,
+        Math.max(0, Math.round(Number(metadata.input_tokens || 0))),
+        Math.max(0, Math.round(Number(metadata.output_tokens || 0))),
+        Math.max(0, Math.round(Number(metadata.xp_cost || 0)))
+      ]
     );
 
     await pool.query(
-      "UPDATE conversations SET last_message_at = NOW(), updated_at = NOW() WHERE id = $1",
-      [String(conversationId)]
+      "UPDATE conversations SET last_message_at = NOW(), updated_at = NOW(), selected_model_key = COALESCE($2, selected_model_key) WHERE id = $1",
+      [String(conversationId), String(metadata.model_key || "").trim() || null]
     );
+
+    return messageRows[0] || null;
   }
 
   async function listMessages(conversationId, limit = 10) {
     const safeLimit = Math.max(1, Math.min(Number(limit) || 10, 50));
     const rows = await query(
       `
-        SELECT role, body, source, created_at
+        SELECT id, user_id, role, body, source, model_key, input_tokens, output_tokens, xp_cost, created_at
         FROM messages
         WHERE conversation_id = $1
         ORDER BY created_at DESC, id DESC
@@ -719,6 +802,12 @@ function createPostgresDatabaseClient(rawConfig = {}) {
       role: row.role,
       text: row.body,
       source: row.source,
+      id: row.id,
+      user_id: row.user_id,
+      model_key: row.model_key,
+      input_tokens: Number(row.input_tokens || 0),
+      output_tokens: Number(row.output_tokens || 0),
+      xp_cost: Number(row.xp_cost || 0),
       created_at: row.created_at
     }));
   }
@@ -727,7 +816,7 @@ function createPostgresDatabaseClient(rawConfig = {}) {
     const safeLimit = Math.max(1, Math.min(Number(limit) || 20, 100));
     return query(
       `
-        SELECT id, guest_session_id, user_id, project_id, title, subject, stage, grade, term, status, last_message_at, created_at, updated_at
+        SELECT id, guest_session_id, user_id, project_id, title, subject, stage, grade, term, selected_model_key, summary, status, last_message_at, created_at, updated_at
         FROM conversations
         ORDER BY COALESCE(last_message_at, created_at) DESC
         LIMIT $1
@@ -749,7 +838,7 @@ function createPostgresDatabaseClient(rawConfig = {}) {
     params.push(safeLimit);
     return query(
       `
-        SELECT id, guest_session_id, user_id, project_id, title, subject, stage, grade, term, status, last_message_at, created_at, updated_at
+        SELECT id, guest_session_id, user_id, project_id, title, subject, stage, grade, term, selected_model_key, summary, status, last_message_at, created_at, updated_at
         FROM conversations
         ${whereClause}
         ORDER BY COALESCE(last_message_at, created_at) DESC
@@ -761,6 +850,7 @@ function createPostgresDatabaseClient(rawConfig = {}) {
 
   async function listUserMemoryCandidates(userId, options = {}) {
     const safeLimit = Math.max(1, Math.min(Number(options.limit || 36), 80));
+    const memoryLimit = Math.min(10, safeLimit);
     const params = [Number(userId)];
     let whereClause = "WHERE c.user_id = $1";
 
@@ -769,6 +859,22 @@ function createPostgresDatabaseClient(rawConfig = {}) {
       whereClause += ` AND c.id <> $${params.length}`;
     }
 
+    const memoryRows = await query(
+      `
+        SELECT
+          memory_type,
+          content,
+          importance,
+          updated_at,
+          created_at
+        FROM user_memory
+        WHERE user_id = $1
+        ORDER BY importance DESC, updated_at DESC, id DESC
+        LIMIT $2
+      `,
+      [Number(userId), memoryLimit]
+    );
+
     params.push(safeLimit);
     const rows = await query(
       `
@@ -776,6 +882,8 @@ function createPostgresDatabaseClient(rawConfig = {}) {
           m.role,
           m.body,
           m.source,
+          m.model_key,
+          m.xp_cost,
           m.created_at,
           c.id AS conversation_id,
           c.title,
@@ -793,10 +901,28 @@ function createPostgresDatabaseClient(rawConfig = {}) {
       params
     );
 
-    return rows.map((row) => ({
+    const memoryItems = memoryRows.map((row) => ({
+      role: "system",
+      text: row.content,
+      source: "memory",
+      memory_type: row.memory_type,
+      importance: Number(row.importance || 0),
+      created_at: row.updated_at || row.created_at,
+      conversation_id: null,
+      title: null,
+      subject: null,
+      stage: null,
+      grade: null,
+      term: null,
+      project_id: null
+    }));
+
+    const messageItems = rows.map((row) => ({
       role: row.role,
       text: row.body,
       source: row.source,
+      model_key: row.model_key,
+      xp_cost: Number(row.xp_cost || 0),
       created_at: row.created_at,
       conversation_id: row.conversation_id,
       title: row.title || null,
@@ -806,6 +932,95 @@ function createPostgresDatabaseClient(rawConfig = {}) {
       term: row.term || null,
       project_id: row.project_id != null ? Number(row.project_id) : null
     }));
+
+    return [...memoryItems, ...messageItems].slice(0, safeLimit);
+  }
+
+  async function countConversationMessages(conversationId) {
+    const rows = await query(
+      "SELECT COUNT(*)::int AS count FROM messages WHERE conversation_id = $1",
+      [String(conversationId)]
+    );
+    return Number(rows?.[0]?.count || 0);
+  }
+
+  async function updateConversationSummary(conversationId, summary) {
+    const rows = await query(
+      "UPDATE conversations SET summary = $2, updated_at = NOW() WHERE id = $1 RETURNING *",
+      [String(conversationId), String(summary || "").trim() || null]
+    );
+    return rows[0] || null;
+  }
+
+  async function saveUserMemory(payload = {}) {
+    const userId = Number(payload.user_id);
+    const content = String(payload.content || "").trim();
+    if (!userId || !content) return null;
+
+    const memoryType = String(payload.memory_type || "fact").trim().slice(0, 40) || "fact";
+    const importance = Math.max(1, Math.min(5, Math.round(Number(payload.importance || 3))));
+    const existing = await query(
+      "SELECT id FROM user_memory WHERE user_id = $1 AND content = $2 LIMIT 1",
+      [userId, content]
+    );
+
+    if (existing[0]?.id) {
+      const rows = await query(
+        "UPDATE user_memory SET memory_type = $2, importance = GREATEST(importance, $3), updated_at = NOW() WHERE id = $1 RETURNING *",
+        [Number(existing[0].id), memoryType, importance]
+      );
+      return rows[0] || null;
+    }
+
+    const rows = await query(
+      `
+        INSERT INTO user_memory (user_id, memory_type, content, importance, embedding)
+        VALUES ($1, $2, $3, $4, $5)
+        RETURNING *
+      `,
+      [userId, memoryType, content, importance, payload.embedding ? JSON.stringify(payload.embedding) : null]
+    );
+    return rows[0] || null;
+  }
+
+  async function saveMessageEmbedding(payload = {}) {
+    const userId = Number(payload.user_id);
+    if (!userId) return null;
+    const rows = await query(
+      `
+        INSERT INTO message_embeddings (user_id, conversation_id, message_id, embedding, content_preview)
+        VALUES ($1, $2, $3, $4, $5)
+        RETURNING *
+      `,
+      [
+        userId,
+        payload.conversation_id ? String(payload.conversation_id) : null,
+        payload.message_id ? Number(payload.message_id) : null,
+        payload.embedding ? JSON.stringify(payload.embedding) : null,
+        String(payload.content_preview || "").trim().slice(0, 800) || null
+      ]
+    );
+    return rows[0] || null;
+  }
+
+  async function saveFeedback(payload = {}) {
+    const userId = Number(payload.user_id);
+    const rating = String(payload.rating || "").trim().toLowerCase();
+    if (!userId || !rating) return null;
+    const rows = await query(
+      `
+        INSERT INTO feedback (user_id, message_id, rating, note)
+        VALUES ($1, $2, $3, $4)
+        RETURNING *
+      `,
+      [
+        userId,
+        payload.message_id ? Number(payload.message_id) : null,
+        rating.slice(0, 20),
+        String(payload.note || "").trim() || null
+      ]
+    );
+    return rows[0] || null;
   }
 
   async function findPackageById(packageId) {
@@ -1460,6 +1675,11 @@ function createPostgresDatabaseClient(rawConfig = {}) {
     listRecentConversations,
     listUserConversations,
     listUserMemoryCandidates,
+    countConversationMessages,
+    updateConversationSummary,
+    saveUserMemory,
+    saveMessageEmbedding,
+    saveFeedback,
     findPackageById,
     findDefaultPackage,
     findPackageByKeyOrName,

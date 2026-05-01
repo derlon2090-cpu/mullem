@@ -44,14 +44,17 @@ function readEnvNumber(keys, fallback) {
 
 const OPENAI_API_KEY = String(process.env.OPENAI_API_KEY || "").trim();
 const OPENAI_MODEL = String(process.env.OPENAI_MODEL || "gpt-4o-mini").trim();
-const OPENAI_MODEL_DEFAULT = String(process.env.OPENAI_MODEL_DEFAULT || process.env.OPENAI_MODEL_ORLIXOR || "gpt-4.1-mini").trim();
-const OPENAI_MODEL_TURBO = String(process.env.OPENAI_MODEL_TURBO || "gpt-4.1-mini").trim();
-const OPENAI_MODEL_PRO = String(process.env.OPENAI_MODEL_PRO || "gpt-4.1").trim();
-const OPENAI_MODEL_CREATIVE = String(process.env.OPENAI_MODEL_CREATIVE || "gpt-4.1").trim();
+const OPENAI_MODEL_DEFAULT = String(process.env.ORLIXOR_DEFAULT_MODEL || process.env.OPENAI_MODEL_DEFAULT || process.env.OPENAI_MODEL_ORLIXOR || "gpt-4.1-mini").trim();
+const OPENAI_MODEL_TURBO = String(process.env.ORLIXOR_TURBO_MODEL || process.env.OPENAI_MODEL_TURBO || "gpt-4.1-nano").trim();
+const OPENAI_MODEL_PRO = String(process.env.ORLIXOR_PRO_MODEL || process.env.OPENAI_MODEL_PRO || "gpt-4.1").trim();
+const OPENAI_MODEL_CREATIVE = String(process.env.ORLIXOR_CREATIVE_MODEL || process.env.OPENAI_MODEL_CREATIVE || "gpt-4.1-mini").trim();
 const OPENAI_IMAGE_MODEL = String(process.env.OPENAI_IMAGE_MODEL || "dall-e-3").trim();
 const OPENAI_RESPONSES_ENDPOINT = String(process.env.OPENAI_RESPONSES_ENDPOINT || "https://api.openai.com/v1/responses").trim();
+const OPENAI_EMBEDDINGS_ENDPOINT = String(process.env.OPENAI_EMBEDDINGS_ENDPOINT || "https://api.openai.com/v1/embeddings").trim();
+const OPENAI_EMBEDDING_MODEL = String(process.env.ORLIXOR_EMBEDDING_MODEL || process.env.OPENAI_EMBEDDING_MODEL || "text-embedding-3-small").trim();
+const ORLIXOR_ENABLE_EMBEDDINGS = /^(1|true|yes|on)$/i.test(String(process.env.ORLIXOR_ENABLE_EMBEDDINGS || "").trim());
 const OPENAI_TIMEOUT_MS = Number(process.env.OPENAI_TIMEOUT_MS || 25000);
-const OPENAI_MAX_OUTPUT_TOKENS = Math.max(120, Math.min(Number(process.env.OPENAI_MAX_OUTPUT_TOKENS || 500), 1200));
+const OPENAI_MAX_OUTPUT_TOKENS = Math.max(120, Math.min(Number(process.env.OPENAI_MAX_OUTPUT_TOKENS || 900), 2000));
 const DB_INIT_TIMEOUT_MS = Math.max(1000, Number(process.env.DB_INIT_TIMEOUT_MS || 8000));
 const MAX_BODY_BYTES = Math.max(10_000, Number(process.env.MAX_BODY_BYTES || 1_000_000));
 const MAX_MESSAGE_LENGTH = Math.max(200, Number(process.env.MAX_MESSAGE_LENGTH || 4000));
@@ -116,26 +119,31 @@ const DEFAULT_STUDENT_PASSWORD = String(process.env.DEFAULT_STUDENT_PASSWORD || 
 const DEFAULT_STUDENT_NAME = String(process.env.DEFAULT_STUDENT_NAME || "طالب").trim();
 const TEXT_MESSAGE_XP_COST = Math.max(1, Number(process.env.TEXT_MESSAGE_XP_COST || process.env.TEXT_MESSAGE_XP_REWARD || 10));
 const IMAGE_GENERATION_XP_COST = Math.max(1, Number(process.env.IMAGE_GENERATION_XP_COST || process.env.IMAGE_MESSAGE_XP_COST || process.env.IMAGE_MESSAGE_XP_REWARD || 15));
-const ATTACHMENT_ANALYSIS_XP_COST = Math.max(1, Number(process.env.ATTACHMENT_ANALYSIS_XP_COST || process.env.ATTACHMENT_XP_COST || 20));
+const ATTACHMENT_ANALYSIS_XP_COST = Math.max(1, Number(process.env.ATTACHMENT_ANALYSIS_XP_COST || process.env.ATTACHMENT_XP_COST || 15));
 const DAILY_LOGIN_XP_REWARD = Math.max(0, Number(process.env.DAILY_LOGIN_XP_REWARD || 5));
 const FIRST_SIGNUP_XP = Math.max(0, Number(process.env.FIRST_SIGNUP_XP || 50));
-const FREE_MAX_OUTPUT_TOKENS = Math.max(120, Math.min(Number(process.env.FREE_MAX_OUTPUT_TOKENS || 800), 1200));
+const FREE_MAX_OUTPUT_TOKENS = Math.max(120, Math.min(Number(process.env.FREE_MAX_OUTPUT_TOKENS || 500), 1200));
 const FREE_MAX_CONTEXT_TOKENS = Math.max(500, Math.min(Number(process.env.FREE_MAX_CONTEXT_TOKENS || 1500), 6000));
 const DAILY_MOTIVATION_BONUS = Math.max(1, Number(process.env.DAILY_MOTIVATION_BONUS || 5));
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const ACCOUNT_MEMORY_LIMIT = Math.max(1, Math.min(Number(process.env.ACCOUNT_MEMORY_LIMIT || 5), 8));
 const ACCOUNT_MEMORY_CANDIDATES = Math.max(ACCOUNT_MEMORY_LIMIT, Math.min(Number(process.env.ACCOUNT_MEMORY_CANDIDATES || 28), 60));
 const modelProfiles = {
-  default: {
-    key: "default",
+  orlixor: {
+    key: "orlixor",
     name: "Orlixor AI",
     openaiModel: OPENAI_MODEL_DEFAULT || OPENAI_MODEL,
     temperature: 0.5,
-    minXpCost: TEXT_MESSAGE_XP_COST,
-    maxXpCost: TEXT_MESSAGE_XP_COST,
-    maxOutputTokens: Math.min(FREE_MAX_OUTPUT_TOKENS, OPENAI_MAX_OUTPUT_TOKENS),
-    maxContextTokens: FREE_MAX_CONTEXT_TOKENS,
-    systemPrompt: "أنت مساعد Orlixor العام. أجب بوضوح وبدقة وبأسلوب عربي احترافي."
+    minXpCost: 8,
+    maxXpCost: 15,
+    maxOutputTokens: Math.min(900, OPENAI_MAX_OUTPUT_TOKENS),
+    maxContextTokens: Math.max(FREE_MAX_CONTEXT_TOKENS, 2800),
+    systemPrompt: [
+      "أنت Orlixor AI، مساعد ذكي متوازن.",
+      "أجب بالعربية بوضوح وتنظيم.",
+      "استخدم أسلوبًا عمليًا ومختصرًا عند الحاجة.",
+      "مناسب للشرح، التلخيص، الكتابة، والأسئلة العامة."
+    ].join("\n")
   },
   turbo: {
     key: "turbo",
@@ -144,9 +152,14 @@ const modelProfiles = {
     temperature: 0.3,
     minXpCost: 5,
     maxXpCost: 10,
-    maxOutputTokens: Math.min(360, OPENAI_MAX_OUTPUT_TOKENS),
+    maxOutputTokens: Math.min(500, OPENAI_MAX_OUTPUT_TOKENS),
     maxContextTokens: Math.min(FREE_MAX_CONTEXT_TOKENS, 1200),
-    systemPrompt: "أنت مساعد سريع. أعط إجابات مختصرة ومباشرة، ولا تطل إلا إذا طلب المستخدم ذلك صراحة."
+    systemPrompt: [
+      "أنت Orlixor AI Turbo.",
+      "أجب بسرعة وباختصار.",
+      "لا تطل إلا إذا طلب المستخدم التفاصيل.",
+      "مناسب للمهام السريعة، التلخيص القصير، وإعادة الصياغة."
+    ].join("\n")
   },
   pro: {
     key: "pro",
@@ -155,20 +168,30 @@ const modelProfiles = {
     temperature: 0.4,
     minXpCost: 10,
     maxXpCost: 15,
-    maxOutputTokens: Math.min(900, Math.max(OPENAI_MAX_OUTPUT_TOKENS, 900)),
+    maxOutputTokens: Math.min(1400, OPENAI_MAX_OUTPUT_TOKENS),
     maxContextTokens: Math.max(FREE_MAX_CONTEXT_TOKENS, 5000),
-    systemPrompt: "أنت مساعد متقدم للتحليل العميق والمهام المعقدة والبرمجة والملفات. قدم إجابات منظمة ودقيقة."
+    systemPrompt: [
+      "أنت Orlixor AI Pro.",
+      "قدّم إجابات دقيقة ومنظمة وعميقة.",
+      "مناسب للتحليل، البرمجة، الملفات، المقارنات، والخطط.",
+      "رتّب الإجابة بعناوين واضحة عند الحاجة."
+    ].join("\n")
   },
   creative: {
     key: "creative",
     name: "Orlixor AI Creative",
     openaiModel: OPENAI_MODEL_CREATIVE || OPENAI_MODEL,
-    temperature: 0.8,
+    temperature: 0.85,
     minXpCost: 10,
     maxXpCost: 15,
-    maxOutputTokens: Math.min(760, Math.max(OPENAI_MAX_OUTPUT_TOKENS, 760)),
+    maxOutputTokens: Math.min(1200, OPENAI_MAX_OUTPUT_TOKENS),
     maxContextTokens: Math.max(FREE_MAX_CONTEXT_TOKENS, 3000),
-    systemPrompt: "أنت مساعد إبداعي متخصص في الكتابة والتسويق وصناعة المحتوى والأفكار والعناوين والسكربتات."
+    systemPrompt: [
+      "أنت Orlixor AI Creative.",
+      "مهمتك إنتاج محتوى إبداعي وتسويقي عالي الجودة.",
+      "اكتب بأسلوب جذاب، واضح، ومناسب للجمهور.",
+      "مناسب للمقالات، الإعلانات، العناوين، السكربتات، والأفكار."
+    ].join("\n")
   }
 };
 const MEMORY_STOP_WORDS = new Set([
@@ -804,14 +827,58 @@ function isImageAttachmentName(value) {
 
 function normalizeSelectedModel(value) {
   const raw = String(value || "").trim().toLowerCase();
+  if (!raw || raw === "default" || raw === "general" || raw === "orlixor ai") return "orlixor";
   if (raw.includes("turbo")) return "turbo";
   if (raw.includes("creative")) return "creative";
   if (raw.includes("pro")) return "pro";
-  return modelProfiles[raw] ? raw : "default";
+  return modelProfiles[raw] ? raw : "orlixor";
 }
 
 function getModelProfile(value) {
-  return modelProfiles[normalizeSelectedModel(value)] || modelProfiles.default;
+  return modelProfiles[normalizeSelectedModel(value)] || modelProfiles.orlixor;
+}
+
+function isFreeUser(user) {
+  if (!user) return true;
+  const dailyXp = Number(user.package_daily_xp || 0);
+  const planType = String(user.plan_type || user.package_key || user.package_name || "").trim().toLowerCase();
+  return dailyXp <= 0 || planType === "starter" || planType === "free";
+}
+
+function applyUserModelLimits(profile, user) {
+  const safeProfile = { ...(profile || modelProfiles.orlixor) };
+  if (!isFreeUser(user)) return safeProfile;
+  return {
+    ...safeProfile,
+    maxOutputTokens: Math.min(Number(safeProfile.maxOutputTokens || OPENAI_MAX_OUTPUT_TOKENS), FREE_MAX_OUTPUT_TOKENS),
+    maxContextTokens: Math.min(Number(safeProfile.maxContextTokens || FREE_MAX_CONTEXT_TOKENS), FREE_MAX_CONTEXT_TOKENS)
+  };
+}
+
+function detectAdvancedTask({ message = "", attachmentCount = 0, attachmentNames = [] } = {}) {
+  const names = Array.isArray(attachmentNames) ? attachmentNames.filter(Boolean) : [];
+  const hasImage = names.some(isImageAttachmentName);
+  const hasFile = Number(attachmentCount || 0) > 0 || names.length > 0;
+  if (hasFile || hasImage) return true;
+
+  const text = String(message || "").toLowerCase();
+  return [
+    "حلل", "تحليل", "ملف", "pdf", "صورة", "صور", "بيانات", "اكسل", "excel",
+    "كود", "برمج", "برمجة", "خطة", "مقارنة", "قارن", "استراتيجية", "دراسة"
+  ].some((term) => text.includes(term));
+}
+
+function resolveEffectiveModelKey(selectedModel, options = {}) {
+  const normalized = normalizeSelectedModel(selectedModel);
+  return detectAdvancedTask(options) ? "pro" : normalized;
+}
+
+function buildModelRoutingNotice(selectedModel, effectiveModel, options = {}) {
+  if (normalizeSelectedModel(selectedModel) === effectiveModel) return "";
+  if (effectiveModel === "pro" && detectAdvancedTask(options)) {
+    return "تم استخدام نموذج Pro لتحليل الطلب لضمان أفضل نتيجة.";
+  }
+  return "";
 }
 
 function getMessageXpCost(attachmentCount = 0, attachmentNames = []) {
@@ -828,25 +895,36 @@ function getMessageXpCost(attachmentCount = 0, attachmentNames = []) {
 function getPreflightXpCost(profile, attachmentCount = 0, attachmentNames = []) {
   const attachmentCost = getMessageXpCost(attachmentCount, attachmentNames);
   if (Math.max(0, Number(attachmentCount) || 0) > 0) {
-    return Math.max(attachmentCost, Number(profile.maxXpCost || attachmentCost));
+    return Math.max(attachmentCost, Number(profile.minXpCost || attachmentCost));
   }
-  return Math.max(1, Number(profile.maxXpCost || TEXT_MESSAGE_XP_COST));
+  if (String(profile?.key || "") === "turbo") {
+    return Math.max(1, Math.min(Number(profile.maxXpCost || 10), 10));
+  }
+  return Math.max(1, Math.min(Number(profile.maxXpCost || TEXT_MESSAGE_XP_COST), TEXT_MESSAGE_XP_COST));
 }
 
-function calculateFinalXpCost(profile, assistantText = "", attachmentCount = 0, attachmentNames = []) {
+function calculateFinalXpCost(profile, assistantText = "", attachmentCount = 0, attachmentNames = [], usage = {}) {
   const normalizedAttachmentCount = Math.max(0, Math.round(Number(attachmentCount) || 0));
-  const minCost = Math.max(1, Number(profile.minXpCost || TEXT_MESSAGE_XP_COST));
-  const maxCost = Math.max(minCost, Number(profile.maxXpCost || TEXT_MESSAGE_XP_COST));
+  const profileKey = String(profile?.key || "orlixor");
+  const minCost = profileKey === "turbo"
+    ? Math.max(1, Number(profile.minXpCost || 5))
+    : Math.max(1, Number(profile.minXpCost || 8));
+  const maxCost = Math.max(minCost, Number(profile.maxXpCost || 15));
+  const inputTokens = Number(usage.input_tokens || usage.prompt_tokens || usage.inputTokens || 0);
+  const outputTokens = Number(usage.output_tokens || usage.completion_tokens || usage.outputTokens || 0);
   const textLength = String(assistantText || "").trim().length;
-  const textUnits = Math.min(maxCost - minCost, Math.floor(textLength / 450));
-  let cost = minCost + textUnits;
+  let cost = minCost;
+
+  if (outputTokens > 600 || (!outputTokens && textLength > 2200)) cost += 3;
+  if (inputTokens > 1200) cost += 2;
 
   if (normalizedAttachmentCount > 0) {
     cost = Math.max(cost, getMessageXpCost(attachmentCount, attachmentNames));
-    if (normalizedAttachmentCount > 1) cost += Math.min(5, normalizedAttachmentCount - 1);
+    cost += Math.min(3, normalizedAttachmentCount);
   }
 
-  return Math.max(1, Math.min(Math.round(cost), Math.max(maxCost, cost)));
+  const cap = maxCost + (normalizedAttachmentCount > 0 ? 3 : 0);
+  return Math.max(1, Math.min(Math.round(cost), cap));
 }
 
 async function chargeUserForMessage(user, cost, activityText) {
@@ -1134,6 +1212,28 @@ function extractResponseText(payload) {
   return coerceModelText(payload.message || payload.content || payload.response || "");
 }
 
+function extractTokenUsage(payload) {
+  const usage = payload?.usage || payload?.response?.usage || {};
+  const inputTokens = Number(
+    usage.input_tokens ??
+    usage.prompt_tokens ??
+    usage.inputTokens ??
+    usage.promptTokens ??
+    0
+  );
+  const outputTokens = Number(
+    usage.output_tokens ??
+    usage.completion_tokens ??
+    usage.outputTokens ??
+    usage.completionTokens ??
+    0
+  );
+  return {
+    input_tokens: Number.isFinite(inputTokens) ? inputTokens : 0,
+    output_tokens: Number.isFinite(outputTokens) ? outputTokens : 0
+  };
+}
+
 function buildResponsesInput(messages = []) {
   return messages
     .map((item) => {
@@ -1341,7 +1441,7 @@ function buildSolveSystemPrompt(payload) {
   return [
     modelProfile.systemPrompt,
     `النموذج المختار: ${modelProfile.name}.`,
-    "أنت محرك حل أسئلة تعليمية عربي لمنصة ملم.",
+    "أنت محرك حل أسئلة وتعليم عربي لمنصة Orlixor.",
     "أعد JSON فقط بدون markdown أو أي نص زائد.",
     "لا تستخدم markdown داخل answer أو explanation أو display_text.",
     "ممنوع استخدام ** أو __ أو # أو ``` أو القوائم العشوائية داخل display_text.",
@@ -1354,8 +1454,8 @@ function buildSolveSystemPrompt(payload) {
     "explanation شرح قصير ومباشر.",
     "display_text نص عربي جاهز للعرض للمستخدم بشكل مختصر ومفيد.",
     "confidence رقم بين 0 و 1.",
-    "matched_source اجعله openai_api.",
-    "source_trace مصفوفة تحتوي مصدرًا واحدًا على الأقل من نوع openai_api.",
+    "matched_source اجعله orlixor_ai.",
+    "source_trace مصفوفة تحتوي مصدرًا واحدًا على الأقل من نوع orlixor_ai.",
     "answer_candidates يمكن أن تكون مصفوفة فارغة.",
     "",
     `السؤال: ${String(payload.question || "").trim()}`,
@@ -1382,13 +1482,13 @@ function normalizeSolvePayload(question, modelOutput) {
     explanation,
     display_text: displayText || answer || "تعذر استخراج جواب واضح من الرد الحالي.",
     confidence,
-    matched_source: "openai_api",
+    matched_source: "orlixor_ai",
     source_trace: Array.isArray(parsed.source_trace) && parsed.source_trace.length
       ? parsed.source_trace
       : [
           {
-            source: "openai_api",
-            detail: "Generated by OpenAI Responses API",
+            source: "orlixor_ai",
+            detail: "Generated by Orlixor AI",
             score: confidence,
             metadata: {}
           }
@@ -1402,7 +1502,7 @@ function normalizeSolvePayload(question, modelOutput) {
       canonical_question: String(question || "").trim().toLowerCase(),
       concept_key: "",
       confidence,
-      decision_basis: "openai_api_only",
+      decision_basis: "orlixor_ai",
       analysis_budget_ms: 5000,
       trusted_domains: []
     }
@@ -1428,7 +1528,7 @@ async function callOpenAI({ input, modelProfile }) {
     throw createHttpError(503, "OPENAI_API_KEY is not configured on the server.");
   }
 
-  const profile = modelProfile || modelProfiles.default;
+  const profile = modelProfile || modelProfiles.orlixor;
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), OPENAI_TIMEOUT_MS);
 
@@ -1444,15 +1544,15 @@ async function callOpenAI({ input, modelProfile }) {
         model: profile.openaiModel || OPENAI_MODEL,
         input: limitPromptContext(input, profile.maxContextTokens || FREE_MAX_CONTEXT_TOKENS),
         temperature: Number(profile.temperature ?? 0.5),
-        max_output_tokens: Math.max(120, Math.min(Number(profile.maxOutputTokens || OPENAI_MAX_OUTPUT_TOKENS), 1200))
+        max_output_tokens: Math.max(120, Math.min(Number(profile.maxOutputTokens || OPENAI_MAX_OUTPUT_TOKENS), 1600))
       }),
       signal: controller.signal
     });
   } catch (error) {
     if (error?.name === "AbortError") {
-      throw createHttpError(504, "OpenAI request timed out on the server.");
+      throw createHttpError(504, "Orlixor AI request timed out on the server.");
     }
-    throw createHttpError(503, "Failed to reach OpenAI API from the server.");
+    throw createHttpError(503, "Failed to reach Orlixor AI from the server.");
   } finally {
     clearTimeout(timeoutId);
   }
@@ -1466,19 +1566,134 @@ async function callOpenAI({ input, modelProfile }) {
     let message =
       payload?.error?.message ||
       payload?.message ||
-      `OpenAI request failed with status ${response.status}`;
+      `Orlixor AI request failed with status ${response.status}`;
+    message = String(message)
+      .replace(/OpenAI/gi, "Orlixor AI")
+      .replace(/gpt-[a-z0-9.\-]+/gi, "Orlixor AI");
     if (message.includes("Invalid value: 'input_text'")) {
-      message = "OpenAI request format mismatch on the server.";
+      message = "Orlixor AI request format mismatch on the server.";
     }
     throw createHttpError(response.status, message);
   }
 
   const text = extractResponseText(payload);
   if (!text) {
-    throw createHttpError(502, "OpenAI returned an empty response.");
+    throw createHttpError(502, "Orlixor AI returned an empty response.");
   }
 
-  return { text, raw: payload };
+  return { text, raw: payload, usage: extractTokenUsage(payload) };
+}
+
+async function createEmbedding(content) {
+  const text = String(content || "").trim();
+  if (!ORLIXOR_ENABLE_EMBEDDINGS || !OPENAI_API_KEY || !text) return null;
+
+  try {
+    const response = await fetch(OPENAI_EMBEDDINGS_ENDPOINT, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${OPENAI_API_KEY}`,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        model: OPENAI_EMBEDDING_MODEL,
+        input: text.slice(0, 6000)
+      })
+    });
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) return null;
+    const embedding = payload?.data?.[0]?.embedding;
+    return Array.isArray(embedding) ? embedding : null;
+  } catch (_) {
+    return null;
+  }
+}
+
+function inferMemoryEntries(userMessage, assistantText) {
+  const text = `${String(userMessage || "")}\n${String(assistantText || "")}`.trim();
+  if (!text) return [];
+
+  const entries = [];
+  const lower = text.toLowerCase();
+  const addEntry = (memory_type, content, importance = 3) => {
+    const cleanContent = sanitizeModelDisplayText(content).slice(0, 500);
+    if (!cleanContent || entries.some((entry) => entry.content === cleanContent)) return;
+    entries.push({ memory_type, content: cleanContent, importance });
+  };
+
+  if (/(اختصر|مختصر|مختصرة|بدون إطالة|بدون اطالة)/.test(lower)) {
+    addEntry("preference", "المستخدم يفضل إجابات مختصرة ومنظمة.", 4);
+  }
+  if (/(رسمي|احترافي|صياغة رسمية)/.test(lower)) {
+    addEntry("style", "المستخدم يفضل أسلوبًا رسميًا واحترافيًا عند الحاجة.", 3);
+  }
+  if (/(مشروعي|مشروع|متجر|شركة|شركتي|منصتي)/.test(lower)) {
+    addEntry("project", `سياق مشروع محتمل للمستخدم: ${String(userMessage || "").trim().slice(0, 220)}`, 3);
+  }
+  if (/(تعليمي|طلاب|دراسة|مذاكرة|منهج)/.test(lower)) {
+    addEntry("fact", "المستخدم يستخدم المنصة غالبًا في سياق تعليمي أو مذاكرة.", 2);
+  }
+
+  return entries;
+}
+
+function buildConversationSummaryFromMessages(messages = []) {
+  const compact = messages
+    .slice(-10)
+    .map((item) => `${item.role === "assistant" ? "المساعد" : "المستخدم"}: ${String(item.text || item.body || "").replace(/\s+/g, " ").trim()}`)
+    .filter((line) => line.length > 12)
+    .join(" | ");
+  return compact.slice(0, 800);
+}
+
+async function maybeUpdateConversationSummary(conversationId) {
+  if (!isDatabaseReady() || !conversationId || typeof databaseClient.countConversationMessages !== "function") return;
+  try {
+    const count = await databaseClient.countConversationMessages(conversationId);
+    if (!count || count % 10 !== 0) return;
+    const messages = await databaseClient.listMessages(conversationId, 14);
+    const summary = buildConversationSummaryFromMessages(messages);
+    if (summary && typeof databaseClient.updateConversationSummary === "function") {
+      await databaseClient.updateConversationSummary(conversationId, summary);
+    }
+  } catch (_) {
+    // Memory and summary updates are best-effort and should never block chat.
+  }
+}
+
+async function storeConversationIntelligence(payload = {}) {
+  if (!isDatabaseReady() || !payload.user?.id || !payload.conversation?.id) return;
+
+  try {
+    if (typeof databaseClient.saveUserMemory === "function") {
+      for (const entry of inferMemoryEntries(payload.userMessage, payload.assistantText)) {
+        await databaseClient.saveUserMemory({
+          user_id: payload.user.id,
+          memory_type: entry.memory_type,
+          content: entry.content,
+          importance: entry.importance
+        });
+      }
+    }
+
+    if (typeof databaseClient.saveMessageEmbedding === "function") {
+      const sourceText = `${String(payload.userMessage || "")}\n${String(payload.assistantText || "")}`.trim();
+      const embedding = await createEmbedding(sourceText);
+      if (embedding) {
+        await databaseClient.saveMessageEmbedding({
+          user_id: payload.user.id,
+          conversation_id: payload.conversation.id,
+          message_id: payload.assistantMessage?.id || null,
+          embedding,
+          content_preview: sourceText.slice(0, 500)
+        });
+      }
+    }
+
+    await maybeUpdateConversationSummary(payload.conversation.id);
+  } catch (_) {
+    // Keep the user-facing response fast even if memory enrichment fails.
+  }
 }
 
 async function getOrCreateConversation(payload) {
@@ -1493,6 +1708,7 @@ async function getOrCreateConversation(payload) {
       stage: String(payload.stage || "").trim() || null,
       grade: String(payload.grade || "").trim() || null,
       term: String(payload.term || "").trim() || null,
+      selected_model_key: normalizeSelectedModel(payload.selected_model || payload.selectedModel || payload.model || "orlixor"),
       title: String(payload.message || payload.question || "").trim().slice(0, 180) || null
     });
   }
@@ -1518,6 +1734,8 @@ async function getOrCreateConversation(payload) {
     stage: String(payload.stage || "").trim() || null,
     grade: String(payload.grade || "").trim() || null,
     term: String(payload.term || "").trim() || null,
+    selected_model_key: normalizeSelectedModel(payload.selected_model || payload.selectedModel || payload.model || "orlixor"),
+    summary: null,
     status: "active",
     created_at: new Date().toISOString(),
     updated_at: new Date().toISOString(),
@@ -1539,15 +1757,23 @@ async function listConversationHistory(conversation) {
   return Array.isArray(conversation?.messages) ? conversation.messages.slice(-MAX_HISTORY_MESSAGES) : [];
 }
 
-async function persistConversationMessage(conversation, role, text, source = "web") {
+async function persistConversationMessage(conversation, role, text, source = "web", metadata = {}) {
   if (isDatabaseReady()) {
-    await databaseClient.saveMessage(conversation.id, role, text, source);
-    return;
+    return databaseClient.saveMessage(conversation.id, role, text, source, metadata);
   }
 
   conversation.updated_at = new Date().toISOString();
   conversation.last_message_at = conversation.updated_at;
-  conversation.messages.push({ role, text, source });
+  const message = {
+    id: crypto.randomUUID(),
+    role,
+    text,
+    source,
+    ...metadata,
+    created_at: conversation.updated_at
+  };
+  conversation.messages.push(message);
+  return message;
 }
 
 function parseListUsersQuery(req) {
@@ -2214,14 +2440,17 @@ async function handleChatSend(req, res) {
   );
   const hasAttachment = Boolean(payload.has_attachment || payload.hasAttachment || attachmentCount > 0);
   const hasOnlyImageAttachments = attachmentNames.length > 0 && attachmentNames.every(isImageAttachmentName);
-  const selectedModel = normalizeSelectedModel(payload.selected_model || payload.selectedModel || payload.model || "default");
-  const modelProfile = getModelProfile(selectedModel);
   const auth = await getAuthContext(req);
   const activeUser = auth?.user ? await syncUserDailyProgress(auth.user, "بدأ جلسة شات جديدة") : null;
 
   if (!activeUser) {
     throw createHttpError(401, "Authentication is required to use chat.");
   }
+
+  const requestedModel = normalizeSelectedModel(payload.selected_model || payload.selectedModel || payload.model || "orlixor");
+  const selectedModel = resolveEffectiveModelKey(requestedModel, { message, attachmentCount, attachmentNames });
+  const routingNotice = buildModelRoutingNotice(requestedModel, selectedModel, { message, attachmentCount, attachmentNames });
+  const modelProfile = applyUserModelLimits(getModelProfile(selectedModel), activeUser);
 
   const preflightXpCost = getPreflightXpCost(modelProfile, attachmentCount, attachmentNames);
   const currentXp = Math.max(0, Number(activeUser.xp || 0));
@@ -2247,7 +2476,8 @@ async function handleChatSend(req, res) {
     subject,
     stage,
     grade,
-    term
+    term,
+    selected_model: selectedModel
   });
 
   let chargedUser = activeUser || null;
@@ -2272,7 +2502,7 @@ async function handleChatSend(req, res) {
     }))
   });
   const assistantText = sanitizeModelDisplayText(result.text);
-  const xpCost = calculateFinalXpCost(modelProfile, assistantText, attachmentCount, attachmentNames);
+  const xpCost = calculateFinalXpCost(modelProfile, assistantText, attachmentCount, attachmentNames, result.usage);
 
   if (activeUser && isDatabaseReady()) {
     chargedUser = await chargeUserForMessage(
@@ -2284,8 +2514,28 @@ async function handleChatSend(req, res) {
     );
   }
 
-  await persistConversationMessage(conversation, "user", message, "web");
-  await persistConversationMessage(conversation, "assistant", assistantText, "openai");
+  const userMessage = await persistConversationMessage(conversation, "user", message, "web", {
+    user_id: activeUser.id,
+    model_key: selectedModel
+  });
+  const assistantMessage = await persistConversationMessage(conversation, "assistant", assistantText, "orlixor", {
+    user_id: activeUser.id,
+    model_key: selectedModel,
+    input_tokens: Number(result.usage?.input_tokens || result.usage?.prompt_tokens || 0),
+    output_tokens: Number(result.usage?.output_tokens || result.usage?.completion_tokens || 0),
+    xp_cost: xpCost
+  });
+
+  await storeConversationIntelligence({
+    user: chargedUser || activeUser,
+    conversation,
+    userMessage: message,
+    assistantText,
+    modelKey: selectedModel,
+    usage: result.usage,
+    userMessage,
+    assistantMessage
+  });
 
   sendJson(req, res, 200, {
     success: true,
@@ -2294,13 +2544,15 @@ async function handleChatSend(req, res) {
       project: project ? buildProjectSummary(project) : null,
       assistant_message: {
         body: assistantText,
-        source: "openai",
+        source: "orlixor",
         model: modelProfile.name
       },
       model: {
         key: selectedModel,
+        requested_key: requestedModel,
         name: modelProfile.name,
-        openai_model: modelProfile.openaiModel
+        routed: requestedModel !== selectedModel,
+        notice: routingNotice
       },
       usage: activeUser ? {
         xp_spent: xpCost,
@@ -2325,14 +2577,17 @@ async function handleSolveQuestion(req, res) {
     Number(payload.attachment_count || payload.attachmentCount || 0) || 0
   );
   const hasOnlyImageAttachments = attachmentNames.length > 0 && attachmentNames.every(isImageAttachmentName);
-  const selectedModel = normalizeSelectedModel(payload.selected_model || payload.selectedModel || payload.model || "default");
-  const modelProfile = getModelProfile(selectedModel);
   const auth = await getAuthContext(req);
   const activeUser = auth?.user ? await syncUserDailyProgress(auth.user, "بدأ حل سؤال دقيق") : null;
 
   if (!activeUser) {
     throw createHttpError(401, "Authentication is required to solve questions.");
   }
+
+  const requestedModel = normalizeSelectedModel(payload.selected_model || payload.selectedModel || payload.model || "orlixor");
+  const selectedModel = resolveEffectiveModelKey(requestedModel, { message: question, attachmentCount, attachmentNames });
+  const routingNotice = buildModelRoutingNotice(requestedModel, selectedModel, { message: question, attachmentCount, attachmentNames });
+  const modelProfile = applyUserModelLimits(getModelProfile(selectedModel), activeUser);
 
   const preflightXpCost = getPreflightXpCost(modelProfile, attachmentCount, attachmentNames);
   const currentXp = Math.max(0, Number(activeUser.xp || 0));
@@ -2363,7 +2618,7 @@ async function handleSolveQuestion(req, res) {
     question_type: "general",
     confidence: 0.72
   });
-  const xpCost = calculateFinalXpCost(modelProfile, normalized.display_text || cleanedSolveText, attachmentCount, attachmentNames);
+  const xpCost = calculateFinalXpCost(modelProfile, normalized.display_text || cleanedSolveText, attachmentCount, attachmentNames, result.usage);
   const chargedUser = isDatabaseReady()
     ? await chargeUserForMessage(
       activeUser,
@@ -2378,8 +2633,10 @@ async function handleSolveQuestion(req, res) {
     ...normalized,
     model: {
       key: selectedModel,
+      requested_key: requestedModel,
       name: modelProfile.name,
-      openai_model: modelProfile.openaiModel
+      routed: requestedModel !== selectedModel,
+      notice: routingNotice
     },
     xp_spent: xpCost,
     remaining_xp: Number(chargedUser?.xp ?? activeUser.xp ?? 0)
@@ -2527,10 +2784,10 @@ async function routeRequest(req, res) {
     sendJson(req, res, 200, {
       status: "ok",
       request_id: requestId,
-      provider: "openai",
+      provider: "orlixor",
       ai_configured: Boolean(OPENAI_API_KEY),
-      model: OPENAI_MODEL,
-      image_model: OPENAI_IMAGE_MODEL,
+      model: "Orlixor AI",
+      image_model: "Orlixor Image",
       db: buildPublicDatabaseState(),
       limits: {
         max_body_bytes: MAX_BODY_BYTES,
@@ -2556,7 +2813,7 @@ async function routeRequest(req, res) {
       request_id: requestId,
       checks: {
         database_connected: Boolean(databaseState.connected),
-        openai_configured: Boolean(OPENAI_API_KEY)
+        ai_configured: Boolean(OPENAI_API_KEY)
       }
     });
     return;

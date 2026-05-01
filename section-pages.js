@@ -350,37 +350,51 @@
   };
 
   const modelProfiles = {
-    default: {
-      key: "default",
+    orlixor: {
+      key: "orlixor",
       name: "Orlixor AI",
-      label: "Orlixor AI (الموصى به)",
-      description: "النموذج المتوازن للشرح والكتابة والأسئلة العامة.",
+      label: "Orlixor AI",
+      badge: "الموصى به",
+      description: "الأكثر توازنًا للشرح والكتابة والأسئلة العامة.",
       icon: "logo",
-      xp: "حتى 15 XP لكل رسالة"
+      xp: "قد يستهلك حتى 15 XP لكل رسالة"
     },
     turbo: {
       key: "turbo",
       name: "Orlixor AI Turbo",
       label: "Orlixor AI Turbo",
+      badge: "الأسرع",
       description: "أسرع استجابة للمهام اليومية والردود المختصرة.",
       icon: "bolt",
-      xp: "حتى 10 XP لكل رسالة"
+      xp: "قد يستهلك حتى 10 XP لكل رسالة"
     },
     pro: {
       key: "pro",
       name: "Orlixor AI Pro",
       label: "Orlixor AI Pro",
-      description: "للتحليل العميق، الملفات، البرمجة والخطط الطويلة.",
+      badge: "للتحليل المتقدم",
+      description: "أدق نموذج لتحليل معمق ونتائج دقيقة.",
       icon: "star",
-      xp: "حتى 15 XP أو أكثر حسب الاستهلاك"
+      xp: "قد يستهلك حتى 15 XP أو أكثر حسب الاستهلاك"
     },
     creative: {
       key: "creative",
       name: "Orlixor AI Creative",
       label: "Orlixor AI Creative",
+      badge: "للإبداع والكتابة",
       description: "أفضل للكتابة الإبداعية والتسويق وصناعة المحتوى.",
       icon: "edit",
-      xp: "حتى 15 XP حسب طول النص"
+      xp: "قد يستهلك حتى 15 XP حسب طول النص"
+    },
+    alpha: {
+      key: "alpha",
+      name: "Orlixor AI Alpha",
+      label: "Orlixor AI Alpha",
+      badge: "قيد التطوير",
+      description: "نموذجنا القادم في التطوير، لأفكار أعمق وتجارب أكثر ذكاءً.",
+      icon: "sparkle",
+      xp: "سيتم إطلاقه قريبًا",
+      disabled: true
     }
   };
 
@@ -497,14 +511,14 @@
   function loadSelectedModel() {
     try {
       const stored = localStorage.getItem(modelStorageKey);
-      return modelProfiles[stored] ? stored : "default";
+      return modelProfiles[stored] && !modelProfiles[stored].disabled ? stored : "orlixor";
     } catch (_) {
-      return "default";
+      return "orlixor";
     }
   }
 
   function setSelectedModel(value) {
-    const next = modelProfiles[value] ? value : "default";
+    const next = modelProfiles[value] && !modelProfiles[value].disabled ? value : "orlixor";
     state.selectedModel = next;
     try {
       localStorage.setItem(modelStorageKey, next);
@@ -514,7 +528,7 @@
   }
 
   function getSelectedModelProfile() {
-    return modelProfiles[state.selectedModel] || modelProfiles.default;
+    return modelProfiles[state.selectedModel] || modelProfiles.orlixor;
   }
 
   function cloneThreadState() {
@@ -1396,7 +1410,7 @@
               <span>${isAuthenticated() ? "متصل الآن" : "استعراض آمن"}</span>
             </div>
           </div>
-          <div class="ai-card-model">Orlixor GPT-4</div>
+          <div class="ai-card-model">Orlixor AI</div>
         </section>
 
         <section class="side-card settings-card">
@@ -1505,17 +1519,17 @@
           <div class="model-menu-head">
             <span>${icons.logo}</span>
             <div>
-              <strong>Orlixor AI</strong>
-              <small>اختر النموذج المناسب لك</small>
+              <strong>اختر النموذج</strong>
+              <small>كل نموذج مصمم لمهام مختلفة</small>
             </div>
             <b>PRO</b>
           </div>
           <div class="model-menu-list">
             ${Object.values(modelProfiles).map((profile) => `
-              <button class="model-option ${state.selectedModel === profile.key ? "active" : ""}" type="button" data-select-model="${escapeHtml(profile.key)}">
+              <button class="model-option ${state.selectedModel === profile.key ? "active" : ""} ${profile.disabled ? "is-disabled" : ""}" type="button" data-select-model="${escapeHtml(profile.key)}" ${profile.disabled ? "disabled aria-disabled=\"true\"" : ""}>
                 <span class="model-option-radio"></span>
                 <span class="model-option-copy">
-                  <strong>${escapeHtml(profile.label)}</strong>
+                  <strong>${escapeHtml(profile.label)}${profile.badge ? ` <b class="model-option-badge">${escapeHtml(profile.badge)}</b>` : ""}</strong>
                   <small>${escapeHtml(profile.description)}</small>
                   <em>${escapeHtml(profile.xp)}</em>
                 </span>
@@ -2491,7 +2505,7 @@
     try {
       const result = await apiClient.sendChat({
         conversation_id: state.conversationIds[threadEntry.id] || undefined,
-        selected_model: state.selectedModel || "default",
+        selected_model: state.selectedModel || "orlixor",
         message: input,
         subject: state.currentUser?.subject || "",
         grade: state.currentUser?.grade || "",
@@ -2629,7 +2643,7 @@
       const modelOption = event.target.closest("[data-select-model]");
       if (modelOption) {
         event.preventDefault();
-        setSelectedModel(modelOption.getAttribute("data-select-model") || "default");
+        setSelectedModel(modelOption.getAttribute("data-select-model") || "orlixor");
         state.modelMenuOpen = false;
         render();
         return;

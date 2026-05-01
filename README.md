@@ -84,7 +84,11 @@ Set these environment variables in Render:
 
 ```env
 OPENAI_API_KEY=your_real_key
-OPENAI_MODEL=gpt-5.4-mini
+ORLIXOR_DEFAULT_MODEL=gpt-4.1-mini
+ORLIXOR_TURBO_MODEL=gpt-4.1-nano
+ORLIXOR_PRO_MODEL=gpt-4.1
+ORLIXOR_CREATIVE_MODEL=gpt-4.1-mini
+ORLIXOR_ENABLE_EMBEDDINGS=false
 DB_CLIENT=postgres
 DATABASE_URL=your_neon_postgres_connection_string
 CORS_ALLOWED_ORIGINS=https://your-frontend-domain.com
@@ -101,11 +105,12 @@ If Render is your backend, the Neon URL must be set in the Render Web Service en
 - New student accounts start with `50 XP`.
 - Free accounts receive `5 XP` once per new login day.
 - Paid packages reset the daily balance to the package daily XP amount.
-- Text chat requests cost `10 XP`.
+- Text chat requests cost about `5-15 XP` depending on model and response length.
 - Image attachments cost `15 XP`.
-- File/document analysis costs `20 XP`.
-- OpenAI responses are capped with `OPENAI_MAX_OUTPUT_TOKENS=500` by default.
+- File/document analysis is routed to `Orlixor AI Pro` and starts around `15 XP`.
+- Free users are capped with `FREE_MAX_OUTPUT_TOKENS=500` and `FREE_MAX_CONTEXT_TOKENS=1500`.
 - Conversation context is limited with `MAX_HISTORY_MESSAGES=5` to keep responses fast and costs controlled.
+- The frontend sends only internal model keys (`orlixor`, `turbo`, `pro`, `creative`); the backend maps them to provider models.
 
 Default paid packages inserted into Neon:
 
@@ -123,7 +128,10 @@ The Node backend creates and maintains these PostgreSQL tables automatically on 
 - `app_api_tokens`: persistent login tokens used to keep users signed in across refreshes and page changes.
 - `app_projects`: student projects and folders.
 - `conversations`: saved chats attached to the logged-in user and optionally to a project.
-- `messages`: all user/assistant messages for saved conversation history.
+- `messages`: all user/assistant messages with model key, token counts, and XP cost.
+- `user_memory`: safe long-term preferences and useful facts for improving the experience.
+- `message_embeddings`: optional embeddings for memory retrieval when `ORLIXOR_ENABLE_EMBEDDINGS=true`.
+- `feedback`: user ratings for assistant messages.
 - `app_guest_usage`: guest usage tracking when guest mode is enabled.
 
 ## Deploy on Railway
