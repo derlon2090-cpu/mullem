@@ -360,6 +360,7 @@
     theme: loadStoredTheme(),
     authModalOpen: false,
     settingsModalOpen: false,
+    settingsModalTab: "general",
     upgradeModalOpen: false,
     balancePanelOpen: false,
     openThreadMenuId: "",
@@ -1430,20 +1431,337 @@
     `;
   }
 
+  function renderSettingsContent(tabKey, settings) {
+    if (tabKey === "notifications") {
+      return `
+        <section class="settings-general-head">
+          <span>${icons.bell}</span>
+          <div>
+            <strong>الإشعارات</strong>
+            <p>تحكم في التنبيهات المهمة داخل حسابك.</p>
+          </div>
+        </section>
+        <div class="settings-option-list">
+          <article class="settings-option-row">
+            <span class="settings-option-icon">${icons.bell}</span>
+            <div class="settings-option-copy">
+              <strong>تنبيهات الرصيد</strong>
+              <small>إشعار عند قرب انتهاء رصيد XP اليومي.</small>
+            </div>
+            <button class="settings-inline-action" type="button" data-settings-action="notifications">مفعّل</button>
+          </article>
+          <article class="settings-option-row">
+            <span class="settings-option-icon">${icons.chat}</span>
+            <div class="settings-option-copy">
+              <strong>تنبيهات المحادثات</strong>
+              <small>إظهار تنبيه عند حفظ أو تحديث محادثة.</small>
+            </div>
+            <button class="settings-inline-action" type="button" data-settings-action="chat-alerts">مفعّل</button>
+          </article>
+        </div>
+      `;
+    }
+
+    if (tabKey === "personalization") {
+      return `
+        <section class="settings-general-head">
+          <span>${icons.ai}</span>
+          <div>
+            <strong>تخصيص</strong>
+            <p>اضبط أسلوب Orlixor حسب طريقة مذاكرتك.</p>
+          </div>
+        </section>
+        <div class="settings-option-list">
+          <article class="settings-option-row">
+            <span class="settings-option-icon">${icons.ai}</span>
+            <div class="settings-option-copy">
+              <strong>أسلوب الشرح</strong>
+              <small>اختر طريقة الرد المناسبة لك.</small>
+            </div>
+            <select data-setting="responseMode">
+              ${["شرح", "مرن", "مختصر", "احترافي", "تعليمي"].map((item) => `
+                <option value="${escapeHtml(item)}" ${settings.responseMode === item ? "selected" : ""}>${escapeHtml(item)}</option>
+              `).join("")}
+            </select>
+          </article>
+          <article class="settings-option-row">
+            <span class="settings-option-icon">${icons.document}</span>
+            <div class="settings-option-copy">
+              <strong>طول الرد</strong>
+              <small>اختر بين رد مختصر أو مفصل.</small>
+            </div>
+            <select data-setting="responseLength">
+              ${["قصير", "متوازن", "مفصل"].map((item) => `
+                <option value="${escapeHtml(item)}" ${settings.responseLength === item ? "selected" : ""}>${escapeHtml(item)}</option>
+              `).join("")}
+            </select>
+          </article>
+        </div>
+      `;
+    }
+
+    if (tabKey === "apps") {
+      return `
+        <section class="settings-general-head">
+          <span>${icons.subjects}</span>
+          <div>
+            <strong>التطبيقات</strong>
+            <p>إدارة أدوات المنصة والاختصارات المتاحة.</p>
+          </div>
+        </section>
+        <div class="settings-option-list">
+          <article class="settings-option-row">
+            <span class="settings-option-icon">${icons.attach}</span>
+            <div class="settings-option-copy">
+              <strong>رفع الملفات</strong>
+              <small>السماح بإرفاق الصور والمستندات داخل المحادثة.</small>
+            </div>
+            <button class="settings-inline-action" type="button" data-settings-action="files">متاح</button>
+          </article>
+          <article class="settings-option-row">
+            <span class="settings-option-icon">${icons.internet}</span>
+            <div class="settings-option-copy">
+              <strong>البحث في الإنترنت</strong>
+              <small>استخدمه عند الحاجة لمعلومة حديثة.</small>
+            </div>
+            <button class="settings-inline-action" type="button" data-toggle-web>${settings.webEnabled ? "مفعّل" : "متوقف"}</button>
+          </article>
+        </div>
+      `;
+    }
+
+    if (tabKey === "data") {
+      return `
+        <section class="settings-general-head">
+          <span>${icons.library}</span>
+          <div>
+            <strong>عناصر التحكم في البيانات</strong>
+            <p>إدارة البيانات المحفوظة داخل حسابك.</p>
+          </div>
+        </section>
+        <div class="settings-option-list">
+          <article class="settings-option-row">
+            <span class="settings-option-icon">${icons.chat}</span>
+            <div class="settings-option-copy">
+              <strong>حفظ المحادثات</strong>
+              <small>المحادثات تحفظ داخل حسابك عند تسجيل الدخول.</small>
+            </div>
+            <span class="settings-pill">مفعّل</span>
+          </article>
+          <article class="settings-option-row">
+            <span class="settings-option-icon">${icons.delete}</span>
+            <div class="settings-option-copy">
+              <strong>حذف المحادثة الحالية</strong>
+              <small>إزالة المحادثة المفتوحة من القائمة.</small>
+            </div>
+            <button class="settings-inline-action danger" type="button" data-delete-thread>حذف</button>
+          </article>
+        </div>
+      `;
+    }
+
+    if (tabKey === "security") {
+      return `
+        <section class="settings-general-head">
+          <span>${icons.lock}</span>
+          <div>
+            <strong>الأمان</strong>
+            <p>خيارات تساعدك في حماية حسابك.</p>
+          </div>
+        </section>
+        <div class="settings-option-list">
+          <article class="settings-option-row">
+            <span class="settings-option-icon">${icons.lock}</span>
+            <div class="settings-option-copy">
+              <strong>حالة الجلسة</strong>
+              <small>تسجيل الدخول محفوظ حتى تسجّل الخروج.</small>
+            </div>
+            <span class="settings-pill">آمن</span>
+          </article>
+          <article class="settings-option-row">
+            <span class="settings-option-icon">${icons.login}</span>
+            <div class="settings-option-copy">
+              <strong>تسجيل الخروج</strong>
+              <small>إنهاء الجلسة الحالية من هذا المتصفح.</small>
+            </div>
+            <button class="settings-inline-action danger" type="button" data-logout>خروج</button>
+          </article>
+        </div>
+      `;
+    }
+
+    if (tabKey === "devices") {
+      return `
+        <section class="settings-general-head">
+          <span>${icons.devices}</span>
+          <div>
+            <strong>الأجهزة</strong>
+            <p>إدارة الأجهزة التي تم تسجيل الدخول عليها.</p>
+          </div>
+        </section>
+        <div class="settings-option-list">
+          <article class="settings-option-row">
+            <span class="settings-option-icon">${icons.devices}</span>
+            <div class="settings-option-copy">
+              <strong>هذا الجهاز</strong>
+              <small>Windows / Chrome - نشط الآن</small>
+            </div>
+            <span class="settings-pill success">نشط الآن</span>
+          </article>
+          <article class="settings-option-row">
+            <span class="settings-option-icon">${icons.user}</span>
+            <div class="settings-option-copy">
+              <strong>الأجهزة النشطة</strong>
+              <small>يمكنك تسجيل الخروج يدويًا عند الحاجة.</small>
+            </div>
+            <span class="settings-pill">1 جهاز</span>
+          </article>
+        </div>
+      `;
+    }
+
+    if (tabKey === "parents") {
+      return `
+        <section class="settings-general-head">
+          <span>${icons.user}</span>
+          <div>
+            <strong>رقابة الوالدين</strong>
+            <p>إعدادات إشراف خفيفة لتجربة تعليمية آمنة.</p>
+          </div>
+        </section>
+        <div class="settings-option-list">
+          <article class="settings-option-row">
+            <span class="settings-option-icon">${icons.eye}</span>
+            <div class="settings-option-copy">
+              <strong>وضع المتابعة</strong>
+              <small>عرض ملخصات الاستخدام والتقدم لاحقًا.</small>
+            </div>
+            <span class="settings-pill">قريبًا</span>
+          </article>
+        </div>
+      `;
+    }
+
+    if (tabKey === "account") {
+      return `
+        <section class="settings-general-head">
+          <span>${icons.settings}</span>
+          <div>
+            <strong>الحساب</strong>
+            <p>معلومات الحساب والباقة الحالية.</p>
+          </div>
+        </section>
+        <div class="settings-option-list">
+          <article class="settings-option-row">
+            <span class="settings-option-icon">${icons.user}</span>
+            <div class="settings-option-copy">
+              <strong>الاسم والبريد</strong>
+              <small>${escapeHtml(state.currentUser?.email || "غير متاح")}</small>
+            </div>
+            <span class="settings-pill">${escapeHtml(getUserPackageLabel(state.currentUser))}</span>
+          </article>
+          <article class="settings-option-row">
+            <span class="settings-option-icon">${icons.crown}</span>
+            <div class="settings-option-copy">
+              <strong>الباقة الحالية</strong>
+              <small>يمكنك الترقية من بطاقة Pro في الشريط الجانبي.</small>
+            </div>
+            <button class="settings-inline-action" type="button" data-open-upgrade>ترقية</button>
+          </article>
+        </div>
+      `;
+    }
+
+    return `
+      <section class="settings-general-head">
+        <span>${icons.settings}</span>
+        <div>
+          <strong>عام</strong>
+          <p>إدارة الإعدادات العامة لتجربة استخدام أفضل</p>
+        </div>
+      </section>
+
+      <div class="settings-option-list">
+        <article class="settings-option-row">
+          <span class="settings-option-icon">${icons.internet}</span>
+          <div class="settings-option-copy">
+            <strong>المظهر</strong>
+            <small>اختر المظهر المفضل لك</small>
+          </div>
+          <div class="settings-segmented">
+            <button type="button" data-modal-theme="light" class="${state.theme === "light" ? "active" : ""}">فاتح</button>
+            <button type="button" data-modal-theme="dark" class="${state.theme === "dark" ? "active" : ""}">داكن</button>
+            <button type="button" data-modal-theme="system">تلقائي</button>
+          </div>
+        </article>
+
+        <article class="settings-option-row">
+          <span class="settings-option-icon">A</span>
+          <div class="settings-option-copy">
+            <strong>اللغة</strong>
+            <small>تغيير لغة واجهة المنصة</small>
+          </div>
+          <select data-setting="language">
+            ${["العربية", "English"].map((item) => `
+              <option value="${escapeHtml(item)}" ${settings.language === item ? "selected" : ""}>${escapeHtml(item)}</option>
+            `).join("")}
+          </select>
+        </article>
+
+        <article class="settings-option-row">
+          <span class="settings-option-icon">${icons.moon}</span>
+          <div class="settings-option-copy">
+            <strong>المنطقة الزمنية</strong>
+            <small>تحديد المنطقة الزمنية الخاصة بك</small>
+          </div>
+          <select>
+            <option>(GMT+3) الرياض</option>
+            <option>(GMT+3) مكة</option>
+          </select>
+        </article>
+
+        <article class="settings-option-row">
+          <span class="settings-option-icon">${icons.document}</span>
+          <div class="settings-option-copy">
+            <strong>تنسيق التاريخ</strong>
+            <small>اختر تنسيق عرض التاريخ</small>
+          </div>
+          <select>
+            <option>YYYY-MM-DD</option>
+            <option>DD/MM/YYYY</option>
+          </select>
+        </article>
+
+        <article class="settings-option-row">
+          <span class="settings-option-icon">${icons.sparkle}</span>
+          <div class="settings-option-copy">
+            <strong>بداية الأسبوع من</strong>
+            <small>اختر اليوم الذي يبدأ منه الأسبوع</small>
+          </div>
+          <div class="settings-segmented">
+            <button type="button" class="active">الأحد</button>
+            <button type="button">السبت</button>
+          </div>
+        </article>
+      </div>
+    `;
+  }
+
   function renderSettingsModal() {
     const userName = String(state.currentUser?.name || "ضيف").trim() || "ضيف";
     const packageLabel = getUserPackageLabel(state.currentUser);
     const settings = state.settings[state.section] || {};
+    const activeSettingsTab = state.settingsModalTab || "general";
     const modalTabs = [
-      ["عام", "settings"],
-      ["الإشعارات", "bell"],
-      ["تخصيص", "ai"],
-      ["التطبيقات", "subjects"],
-      ["عناصر التحكم في البيانات", "library"],
-      ["الأمان", "lock"],
-      ["الأجهزة", "devices"],
-      ["رقابة الوالدين", "user"],
-      ["الحساب", "settings"]
+      ["general", "عام", "settings"],
+      ["notifications", "الإشعارات", "bell"],
+      ["personalization", "تخصيص", "ai"],
+      ["apps", "التطبيقات", "subjects"],
+      ["data", "عناصر التحكم في البيانات", "library"],
+      ["security", "الأمان", "lock"],
+      ["devices", "الأجهزة", "devices"],
+      ["parents", "رقابة الوالدين", "user"],
+      ["account", "الحساب", "settings"]
     ];
 
     return `
@@ -1466,8 +1784,8 @@
             </div>
 
             <nav class="settings-modal-nav" aria-label="أقسام الإعدادات">
-              ${modalTabs.map(([label, icon], index) => `
-                <button class="${index === 0 ? "active" : ""}" type="button">
+              ${modalTabs.map(([key, label, icon]) => `
+                <button class="${activeSettingsTab === key ? "active" : ""}" type="button" data-settings-tab="${escapeHtml(key)}">
                   <span>${icons[icon] || icons.settings}</span>
                   <b>${escapeHtml(label)}</b>
                 </button>
@@ -1486,77 +1804,7 @@
               <p>إدارة تفضيلاتك وخياراتك الشخصية</p>
             </header>
 
-            <section class="settings-general-head">
-              <span>${icons.settings}</span>
-              <div>
-                <strong>عام</strong>
-                <p>إدارة الإعدادات العامة لتجربة استخدام أفضل</p>
-              </div>
-            </section>
-
-            <div class="settings-option-list">
-              <article class="settings-option-row">
-                <span class="settings-option-icon">${icons.internet}</span>
-                <div class="settings-option-copy">
-                  <strong>المظهر</strong>
-                  <small>اختر المظهر المفضل لك</small>
-                </div>
-                <div class="settings-segmented">
-                  <button type="button" data-modal-theme="light" class="${state.theme === "light" ? "active" : ""}">فاتح</button>
-                  <button type="button" data-modal-theme="dark" class="${state.theme === "dark" ? "active" : ""}">داكن</button>
-                  <button type="button" data-modal-theme="system">تلقائي</button>
-                </div>
-              </article>
-
-              <article class="settings-option-row">
-                <span class="settings-option-icon">A</span>
-                <div class="settings-option-copy">
-                  <strong>اللغة</strong>
-                  <small>تغيير لغة واجهة المنصة</small>
-                </div>
-                <select data-setting="language">
-                  ${["العربية", "English"].map((item) => `
-                    <option value="${escapeHtml(item)}" ${settings.language === item ? "selected" : ""}>${escapeHtml(item)}</option>
-                  `).join("")}
-                </select>
-              </article>
-
-              <article class="settings-option-row">
-                <span class="settings-option-icon">${icons.moon}</span>
-                <div class="settings-option-copy">
-                  <strong>المنطقة الزمنية</strong>
-                  <small>تحديد المنطقة الزمنية الخاصة بك</small>
-                </div>
-                <select>
-                  <option>(GMT+3) الرياض</option>
-                  <option>(GMT+3) مكة</option>
-                </select>
-              </article>
-
-              <article class="settings-option-row">
-                <span class="settings-option-icon">${icons.document}</span>
-                <div class="settings-option-copy">
-                  <strong>تنسيق التاريخ</strong>
-                  <small>اختر تنسيق عرض التاريخ</small>
-                </div>
-                <select>
-                  <option>YYYY-MM-DD</option>
-                  <option>DD/MM/YYYY</option>
-                </select>
-              </article>
-
-              <article class="settings-option-row">
-                <span class="settings-option-icon">${icons.sparkle}</span>
-                <div class="settings-option-copy">
-                  <strong>بداية الأسبوع من</strong>
-                  <small>اختر اليوم الذي يبدأ منه الأسبوع</small>
-                </div>
-                <div class="settings-segmented">
-                  <button type="button" class="active">الأحد</button>
-                  <button type="button">السبت</button>
-                </div>
-              </article>
-            </div>
+            ${renderSettingsContent(activeSettingsTab, settings)}
           </div>
         </section>
       </div>
@@ -2448,11 +2696,26 @@
       if (event.target.closest("[data-open-account]")) {
         state.currentUser = getActiveUser() || state.currentUser;
         if (isAuthenticated()) {
+          state.settingsModalTab = state.settingsModalTab || "general";
           state.settingsModalOpen = true;
           render();
         } else {
           openAuthModal("افتح حسابك للوصول إلى التجربة الكاملة.");
         }
+        return;
+      }
+
+      const settingsTabButton = event.target.closest("[data-settings-tab]");
+      if (settingsTabButton) {
+        state.settingsModalTab = settingsTabButton.getAttribute("data-settings-tab") || "general";
+        render();
+        return;
+      }
+
+      const settingsActionButton = event.target.closest("[data-settings-action]");
+      if (settingsActionButton) {
+        event.preventDefault();
+        showToast("تم حفظ الإجراء داخل الإعدادات.");
         return;
       }
 

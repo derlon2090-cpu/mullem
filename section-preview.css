@@ -2569,6 +2569,42 @@ body[data-workspace-mode="home"] .guest-root {
   font-weight: 700;
 }
 
+.settings-inline-action,
+.settings-pill {
+  min-height: 34px;
+  border: 1px solid rgba(111, 76, 255, 0.14);
+  border-radius: 10px;
+  padding: 0 14px;
+  display: inline-grid;
+  place-items: center;
+  color: #6547ff;
+  background: rgba(111, 76, 255, 0.08);
+  font-size: 0.66rem;
+  font-weight: 900;
+  white-space: nowrap;
+}
+
+.settings-inline-action {
+  cursor: pointer;
+}
+
+.settings-inline-action:hover {
+  border-color: rgba(111, 76, 255, 0.26);
+  background: rgba(111, 76, 255, 0.13);
+}
+
+.settings-inline-action.danger {
+  color: #ff4d57;
+  border-color: rgba(255, 77, 87, 0.16);
+  background: rgba(255, 77, 87, 0.08);
+}
+
+.settings-pill.success {
+  color: #059669;
+  border-color: rgba(5, 150, 105, 0.14);
+  background: rgba(5, 150, 105, 0.1);
+}
+
 .settings-segmented {
   min-height: 34px;
   padding: 4px;
