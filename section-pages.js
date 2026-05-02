@@ -1956,6 +1956,94 @@
     `;
   }
 
+  function renderToolsMain(profile) {
+    const categories = ["الكل", "كتابة وتحرير", "تلخيص وتنظيم", "تحليل وبيانات", "إنتاجية", "تعليم وتعلم", "أدوات مجانية"];
+    const tools = [
+      {
+        title: "البحث الذكي",
+        description: "البحث عن معلومات دقيقة من مصادر موثوقة",
+        icon: icons.search
+      },
+      {
+        title: "مساعد الكتابة",
+        description: "كتابة وتحسين النصوص بجودة عالية وبأسلوب احترافي",
+        icon: icons.edit
+      },
+      {
+        title: "صناعة ملخصات",
+        description: "إنشاء ملخصات احترافية من النصوص أو الملفات",
+        icon: icons.document
+      },
+      {
+        title: "تلخيص محتوى",
+        description: "تلخيص أي نص طويل إلى نقاط مختصرة وواضحة",
+        icon: icons.notes
+      },
+      {
+        title: "ترجمة ذكية",
+        description: "ترجمة النصوص بدقة عالية ولغة واضحة",
+        icon: icons.internet
+      },
+      {
+        title: "استخراج البيانات",
+        description: "استخراج البيانات من النصوص والملفات المنظمة",
+        icon: icons.tests
+      },
+      {
+        title: "أفكار ومقترحات",
+        description: "الحصول على أفكار إبداعية لمشاريعك ومحتواك",
+        icon: icons.sparkle
+      },
+      {
+        title: "تحليل المحتوى",
+        description: "تحليل النصوص واستخراج المفاهيم الرئيسية",
+        icon: icons.ai
+      }
+    ];
+
+    return `
+      <section class="guest-main tools-main" aria-label="أدوات الذكاء الاصطناعي">
+        <div class="tools-page">
+          <header class="tools-hero">
+            <div class="tools-title-row">
+              <h1>${escapeHtml(profile.heroTitle || "أدوات الذكاء الاصطناعي")}</h1>
+              <span class="tools-title-icon" aria-hidden="true">${icons.settings}</span>
+            </div>
+            <p>مجموعة من الأدوات الذكية لمساعدتك في العمل والإبداع</p>
+          </header>
+
+          <div class="tools-filters" aria-label="تصنيفات الأدوات">
+            ${categories.map((category, index) => `
+              <button class="tools-filter ${index === 0 ? "is-active" : ""}" type="button">
+                ${escapeHtml(category)}
+              </button>
+            `).join("")}
+          </div>
+
+          <section class="tools-grid">
+            ${tools.map((tool) => `
+              <button class="tool-card ${isAuthenticated() ? "" : "requires-auth"}" type="button" data-card="${escapeHtml(tool.title)}">
+                <span class="tool-card-star" aria-hidden="true">${icons.star}</span>
+                <span class="tool-card-icon" aria-hidden="true">${tool.icon}</span>
+                <strong>${escapeHtml(tool.title)}</strong>
+                <span class="tool-card-copy">${escapeHtml(tool.description)}</span>
+                <span class="tool-card-meta">
+                  <b>مجاني</b>
+                  <small>متاح في: طويق، برو</small>
+                </span>
+              </button>
+            `).join("")}
+          </section>
+
+          <p class="tools-suggest">
+            هل لديك اقتراح لأداة جديدة؟
+            <button type="button" data-card="اقتراح أداة جديدة">أخبرنا عن رأيك</button>
+          </p>
+        </div>
+      </section>
+    `;
+  }
+
   function renderHomeMain(profile) {
     const firstName = isAuthenticated()
       ? String(state.currentUser?.name || "أحمد").trim().split(/\s+/)[0] || "أحمد"
@@ -1998,7 +2086,7 @@
               ${icons.attach}
               <span>إرفاق ملف</span>
             </button>
-            <button class="home-compose-tool ${isAuthenticated() ? "" : "requires-auth"}" type="button" data-toggle-web>
+            <button class="home-compose-tool" type="button" data-open-tools>
               ${icons.settings}
               <span>أدوات</span>
             </button>
@@ -2013,6 +2101,9 @@
   }
 
   function renderMain(profile) {
+    if (profile.key === "ai-tools") {
+      return renderToolsMain(profile);
+    }
     if (isHomeWorkspace) {
       return renderHomeMain(profile);
     }
@@ -2105,8 +2196,7 @@
         <div class="guest-collapsed-tools" aria-label="اختصارات الشريط الجانبي">
           <button class="guest-rail-btn ${isAuthenticated() ? "" : "requires-auth"}" type="button" data-new-chat aria-label="دردشة جديدة">${icons.edit}</button>
           <button class="guest-rail-btn" type="button" data-focus-history-search aria-label="البحث في المحادثات">${icons.search}</button>
-          <button class="guest-rail-btn" type="button" data-nav="projects" aria-label="المشروعات">${icons.projects}</button>
-          <button class="guest-rail-btn" type="button" data-nav="ai-tools" aria-label="Orlixor AI">${icons.ai}</button>
+          <button class="guest-rail-btn is-tools" type="button" data-open-tools aria-label="أدوات">${icons.settings}<span class="guest-rail-label">أدوات</span></button>
           <button class="guest-rail-btn" type="button" data-open-account aria-label="المزيد">${icons.menu}</button>
         </div>
 
@@ -2906,6 +2996,13 @@
       if (event.target.closest("[data-open-upgrade]")) {
         state.upgradeModalOpen = true;
         render();
+        return;
+      }
+
+      if (event.target.closest("[data-open-tools]")) {
+        state.homeConversationOpen = false;
+        state.openThreadMenuId = "";
+        setSection("ai-tools");
         return;
       }
 
