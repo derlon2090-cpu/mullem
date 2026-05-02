@@ -2102,6 +2102,14 @@
           <i aria-hidden="true">${icons.plus}</i>
         </button>
 
+        <div class="guest-collapsed-tools" aria-label="اختصارات الشريط الجانبي">
+          <button class="guest-rail-btn ${isAuthenticated() ? "" : "requires-auth"}" type="button" data-new-chat aria-label="دردشة جديدة">${icons.edit}</button>
+          <button class="guest-rail-btn" type="button" data-focus-history-search aria-label="البحث في المحادثات">${icons.search}</button>
+          <button class="guest-rail-btn" type="button" data-nav="projects" aria-label="المشروعات">${icons.projects}</button>
+          <button class="guest-rail-btn" type="button" data-nav="ai-tools" aria-label="Orlixor AI">${icons.ai}</button>
+          <button class="guest-rail-btn" type="button" data-open-account aria-label="المزيد">${icons.menu}</button>
+        </div>
+
         <label class="guest-search-box">
           <input type="search" value="${escapeHtml(getSearchValue())}" placeholder="بحث في المحادثات" data-history-search>
           <span>${icons.search}</span>
@@ -2737,6 +2745,14 @@
         setSelectedModel(modelOption.getAttribute("data-select-model") || "orlixor");
         state.modelMenuOpen = false;
         render();
+        return;
+      }
+
+      if (event.target.closest("[data-focus-history-search]")) {
+        event.preventDefault();
+        setSidebarCollapsed(false);
+        render();
+        setTimeout(() => app.querySelector("[data-history-search]")?.focus(), 0);
         return;
       }
 

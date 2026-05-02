@@ -4070,6 +4070,28 @@ body[data-workspace-mode="home"] .guest-root {
   display: none;
 }
 
+.guest-collapsed-tools {
+  display: none;
+}
+
+.guest-rail-btn {
+  width: 48px;
+  height: 48px;
+  border: 0;
+  border-radius: 14px;
+  color: #172044;
+  background: transparent;
+  display: grid;
+  place-items: center;
+  transition: color 0.18s ease, background 0.18s ease, transform 0.18s ease;
+}
+
+.guest-rail-btn:hover {
+  color: #6b4cff;
+  background: rgba(111, 76, 255, 0.08);
+  transform: translateY(-1px);
+}
+
 .guest-shell.is-sidebar-collapsed {
   grid-template-columns: 86px minmax(0, 1fr) 286px;
 }
@@ -4125,8 +4147,6 @@ body[data-workspace-mode="home"] .guest-root {
 }
 
 .guest-shell.is-sidebar-collapsed .guest-new-chat,
-.guest-shell.is-sidebar-collapsed .guest-search-box,
-.guest-shell.is-sidebar-collapsed .guest-history-item,
 .guest-shell.is-sidebar-collapsed .guest-upgrade-card,
 .guest-shell.is-sidebar-collapsed .guest-user-card {
   width: 48px;
@@ -4142,6 +4162,17 @@ body[data-workspace-mode="home"] .guest-root {
   box-shadow: 0 14px 26px rgba(111, 76, 255, 0.24);
 }
 
+.guest-shell.is-sidebar-collapsed .guest-collapsed-tools {
+  width: 100%;
+  flex: 1 1 auto;
+  min-height: 0;
+  margin-top: 4px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+}
+
 .guest-shell.is-sidebar-collapsed .guest-new-chat i,
 .guest-shell.is-sidebar-collapsed .guest-search-box span,
 .guest-shell.is-sidebar-collapsed .guest-history-more,
@@ -4151,10 +4182,13 @@ body[data-workspace-mode="home"] .guest-root {
 }
 
 .guest-shell.is-sidebar-collapsed .guest-new-chat span,
+.guest-shell.is-sidebar-collapsed .guest-search-box,
+.guest-shell.is-sidebar-collapsed .guest-history-wrap,
 .guest-shell.is-sidebar-collapsed .guest-search-box input,
 .guest-shell.is-sidebar-collapsed .guest-history-copy,
 .guest-shell.is-sidebar-collapsed .guest-history-group h3,
 .guest-shell.is-sidebar-collapsed .guest-history-badge,
+.guest-shell.is-sidebar-collapsed .guest-upgrade-card,
 .guest-shell.is-sidebar-collapsed .guest-upgrade-card div,
 .guest-shell.is-sidebar-collapsed .guest-user-copy,
 .guest-shell.is-sidebar-collapsed .guest-user-head,
@@ -4164,33 +4198,6 @@ body[data-workspace-mode="home"] .guest-root {
   display: none;
 }
 
-.guest-shell.is-sidebar-collapsed .guest-history-wrap {
-  width: 100%;
-  padding-inline: 0;
-}
-
-.guest-shell.is-sidebar-collapsed .guest-history-group,
-.guest-shell.is-sidebar-collapsed .guest-history-list,
-.guest-shell.is-sidebar-collapsed .guest-history-item-wrap {
-  width: 100%;
-}
-
-.guest-shell.is-sidebar-collapsed .guest-history-item {
-  justify-content: center;
-}
-
-.guest-shell.is-sidebar-collapsed .guest-history-more {
-  position: static;
-  opacity: 1;
-  transform: none;
-}
-
-.guest-shell.is-sidebar-collapsed .thread-actions-menu {
-  right: auto;
-  left: 58px;
-}
-
-.guest-shell.is-sidebar-collapsed .guest-upgrade-card,
 .guest-shell.is-sidebar-collapsed .guest-user-card {
   flex: 0 0 auto;
 }
