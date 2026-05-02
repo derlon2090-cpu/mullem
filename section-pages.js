@@ -2009,11 +2009,6 @@
         </header>
 
         <div class="tools-page">
-          <button class="tools-back" type="button" data-nav="messages">
-            <span aria-hidden="true">←</span>
-            <b>عودة</b>
-          </button>
-
           <header class="tools-hero">
             <div class="tools-title-row">
               <h1>أدوات الذكاء الاصطناعي</h1>
@@ -2403,8 +2398,9 @@
 
   function renderShell() {
     const profile = getProfile();
+    const isToolsWorkspace = state.section === "ai-tools";
     app.innerHTML = `
-      <div class="guest-shell ${state.theme === "dark" ? "theme-dark" : ""} ${isHomeWorkspace ? "is-home-workspace" : ""} ${state.sidebarCollapsed ? "is-sidebar-collapsed" : ""}">
+      <div class="guest-shell ${state.theme === "dark" ? "theme-dark" : ""} ${isHomeWorkspace ? "is-home-workspace" : ""} ${isToolsWorkspace ? "is-tools-workspace" : ""} ${state.sidebarCollapsed ? "is-sidebar-collapsed" : ""}">
         ${renderSidebar()}
         ${renderMain(profile)}
         ${isHomeWorkspace ? "" : renderRightPanel(profile)}
@@ -3012,6 +3008,7 @@
       if (event.target.closest("[data-open-tools]")) {
         state.homeConversationOpen = false;
         state.openThreadMenuId = "";
+        setSidebarCollapsed(false);
         setSection("ai-tools");
         return;
       }
