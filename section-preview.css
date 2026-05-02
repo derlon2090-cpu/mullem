@@ -155,7 +155,7 @@ body[data-workspace-mode="home"] .guest-root {
   padding: 24px 56px 24px;
   gap: 0;
   align-content: stretch;
-  grid-template-rows: 58px 292px 112px minmax(0, 1fr) 164px 34px;
+  grid-template-rows: 58px 270px 112px minmax(30px, 1fr) 164px 34px;
 }
 
 .guest-brand {
@@ -1751,7 +1751,7 @@ body[data-workspace-mode="home"] .guest-root {
   grid-row: 3;
   max-width: 1210px;
   width: 100%;
-  margin: 0 auto;
+  margin: -8px auto 0;
   grid-template-columns: repeat(6, minmax(0, 1fr));
   gap: 16px;
   align-self: start;
