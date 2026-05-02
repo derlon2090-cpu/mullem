@@ -4089,12 +4089,21 @@ body[data-workspace-mode="home"] .guest-root {
   grid-row: 1 / -1;
   height: 100vh;
   min-height: 100vh;
+  display: block;
+  align-content: initial;
+  grid-template-rows: none;
+  padding: 24px clamp(28px, 4vw, 54px);
 }
 
 .tools-page {
   position: relative;
   width: min(100%, 1018px);
   margin: 0 auto;
+}
+
+.tools-main-topbar {
+  width: min(100%, 1120px);
+  margin: 0 auto 20px;
 }
 
 .tools-back {

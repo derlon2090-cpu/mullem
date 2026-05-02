@@ -2003,6 +2003,11 @@
 
     return `
       <section class="guest-main tools-main" aria-label="أدوات الذكاء الاصطناعي">
+        <header class="guest-main-topbar tools-main-topbar">
+          ${renderModelSwitcher()}
+          ${renderHomeTopActions()}
+        </header>
+
         <div class="tools-page">
           <button class="tools-back" type="button" data-nav="messages">
             <span aria-hidden="true">←</span>
