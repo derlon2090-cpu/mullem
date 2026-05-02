@@ -51,6 +51,7 @@ const OPENAI_MODEL_CREATIVE = String(process.env.ORLIXOR_CREATIVE_MODEL || proce
 const OPENAI_MODEL_SEARCH = String(process.env.ORLIXOR_SEARCH_MODEL || process.env.OPENAI_MODEL_SEARCH || OPENAI_MODEL_DEFAULT || "gpt-4.1-mini").trim();
 const OPENAI_MODEL_WRITING = String(process.env.ORLIXOR_WRITING_MODEL || process.env.OPENAI_MODEL_WRITING || OPENAI_MODEL_CREATIVE || OPENAI_MODEL_DEFAULT || "gpt-4.1-mini").trim();
 const OPENAI_MODEL_TONE = String(process.env.ORLIXOR_TONE_MODEL || process.env.OPENAI_MODEL_TONE || OPENAI_MODEL_WRITING || "gpt-4.1-mini").trim();
+const OPENAI_MODEL_EXPAND = String(process.env.ORLIXOR_EXPAND_MODEL || process.env.OPENAI_MODEL_EXPAND || OPENAI_MODEL_WRITING || "gpt-4.1-mini").trim();
 const OPENAI_IMAGE_MODEL = String(process.env.OPENAI_IMAGE_MODEL || "dall-e-3").trim();
 const OPENAI_RESPONSES_ENDPOINT = String(process.env.OPENAI_RESPONSES_ENDPOINT || "https://api.openai.com/v1/responses").trim();
 const OPENAI_EMBEDDINGS_ENDPOINT = String(process.env.OPENAI_EMBEDDINGS_ENDPOINT || "https://api.openai.com/v1/embeddings").trim();
@@ -71,6 +72,8 @@ const RATE_LIMIT_GENERAL_MAX = Math.max(1, Number(process.env.RATE_LIMIT_GENERAL
 const SEARCH_XP_COST = Math.max(1, Number(process.env.SEARCH_XP_COST || 10));
 const SEARCH_DEEP_XP_COST = Math.max(SEARCH_XP_COST, Number(process.env.SEARCH_DEEP_XP_COST || 15));
 const TONE_XP_COST = Math.max(1, Number(process.env.TONE_XP_COST || 5));
+const EXPAND_XP_COST = Math.max(1, Number(process.env.EXPAND_XP_COST || process.env.WRITING_EXPAND_XP_COST || 8));
+const EXPAND_LONG_XP_COST = Math.max(EXPAND_XP_COST, Number(process.env.EXPAND_LONG_XP_COST || 12));
 const WRITING_XP_COSTS = Object.freeze({
   rewrite: Math.max(1, Number(process.env.WRITING_REWRITE_XP_COST || 5)),
   tone: Math.max(1, Number(process.env.WRITING_TONE_XP_COST || 5)),
@@ -1811,6 +1814,93 @@ function buildTonePrompt({ text, tone, level }) {
   ];
 }
 
+const EXPAND_LEVELS = Object.freeze({
+  light: {
+    label: "توسيع خفيف",
+    prompt: "وسّع النص بشكل خفيف مع إضافة جملة أو جملتين فقط."
+  },
+  medium: {
+    label: "توسيع متوسط",
+    prompt: "وسّع النص بشكل متوسط مع إضافة تفاصيل مهمة وأمثلة بسيطة."
+  },
+  deep: {
+    label: "توسيع مفصل",
+    prompt: "وسّع النص بشكل مفصل ومنظم مع أمثلة وسياق واضح."
+  }
+});
+
+const EXPAND_FOCUS_OPTIONS = Object.freeze({
+  details: {
+    label: "تفاصيل وأمثلة",
+    prompt: "ركز على إضافة تفاصيل وأمثلة مفيدة."
+  },
+  explanation: {
+    label: "شرح أعمق",
+    prompt: "ركز على شرح الفكرة بشكل أعمق."
+  },
+  examples: {
+    label: "أمثلة واقعية",
+    prompt: "ركز على إضافة أمثلة واقعية."
+  },
+  context: {
+    label: "سياق وخلفية",
+    prompt: "ركز على إضافة سياق وخلفية للفكرة."
+  }
+});
+
+function normalizeExpandLevel(value) {
+  const key = String(value || "medium").trim().toLowerCase();
+  return Object.prototype.hasOwnProperty.call(EXPAND_LEVELS, key) ? key : "medium";
+}
+
+function normalizeExpandFocus(value) {
+  const key = String(value || "details").trim().toLowerCase();
+  return Object.prototype.hasOwnProperty.call(EXPAND_FOCUS_OPTIONS, key) ? key : "details";
+}
+
+function getExpandProfile(user, level = "medium") {
+  const normalizedLevel = normalizeExpandLevel(level);
+  const isDeep = normalizedLevel === "deep";
+  return {
+    key: "writing-expand",
+    name: "Orlixor Expand",
+    openaiModel: OPENAI_MODEL_EXPAND || OPENAI_MODEL_WRITING || OPENAI_MODEL_DEFAULT,
+    temperature: 0.65,
+    maxOutputTokens: isFreeUser(user) ? (isDeep ? 650 : 550) : (isDeep ? 1000 : 750),
+    maxContextTokens: isFreeUser(user) ? FREE_MAX_CONTEXT_TOKENS : 2600,
+    minXpCost: isDeep ? EXPAND_LONG_XP_COST : EXPAND_XP_COST,
+    maxXpCost: isDeep ? EXPAND_LONG_XP_COST : EXPAND_XP_COST,
+    systemPrompt: [
+      "أنت أداة توسيع النص في Orlixor.",
+      "مهمتك توسيع النص مع الحفاظ على المعنى الأصلي.",
+      "لا تغيّر الفكرة الأساسية.",
+      "لا تضف معلومات حساسة أو ادعاءات غير مؤكدة.",
+      "اكتب بالعربية بوضوح وتنظيم.",
+      "أعد النص النهائي فقط بدون شرح إضافي.",
+      "لا تذكر أسماء مزودي الخدمة أو النماذج التقنية."
+    ].join("\n")
+  };
+}
+
+function buildExpandPrompt({ text, level, focus, audience }) {
+  const levelKey = normalizeExpandLevel(level);
+  const focusKey = normalizeExpandFocus(focus);
+  const safeAudience = sanitizeOptionalText(audience, 80) || "عام";
+  return [
+    { role: "system", content: getExpandProfile(null, levelKey).systemPrompt },
+    {
+      role: "user",
+      content: [
+        `مستوى التوسيع: ${EXPAND_LEVELS[levelKey].prompt}`,
+        `نوع التركيز: ${EXPAND_FOCUS_OPTIONS[focusKey].prompt}`,
+        `الجمهور المستهدف: ${safeAudience}`,
+        "النص:",
+        String(text || "").trim()
+      ].join("\n\n")
+    }
+  ];
+}
+
 function getSmartSearchSourceInstruction(sourceType) {
   const key = String(sourceType || "all").trim().toLowerCase();
   if (key === "news") return "ركز على الأخبار والمصادر الحديثة، وتجنب النتائج القديمة إذا لم تكن مهمة.";
@@ -3049,6 +3139,86 @@ async function handleToneTool(req, res) {
   });
 }
 
+async function handleExpandTextTool(req, res) {
+  const payload = await parseJsonBody(req);
+  const text = requireTextField(payload.text || payload.input_text || payload.inputText, "text", 3500);
+  const level = normalizeExpandLevel(payload.level);
+  const focus = normalizeExpandFocus(payload.focus);
+  const audience = sanitizeOptionalText(payload.audience, 80) || "عام";
+  const auth = await getAuthContext(req);
+  const activeUser = auth?.user ? await syncUserDailyProgress(auth.user, "استخدم توسيع النص") : null;
+
+  if (!activeUser) {
+    throw createHttpError(401, "Authentication is required to use text expansion.");
+  }
+
+  if (text.trim().length < 10) {
+    throw createHttpError(422, "Text is too short. Write a clear sentence or idea.");
+  }
+
+  if (text.length > 3500) {
+    throw createHttpError(413, "Text is too long. Please summarize it or split it.");
+  }
+
+  const xpCost = level === "deep" ? EXPAND_LONG_XP_COST : EXPAND_XP_COST;
+  const currentXp = Math.max(0, Number(activeUser.xp || 0));
+  if (currentXp < xpCost) {
+    throw createHttpError(402, `Insufficient XP balance. Text expansion needs ${xpCost} XP.`);
+  }
+
+  const profile = getExpandProfile(activeUser, level);
+  const result = await callOpenAI({
+    modelProfile: profile,
+    input: buildResponsesInput(buildExpandPrompt({ text, level, focus, audience }))
+  });
+  const output = sanitizeModelDisplayText(result.text);
+
+  if (!output) {
+    throw createHttpError(502, "Text expansion returned an empty response.");
+  }
+
+  const chargedUser = await chargeUserForMessage(
+    activeUser,
+    xpCost,
+    `استخدم توسيع النص (${EXPAND_LEVELS[level].label})`
+  );
+
+  if (isDatabaseReady() && typeof databaseClient.saveToolUsage === "function") {
+    await databaseClient.saveToolUsage({
+      user_id: activeUser.id,
+      tool_key: "writing_assistant",
+      task_type: "expand",
+      input_text: text,
+      output_text: output,
+      xp_cost: xpCost,
+      input_tokens: Number(result.usage?.input_tokens || result.usage?.prompt_tokens || 0),
+      output_tokens: Number(result.usage?.output_tokens || result.usage?.completion_tokens || 0),
+      metadata: {
+        level,
+        level_label: EXPAND_LEVELS[level].label,
+        focus,
+        focus_label: EXPAND_FOCUS_OPTIONS[focus].label,
+        audience
+      }
+    });
+  }
+
+  sendJson(req, res, 200, {
+    success: true,
+    data: {
+      output,
+      level,
+      focus,
+      audience,
+      task_type: "expand",
+      tool: "text_expander",
+      xp_spent: xpCost,
+      xp_remaining: Math.max(0, Number(chargedUser?.xp || activeUser.xp || 0)),
+      user: chargedUser ? buildApiUser(chargedUser) : buildApiUser(activeUser)
+    }
+  });
+}
+
 async function handleWritingAssistant(req, res) {
   const payload = await parseJsonBody(req);
   const taskType = normalizeWritingTask(payload.task_type || payload.taskType || "generate");
@@ -3564,6 +3734,11 @@ async function routeRequest(req, res) {
 
   if (req.method === "POST" && requestPath === "/api/tools/tone") {
     await handleToneTool(req, res);
+    return;
+  }
+
+  if (req.method === "POST" && requestPath === "/api/tools/expand-text") {
+    await handleExpandTextTool(req, res);
     return;
   }
 

@@ -439,6 +439,10 @@
       toneText: "",
       toneTarget: "formal",
       toneLevel: "balanced",
+      expandText: "",
+      expandLevel: "medium",
+      expandFocus: "details",
+      expandAudience: "عام",
       language: "العربية",
       length: "متوسط (300 - 500 كلمة)",
       loading: false,
@@ -2390,6 +2394,162 @@
     `;
   }
 
+  function renderExpandAssistantMain(profile, writing, tasks, activeTask) {
+    const levelOptions = [
+      ["light", "خفيف", "توسيع خفيف"],
+      ["medium", "متوسط", "توسيع متوسط"],
+      ["deep", "مفصل", "توسيع مفصل"]
+    ];
+    const focusOptions = [
+      ["details", "تفاصيل وأمثلة", "إضافة تفاصيل مفيدة", icons.ai],
+      ["explanation", "شرح أعمق", "توضيح الفكرة أكثر", icons.book || icons.subjects],
+      ["examples", "أمثلة واقعية", "إضافة أمثلة عملية", icons.subjects],
+      ["context", "سياق وخلفية", "ربط الفكرة بسياقها", icons.sparkle]
+    ];
+    const audienceOptions = ["عام", "طلاب", "عملاء", "فريق عمل", "أكاديمي"];
+    const examples = ["تقرير", "خطة مشروع", "خطة عمل", "فكرة منتج", "مقال قصير"];
+    const output = coerceDisplayText(writing.result?.output || "");
+    const textLength = String(writing.expandText || "").length;
+    const xpCost = writing.expandLevel === "deep" ? 12 : 8;
+
+    return `
+      <section class="guest-main tools-main writing-main tone-main expand-main" aria-label="توسيع النص">
+        <header class="guest-main-topbar tools-main-topbar">
+          ${renderModelSwitcher()}
+          ${renderHomeTopActions()}
+        </header>
+
+        <div class="writing-page tone-page expand-page">
+          <button class="writing-back tone-back" type="button" data-tools-back>
+            <span aria-hidden="true">←</span>
+            <span>العودة إلى الأدوات</span>
+          </button>
+
+          <header class="writing-hero tone-hero">
+            <div class="writing-title tone-title">
+              <h1>مساعد الكتابة</h1>
+              <span aria-hidden="true">${icons.edit}</span>
+            </div>
+            <p>اكتب وحسن نصوصك باحترافية وبجودة عالية</p>
+          </header>
+
+          <div class="writing-task-tabs tone-task-tabs" role="list" aria-label="أنواع الكتابة">
+            ${tasks.map(([key, title, description, icon]) => `
+              <button class="writing-task-card ${activeTask === key ? "is-active" : ""}" type="button" data-writing-task="${escapeHtml(key)}">
+                <span aria-hidden="true">${icon}</span>
+                <strong>${escapeHtml(title)}</strong>
+                <small>${escapeHtml(description)}</small>
+              </button>
+            `).join("")}
+          </div>
+
+          <section class="tone-layout expand-layout">
+            <aside class="tone-settings-card expand-settings-card">
+              <h2>إعدادات توسيع النص</h2>
+
+              <label class="tone-level expand-level">
+                <span>${icons.bolt}<b>مستوى التوسيع</b></span>
+                <select data-expand-field="level">
+                  ${levelOptions.map(([key, label]) => `
+                    <option value="${escapeHtml(key)}" ${writing.expandLevel === key ? "selected" : ""}>${escapeHtml(label)}</option>
+                  `).join("")}
+                </select>
+                <small>اختر مستوى التوسيع المطلوب للنص</small>
+              </label>
+
+              <p class="expand-focus-title">التركيز على</p>
+              <div class="expand-focus-grid" role="list" aria-label="تركيز التوسيع">
+                ${focusOptions.map(([key, label, hint, icon]) => `
+                  <button class="expand-focus-option ${writing.expandFocus === key ? "is-active" : ""}" type="button" data-expand-focus="${escapeHtml(key)}">
+                    <span aria-hidden="true">${icon}</span>
+                    <strong>${escapeHtml(label)}</strong>
+                    <small>${escapeHtml(hint)}</small>
+                    <i aria-hidden="true">${writing.expandFocus === key ? "●" : ""}</i>
+                  </button>
+                `).join("")}
+              </div>
+
+              <label class="tone-level expand-level">
+                <span>${icons.user}<b>الجمهور المستهدف</b></span>
+                <select data-expand-field="audience">
+                  ${audienceOptions.map((item) => `
+                    <option value="${escapeHtml(item)}" ${writing.expandAudience === item ? "selected" : ""}>${escapeHtml(item)}</option>
+                  `).join("")}
+                </select>
+              </label>
+
+              <button class="tone-submit expand-submit ${isAuthenticated() ? "" : "requires-auth"}" type="submit" form="expandTextForm" ${writing.loading ? "disabled" : ""}>
+                ${writing.loading ? "جاري توسيع النص..." : "توسيع النص"}
+                ${icons.sparkle}
+              </button>
+              <small class="tone-cost">تكلفة العملية: ${xpCost} XP</small>
+            </aside>
+
+            <form class="tone-editor-card expand-editor-card" id="expandTextForm" data-expand-form>
+              <section class="tone-text-panel expand-text-panel">
+                <header>
+                  <div>
+                    <h2>النص الأصلي</h2>
+                    <p>ادخل النص الذي تريد توسيعه</p>
+                  </div>
+                  ${icons.document}
+                </header>
+                <textarea
+                  maxlength="3500"
+                  data-expand-field="text"
+                  placeholder="اكتب النص الأصلي هنا..."
+                >${escapeHtml(writing.expandText || "")}</textarea>
+                <small>${escapeHtml(String(textLength))}/3500</small>
+              </section>
+
+              <div class="tone-divider" aria-hidden="true">↓</div>
+
+              <section class="tone-text-panel tone-output-panel expand-text-panel">
+                <header>
+                  <div>
+                    <h2>النص بعد التوسيع</h2>
+                    <p>النص الناتج بعد التوسيع</p>
+                  </div>
+                  ${icons.ai}
+                </header>
+                <div class="tone-output-box expand-output-box ${output ? "" : "is-empty"}">${output ? formatSmartSearchAnswer(output) : "<p>سيظهر النص بعد التوسيع هنا.</p>"}</div>
+                <small>${escapeHtml(String(output.length))}/4000</small>
+              </section>
+
+              <div class="tone-result-actions expand-result-actions">
+                <button type="button" data-copy-expand-result ${output ? "" : "disabled"}>${icons.copy}<span>نسخ النص</span></button>
+                <button type="button" data-download-expand-result ${output ? "" : "disabled"}><span aria-hidden="true">↓</span><span>تنزيل</span></button>
+                <button type="button" data-retry-expand ${output ? "" : "disabled"}>${icons.refresh}<span>إعادة المحاولة</span></button>
+              </div>
+            </form>
+          </section>
+
+          ${writing.error ? `
+            <section class="writing-result is-error tone-error">
+              <strong>تعذر توسيع النص</strong>
+              <p>${escapeHtml(writing.error)}</p>
+            </section>
+          ` : ""}
+
+          <section class="tone-examples expand-examples">
+            <header>
+              <h2>أمثلة سريعة</h2>
+              ${icons.bolt}
+            </header>
+            <div>
+              ${examples.map((item) => `
+                <button type="button" data-expand-example="${escapeHtml(item)}">
+                  <span>${escapeHtml(item)}</span>
+                  ${icons.document}
+                </button>
+              `).join("")}
+            </div>
+          </section>
+        </div>
+      </section>
+    `;
+  }
+
   function renderWritingAssistantMain(profile) {
     const writing = state.writingAssistant || {};
     const activeTask = writing.taskType || "generate";
@@ -2403,6 +2563,9 @@
     ];
     if (activeTask === "tone") {
       return renderToneAssistantMain(profile, writing, tasks, activeTask);
+    }
+    if (activeTask === "expand") {
+      return renderExpandAssistantMain(profile, writing, tasks, activeTask);
     }
     const selectOptions = {
       contentType: ["مقال", "منشور", "رسالة", "إعلان", "ملخص", "سكربت"],
@@ -3537,6 +3700,89 @@
     }
   }
 
+  async function submitExpandTextTool() {
+    const textField = app.querySelector('[data-expand-field="text"]');
+    const levelField = app.querySelector('[data-expand-field="level"]');
+    const audienceField = app.querySelector('[data-expand-field="audience"]');
+    const text = String(textField?.value || state.writingAssistant.expandText || "").trim();
+    const level = String(levelField?.value || state.writingAssistant.expandLevel || "medium");
+    const focus = String(state.writingAssistant.expandFocus || "details");
+    const audience = String(audienceField?.value || state.writingAssistant.expandAudience || "عام").trim() || "عام";
+
+    if (text.length < 10) {
+      state.writingAssistant.error = "النص قصير جدًا. اكتب فكرة أو جملة واضحة لتوسيعها.";
+      render();
+      return;
+    }
+
+    if (!isAuthenticated()) {
+      state.writingAssistant = {
+        ...state.writingAssistant,
+        expandText: text,
+        expandLevel: level,
+        expandAudience: audience,
+        error: ""
+      };
+      openAuthModal("سجّل دخولك لاستخدام توسيع النص وحفظ النتيجة داخل حسابك.");
+      return;
+    }
+
+    const apiClient = getApiClient();
+    if (!apiClient?.expandText) {
+      state.writingAssistant.error = "خدمة توسيع النص غير جاهزة الآن.";
+      render();
+      return;
+    }
+
+    state.writingAssistant = {
+      ...state.writingAssistant,
+      expandText: text,
+      expandLevel: level,
+      expandFocus: focus,
+      expandAudience: audience,
+      loading: true,
+      error: "",
+      result: null
+    };
+    render();
+
+    try {
+      const result = await apiClient.expandText({
+        text,
+        level,
+        focus,
+        audience
+      });
+
+      if (!result?.ok) {
+        throw new Error(result?.message || "تعذر توسيع النص الآن.");
+      }
+
+      if (result.data?.user) {
+        const token = apiClient.getToken?.();
+        if (token) {
+          apiClient.setSession?.({ token, user: result.data.user });
+        }
+        state.currentUser = persistEmbeddedUser(result.data.user) || normalizeUser(result.data.user) || state.currentUser;
+      }
+
+      state.writingAssistant = {
+        ...state.writingAssistant,
+        loading: false,
+        error: "",
+        result: result.data || {}
+      };
+      render();
+    } catch (error) {
+      state.writingAssistant = {
+        ...state.writingAssistant,
+        loading: false,
+        error: error?.message || "تعذر توسيع النص الآن."
+      };
+      render();
+    }
+  }
+
   function splitReplyToBullets(text) {
     const cleaned = coerceDisplayText(text).replace(/\[object Object\]/g, "").trim();
     if (!cleaned) return ["لم يصلنا نص واضح من الخدمة."];
@@ -4017,6 +4263,67 @@
         return;
       }
 
+      const expandFocus = event.target.closest("[data-expand-focus]");
+      if (expandFocus) {
+        state.writingAssistant.expandFocus = expandFocus.getAttribute("data-expand-focus") || "details";
+        state.writingAssistant.error = "";
+        render();
+        return;
+      }
+
+      const expandExample = event.target.closest("[data-expand-example]");
+      if (expandExample) {
+        const exampleLabel = expandExample.getAttribute("data-expand-example") || "";
+        const examples = {
+          "تقرير": "الذكاء الاصطناعي يساعد الشركات على أتمتة المهام وتحسين الكفاءة.",
+          "خطة مشروع": "نريد إطلاق منصة تعليمية تساعد الطلاب على تنظيم مذاكرتهم.",
+          "خطة عمل": "نحتاج خطة لتحسين تجربة العملاء وزيادة المبيعات خلال شهر.",
+          "فكرة منتج": "تطبيق يساعد المستخدمين على ترتيب مهامهم اليومية بذكاء.",
+          "مقال قصير": "التعلم المستمر يساعد الإنسان على تطوير مهاراته ومواكبة التغيرات."
+        };
+        state.writingAssistant.expandText = examples[exampleLabel] || exampleLabel;
+        state.writingAssistant.error = "";
+        render();
+        return;
+      }
+
+      if (event.target.closest("[data-copy-expand-result]")) {
+        const text = coerceDisplayText(state.writingAssistant.result?.output || "");
+        if (!text) {
+          showToast("لا يوجد نص جاهز للنسخ.");
+          return;
+        }
+        navigator.clipboard?.writeText(text).then(() => {
+          showToast("تم نسخ النص.");
+        }).catch(() => {
+          showToast("تعذر نسخ النص الآن.");
+        });
+        return;
+      }
+
+      if (event.target.closest("[data-download-expand-result]")) {
+        const text = coerceDisplayText(state.writingAssistant.result?.output || "");
+        if (!text) {
+          showToast("لا يوجد نص جاهز للتنزيل.");
+          return;
+        }
+        const blob = new Blob([text], { type: "text/plain;charset=utf-8" });
+        const link = document.createElement("a");
+        link.href = URL.createObjectURL(blob);
+        link.download = "orlixor-expanded-text.txt";
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        setTimeout(() => URL.revokeObjectURL(link.href), 500);
+        showToast("تم تجهيز ملف النص.");
+        return;
+      }
+
+      if (event.target.closest("[data-retry-expand]")) {
+        submitExpandTextTool();
+        return;
+      }
+
       const cardButton = event.target.closest("[data-card]");
       if (cardButton) {
         const label = cardButton.getAttribute("data-card") || "";
@@ -4119,6 +4426,12 @@
         state.writingAssistant.toneText = toneField.value;
         state.writingAssistant.error = "";
       }
+
+      const expandField = event.target.closest("[data-expand-field]");
+      if (expandField && expandField.getAttribute("data-expand-field") === "text") {
+        state.writingAssistant.expandText = expandField.value;
+        state.writingAssistant.error = "";
+      }
     });
 
     app.addEventListener("change", (event) => {
@@ -4149,6 +4462,21 @@
         state.writingAssistant.toneLevel = toneField.value;
         state.writingAssistant.error = "";
         return;
+      }
+
+      const expandField = event.target.closest("[data-expand-field]");
+      if (expandField) {
+        const key = expandField.getAttribute("data-expand-field");
+        if (key === "level") {
+          state.writingAssistant.expandLevel = expandField.value;
+          state.writingAssistant.error = "";
+          return;
+        }
+        if (key === "audience") {
+          state.writingAssistant.expandAudience = expandField.value;
+          state.writingAssistant.error = "";
+          return;
+        }
       }
 
       const filePicker = event.target.closest("#guestFilePicker");
@@ -4237,6 +4565,13 @@
       if (toneForm) {
         event.preventDefault();
         submitToneTool();
+        return;
+      }
+
+      const expandForm = event.target.closest("[data-expand-form]");
+      if (expandForm) {
+        event.preventDefault();
+        submitExpandTextTool();
         return;
       }
 

@@ -910,6 +910,13 @@
     });
   }
 
+  async function expandText(payload) {
+    return request("/tools/expand-text", {
+      method: "POST",
+      body: payload
+    });
+  }
+
   async function getHealth() {
     return request("/health", {
       method: "GET",
@@ -1013,6 +1020,7 @@
     smartSearch,
     runWritingAssistant,
     changeTone,
+    expandText,
     getHealth,
     streamChat,
     getChatSessions,

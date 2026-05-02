@@ -5464,6 +5464,121 @@ body[data-workspace-mode="home"] .guest-root {
   color: #6b4cff;
 }
 
+.expand-page {
+  width: min(100%, 1240px);
+}
+
+.expand-layout {
+  grid-template-columns: 360px minmax(0, 1fr);
+}
+
+.expand-settings-card {
+  min-height: 500px;
+}
+
+.expand-level {
+  margin-top: 0;
+}
+
+.expand-level > small {
+  display: block;
+  margin-top: 8px;
+  color: #9aa1b8;
+  font-size: 0.68rem;
+  font-weight: 850;
+}
+
+.expand-focus-title {
+  margin: 18px 0 10px;
+  color: #172044;
+  font-size: 0.82rem;
+  font-weight: 950;
+}
+
+.expand-focus-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin-bottom: 18px;
+}
+
+.expand-focus-option {
+  min-height: 72px;
+  border: 1px solid rgba(111, 76, 255, 0.13);
+  border-radius: 13px;
+  background: rgba(255, 255, 255, 0.94);
+  color: #172044;
+  display: grid;
+  grid-template-columns: 34px 1fr 18px;
+  grid-template-rows: auto auto;
+  align-items: center;
+  gap: 2px 9px;
+  padding: 10px;
+  text-align: right;
+  transition: border-color 0.18s ease, box-shadow 0.18s ease, transform 0.18s ease, background 0.18s ease;
+}
+
+.expand-focus-option:hover,
+.expand-focus-option.is-active {
+  border-color: rgba(111, 76, 255, 0.58);
+  background: linear-gradient(135deg, rgba(111, 76, 255, 0.09), rgba(255, 255, 255, 0.98));
+  box-shadow: 0 14px 30px rgba(111, 76, 255, 0.11);
+  transform: translateY(-1px);
+}
+
+.expand-focus-option > span {
+  grid-row: 1 / span 2;
+  width: 34px;
+  height: 34px;
+  border-radius: 12px;
+  color: #6b4cff;
+  background: rgba(111, 76, 255, 0.1);
+  display: grid;
+  place-items: center;
+}
+
+.expand-focus-option svg {
+  width: 16px;
+  height: 16px;
+}
+
+.expand-focus-option strong {
+  color: #172044;
+  font-size: 0.78rem;
+  font-weight: 950;
+}
+
+.expand-focus-option small {
+  color: #9aa1b8;
+  font-size: 0.64rem;
+  font-weight: 850;
+}
+
+.expand-focus-option i {
+  grid-row: 1 / span 2;
+  color: #6b4cff;
+  font-style: normal;
+  font-size: 0.7rem;
+}
+
+.expand-submit {
+  margin-top: 16px;
+}
+
+.expand-page .tone-text-panel textarea,
+.expand-page .tone-output-box {
+  min-height: 156px;
+  font-size: 0.9rem;
+}
+
+.expand-page .tone-task-tabs {
+  margin-bottom: 22px;
+}
+
+.expand-examples {
+  margin-top: 24px;
+}
+
 .guest-rail-btn {
   width: 48px;
   height: 48px;
@@ -5695,6 +5810,7 @@ body[data-workspace-mode="home"] .guest-root {
   .smart-suggestions > div,
   .writing-examples > div,
   .tone-examples > div,
+  .expand-focus-grid,
   .tone-result-actions {
     grid-template-columns: 1fr;
   }
