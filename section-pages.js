@@ -2004,9 +2004,14 @@
     return `
       <section class="guest-main tools-main" aria-label="أدوات الذكاء الاصطناعي">
         <div class="tools-page">
+          <button class="tools-back" type="button" data-nav="messages">
+            <span aria-hidden="true">←</span>
+            <b>عودة</b>
+          </button>
+
           <header class="tools-hero">
             <div class="tools-title-row">
-              <h1>${escapeHtml(profile.heroTitle || "أدوات الذكاء الاصطناعي")}</h1>
+              <h1>أدوات الذكاء الاصطناعي</h1>
               <span class="tools-title-icon" aria-hidden="true">${icons.settings}</span>
             </div>
             <p>مجموعة من الأدوات الذكية لمساعدتك في العمل والإبداع</p>
