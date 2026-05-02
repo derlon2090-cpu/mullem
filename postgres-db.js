@@ -703,6 +703,18 @@ function createPostgresDatabaseClient(rawConfig = {}) {
     return getConversationById(conversationId);
   }
 
+  async function deleteConversation(conversationId, userId) {
+    const safeConversationId = String(conversationId || "").trim();
+    if (!safeConversationId || !userId) return false;
+
+    const result = await pool.query(
+      "DELETE FROM conversations WHERE id = $1 AND user_id = $2 RETURNING id",
+      [safeConversationId, Number(userId)]
+    );
+
+    return Number(result.rowCount || 0) > 0;
+  }
+
   async function getOrCreateConversation(payload = {}) {
     const conversationId = String(payload.conversation_id || "").trim();
     const guestSessionId = String(payload.guest_session_id || "").trim();
@@ -1670,6 +1682,7 @@ function createPostgresDatabaseClient(rawConfig = {}) {
     getConversationById,
     getConversationByGuestSessionId,
     getOrCreateConversation,
+    deleteConversation,
     saveMessage,
     listMessages,
     listRecentConversations,

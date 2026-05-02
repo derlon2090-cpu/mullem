@@ -13,6 +13,7 @@
   const shellBaseUrl = isHomeWorkspace ? HOME_URL : GUEST_URL;
   const themeKey = "orlixor_guest_theme";
   const modelStorageKey = "orlixor_selected_model";
+  const sidebarStorageKey = "orlixor_sidebar_collapsed";
   const avatarStoragePrefix = "orlixor_user_avatar_";
   const xpClaimStoragePrefix = "orlixor_xp_claimed_at_";
   const authBridgeKey = "mlm_auth_bridge";
@@ -413,6 +414,7 @@
     settingsModalTab: "general",
     modelMenuOpen: false,
     selectedModel: loadSelectedModel(),
+    sidebarCollapsed: loadSidebarCollapsed(),
     upgradeModalOpen: false,
     balancePanelOpen: false,
     openThreadMenuId: "",
@@ -522,6 +524,23 @@
     state.selectedModel = next;
     try {
       localStorage.setItem(modelStorageKey, next);
+    } catch (_) {
+      // Ignore storage issues.
+    }
+  }
+
+  function loadSidebarCollapsed() {
+    try {
+      return localStorage.getItem(sidebarStorageKey) === "1";
+    } catch (_) {
+      return false;
+    }
+  }
+
+  function setSidebarCollapsed(value) {
+    state.sidebarCollapsed = Boolean(value);
+    try {
+      localStorage.setItem(sidebarStorageKey, state.sidebarCollapsed ? "1" : "0");
     } catch (_) {
       // Ignore storage issues.
     }
@@ -1197,26 +1216,41 @@
 
   function removeThreadById(threadId, sectionKey = state.section) {
     if (!threadId) return false;
-    if (state.conversationIds[threadId]) {
-      delete state.conversationIds[threadId];
-      saveConversationIdsForCurrentUser();
+    const apiConversationId = state.conversationIds?.[threadId] || "";
+    const sectionsToClean = apiConversationId
+      ? Object.keys(state.threadState || {})
+      : [sectionKey];
+    const mappedThreadIdsToRemove = new Set();
+    Object.keys(state.conversationIds || {}).forEach((mappedThreadId) => {
+      if (mappedThreadId === threadId || (apiConversationId && state.conversationIds[mappedThreadId] === apiConversationId)) {
+        mappedThreadIdsToRemove.add(mappedThreadId);
+        delete state.conversationIds[mappedThreadId];
+      }
+    });
+    if (apiConversationId) {
+      delete state.hydratedConversationIds[apiConversationId];
+      delete state.hydratingConversationIds[apiConversationId];
     }
 
     let removed = false;
-    state.threadState[sectionKey] = (state.threadState[sectionKey] || [])
-      .map((groupEntry) => ({
-        ...groupEntry,
-        items: groupEntry.items.filter((item) => {
-          const keep = item.id !== threadId;
-          removed = removed || !keep;
-          return keep;
-        })
-      }))
-      .filter((groupEntry) => groupEntry.items.length);
+    sectionsToClean.forEach((targetSection) => {
+      state.threadState[targetSection] = (state.threadState[targetSection] || [])
+        .map((groupEntry) => ({
+          ...groupEntry,
+          items: groupEntry.items.filter((item) => {
+            const keep = item.id !== threadId && !mappedThreadIdsToRemove.has(item.id);
+            removed = removed || !keep;
+            return keep;
+          })
+        }))
+        .filter((groupEntry) => groupEntry.items.length);
 
-    if (state.activeThreadId?.[sectionKey] === threadId) {
-      state.activeThreadId[sectionKey] = getAllThreads(sectionKey)[0]?.id || "";
-    }
+      if (state.activeThreadId?.[targetSection] === threadId || mappedThreadIdsToRemove.has(state.activeThreadId?.[targetSection])) {
+        state.activeThreadId[targetSection] = getAllThreads(targetSection)[0]?.id || "";
+      }
+    });
+
+    saveConversationIdsForCurrentUser();
     return removed;
   }
 
@@ -2052,9 +2086,16 @@
       `;
     return `
       <aside class="guest-sidebar">
-        <a class="guest-brand" href="${shellBaseUrl}" aria-label="Orlixor">
-          <img src="orlixor-brand.png" alt="Orlixor">
-        </a>
+        <div class="guest-sidebar-head">
+          <a class="guest-brand" href="${shellBaseUrl}" aria-label="Orlixor">
+            <img class="guest-brand-full" src="orlixor-brand.png" alt="Orlixor">
+            <img class="guest-brand-mark" src="orlixor-mark.png" alt="" aria-hidden="true">
+          </a>
+          <button class="guest-sidebar-toggle" type="button" data-toggle-sidebar aria-label="${state.sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}" aria-expanded="${state.sidebarCollapsed ? "false" : "true"}">
+            <span class="toggle-expanded" aria-hidden="true">&lsaquo;&lsaquo;</span>
+            <span class="toggle-collapsed" aria-hidden="true">&rsaquo;&rsaquo;</span>
+          </button>
+        </div>
 
         <button class="guest-new-chat ${isAuthenticated() ? "" : "requires-auth"}" type="button" data-new-chat>
           <span>محادثة جديدة</span>
@@ -2255,7 +2296,7 @@
   function renderShell() {
     const profile = getProfile();
     app.innerHTML = `
-      <div class="guest-shell ${state.theme === "dark" ? "theme-dark" : ""} ${isHomeWorkspace ? "is-home-workspace" : ""}">
+      <div class="guest-shell ${state.theme === "dark" ? "theme-dark" : ""} ${isHomeWorkspace ? "is-home-workspace" : ""} ${state.sidebarCollapsed ? "is-sidebar-collapsed" : ""}">
         ${renderSidebar()}
         ${renderMain(profile)}
         ${isHomeWorkspace ? "" : renderRightPanel(profile)}
@@ -2453,6 +2494,49 @@
     getFileInput()?.click();
   }
 
+  function canPreviewTextFile(file) {
+    const name = String(file?.name || "").toLowerCase();
+    const type = String(file?.type || "").toLowerCase();
+    return type.startsWith("text/")
+      || /\.(txt|md|csv|json|html|css|js|ts|tsx|jsx)$/i.test(name);
+  }
+
+  async function readAttachmentPreviews(files = []) {
+    const previews = [];
+    for (const file of files.slice(0, 4)) {
+      if (!canPreviewTextFile(file) || Number(file.size || 0) > 512 * 1024) continue;
+      try {
+        const text = await file.text();
+        const content = String(text || "").replace(/\s+/g, " ").trim().slice(0, 4000);
+        if (content) {
+          previews.push({
+            name: file.name,
+            type: file.type || "text/plain",
+            content
+          });
+        }
+      } catch (_) {
+        // File previews are optional; the attachment name is still sent.
+      }
+    }
+    return previews;
+  }
+
+  async function deleteThreadPermanently(threadId, sectionKey = state.section) {
+    if (!threadId) return false;
+    const apiClient = getApiClient();
+    const conversationId = state.conversationIds?.[threadId] || "";
+
+    if (conversationId && apiClient?.deleteChatSession) {
+      const result = await apiClient.deleteChatSession(conversationId);
+      if (!result?.ok && result?.status !== 404) {
+        throw new Error(result?.message || "تعذر حذف المحادثة من الخادم.");
+      }
+    }
+
+    return removeThreadById(threadId, sectionKey);
+  }
+
   async function submitMessage() {
     state.currentUser = getActiveUser() || state.currentUser;
     const input = (getComposerValue() || "").trim();
@@ -2471,16 +2555,20 @@
 
     ensureThreadState();
     let threadEntry = getActiveThread();
+    const hasOutgoingDraftFiles = state.selectedFiles.length > 0;
+    const draftTitle = input.slice(0, 28) || (hasOutgoingDraftFiles ? "تحليل مرفقات" : "محادثة جديدة");
     if (isHomeWorkspace && !state.homeConversationOpen) {
-      createNewThreadFromDraft(input.slice(0, 28) || "محادثة جديدة");
+      createNewThreadFromDraft(draftTitle);
       threadEntry = getActiveThread();
     } else if (!threadEntry) {
-      createNewThreadFromDraft(input.slice(0, 28) || "محادثة جديدة");
+      createNewThreadFromDraft(draftTitle);
       threadEntry = getActiveThread();
     }
 
     const outgoingFiles = [...state.selectedFiles];
-    const newUserMessage = { role: "user", body: input };
+    const outboundMessage = input || "حلل المرفقات المرسلة.";
+    const displayUserMessage = input || `أرسلت ${outgoingFiles.length} مرفق للتحليل.`;
+    const newUserMessage = { role: "user", body: displayUserMessage };
     const pendingAssistant = {
       role: "assistant",
       body: assistantReply("جاري تجهيز الرد...", ["نعالج رسالتك الآن ونرتب الإجابة من الخادم."])
@@ -2502,17 +2590,19 @@
     let shouldKeepDraft = false;
 
     try {
+      const attachmentPreviews = await readAttachmentPreviews(outgoingFiles);
       const result = await apiClient.sendChat({
         conversation_id: state.conversationIds[threadEntry.id] || undefined,
         selected_model: state.selectedModel || "orlixor",
-        message: input,
+        message: outboundMessage,
         subject: state.currentUser?.subject || "",
         grade: state.currentUser?.grade || "",
         stage: state.currentUser?.stage || "",
         stream: false,
         has_attachment: outgoingFiles.length > 0,
         attachment_count: outgoingFiles.length,
-        attachment_names: outgoingFiles.map((file) => file.name).slice(0, 8)
+        attachment_names: outgoingFiles.map((file) => file.name).slice(0, 8),
+        attachment_previews: attachmentPreviews
       });
 
       threadEntry.messages.pop();
@@ -2566,8 +2656,10 @@
           state.hydratedConversationIds[String(result.data.conversation_id)] = true;
           saveConversationIdsForCurrentUser();
         }
-        if (input) {
-          threadEntry.title = threadEntry.title === "محادثة جديدة" ? input.slice(0, 32) : threadEntry.title;
+        if (input || outgoingFiles.length) {
+          threadEntry.title = ["محادثة جديدة", "تحليل مرفقات"].includes(threadEntry.title)
+            ? (input || "تحليل مرفقات").slice(0, 32)
+            : threadEntry.title;
         }
       }
     } catch (_) {
@@ -2611,7 +2703,7 @@
       render();
     });
 
-    app.addEventListener("click", (event) => {
+    app.addEventListener("click", async (event) => {
       const shouldCloseBalance = state.balancePanelOpen
         && !event.target.closest("[data-balance]")
         && !event.target.closest("[data-balance-panel]");
@@ -2746,8 +2838,12 @@
             return;
           }
           if (window.confirm("هل تريد حذف هذه المحادثة؟")) {
-            removeThreadById(threadId);
-            showToast("تم حذف المحادثة.");
+            try {
+              await deleteThreadPermanently(threadId);
+              showToast("تم حذف المحادثة.");
+            } catch (error) {
+              showToast(error?.message || "تعذر حذف المحادثة من الخادم.");
+            }
           }
           render();
           return;
@@ -2817,6 +2913,13 @@
       if (event.target.closest("[data-theme-toggle]")) {
         state.theme = state.theme === "dark" ? "light" : "dark";
         setStoredTheme(state.theme);
+        render();
+        return;
+      }
+
+      if (event.target.closest("[data-toggle-sidebar]")) {
+        event.preventDefault();
+        setSidebarCollapsed(!state.sidebarCollapsed);
         render();
         return;
       }
@@ -2936,17 +3039,12 @@
         }
         const sectionKey = state.section;
         const currentId = getActiveThread(sectionKey)?.id;
-        if (currentId && state.conversationIds[currentId]) {
-          delete state.conversationIds[currentId];
-          saveConversationIdsForCurrentUser();
+        try {
+          await deleteThreadPermanently(currentId, sectionKey);
+          showToast("تم حذف المحادثة.");
+        } catch (error) {
+          showToast(error?.message || "تعذر حذف المحادثة من الخادم.");
         }
-        state.threadState[sectionKey] = state.threadState[sectionKey]
-          .map((groupEntry) => ({
-            ...groupEntry,
-            items: groupEntry.items.filter((item) => item.id !== currentId)
-          }))
-          .filter((groupEntry) => groupEntry.items.length);
-        state.activeThreadId[sectionKey] = getAllThreads(sectionKey)[0]?.id || "";
         render();
         return;
       }
@@ -2998,6 +3096,28 @@
     });
 
     app.addEventListener("change", (event) => {
+      const filePicker = event.target.closest("#guestFilePicker");
+      if (filePicker) {
+        const allowedTypes = /\.(pdf|docx?|png|jpe?g|webp|gif|txt|md|pptx?)$/i;
+        const files = Array.from(filePicker.files || [])
+          .filter((file) => allowedTypes.test(file.name || "") || /^image\//i.test(file.type || ""))
+          .slice(0, 8);
+        const oversized = files.find((file) => Number(file.size || 0) > 10 * 1024 * 1024);
+        if (oversized) {
+          showToast("حجم الملف كبير. اختر ملفًا أقل من 10MB.");
+          filePicker.value = "";
+          return;
+        }
+        state.selectedFiles = files;
+        if (files.length) {
+          showToast(`تم إرفاق ${files.length} ملف.`);
+        } else {
+          showToast("اختر صورة أو مستندًا مدعومًا.");
+        }
+        render();
+        return;
+      }
+
       const avatarInput = event.target.closest("[data-avatar-upload]");
       if (avatarInput) {
         if (!isAuthenticated()) {

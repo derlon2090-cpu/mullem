@@ -911,6 +911,12 @@
     return request(`/chat/sessions/${conversationId}`);
   }
 
+  async function deleteChatSession(conversationId) {
+    return request(`/chat/sessions/${encodeURIComponent(String(conversationId))}`, {
+      method: "DELETE"
+    });
+  }
+
   async function performLogout(redirectTo = "index.html") {
     try {
       localStorage.setItem(storageKeys.logoutMarker, "1");
@@ -987,6 +993,7 @@
     streamChat,
     getChatSessions,
     getChatSession,
+    deleteChatSession,
     getToken,
     hasToken,
     isAuthenticatedStudent,

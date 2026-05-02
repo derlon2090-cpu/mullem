@@ -348,7 +348,7 @@ function setCorsHeaders(req, res) {
     res.setHeader("Access-Control-Allow-Origin", "*");
   }
   res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Requested-With");
-  res.setHeader("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, OPTIONS");
+  res.setHeader("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS");
 }
 
 function sendJson(req, res, statusCode, payload, extraHeaders = {}) {
@@ -441,8 +441,23 @@ function sanitizeAttachmentNames(value) {
     .slice(0, 8);
 }
 
+function sanitizeAttachmentPreviews(value) {
+  if (!Array.isArray(value)) return [];
+  return value
+    .map((item) => {
+      const name = sanitizeOptionalText(item?.name, 160);
+      const type = sanitizeOptionalText(item?.type, 80);
+      const content = sanitizeOptionalText(item?.content, 4000);
+      if (!name || !content) return null;
+      return { name, type, content };
+    })
+    .filter(Boolean)
+    .slice(0, 4);
+}
+
 function buildAttachmentContext(payload) {
   const names = sanitizeAttachmentNames(payload?.attachment_names || payload?.attachmentNames);
+  const previews = sanitizeAttachmentPreviews(payload?.attachment_previews || payload?.attachmentPreviews);
   const attachmentCount = Math.max(
     names.length,
     Number(payload?.attachment_count || payload?.attachmentCount || 0) || 0
@@ -451,7 +466,10 @@ function buildAttachmentContext(payload) {
   if (!attachmentCount) return "";
 
   const listedNames = names.length ? ` أسماء المرفقات: ${names.join("، ")}.` : "";
-  return `\n\nملاحظة عن المرفقات: أرسل المستخدم ${attachmentCount} مرفقًا مع هذه الرسالة.${listedNames} إذا احتجت محتوى الملف نفسه فاطلب من المستخدم كتابة النص أو وصف الصورة بشكل أوضح.`;
+  const previewContext = previews.length
+    ? `\nمقتطفات نصية من المرفقات:\n${previews.map((item, index) => `${index + 1}. ${item.name}${item.type ? ` (${item.type})` : ""}: ${item.content}`).join("\n")}`
+    : "";
+  return `\n\nملاحظة عن المرفقات: أرسل المستخدم ${attachmentCount} مرفقًا مع هذه الرسالة.${listedNames}${previewContext} إذا لم تظهر لك محتويات الصورة أو الملف بوضوح فاطلب من المستخدم وصفها أو نسخ النص المطلوب.`;
 }
 
 function sanitizeModelDisplayText(value) {
@@ -2732,6 +2750,43 @@ async function handleGetChatSession(req, res, conversationId) {
   });
 }
 
+async function handleDeleteChatSession(req, res, conversationId) {
+  const auth = await requireAuthenticatedUser(req);
+  const safeConversationId = sanitizeOptionalText(conversationId, MAX_METADATA_LENGTH);
+
+  if (!safeConversationId) {
+    throw createHttpError(404, "Conversation not found.");
+  }
+
+  if (isDatabaseReady()) {
+    const deleted = await databaseClient.deleteConversation(safeConversationId, auth.user.id);
+    if (!deleted) {
+      throw createHttpError(404, "Conversation not found.");
+    }
+  } else {
+    const conversation =
+      conversations.get(safeConversationId) ||
+      conversations.get(guestConversationMap.get(safeConversationId));
+
+    if (!conversation || String(conversation.user_id || "") !== String(auth.user.id)) {
+      throw createHttpError(404, "Conversation not found.");
+    }
+
+    conversations.delete(conversation.id);
+    if (conversation.guest_session_id) {
+      guestConversationMap.delete(conversation.guest_session_id);
+    }
+  }
+
+  sendJson(req, res, 200, {
+    success: true,
+    data: {
+      deleted: true,
+      conversation_id: safeConversationId
+    }
+  });
+}
+
 function resolveStaticFile(urlPath) {
   const rawPath = decodeURIComponent((urlPath || "/").split("?")[0]);
   const requested = rawPath === "/" ? "/index.html" : rawPath;
@@ -2947,6 +3002,12 @@ async function routeRequest(req, res) {
   if (req.method === "GET" && requestPath.startsWith("/api/chat/sessions/")) {
     const conversationId = decodeURIComponent(requestPath.replace("/api/chat/sessions/", ""));
     await handleGetChatSession(req, res, conversationId);
+    return;
+  }
+
+  if (req.method === "DELETE" && requestPath.startsWith("/api/chat/sessions/")) {
+    const conversationId = decodeURIComponent(requestPath.replace("/api/chat/sessions/", ""));
+    await handleDeleteChatSession(req, res, conversationId);
     return;
   }
 

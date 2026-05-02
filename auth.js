@@ -364,6 +364,20 @@ function setSuccessState(text) {
 
 function setFormBusy(form, isBusy) {
   if (!form) return;
+  form.classList.toggle("is-busy", Boolean(isBusy));
+  form.setAttribute("aria-busy", isBusy ? "true" : "false");
+  const submitButton = form.querySelector(".auth-submit");
+  if (submitButton) {
+    if (isBusy) {
+      submitButton.dataset.defaultLabel = submitButton.dataset.defaultLabel || submitButton.textContent.trim();
+      const loadingLabel = submitButton.getAttribute("data-loading-label") || "جاري المعالجة...";
+      const labelTarget = submitButton.querySelector("span") || submitButton;
+      labelTarget.textContent = loadingLabel;
+    } else {
+      const labelTarget = submitButton.querySelector("span") || submitButton;
+      labelTarget.textContent = submitButton.dataset.defaultLabel || labelTarget.textContent;
+    }
+  }
   form.querySelectorAll("button, input, select").forEach((control) => {
     if (control.matches("[data-password-toggle]")) return;
     control.disabled = Boolean(isBusy);
@@ -569,12 +583,17 @@ loginForm?.addEventListener("submit", async (event) => {
   const apiClient = getApiClient();
 
   if (!email || !password) {
-    setState("أدخل البريد الإلكتروني وكلمة المرور أولًا.");
+    const message = "أدخل البريد الإلكتروني وكلمة المرور أولًا.";
+    setInlineError(loginError, message);
+    setFieldError(loginPassword, !password);
+    setState(message);
     return;
   }
 
   if (!isValidEmail(email)) {
-    setState("البريد الإلكتروني غير صحيح.");
+    const message = "البريد الإلكتروني غير صحيح.";
+    setInlineError(loginError, message);
+    setState(message);
     return;
   }
 
@@ -587,6 +606,7 @@ loginForm?.addEventListener("submit", async (event) => {
   if (loginSubmitting) return;
   loginSubmitting = true;
   setFormBusy(loginForm, true);
+  setState("جاري تسجيل الدخول...");
   let apiResult;
   try {
     apiResult = await apiClient.login({
@@ -629,7 +649,7 @@ loginForm?.addEventListener("submit", async (event) => {
 
   const loginMessage = apiResult.message || "تعذر تسجيل الدخول. تحقق من البيانات ثم حاول مرة أخرى.";
   if (/invalid email or password/i.test(loginMessage) || /كلمة المرور/i.test(loginMessage)) {
-    setInlineError(loginError, "كلمة المرور غير صحيحة.");
+    setInlineError(loginError, "البريد الإلكتروني أو كلمة المرور غير صحيحة. تأكد من البيانات ثم حاول مرة أخرى.");
     setFieldError(loginPassword, true);
   } else {
     setInlineError(loginError, loginMessage);
