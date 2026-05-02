@@ -429,6 +429,19 @@
         { query: "فوائد القراءة اليومية على الصحة النفسية", time: "أمس - 11:15 ص" }
       ]
     },
+    writingAssistant: {
+      taskType: "generate",
+      topic: "",
+      details: "",
+      contentType: "مقال",
+      purpose: "إقناع",
+      tone: "احترافية",
+      language: "العربية",
+      length: "متوسط (300 - 500 كلمة)",
+      loading: false,
+      error: "",
+      result: null
+    },
     upgradeModalOpen: false,
     balancePanelOpen: false,
     openThreadMenuId: "",
@@ -1980,6 +1993,7 @@
         icon: icons.search
       },
       {
+        key: "writing-assistant",
         title: "مساعد الكتابة",
         description: "كتابة وتحسين النصوص بجودة عالية وبأسلوب احترافي",
         icon: icons.edit
@@ -2222,6 +2236,162 @@
       .join("");
   }
 
+  function renderWritingAssistantMain(profile) {
+    const writing = state.writingAssistant || {};
+    const activeTask = writing.taskType || "generate";
+    const tasks = [
+      ["generate", "كتابة من الصفر", "إنشاء محتوى جديد", icons.sparkle],
+      ["tone", "تغيير النبرة", "تحويل الأسلوب", icons.ai],
+      ["expand", "توسيع نص", "إضافة تفاصيل ومقترحات", icons.document],
+      ["summarize", "تلخيص نص", "اختصار إلى نقاط واضحة", icons.notes],
+      ["rewrite", "تصحيح لغوي", "تصحيح وتحسين الصياغة", icons.edit],
+      ["style", "تحسين الأسلوب", "جعل النص أكثر احترافية", icons.settings]
+    ];
+    const selectOptions = {
+      contentType: ["مقال", "منشور", "رسالة", "إعلان", "ملخص", "سكربت"],
+      purpose: ["إقناع", "شرح", "تسويق", "تعليم", "إخبار", "تحفيز"],
+      tone: ["احترافية", "ودية", "رسمية", "تسويقية", "أكاديمية", "مختصرة"],
+      language: ["العربية", "English"],
+      length: ["قصير (100 - 200 كلمة)", "متوسط (300 - 500 كلمة)", "طويل (700+ كلمة)"]
+    };
+    const examples = [
+      "مقدمة مقالة عن الذكاء الاصطناعي",
+      "شرح منتج بطريقة تسويقية",
+      "رسالة بريد احترافية",
+      "منشور قصير لمنصة تعليمية"
+    ];
+    const renderSelect = (key, label, iconKey) => `
+      <label class="writing-setting">
+        <span>${escapeHtml(label)}</span>
+        <div>
+          <select data-writing-field="${escapeHtml(key)}">
+            ${(selectOptions[key] || []).map((item) => `
+              <option value="${escapeHtml(item)}" ${writing[key] === item ? "selected" : ""}>${escapeHtml(item)}</option>
+            `).join("")}
+          </select>
+          ${icons[iconKey] || icons.settings}
+        </div>
+      </label>
+    `;
+
+    return `
+      <section class="guest-main tools-main writing-main" aria-label="مساعد الكتابة">
+        <header class="guest-main-topbar tools-main-topbar">
+          ${renderModelSwitcher()}
+          ${renderHomeTopActions()}
+        </header>
+
+        <div class="writing-page">
+          <button class="writing-back" type="button" data-tools-back>
+            <span aria-hidden="true">←</span>
+            <span>العودة إلى الأدوات</span>
+          </button>
+
+          <header class="writing-hero">
+            <div class="writing-title">
+              <h1>مساعد الكتابة</h1>
+              <span aria-hidden="true">${icons.edit}</span>
+            </div>
+            <p>اكتب وحسّن نصوصك باحترافية وجودة عالية</p>
+          </header>
+
+          <div class="writing-task-tabs" role="list" aria-label="أنواع الكتابة">
+            ${tasks.map(([key, title, description, icon]) => `
+              <button class="writing-task-card ${activeTask === key ? "is-active" : ""}" type="button" data-writing-task="${escapeHtml(key)}">
+                <span aria-hidden="true">${icon}</span>
+                <strong>${escapeHtml(title)}</strong>
+                <small>${escapeHtml(description)}</small>
+              </button>
+            `).join("")}
+          </div>
+
+          <section class="writing-layout">
+            <aside class="writing-settings-card">
+              <h2>إعدادات الكتابة</h2>
+              ${renderSelect("contentType", "نوع المحتوى", "document")}
+              ${renderSelect("purpose", "الغرض من الكتابة", "ai")}
+              ${renderSelect("tone", "النبرة", "sparkle")}
+              ${renderSelect("language", "اللغة", "internet")}
+              ${renderSelect("length", "الطول التقريبي", "settings")}
+              <button class="writing-submit-side ${isAuthenticated() ? "" : "requires-auth"}" type="submit" form="writingAssistantForm" ${writing.loading ? "disabled" : ""}>
+                ${writing.loading ? "جاري الإنشاء..." : "إنشاء النص"}
+                ${icons.sparkle}
+              </button>
+            </aside>
+
+            <form class="writing-form-card" id="writingAssistantForm" data-writing-form>
+              <label class="writing-field">
+                <span>موضوع الكتابة أو الفكرة الرئيسية</span>
+                <input
+                  type="text"
+                  value="${escapeHtml(writing.topic || "")}"
+                  placeholder="اكتب موضوعك هنا، مثال: تأثير الذكاء الاصطناعي على سوق العمل"
+                  data-writing-field="topic"
+                  autocomplete="off"
+                >
+              </label>
+
+              <label class="writing-field">
+                <span>تفاصيل إضافية (اختياري)</span>
+                <textarea
+                  rows="8"
+                  maxlength="2000"
+                  placeholder="أضف أي تفاصيل أو نقاط تريد تضمينها في النص..."
+                  data-writing-field="details"
+                >${escapeHtml(writing.details || "")}</textarea>
+                <small>${escapeHtml(String(writing.details || "").length)}/2000</small>
+              </label>
+
+              <div class="writing-actions">
+                <button type="button" data-writing-add-points>
+                  ${icons.notes}
+                  <span>إضافة نقاط رئيسية</span>
+                </button>
+                <button type="submit" ${writing.loading ? "disabled" : ""}>
+                  ${writing.loading ? "جاري الإنشاء..." : "إنشاء النص"}
+                  ${icons.sparkle}
+                </button>
+              </div>
+            </form>
+          </section>
+
+          ${writing.error ? `
+            <section class="writing-result is-error">
+              <strong>تعذر تنفيذ مساعد الكتابة</strong>
+              <p>${escapeHtml(writing.error)}</p>
+            </section>
+          ` : ""}
+
+          ${writing.result ? `
+            <section class="writing-result">
+              <header>
+                <strong>النص الناتج</strong>
+                <span>${escapeHtml(writing.result.xp_spent ? `${writing.result.xp_spent} XP` : "جاهز")}</span>
+              </header>
+              <div class="writing-output">${formatSmartSearchAnswer(writing.result.output || writing.result.answer || "")}</div>
+              <button type="button" data-copy-writing-result>${icons.copy}<span>نسخ النص</span></button>
+            </section>
+          ` : ""}
+
+          <section class="writing-examples">
+            <header>
+              <h2>أمثلة سريعة</h2>
+              ${icons.bolt}
+            </header>
+            <div>
+              ${examples.map((item) => `
+                <button type="button" data-writing-example="${escapeHtml(item)}">
+                  <span>${escapeHtml(item)}</span>
+                  ${icons.document}
+                </button>
+              `).join("")}
+            </div>
+          </section>
+        </div>
+      </section>
+    `;
+  }
+
   function renderHomeMain(profile) {
     const firstName = isAuthenticated()
       ? String(state.currentUser?.name || "أحمد").trim().split(/\s+/)[0] || "أحمد"
@@ -2282,6 +2452,9 @@
     if (profile.key === "ai-tools") {
       if (state.toolView === "smart-search") {
         return renderSmartSearchMain(profile);
+      }
+      if (state.toolView === "writing-assistant") {
+        return renderWritingAssistantMain(profile);
       }
       return renderToolsMain(profile);
     }
@@ -3042,6 +3215,93 @@
     }
   }
 
+  async function submitWritingAssistant() {
+    const readField = (key) => app.querySelector(`[data-writing-field="${key}"]`);
+    const topic = String(readField("topic")?.value || state.writingAssistant.topic || "").trim();
+    const details = String(readField("details")?.value || state.writingAssistant.details || "").trim();
+
+    if (!topic && !details) {
+      state.writingAssistant.error = "اكتب موضوعًا أو نصًا ليعمل مساعد الكتابة.";
+      render();
+      return;
+    }
+
+    if (!isAuthenticated()) {
+      state.writingAssistant = {
+        ...state.writingAssistant,
+        topic,
+        details,
+        error: ""
+      };
+      openAuthModal("سجّل دخولك لاستخدام مساعد الكتابة وحفظ الناتج داخل حسابك.");
+      return;
+    }
+
+    const apiClient = getApiClient();
+    if (!apiClient?.runWritingAssistant) {
+      state.writingAssistant.error = "خدمة مساعد الكتابة غير جاهزة الآن.";
+      render();
+      return;
+    }
+
+    state.writingAssistant = {
+      ...state.writingAssistant,
+      topic,
+      details,
+      contentType: String(readField("contentType")?.value || state.writingAssistant.contentType || "مقال"),
+      purpose: String(readField("purpose")?.value || state.writingAssistant.purpose || "إقناع"),
+      tone: String(readField("tone")?.value || state.writingAssistant.tone || "احترافية"),
+      language: String(readField("language")?.value || state.writingAssistant.language || "العربية"),
+      length: String(readField("length")?.value || state.writingAssistant.length || "متوسط (300 - 500 كلمة)"),
+      loading: true,
+      error: "",
+      result: null
+    };
+    render();
+
+    try {
+      const result = await apiClient.runWritingAssistant({
+        task_type: state.writingAssistant.taskType,
+        input_text: topic,
+        details,
+        options: {
+          content_type: state.writingAssistant.contentType,
+          purpose: state.writingAssistant.purpose,
+          tone: state.writingAssistant.tone,
+          language: state.writingAssistant.language,
+          length: state.writingAssistant.length
+        }
+      });
+
+      if (!result?.ok) {
+        throw new Error(result?.message || "تعذر تشغيل مساعد الكتابة الآن.");
+      }
+
+      if (result.data?.user) {
+        const token = apiClient.getToken?.();
+        if (token) {
+          apiClient.setSession?.({ token, user: result.data.user });
+        }
+        state.currentUser = persistEmbeddedUser(result.data.user) || normalizeUser(result.data.user) || state.currentUser;
+      }
+
+      state.writingAssistant = {
+        ...state.writingAssistant,
+        loading: false,
+        error: "",
+        result: result.data || {}
+      };
+      render();
+    } catch (error) {
+      state.writingAssistant = {
+        ...state.writingAssistant,
+        loading: false,
+        error: error?.message || "تعذر تشغيل مساعد الكتابة الآن."
+      };
+      render();
+    }
+  }
+
   function splitReplyToBullets(text) {
     const cleaned = coerceDisplayText(text).replace(/\[object Object\]/g, "").trim();
     if (!cleaned) return ["لم يصلنا نص واضح من الخدمة."];
@@ -3390,6 +3650,7 @@
       if (event.target.closest("[data-tools-back]")) {
         state.toolView = "tools";
         state.smartSearch.error = "";
+        state.writingAssistant.error = "";
         render();
         return;
       }
@@ -3413,6 +3674,50 @@
           render();
           return;
         }
+        if (toolKey === "writing-assistant") {
+          state.toolView = "writing-assistant";
+          state.openThreadMenuId = "";
+          state.modelMenuOpen = false;
+          setSidebarCollapsed(false);
+          render();
+          return;
+        }
+      }
+
+      const writingTaskButton = event.target.closest("[data-writing-task]");
+      if (writingTaskButton) {
+        state.writingAssistant.taskType = writingTaskButton.getAttribute("data-writing-task") || "generate";
+        state.writingAssistant.error = "";
+        render();
+        return;
+      }
+
+      const writingExample = event.target.closest("[data-writing-example]");
+      if (writingExample) {
+        state.writingAssistant.topic = writingExample.getAttribute("data-writing-example") || "";
+        state.writingAssistant.error = "";
+        render();
+        return;
+      }
+
+      if (event.target.closest("[data-writing-add-points]")) {
+        state.writingAssistant.details = `${state.writingAssistant.details || ""}${state.writingAssistant.details ? "\n" : ""}- النقطة الأولى\n- النقطة الثانية\n- النقطة الثالثة`;
+        render();
+        return;
+      }
+
+      if (event.target.closest("[data-copy-writing-result]")) {
+        const text = coerceDisplayText(state.writingAssistant.result?.output || state.writingAssistant.result?.answer || "");
+        if (!text) {
+          showToast("لا يوجد نص جاهز للنسخ.");
+          return;
+        }
+        navigator.clipboard?.writeText(text).then(() => {
+          showToast("تم نسخ النص.");
+        }).catch(() => {
+          showToast("تعذر نسخ النص الآن.");
+        });
+        return;
       }
 
       const cardButton = event.target.closest("[data-card]");
@@ -3504,6 +3809,13 @@
         state.smartSearch.query = smartQuery.value;
         state.smartSearch.error = "";
       }
+
+      const writingField = event.target.closest("[data-writing-field]");
+      if (writingField && ["topic", "details"].includes(writingField.getAttribute("data-writing-field"))) {
+        const key = writingField.getAttribute("data-writing-field");
+        state.writingAssistant[key] = writingField.value;
+        state.writingAssistant.error = "";
+      }
     });
 
     app.addEventListener("change", (event) => {
@@ -3517,6 +3829,16 @@
       if (smartLanguage) {
         state.smartSearch.language = smartLanguage.value;
         return;
+      }
+
+      const writingField = event.target.closest("[data-writing-field]");
+      if (writingField) {
+        const key = writingField.getAttribute("data-writing-field");
+        if (["contentType", "purpose", "tone", "language", "length"].includes(key)) {
+          state.writingAssistant[key] = writingField.value;
+          state.writingAssistant.error = "";
+          return;
+        }
       }
 
       const filePicker = event.target.closest("#guestFilePicker");
@@ -3598,6 +3920,13 @@
       if (smartSearchForm) {
         event.preventDefault();
         submitSmartSearch();
+        return;
+      }
+
+      const writingForm = event.target.closest("[data-writing-form]");
+      if (writingForm) {
+        event.preventDefault();
+        submitWritingAssistant();
         return;
       }
 

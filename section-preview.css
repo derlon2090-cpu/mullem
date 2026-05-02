@@ -4689,6 +4689,391 @@ body[data-workspace-mode="home"] .guest-root {
   font-weight: 800;
 }
 
+.writing-page {
+  width: min(100%, 1120px);
+  margin: 0 auto;
+}
+
+.writing-back {
+  border: 0;
+  color: #6b4cff;
+  background: transparent;
+  font-size: 0.82rem;
+  font-weight: 950;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+  cursor: pointer;
+}
+
+.writing-hero {
+  text-align: center;
+  margin: 0 0 18px;
+}
+
+.writing-title {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+}
+
+.writing-title h1 {
+  margin: 0;
+  color: #172044;
+  font-size: clamp(1.45rem, 2.4vw, 1.95rem);
+  font-weight: 950;
+  letter-spacing: -0.045em;
+}
+
+.writing-title span {
+  width: 42px;
+  height: 42px;
+  border-radius: 15px;
+  color: #6b4cff;
+  background: rgba(111, 76, 255, 0.1);
+  display: grid;
+  place-items: center;
+}
+
+.writing-title svg {
+  width: 22px;
+  height: 22px;
+}
+
+.writing-hero p {
+  margin: 7px 0 0;
+  color: #8c94ad;
+  font-size: 0.88rem;
+  font-weight: 850;
+}
+
+.writing-task-tabs {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 10px;
+  margin-bottom: 16px;
+}
+
+.writing-task-card {
+  min-height: 58px;
+  border: 1px solid rgba(111, 76, 255, 0.13);
+  border-radius: 14px;
+  color: #172044;
+  background: rgba(255, 255, 255, 0.92);
+  display: grid;
+  grid-template-columns: 30px minmax(0, 1fr);
+  grid-template-rows: auto auto;
+  align-items: center;
+  gap: 2px 8px;
+  padding: 10px 12px;
+  text-align: right;
+  box-shadow: 0 14px 30px rgba(22, 30, 68, 0.035);
+  transition: border-color 0.18s ease, box-shadow 0.18s ease, transform 0.18s ease;
+}
+
+.writing-task-card:hover,
+.writing-task-card.is-active {
+  border-color: rgba(111, 76, 255, 0.45);
+  box-shadow: 0 16px 34px rgba(111, 76, 255, 0.09);
+  transform: translateY(-1px);
+}
+
+.writing-task-card span {
+  grid-row: 1 / span 2;
+  width: 30px;
+  height: 30px;
+  border-radius: 10px;
+  color: #6b4cff;
+  background: rgba(111, 76, 255, 0.09);
+  display: grid;
+  place-items: center;
+}
+
+.writing-task-card svg {
+  width: 16px;
+  height: 16px;
+}
+
+.writing-task-card strong {
+  font-size: 0.76rem;
+  font-weight: 950;
+  white-space: nowrap;
+}
+
+.writing-task-card small {
+  color: #9aa1b8;
+  font-size: 0.62rem;
+  font-weight: 800;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.writing-layout {
+  display: grid;
+  grid-template-columns: 292px minmax(0, 1fr);
+  gap: 18px;
+  align-items: stretch;
+}
+
+.writing-settings-card,
+.writing-form-card,
+.writing-result,
+.writing-examples {
+  border: 1px solid rgba(111, 76, 255, 0.13);
+  border-radius: 20px;
+  background: rgba(255, 255, 255, 0.93);
+  box-shadow: 0 18px 44px rgba(22, 30, 68, 0.045);
+}
+
+.writing-settings-card {
+  padding: 18px;
+}
+
+.writing-settings-card h2 {
+  margin: 0 0 14px;
+  color: #172044;
+  font-size: 0.96rem;
+  font-weight: 950;
+}
+
+.writing-setting {
+  display: block;
+  margin-bottom: 11px;
+}
+
+.writing-setting > span,
+.writing-field > span {
+  display: block;
+  margin-bottom: 7px;
+  color: #172044;
+  font-size: 0.76rem;
+  font-weight: 950;
+}
+
+.writing-setting div {
+  height: 42px;
+  border: 1px solid rgba(111, 76, 255, 0.13);
+  border-radius: 13px;
+  padding: 0 12px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: #6b4cff;
+  background: rgba(255, 255, 255, 0.88);
+}
+
+.writing-setting select {
+  width: 100%;
+  border: 0;
+  outline: 0;
+  color: #5c6482;
+  background: transparent;
+  font: inherit;
+  font-size: 0.78rem;
+  font-weight: 900;
+}
+
+.writing-setting svg {
+  width: 16px;
+  height: 16px;
+}
+
+.writing-submit-side {
+  width: 100%;
+  height: 44px;
+  border: 0;
+  border-radius: 13px;
+  color: #fff;
+  background: linear-gradient(135deg, #7a5cff, #5a31f4);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  font-weight: 950;
+  box-shadow: 0 16px 34px rgba(111, 76, 255, 0.2);
+}
+
+.writing-form-card {
+  padding: 22px;
+}
+
+.writing-field {
+  display: block;
+  margin-bottom: 16px;
+}
+
+.writing-field input,
+.writing-field textarea {
+  width: 100%;
+  border: 1px solid rgba(111, 76, 255, 0.13);
+  border-radius: 14px;
+  outline: 0;
+  color: #172044;
+  background: rgba(255, 255, 255, 0.9);
+  font: inherit;
+  font-weight: 850;
+  text-align: right;
+}
+
+.writing-field input {
+  height: 48px;
+  padding: 0 16px;
+}
+
+.writing-field textarea {
+  min-height: 178px;
+  resize: vertical;
+  padding: 16px;
+  line-height: 1.9;
+}
+
+.writing-field input::placeholder,
+.writing-field textarea::placeholder {
+  color: #a1a8bf;
+}
+
+.writing-field small {
+  display: block;
+  margin-top: 6px;
+  color: #a1a8bf;
+  font-size: 0.68rem;
+  font-weight: 850;
+}
+
+.writing-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.writing-actions button,
+.writing-result button {
+  min-height: 42px;
+  border: 1px solid rgba(111, 76, 255, 0.14);
+  border-radius: 999px;
+  padding: 0 18px;
+  color: #6b4cff;
+  background: rgba(255, 255, 255, 0.9);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  font-weight: 950;
+}
+
+.writing-actions button[type="submit"] {
+  border: 0;
+  color: #fff;
+  background: linear-gradient(135deg, #7a5cff, #5a31f4);
+  box-shadow: 0 16px 34px rgba(111, 76, 255, 0.2);
+}
+
+.writing-actions svg,
+.writing-result svg {
+  width: 16px;
+  height: 16px;
+}
+
+.writing-result {
+  margin-top: 18px;
+  padding: 18px 20px;
+}
+
+.writing-result.is-error {
+  border-color: rgba(255, 76, 92, 0.24);
+}
+
+.writing-result header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  margin-bottom: 12px;
+}
+
+.writing-result strong {
+  color: #172044;
+  font-size: 0.98rem;
+  font-weight: 950;
+}
+
+.writing-result header span {
+  color: #6b4cff;
+  background: rgba(111, 76, 255, 0.09);
+  border-radius: 999px;
+  padding: 7px 12px;
+  font-size: 0.72rem;
+  font-weight: 950;
+}
+
+.writing-output {
+  color: #253052;
+  font-size: 0.9rem;
+  font-weight: 750;
+  line-height: 1.9;
+}
+
+.writing-output p {
+  margin: 0 0 10px;
+}
+
+.writing-examples {
+  margin-top: 18px;
+  padding: 16px 18px;
+}
+
+.writing-examples header {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin-bottom: 12px;
+  color: #172044;
+}
+
+.writing-examples h2 {
+  margin: 0;
+  font-size: 0.94rem;
+  font-weight: 950;
+}
+
+.writing-examples header svg {
+  width: 16px;
+  height: 16px;
+  color: #6b4cff;
+}
+
+.writing-examples > div {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.writing-examples button {
+  min-height: 48px;
+  border: 1px solid rgba(111, 76, 255, 0.12);
+  border-radius: 13px;
+  color: #8c94ad;
+  background: rgba(255, 255, 255, 0.88);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 0 14px;
+  font-size: 0.76rem;
+  font-weight: 900;
+}
+
+.writing-examples svg {
+  width: 16px;
+  height: 16px;
+  color: #6b4cff;
+}
+
 .guest-rail-btn {
   width: 48px;
   height: 48px;
@@ -4866,6 +5251,24 @@ body[data-workspace-mode="home"] .guest-root {
     grid-template-columns: 1fr;
   }
 
+  .writing-task-tabs {
+    display: flex;
+    overflow-x: auto;
+    padding-bottom: 4px;
+  }
+
+  .writing-task-card {
+    flex: 0 0 170px;
+  }
+
+  .writing-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .writing-examples > div {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
   .smart-suggestions > div {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
@@ -4891,8 +5294,27 @@ body[data-workspace-mode="home"] .guest-root {
   }
 
   .smart-search-controls,
-  .smart-suggestions > div {
+  .smart-suggestions > div,
+  .writing-examples > div {
     grid-template-columns: 1fr;
+  }
+
+  .writing-form-card,
+  .writing-settings-card {
+    padding: 16px;
+  }
+
+  .writing-field textarea {
+    min-height: 150px;
+  }
+
+  .writing-actions {
+    flex-direction: column-reverse;
+    align-items: stretch;
+  }
+
+  .writing-actions button {
+    width: 100%;
   }
 
   .smart-history article {

@@ -896,6 +896,13 @@
     });
   }
 
+  async function runWritingAssistant(payload) {
+    return request("/tools/writing-assistant", {
+      method: "POST",
+      body: payload
+    });
+  }
+
   async function getHealth() {
     return request("/health", {
       method: "GET",
@@ -997,6 +1004,7 @@
     updateAdminUser,
     sendChat,
     smartSearch,
+    runWritingAssistant,
     getHealth,
     streamChat,
     getChatSessions,

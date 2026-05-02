@@ -530,6 +530,24 @@ function createPostgresDatabaseClient(rawConfig = {}) {
     await pool.query("CREATE INDEX IF NOT EXISTS idx_feedback_user_message ON feedback (user_id, message_id)");
 
     await pool.query(`
+      CREATE TABLE IF NOT EXISTS tool_usage (
+        id BIGSERIAL PRIMARY KEY,
+        user_id BIGINT NOT NULL REFERENCES app_users(id) ON DELETE CASCADE,
+        tool_key VARCHAR(80) NOT NULL,
+        task_type VARCHAR(80) NULL,
+        input_text TEXT NULL,
+        output_text TEXT NULL,
+        xp_cost INTEGER NOT NULL DEFAULT 0,
+        input_tokens INTEGER NOT NULL DEFAULT 0,
+        output_tokens INTEGER NOT NULL DEFAULT 0,
+        metadata JSONB NULL,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )
+    `);
+    await pool.query("CREATE INDEX IF NOT EXISTS idx_tool_usage_user_created ON tool_usage (user_id, created_at DESC)");
+    await pool.query("CREATE INDEX IF NOT EXISTS idx_tool_usage_tool_task ON tool_usage (tool_key, task_type)");
+
+    await pool.query(`
       CREATE TABLE IF NOT EXISTS app_api_tokens (
         id BIGSERIAL PRIMARY KEY,
         user_id BIGINT NOT NULL REFERENCES app_users(id) ON DELETE CASCADE,
@@ -1030,6 +1048,32 @@ function createPostgresDatabaseClient(rawConfig = {}) {
         payload.message_id ? Number(payload.message_id) : null,
         rating.slice(0, 20),
         String(payload.note || "").trim() || null
+      ]
+    );
+    return rows[0] || null;
+  }
+
+  async function saveToolUsage(payload = {}) {
+    const userId = Number(payload.user_id);
+    const toolKey = String(payload.tool_key || payload.tool || "").trim().slice(0, 80);
+    if (!userId || !toolKey) return null;
+    const rows = await query(
+      `
+        INSERT INTO tool_usage (
+          user_id, tool_key, task_type, input_text, output_text, xp_cost, input_tokens, output_tokens, metadata
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+        RETURNING *
+      `,
+      [
+        userId,
+        toolKey,
+        String(payload.task_type || payload.taskType || "").trim().slice(0, 80) || null,
+        String(payload.input_text || payload.inputText || "").trim() || null,
+        String(payload.output_text || payload.outputText || "").trim() || null,
+        Math.max(0, Math.round(Number(payload.xp_cost || payload.xpCost || 0) || 0)),
+        Math.max(0, Math.round(Number(payload.input_tokens || payload.inputTokens || 0) || 0)),
+        Math.max(0, Math.round(Number(payload.output_tokens || payload.outputTokens || 0) || 0)),
+        payload.metadata ? JSON.stringify(payload.metadata) : null
       ]
     );
     return rows[0] || null;
@@ -1693,6 +1737,7 @@ function createPostgresDatabaseClient(rawConfig = {}) {
     saveUserMemory,
     saveMessageEmbedding,
     saveFeedback,
+    saveToolUsage,
     findPackageById,
     findDefaultPackage,
     findPackageByKeyOrName,

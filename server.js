@@ -49,6 +49,7 @@ const OPENAI_MODEL_TURBO = String(process.env.ORLIXOR_TURBO_MODEL || process.env
 const OPENAI_MODEL_PRO = String(process.env.ORLIXOR_PRO_MODEL || process.env.OPENAI_MODEL_PRO || "gpt-4.1").trim();
 const OPENAI_MODEL_CREATIVE = String(process.env.ORLIXOR_CREATIVE_MODEL || process.env.OPENAI_MODEL_CREATIVE || "gpt-4.1-mini").trim();
 const OPENAI_MODEL_SEARCH = String(process.env.ORLIXOR_SEARCH_MODEL || process.env.OPENAI_MODEL_SEARCH || OPENAI_MODEL_DEFAULT || "gpt-4.1-mini").trim();
+const OPENAI_MODEL_WRITING = String(process.env.ORLIXOR_WRITING_MODEL || process.env.OPENAI_MODEL_WRITING || OPENAI_MODEL_CREATIVE || OPENAI_MODEL_DEFAULT || "gpt-4.1-mini").trim();
 const OPENAI_IMAGE_MODEL = String(process.env.OPENAI_IMAGE_MODEL || "dall-e-3").trim();
 const OPENAI_RESPONSES_ENDPOINT = String(process.env.OPENAI_RESPONSES_ENDPOINT || "https://api.openai.com/v1/responses").trim();
 const OPENAI_EMBEDDINGS_ENDPOINT = String(process.env.OPENAI_EMBEDDINGS_ENDPOINT || "https://api.openai.com/v1/embeddings").trim();
@@ -68,6 +69,14 @@ const RATE_LIMIT_SOLVE_MAX = Math.max(1, Number(process.env.RATE_LIMIT_SOLVE_MAX
 const RATE_LIMIT_GENERAL_MAX = Math.max(1, Number(process.env.RATE_LIMIT_GENERAL_MAX || 60));
 const SEARCH_XP_COST = Math.max(1, Number(process.env.SEARCH_XP_COST || 10));
 const SEARCH_DEEP_XP_COST = Math.max(SEARCH_XP_COST, Number(process.env.SEARCH_DEEP_XP_COST || 15));
+const WRITING_XP_COSTS = Object.freeze({
+  rewrite: Math.max(1, Number(process.env.WRITING_REWRITE_XP_COST || 5)),
+  tone: Math.max(1, Number(process.env.WRITING_TONE_XP_COST || 5)),
+  summarize: Math.max(1, Number(process.env.WRITING_SUMMARIZE_XP_COST || 6)),
+  expand: Math.max(1, Number(process.env.WRITING_EXPAND_XP_COST || 8)),
+  generate: Math.max(1, Number(process.env.WRITING_GENERATE_XP_COST || 10)),
+  longGenerate: Math.max(1, Number(process.env.WRITING_LONG_GENERATE_XP_COST || 15))
+});
 const CORS_ALLOWED_ORIGINS = String(process.env.CORS_ALLOWED_ORIGINS || "*").trim();
 const DEFAULT_ALLOWED_FRONTEND_ORIGINS = [
   "https://orlixor.com",
@@ -1605,6 +1614,115 @@ async function callOpenAI({ input, modelProfile }) {
   return { text, raw: payload, usage: extractTokenUsage(payload) };
 }
 
+function normalizeWritingTask(value) {
+  const key = String(value || "generate").trim().toLowerCase();
+  if (key === "style" || key === "proofread" || key === "correct") return "rewrite";
+  if (key === "long" || key === "longgenerate" || key === "long_generate") return "longGenerate";
+  if (["generate", "tone", "expand", "summarize", "rewrite", "longGenerate"].includes(key)) return key;
+  return "generate";
+}
+
+function getWritingProfile(taskType, user) {
+  const task = normalizeWritingTask(taskType);
+  const base = {
+    key: `writing-${task}`,
+    name: "Orlixor Writing Assistant",
+    openaiModel: task === "longGenerate" ? (OPENAI_MODEL_PRO || OPENAI_MODEL_WRITING) : (OPENAI_MODEL_WRITING || OPENAI_MODEL_CREATIVE || OPENAI_MODEL_DEFAULT),
+    temperature: 0.55,
+    maxOutputTokens: 700,
+    maxContextTokens: 2200,
+    minXpCost: WRITING_XP_COSTS[task] || WRITING_XP_COSTS.generate,
+    maxXpCost: WRITING_XP_COSTS[task] || WRITING_XP_COSTS.generate,
+    systemPrompt: [
+      "أنت مساعد كتابة احترافي في Orlixor.",
+      "اكتب نصًا عربيًا واضحًا وجذابًا ومنظمًا.",
+      "لا تذكر أسماء مزودي الخدمة أو النماذج التقنية.",
+      "نفذ مهمة الكتابة المطلوبة مباشرة بدون شرح جانبي طويل."
+    ].join("\n")
+  };
+
+  if (task === "generate" || task === "longGenerate") {
+    base.temperature = 0.75;
+    base.maxOutputTokens = task === "longGenerate" ? 1200 : 900;
+    base.systemPrompt = [
+      "أنت مساعد كتابة احترافي في Orlixor.",
+      "أنشئ محتوى جديدًا واضحًا وجذابًا ومنظمًا من فكرة المستخدم.",
+      "اكتب بأسلوب عربي طبيعي ومناسب للغرض والنبرة المطلوبة.",
+      "لا تذكر أسماء مزودي الخدمة أو النماذج التقنية."
+    ].join("\n");
+  } else if (task === "tone") {
+    base.temperature = 0.55;
+    base.maxOutputTokens = 700;
+    base.systemPrompt = [
+      "أنت أداة تغيير نبرة النص في Orlixor.",
+      "حوّل النص للنبرة المطلوبة مع الحفاظ على المعنى.",
+      "أعد النص المحسن فقط بدون شرح طويل."
+    ].join("\n");
+  } else if (task === "expand") {
+    base.temperature = 0.65;
+    base.maxOutputTokens = 1000;
+    base.systemPrompt = [
+      "أنت أداة توسيع النص في Orlixor.",
+      "وسّع النص بإضافة تفاصيل وأمثلة واضحة مع الحفاظ على الفكرة الأصلية.",
+      "اجعل النتيجة منظمة وقابلة للاستخدام مباشرة."
+    ].join("\n");
+  } else if (task === "summarize") {
+    base.temperature = 0.3;
+    base.maxOutputTokens = 500;
+    base.systemPrompt = [
+      "أنت أداة تلخيص في Orlixor.",
+      "اختصر النص إلى نقاط واضحة ومباشرة.",
+      "احذف الحشو وحافظ على المعنى الأساسي."
+    ].join("\n");
+  } else if (task === "rewrite") {
+    base.temperature = 0.45;
+    base.maxOutputTokens = 700;
+    base.systemPrompt = [
+      "أنت أداة تحسين وصياغة في Orlixor.",
+      "صحح النص وحسّن أسلوبه مع الحفاظ على المعنى.",
+      "أعد النص النهائي فقط إلا إذا احتاج المستخدم ملاحظات قصيرة."
+    ].join("\n");
+  }
+
+  if (isFreeUser(user)) {
+    base.maxOutputTokens = Math.min(base.maxOutputTokens, 600);
+    base.maxContextTokens = Math.min(base.maxContextTokens, FREE_MAX_CONTEXT_TOKENS);
+  }
+
+  return base;
+}
+
+function calculateWritingXpCost(taskType, inputText = "", details = "") {
+  const task = normalizeWritingTask(taskType);
+  const totalLength = String(inputText || "").length + String(details || "").length;
+  let cost = WRITING_XP_COSTS[task] || WRITING_XP_COSTS.generate;
+  if ((task === "generate" || task === "expand") && totalLength > 1800) {
+    cost = Math.max(cost, WRITING_XP_COSTS.longGenerate);
+  }
+  return Math.max(1, Math.round(cost));
+}
+
+function buildWritingPrompt({ taskType, inputText, details, options }) {
+  const safeOptions = options && typeof options === "object" ? options : {};
+  return [
+    { role: "system", content: getWritingProfile(taskType).systemPrompt },
+    {
+      role: "user",
+      content: [
+        `نوع المهمة: ${normalizeWritingTask(taskType)}`,
+        `النص أو الفكرة:\n${String(inputText || "").trim()}`,
+        details ? `تفاصيل إضافية:\n${String(details || "").trim()}` : "",
+        "الخيارات:",
+        `- نوع المحتوى: ${sanitizeOptionalText(safeOptions.content_type || safeOptions.contentType, 80) || "مقال"}`,
+        `- الغرض: ${sanitizeOptionalText(safeOptions.purpose, 80) || "إقناع"}`,
+        `- النبرة: ${sanitizeOptionalText(safeOptions.tone, 80) || "احترافية"}`,
+        `- اللغة: ${sanitizeOptionalText(safeOptions.language, 80) || "العربية"}`,
+        `- الطول التقريبي: ${sanitizeOptionalText(safeOptions.length, 120) || "متوسط"}`
+      ].filter(Boolean).join("\n\n")
+    }
+  ];
+}
+
 function getSmartSearchSourceInstruction(sourceType) {
   const key = String(sourceType || "all").trim().toLowerCase();
   if (key === "news") return "ركز على الأخبار والمصادر الحديثة، وتجنب النتائج القديمة إذا لم تكن مهمة.";
@@ -2768,6 +2886,80 @@ async function handleSmartSearch(req, res) {
   });
 }
 
+async function handleWritingAssistant(req, res) {
+  const payload = await parseJsonBody(req);
+  const taskType = normalizeWritingTask(payload.task_type || payload.taskType || "generate");
+  const inputText = requireTextField(payload.input_text || payload.inputText || payload.topic || payload.message || payload.text, "input_text", Math.min(MAX_MESSAGE_LENGTH, 4000));
+  const details = sanitizeOptionalText(payload.details || payload.extra_details || payload.extraDetails, 3000);
+  const options = payload.options && typeof payload.options === "object" ? payload.options : {};
+  const auth = await getAuthContext(req);
+  const activeUser = auth?.user ? await syncUserDailyProgress(auth.user, "استخدم مساعد الكتابة") : null;
+
+  if (!activeUser) {
+    throw createHttpError(401, "Authentication is required to use the writing assistant.");
+  }
+
+  const xpCost = calculateWritingXpCost(taskType, inputText, details);
+  const currentXp = Math.max(0, Number(activeUser.xp || 0));
+
+  if (currentXp < xpCost) {
+    throw createHttpError(402, `Insufficient XP balance. Writing assistant needs ${xpCost} XP.`);
+  }
+
+  const profile = getWritingProfile(taskType, activeUser);
+  const result = await callOpenAI({
+    modelProfile: profile,
+    input: buildResponsesInput(buildWritingPrompt({ taskType, inputText, details, options }))
+  });
+  const output = sanitizeModelDisplayText(result.text);
+
+  if (!output) {
+    throw createHttpError(502, "Writing assistant returned an empty response.");
+  }
+
+  const chargedUser = await chargeUserForMessage(
+    activeUser,
+    xpCost,
+    `استخدم مساعد الكتابة (${taskType})`
+  );
+
+  if (isDatabaseReady() && typeof databaseClient.saveToolUsage === "function") {
+    await databaseClient.saveToolUsage({
+      user_id: activeUser.id,
+      tool_key: "writing_assistant",
+      task_type: taskType,
+      input_text: inputText,
+      output_text: output,
+      xp_cost: xpCost,
+      input_tokens: Number(result.usage?.input_tokens || result.usage?.prompt_tokens || 0),
+      output_tokens: Number(result.usage?.output_tokens || result.usage?.completion_tokens || 0),
+      metadata: {
+        content_type: sanitizeOptionalText(options.content_type || options.contentType, 80),
+        purpose: sanitizeOptionalText(options.purpose, 80),
+        tone: sanitizeOptionalText(options.tone, 80),
+        language: sanitizeOptionalText(options.language, 80),
+        length: sanitizeOptionalText(options.length, 120)
+      }
+    });
+  }
+
+  sendJson(req, res, 200, {
+    success: true,
+    data: {
+      output,
+      task_type: taskType,
+      tool: "writing_assistant",
+      usage: {
+        xp_spent: xpCost,
+        xp_remaining: Math.max(0, Number(chargedUser?.xp || activeUser.xp || 0))
+      },
+      xp_spent: xpCost,
+      xp_remaining: Math.max(0, Number(chargedUser?.xp || activeUser.xp || 0)),
+      user: chargedUser ? buildApiUser(chargedUser) : buildApiUser(activeUser)
+    }
+  });
+}
+
 async function handleSolveQuestion(req, res) {
   const payload = await parseJsonBody(req);
   const question = requireTextField(payload.question, "question", MAX_QUESTION_LENGTH);
@@ -3204,6 +3396,11 @@ async function routeRequest(req, res) {
 
   if (req.method === "POST" && requestPath === "/api/tools/smart-search") {
     await handleSmartSearch(req, res);
+    return;
+  }
+
+  if (req.method === "POST" && requestPath === "/api/tools/writing-assistant") {
+    await handleWritingAssistant(req, res);
     return;
   }
 
