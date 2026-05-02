@@ -889,6 +889,13 @@
     });
   }
 
+  async function smartSearch(payload) {
+    return request("/tools/smart-search", {
+      method: "POST",
+      body: payload
+    });
+  }
+
   async function getHealth() {
     return request("/health", {
       method: "GET",
@@ -989,6 +996,7 @@
     updateAdminPackage,
     updateAdminUser,
     sendChat,
+    smartSearch,
     getHealth,
     streamChat,
     getChatSessions,

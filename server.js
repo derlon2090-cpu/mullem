@@ -48,6 +48,7 @@ const OPENAI_MODEL_DEFAULT = String(process.env.ORLIXOR_DEFAULT_MODEL || process
 const OPENAI_MODEL_TURBO = String(process.env.ORLIXOR_TURBO_MODEL || process.env.OPENAI_MODEL_TURBO || "gpt-4.1-nano").trim();
 const OPENAI_MODEL_PRO = String(process.env.ORLIXOR_PRO_MODEL || process.env.OPENAI_MODEL_PRO || "gpt-4.1").trim();
 const OPENAI_MODEL_CREATIVE = String(process.env.ORLIXOR_CREATIVE_MODEL || process.env.OPENAI_MODEL_CREATIVE || "gpt-4.1-mini").trim();
+const OPENAI_MODEL_SEARCH = String(process.env.ORLIXOR_SEARCH_MODEL || process.env.OPENAI_MODEL_SEARCH || OPENAI_MODEL_DEFAULT || "gpt-4.1-mini").trim();
 const OPENAI_IMAGE_MODEL = String(process.env.OPENAI_IMAGE_MODEL || "dall-e-3").trim();
 const OPENAI_RESPONSES_ENDPOINT = String(process.env.OPENAI_RESPONSES_ENDPOINT || "https://api.openai.com/v1/responses").trim();
 const OPENAI_EMBEDDINGS_ENDPOINT = String(process.env.OPENAI_EMBEDDINGS_ENDPOINT || "https://api.openai.com/v1/embeddings").trim();
@@ -65,6 +66,8 @@ const RATE_LIMIT_WINDOW_MS = Math.max(1000, Number(process.env.RATE_LIMIT_WINDOW
 const RATE_LIMIT_CHAT_MAX = Math.max(1, Number(process.env.RATE_LIMIT_CHAT_MAX || 20));
 const RATE_LIMIT_SOLVE_MAX = Math.max(1, Number(process.env.RATE_LIMIT_SOLVE_MAX || 20));
 const RATE_LIMIT_GENERAL_MAX = Math.max(1, Number(process.env.RATE_LIMIT_GENERAL_MAX || 60));
+const SEARCH_XP_COST = Math.max(1, Number(process.env.SEARCH_XP_COST || 10));
+const SEARCH_DEEP_XP_COST = Math.max(SEARCH_XP_COST, Number(process.env.SEARCH_DEEP_XP_COST || 15));
 const CORS_ALLOWED_ORIGINS = String(process.env.CORS_ALLOWED_ORIGINS || "*").trim();
 const DEFAULT_ALLOWED_FRONTEND_ORIGINS = [
   "https://orlixor.com",
@@ -1602,6 +1605,139 @@ async function callOpenAI({ input, modelProfile }) {
   return { text, raw: payload, usage: extractTokenUsage(payload) };
 }
 
+function getSmartSearchSourceInstruction(sourceType) {
+  const key = String(sourceType || "all").trim().toLowerCase();
+  if (key === "news") return "ركز على الأخبار والمصادر الحديثة، وتجنب النتائج القديمة إذا لم تكن مهمة.";
+  if (key === "academic") return "ركز على المصادر الأكاديمية والتعليمية والموثوقة قدر الإمكان.";
+  if (key === "tech") return "ركز على المصادر التقنية والرسمية والوثائق الحديثة قدر الإمكان.";
+  return "استخدم أفضل المصادر الموثوقة والمتنوعة المتاحة.";
+}
+
+function shouldUseDeepSmartSearch(query, sourceType) {
+  const text = String(query || "").toLowerCase();
+  return sourceType === "academic"
+    || /تحليل|قارن|مقارنة|تقرير|خطة|دراسة|مصادر كثيرة|بالتفصيل|deep|analysis|report/i.test(text);
+}
+
+function extractResponseSources(payload) {
+  const sources = [];
+  const seen = new Set();
+
+  function addSource(url, title) {
+    const cleanUrl = String(url || "").trim();
+    if (!/^https?:\/\//i.test(cleanUrl) || seen.has(cleanUrl)) return;
+    seen.add(cleanUrl);
+    sources.push({
+      title: String(title || cleanUrl).trim(),
+      url: cleanUrl
+    });
+  }
+
+  function visit(node) {
+    if (!node || sources.length >= 8) return;
+    if (Array.isArray(node)) {
+      node.forEach(visit);
+      return;
+    }
+    if (typeof node !== "object") return;
+
+    if (node.url || node.uri) {
+      addSource(node.url || node.uri, node.title || node.name || node.text);
+    }
+
+    Object.values(node).forEach(visit);
+  }
+
+  visit(payload);
+  return sources.slice(0, 6);
+}
+
+async function callOpenAIWebSearch({ query, language, sourceType, deep }) {
+  if (!OPENAI_API_KEY) {
+    throw createHttpError(503, "OPENAI_API_KEY is not configured on the server.");
+  }
+
+  const systemPrompt = [
+    "أنت أداة البحث الذكي في Orlixor.",
+    "ابحث عن معلومات حديثة وموثوقة.",
+    "أجب بالعربية باختصار وتنظيم إلا إذا طلب المستخدم غير ذلك.",
+    "اذكر المصادر عند توفرها، ولا تخترع معلومات.",
+    "لا تذكر أسماء النماذج أو مزود الخدمة للمستخدم.",
+    getSmartSearchSourceInstruction(sourceType),
+    `لغة الإجابة المطلوبة: ${String(language || "العربية").trim()}.`
+  ].join("\n");
+  const bodyBase = {
+    model: OPENAI_MODEL_SEARCH || OPENAI_MODEL_DEFAULT,
+    input: [
+      { role: "system", content: systemPrompt },
+      { role: "user", content: String(query || "").trim() }
+    ],
+    tool_choice: "required",
+    max_output_tokens: deep ? 900 : 650
+  };
+
+  async function requestWithTool(toolType) {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), OPENAI_TIMEOUT_MS);
+    try {
+      const response = await fetch(OPENAI_RESPONSES_ENDPOINT, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${OPENAI_API_KEY}`,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          ...bodyBase,
+          tools: [{ type: toolType }]
+        }),
+        signal: controller.signal
+      });
+      const contentType = response.headers.get("content-type") || "";
+      const payload = contentType.includes("application/json")
+        ? await response.json()
+        : { error: await response.text() };
+      return { response, payload };
+    } catch (error) {
+      if (error?.name === "AbortError") {
+        throw createHttpError(504, "Smart search request timed out on the server.");
+      }
+      throw createHttpError(503, "Failed to reach smart search from the server.");
+    } finally {
+      clearTimeout(timeoutId);
+    }
+  }
+
+  let { response, payload } = await requestWithTool("web_search");
+  if (!response.ok) {
+    const message = String(payload?.error?.message || payload?.message || "");
+    if (/web_search/i.test(message) && /invalid|unsupported|unknown/i.test(message)) {
+      ({ response, payload } = await requestWithTool("web_search_preview"));
+    }
+  }
+
+  if (!response.ok) {
+    let message =
+      payload?.error?.message ||
+      payload?.message ||
+      `Smart search failed with status ${response.status}`;
+    message = String(message)
+      .replace(/OpenAI/gi, "Orlixor")
+      .replace(/gpt-[a-z0-9.\-]+/gi, "Orlixor AI");
+    throw createHttpError(response.status, message);
+  }
+
+  const text = sanitizeModelDisplayText(extractResponseText(payload));
+  if (!text) {
+    throw createHttpError(502, "Smart search returned an empty response.");
+  }
+
+  return {
+    text,
+    sources: extractResponseSources(payload),
+    usage: extractTokenUsage(payload)
+  };
+}
+
 async function createEmbedding(content) {
   const text = String(content || "").trim();
   if (!ORLIXOR_ENABLE_EMBEDDINGS || !OPENAI_API_KEY || !text) return null;
@@ -2582,6 +2718,56 @@ async function handleChatSend(req, res) {
   });
 }
 
+async function handleSmartSearch(req, res) {
+  const payload = await parseJsonBody(req);
+  const query = requireTextField(payload.query || payload.message, "query", Math.min(MAX_MESSAGE_LENGTH, 900));
+  const language = sanitizeOptionalText(payload.language, 40) || "العربية";
+  const sourceType = sanitizeOptionalText(payload.source_type || payload.sourceType, 40) || "all";
+  const auth = await getAuthContext(req);
+  const activeUser = auth?.user ? await syncUserDailyProgress(auth.user, "استخدم البحث الذكي") : null;
+
+  if (!activeUser) {
+    throw createHttpError(401, "Authentication is required to use smart search.");
+  }
+
+  const deep = shouldUseDeepSmartSearch(query, sourceType);
+  const xpCost = deep ? SEARCH_DEEP_XP_COST : SEARCH_XP_COST;
+  const currentXp = Math.max(0, Number(activeUser.xp || 0));
+
+  if (currentXp < xpCost) {
+    throw createHttpError(402, `Insufficient XP balance. Smart search needs ${xpCost} XP.`);
+  }
+
+  const result = await callOpenAIWebSearch({
+    query,
+    language,
+    sourceType,
+    deep
+  });
+
+  const chargedUser = await chargeUserForMessage(
+    activeUser,
+    xpCost,
+    deep ? "استخدم البحث الذكي المتقدم" : "استخدم البحث الذكي"
+  );
+
+  sendJson(req, res, 200, {
+    success: true,
+    data: {
+      answer: result.text,
+      sources: result.sources,
+      search_type: deep ? "deep" : "standard",
+      usage: {
+        xp_spent: xpCost,
+        xp_remaining: Math.max(0, Number(chargedUser?.xp || activeUser.xp || 0))
+      },
+      xp_spent: xpCost,
+      xp_remaining: Math.max(0, Number(chargedUser?.xp || activeUser.xp || 0)),
+      user: chargedUser ? buildApiUser(chargedUser) : buildApiUser(activeUser)
+    }
+  });
+}
+
 async function handleSolveQuestion(req, res) {
   const payload = await parseJsonBody(req);
   const question = requireTextField(payload.question, "question", MAX_QUESTION_LENGTH);
@@ -3013,6 +3199,11 @@ async function routeRequest(req, res) {
 
   if (req.method === "POST" && requestPath === "/api/chat/send") {
     await handleChatSend(req, res);
+    return;
+  }
+
+  if (req.method === "POST" && requestPath === "/api/tools/smart-search") {
+    await handleSmartSearch(req, res);
     return;
   }
 

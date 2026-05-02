@@ -415,6 +415,20 @@
     modelMenuOpen: false,
     selectedModel: loadSelectedModel(),
     sidebarCollapsed: loadSidebarCollapsed(),
+    toolView: "tools",
+    smartSearch: {
+      query: "",
+      language: "العربية",
+      sourceType: "all",
+      loading: false,
+      error: "",
+      result: null,
+      history: [
+        { query: "ما هي أحدث تقنيات الذكاء الاصطناعي في 2024؟", time: "اليوم - 10:45 ص" },
+        { query: "تطورات سوق الأسهم السعودي", time: "أمس - 4:20 م" },
+        { query: "فوائد القراءة اليومية على الصحة النفسية", time: "أمس - 11:15 ص" }
+      ]
+    },
     upgradeModalOpen: false,
     balancePanelOpen: false,
     openThreadMenuId: "",
@@ -1960,6 +1974,7 @@
     const categories = ["الكل", "كتابة وتحرير", "تلخيص وتنظيم", "تحليل وبيانات", "إنتاجية", "تعليم وتعلم", "أدوات مجانية"];
     const tools = [
       {
+        key: "smart-search",
         title: "البحث الذكي",
         description: "البحث عن معلومات دقيقة من مصادر موثوقة",
         icon: icons.search
@@ -2027,7 +2042,7 @@
 
           <section class="tools-grid">
             ${tools.map((tool) => `
-              <button class="tool-card ${isAuthenticated() ? "" : "requires-auth"}" type="button" data-card="${escapeHtml(tool.title)}">
+              <button class="tool-card ${isAuthenticated() ? "" : "requires-auth"}" type="button" data-tool-key="${escapeHtml(tool.key || "")}" data-card="${escapeHtml(tool.title)}">
                 <span class="tool-card-star" aria-hidden="true">${icons.star}</span>
                 <span class="tool-card-icon" aria-hidden="true">${tool.icon}</span>
                 <strong>${escapeHtml(tool.title)}</strong>
@@ -2047,6 +2062,164 @@
         </div>
       </section>
     `;
+  }
+
+  function renderSmartSearchMain(profile) {
+    const smart = state.smartSearch || {};
+    const result = smart.result || null;
+    const sources = Array.isArray(result?.sources) ? result.sources.slice(0, 5) : [];
+    const suggestions = [
+      "ما هي فوائد الذكاء الاصطناعي في التعليم؟",
+      "تطورات سوق الأسهم السعودي 2024",
+      "أفضل طرق إدارة الوقت",
+      "آخر أخبار الاقتصاد العالمي اليوم",
+      "شرح مبسط لتقنية البلوك تشين",
+      "ما هي مصادر الطاقة المتجددة؟"
+    ];
+
+    return `
+      <section class="guest-main tools-main smart-search-main" aria-label="البحث الذكي">
+        <header class="guest-main-topbar tools-main-topbar">
+          ${renderModelSwitcher()}
+          ${renderHomeTopActions()}
+        </header>
+
+        <div class="smart-search-page">
+          <button class="smart-search-back" type="button" data-tools-back>
+            <span aria-hidden="true">←</span>
+            <span>العودة إلى الأدوات</span>
+          </button>
+
+          <header class="smart-search-hero">
+            <div class="smart-search-title">
+              <h1>البحث الذكي</h1>
+              <span aria-hidden="true">${icons.search}</span>
+            </div>
+            <p>ابحث عن معلومات دقيقة من مصادر موثوقة خلال ثواني</p>
+          </header>
+
+          <section class="smart-search-layout">
+            <form class="smart-search-box" data-smart-search-form>
+              <label class="smart-search-query">
+                <span aria-hidden="true">${icons.search}</span>
+                <input
+                  type="search"
+                  value="${escapeHtml(smart.query || "")}"
+                  placeholder="اكتب سؤالك هنا..."
+                  data-smart-search-query
+                  autocomplete="off"
+                >
+              </label>
+              <p class="smart-search-example">مثال: ما هي أحدث التطورات في الذكاء الاصطناعي؟</p>
+
+              <div class="smart-search-controls">
+                <label>
+                  <select data-smart-search-source>
+                    ${[
+                      ["all", "كل المصادر"],
+                      ["news", "أخبار"],
+                      ["academic", "أكاديمي"],
+                      ["tech", "تقني"]
+                    ].map(([value, label]) => `
+                      <option value="${value}" ${smart.sourceType === value ? "selected" : ""}>${label}</option>
+                    `).join("")}
+                  </select>
+                  <span>${icons.internet}</span>
+                </label>
+                <label>
+                  <select data-smart-search-language>
+                    ${["العربية", "English"].map((item) => `
+                      <option value="${escapeHtml(item)}" ${smart.language === item ? "selected" : ""}>اللغة: ${escapeHtml(item)}</option>
+                    `).join("")}
+                  </select>
+                  <span>文</span>
+                </label>
+                <button class="smart-search-submit ${isAuthenticated() ? "" : "requires-auth"}" type="submit" ${smart.loading ? "disabled" : ""}>
+                  <span>${smart.loading ? "جاري البحث..." : "بحث ذكي"}</span>
+                  ${icons.sparkle}
+                </button>
+              </div>
+            </form>
+
+            <aside class="smart-search-info">
+              <h2>حول البحث الذكي</h2>
+              <p>يستخدم البحث الذكي مصادر موثوقة وحديثة ويقدم معلومات دقيقة مع روابط للمصادر.</p>
+              ${[
+                "نتائج دقيقة وسريعة",
+                "مصادر موثوقة وحديثة",
+                "روابط للمراجع والمصادر",
+                "تلخيص ذكي للمعلومات"
+              ].map((item) => `
+                <span><b>✓</b>${escapeHtml(item)}</span>
+              `).join("")}
+            </aside>
+          </section>
+
+          ${smart.error ? `
+            <section class="smart-search-result is-error">
+              <strong>تعذر تنفيذ البحث</strong>
+              <p>${escapeHtml(smart.error)}</p>
+            </section>
+          ` : ""}
+
+          ${result ? `
+            <section class="smart-search-result">
+              <header>
+                <strong>نتيجة البحث</strong>
+                <span>${escapeHtml(result.xp_spent ? `${result.xp_spent} XP` : "بحث موثوق")}</span>
+              </header>
+              <div class="smart-search-answer">${formatSmartSearchAnswer(result.answer || result.summary || "")}</div>
+              ${sources.length ? `
+                <div class="smart-search-sources">
+                  <b>المصادر</b>
+                  ${sources.map((source) => `
+                    <a href="${escapeHtml(source.url || "#")}" target="_blank" rel="noopener noreferrer">
+                      ${escapeHtml(source.title || source.url || "مصدر")}
+                    </a>
+                  `).join("")}
+                </div>
+              ` : ""}
+              <button type="button" class="smart-search-open-chat" data-card="فتح البحث كمحادثة">افتح كمحادثة</button>
+            </section>
+          ` : ""}
+
+          <section class="smart-suggestions">
+            <h2>اقتراحات شائعة</h2>
+            <div>
+              ${suggestions.map((item) => `
+                <button type="button" data-smart-suggestion="${escapeHtml(item)}">
+                  ${escapeHtml(item)}
+                  ${icons.search}
+                </button>
+              `).join("")}
+            </div>
+          </section>
+
+          <section class="smart-history">
+            <h2>عمليات البحث السابقة</h2>
+            <div>
+              ${(smart.history || []).map((item) => `
+                <article>
+                  <button type="button" data-smart-suggestion="${escapeHtml(item.query)}">›</button>
+                  <span>${escapeHtml(item.time || "")}</span>
+                  <strong>${escapeHtml(item.query || "")}</strong>
+                  <button type="button" aria-label="حذف">${icons.delete}</button>
+                </article>
+              `).join("")}
+            </div>
+          </section>
+        </div>
+      </section>
+    `;
+  }
+
+  function formatSmartSearchAnswer(text) {
+    const cleaned = coerceDisplayText(text).trim();
+    if (!cleaned) return "<p>لم تصل نتيجة واضحة بعد.</p>";
+    return cleaned
+      .split(/\n{2,}/)
+      .map((block) => `<p>${escapeHtml(block.replace(/\n/g, " ").trim())}</p>`)
+      .join("");
   }
 
   function renderHomeMain(profile) {
@@ -2107,6 +2280,9 @@
 
   function renderMain(profile) {
     if (profile.key === "ai-tools") {
+      if (state.toolView === "smart-search") {
+        return renderSmartSearchMain(profile);
+      }
       return renderToolsMain(profile);
     }
     if (isHomeWorkspace) {
@@ -2544,6 +2720,9 @@
   function setSection(sectionKey, replace = false) {
     if (!sectionProfiles[sectionKey]) return;
     state.section = sectionKey;
+    if (sectionKey !== "ai-tools") {
+      state.toolView = "tools";
+    }
     ensureThreadState(sectionKey);
     if (isAuthenticated()) {
       state.savedConversationsLoaded = false;
@@ -2786,6 +2965,83 @@
     }
   }
 
+  async function submitSmartSearch() {
+    const queryInput = app.querySelector("[data-smart-search-query]");
+    const languageInput = app.querySelector("[data-smart-search-language]");
+    const sourceInput = app.querySelector("[data-smart-search-source]");
+    const query = String(queryInput?.value || state.smartSearch.query || "").trim();
+
+    if (!query) {
+      state.smartSearch.error = "اكتب سؤال البحث أولًا.";
+      render();
+      return;
+    }
+
+    if (!isAuthenticated()) {
+      state.smartSearch.query = query;
+      openAuthModal("سجّل دخولك لاستخدام البحث الذكي.");
+      return;
+    }
+
+    const apiClient = getApiClient();
+    if (!apiClient?.smartSearch) {
+      state.smartSearch.error = "خدمة البحث الذكي غير جاهزة الآن.";
+      render();
+      return;
+    }
+
+    state.smartSearch = {
+      ...state.smartSearch,
+      query,
+      language: String(languageInput?.value || state.smartSearch.language || "العربية"),
+      sourceType: String(sourceInput?.value || state.smartSearch.sourceType || "all"),
+      loading: true,
+      error: "",
+      result: null
+    };
+    render();
+
+    try {
+      const result = await apiClient.smartSearch({
+        query,
+        language: state.smartSearch.language,
+        source_type: state.smartSearch.sourceType
+      });
+
+      if (!result?.ok) {
+        throw new Error(result?.message || "تعذر تنفيذ البحث الذكي الآن.");
+      }
+
+      if (result.data?.user) {
+        const token = apiClient.getToken?.();
+        if (token) {
+          apiClient.setSession?.({ token, user: result.data.user });
+        }
+        state.currentUser = persistEmbeddedUser(result.data.user) || normalizeUser(result.data.user) || state.currentUser;
+      }
+
+      const historyItem = {
+        query,
+        time: "الآن"
+      };
+      state.smartSearch = {
+        ...state.smartSearch,
+        loading: false,
+        error: "",
+        result: result.data || {},
+        history: [historyItem, ...(state.smartSearch.history || []).filter((item) => item.query !== query)].slice(0, 6)
+      };
+      render();
+    } catch (error) {
+      state.smartSearch = {
+        ...state.smartSearch,
+        loading: false,
+        error: error?.message || "تعذر تنفيذ البحث الذكي الآن."
+      };
+      render();
+    }
+  }
+
   function splitReplyToBullets(text) {
     const cleaned = coerceDisplayText(text).replace(/\[object Object\]/g, "").trim();
     if (!cleaned) return ["لم يصلنا نص واضح من الخدمة."];
@@ -3008,6 +3264,7 @@
       if (event.target.closest("[data-open-tools]")) {
         state.homeConversationOpen = false;
         state.openThreadMenuId = "";
+        state.toolView = "tools";
         setSidebarCollapsed(false);
         setSection("ai-tools");
         return;
@@ -3130,6 +3387,34 @@
         return;
       }
 
+      if (event.target.closest("[data-tools-back]")) {
+        state.toolView = "tools";
+        state.smartSearch.error = "";
+        render();
+        return;
+      }
+
+      const smartSuggestion = event.target.closest("[data-smart-suggestion]");
+      if (smartSuggestion) {
+        state.smartSearch.query = smartSuggestion.getAttribute("data-smart-suggestion") || "";
+        state.smartSearch.error = "";
+        render();
+        return;
+      }
+
+      const toolButton = event.target.closest("[data-tool-key]");
+      if (toolButton) {
+        const toolKey = toolButton.getAttribute("data-tool-key") || "";
+        if (toolKey === "smart-search") {
+          state.toolView = "smart-search";
+          state.openThreadMenuId = "";
+          state.modelMenuOpen = false;
+          setSidebarCollapsed(false);
+          render();
+          return;
+        }
+      }
+
       const cardButton = event.target.closest("[data-card]");
       if (cardButton) {
         const label = cardButton.getAttribute("data-card") || "";
@@ -3213,9 +3498,27 @@
         }
         setComposerValue(composeInput.value);
       }
+
+      const smartQuery = event.target.closest("[data-smart-search-query]");
+      if (smartQuery) {
+        state.smartSearch.query = smartQuery.value;
+        state.smartSearch.error = "";
+      }
     });
 
     app.addEventListener("change", (event) => {
+      const smartSource = event.target.closest("[data-smart-search-source]");
+      if (smartSource) {
+        state.smartSearch.sourceType = smartSource.value;
+        return;
+      }
+
+      const smartLanguage = event.target.closest("[data-smart-search-language]");
+      if (smartLanguage) {
+        state.smartSearch.language = smartLanguage.value;
+        return;
+      }
+
       const filePicker = event.target.closest("#guestFilePicker");
       if (filePicker) {
         const allowedTypes = /\.(pdf|docx?|png|jpe?g|webp|gif|txt|md|pptx?)$/i;
@@ -3291,6 +3594,13 @@
     });
 
     app.addEventListener("submit", (event) => {
+      const smartSearchForm = event.target.closest("[data-smart-search-form]");
+      if (smartSearchForm) {
+        event.preventDefault();
+        submitSmartSearch();
+        return;
+      }
+
       const composeForm = event.target.closest("[data-compose-form]");
       if (!composeForm) return;
       event.preventDefault();
