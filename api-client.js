@@ -903,6 +903,13 @@
     });
   }
 
+  async function changeTone(payload) {
+    return request("/tools/tone", {
+      method: "POST",
+      body: payload
+    });
+  }
+
   async function getHealth() {
     return request("/health", {
       method: "GET",
@@ -1005,6 +1012,7 @@
     sendChat,
     smartSearch,
     runWritingAssistant,
+    changeTone,
     getHealth,
     streamChat,
     getChatSessions,

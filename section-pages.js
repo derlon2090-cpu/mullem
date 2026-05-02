@@ -436,6 +436,9 @@
       contentType: "مقال",
       purpose: "إقناع",
       tone: "احترافية",
+      toneText: "",
+      toneTarget: "formal",
+      toneLevel: "balanced",
       language: "العربية",
       length: "متوسط (300 - 500 كلمة)",
       loading: false,
@@ -2236,6 +2239,157 @@
       .join("");
   }
 
+  function renderToneAssistantMain(profile, writing, tasks, activeTask) {
+    const toneOptions = [
+      ["formal", "رسمي", "مناسب للمراسلات والتقارير", icons.subjects],
+      ["friendly", "ودود", "واضح وبسيط وقريب من القارئ", icons.user],
+      ["marketing", "تسويقي", "جذاب ومؤثر لزيادة التفاعل", icons.share],
+      ["academic", "أكاديمي", "علمي وموثوق ومناسب للبحوث", icons.tests],
+      ["concise", "مختصر", "موجز ومباشر في الطرح", icons.notes],
+      ["inspiring", "ملهم", "محفز وملهم للقارئ", icons.star]
+    ];
+    const levelOptions = [
+      ["balanced", "متوازن (موصى به)"],
+      ["light", "خفيف"],
+      ["strong", "قوي"]
+    ];
+    const examples = [
+      "رسالة بريد رسمية",
+      "محتوى تعليمي",
+      "تقرير عمل",
+      "منشور تسويقي",
+      "دعوة فعالية"
+    ];
+    const output = coerceDisplayText(writing.result?.output || "");
+    const textLength = String(writing.toneText || "").length;
+
+    return `
+      <section class="guest-main tools-main writing-main tone-main" aria-label="تغيير النبرة">
+        <header class="guest-main-topbar tools-main-topbar">
+          ${renderModelSwitcher()}
+          ${renderHomeTopActions()}
+        </header>
+
+        <div class="writing-page tone-page">
+          <button class="writing-back tone-back" type="button" data-tools-back>
+            <span aria-hidden="true">←</span>
+            <span>العودة إلى الأدوات</span>
+          </button>
+
+          <header class="writing-hero tone-hero">
+            <div class="writing-title tone-title">
+              <h1>مساعد الكتابة</h1>
+              <span aria-hidden="true">${icons.edit}</span>
+            </div>
+            <p>اكتب وحسّن نصوصك باحترافية وجودة عالية</p>
+          </header>
+
+          <div class="writing-task-tabs tone-task-tabs" role="list" aria-label="أنواع الكتابة">
+            ${tasks.map(([key, title, description, icon]) => `
+              <button class="writing-task-card ${activeTask === key ? "is-active" : ""}" type="button" data-writing-task="${escapeHtml(key)}">
+                <span aria-hidden="true">${icon}</span>
+                <strong>${escapeHtml(title)}</strong>
+                <small>${escapeHtml(description)}</small>
+              </button>
+            `).join("")}
+          </div>
+
+          <section class="tone-layout">
+            <aside class="tone-settings-card">
+              <h2>إعدادات تغيير النبرة</h2>
+              <p>اختر نبرة النص</p>
+              <div class="tone-option-list">
+                ${toneOptions.map(([key, label, hint, icon]) => `
+                  <button class="tone-option ${writing.toneTarget === key ? "is-active" : ""}" type="button" data-tone-option="${escapeHtml(key)}">
+                    <span class="tone-option-check" aria-hidden="true">${writing.toneTarget === key ? "●" : ""}</span>
+                    <span class="tone-option-icon" aria-hidden="true">${icon}</span>
+                    <strong>${escapeHtml(label)}</strong>
+                    <small>${escapeHtml(hint)}</small>
+                  </button>
+                `).join("")}
+              </div>
+
+              <label class="tone-level">
+                <span>${icons.settings}<b>خيارات إضافية</b></span>
+                <select data-tone-field="level">
+                  ${levelOptions.map(([key, label]) => `
+                    <option value="${escapeHtml(key)}" ${writing.toneLevel === key ? "selected" : ""}>${escapeHtml(label)}</option>
+                  `).join("")}
+                </select>
+              </label>
+
+              <button class="tone-submit ${isAuthenticated() ? "" : "requires-auth"}" type="submit" form="toneChangerForm" ${writing.loading ? "disabled" : ""}>
+                ${writing.loading ? "جاري التغيير..." : "تغيير النبرة"}
+                ${icons.ai}
+              </button>
+              <small class="tone-cost">تكلفة العملية: 5 XP</small>
+            </aside>
+
+            <form class="tone-editor-card" id="toneChangerForm" data-tone-form>
+              <section class="tone-text-panel">
+                <header>
+                  <div>
+                    <h2>النص الأصلي</h2>
+                    <p>ادخل النص الذي تريد تغيير نبرته</p>
+                  </div>
+                  ${icons.document}
+                </header>
+                <textarea
+                  maxlength="4000"
+                  data-tone-field="text"
+                  placeholder="اكتب النص الأصلي هنا..."
+                >${escapeHtml(writing.toneText || "")}</textarea>
+                <small>${escapeHtml(String(textLength))}/4000</small>
+              </section>
+
+              <div class="tone-divider" aria-hidden="true">↓</div>
+
+              <section class="tone-text-panel tone-output-panel">
+                <header>
+                  <div>
+                    <h2>النص بعد تغيير النبرة</h2>
+                    <p>النص الناتج بعد تطبيق النبرة المختارة</p>
+                  </div>
+                  ${icons.ai}
+                </header>
+                <div class="tone-output-box ${output ? "" : "is-empty"}">${output ? formatSmartSearchAnswer(output) : "<p>سيظهر النص بعد التعديل هنا.</p>"}</div>
+                <small>${escapeHtml(String(output.length))}/4000</small>
+              </section>
+
+              <div class="tone-result-actions">
+                <button type="button" data-copy-tone-result ${output ? "" : "disabled"}>${icons.copy}<span>نسخ النص</span></button>
+                <button type="button" data-download-tone-result ${output ? "" : "disabled"}><span aria-hidden="true">↓</span><span>تنزيل</span></button>
+                <button type="button" data-retry-tone ${output ? "" : "disabled"}>${icons.refresh}<span>إعادة المحاولة</span></button>
+              </div>
+            </form>
+          </section>
+
+          ${writing.error ? `
+            <section class="writing-result is-error tone-error">
+              <strong>تعذر تغيير النبرة</strong>
+              <p>${escapeHtml(writing.error)}</p>
+            </section>
+          ` : ""}
+
+          <section class="tone-examples">
+            <header>
+              <h2>أمثلة سريعة</h2>
+              ${icons.bolt}
+            </header>
+            <div>
+              ${examples.map((item) => `
+                <button type="button" data-tone-example="${escapeHtml(item)}">
+                  <span>${escapeHtml(item)}</span>
+                  ${icons.document}
+                </button>
+              `).join("")}
+            </div>
+          </section>
+        </div>
+      </section>
+    `;
+  }
+
   function renderWritingAssistantMain(profile) {
     const writing = state.writingAssistant || {};
     const activeTask = writing.taskType || "generate";
@@ -2247,6 +2401,9 @@
       ["rewrite", "تصحيح لغوي", "تصحيح وتحسين الصياغة", icons.edit],
       ["style", "تحسين الأسلوب", "جعل النص أكثر احترافية", icons.settings]
     ];
+    if (activeTask === "tone") {
+      return renderToneAssistantMain(profile, writing, tasks, activeTask);
+    }
     const selectOptions = {
       contentType: ["مقال", "منشور", "رسالة", "إعلان", "ملخص", "سكربت"],
       purpose: ["إقناع", "شرح", "تسويق", "تعليم", "إخبار", "تحفيز"],
@@ -3302,6 +3459,84 @@
     }
   }
 
+  async function submitToneTool() {
+    const textField = app.querySelector('[data-tone-field="text"]');
+    const levelField = app.querySelector('[data-tone-field="level"]');
+    const text = String(textField?.value || state.writingAssistant.toneText || "").trim();
+    const tone = String(state.writingAssistant.toneTarget || "formal");
+    const level = String(levelField?.value || state.writingAssistant.toneLevel || "balanced");
+
+    if (text.length < 5) {
+      state.writingAssistant.error = "اكتب نصًا أطول قليلًا لتغيير النبرة.";
+      render();
+      return;
+    }
+
+    if (!isAuthenticated()) {
+      state.writingAssistant = {
+        ...state.writingAssistant,
+        toneText: text,
+        toneLevel: level,
+        error: ""
+      };
+      openAuthModal("سجّل دخولك لاستخدام تغيير النبرة وحفظ النتيجة داخل حسابك.");
+      return;
+    }
+
+    const apiClient = getApiClient();
+    if (!apiClient?.changeTone) {
+      state.writingAssistant.error = "خدمة تغيير النبرة غير جاهزة الآن.";
+      render();
+      return;
+    }
+
+    state.writingAssistant = {
+      ...state.writingAssistant,
+      toneText: text,
+      toneTarget: tone,
+      toneLevel: level,
+      loading: true,
+      error: "",
+      result: null
+    };
+    render();
+
+    try {
+      const result = await apiClient.changeTone({
+        text,
+        tone,
+        level
+      });
+
+      if (!result?.ok) {
+        throw new Error(result?.message || "تعذر تغيير النبرة الآن.");
+      }
+
+      if (result.data?.user) {
+        const token = apiClient.getToken?.();
+        if (token) {
+          apiClient.setSession?.({ token, user: result.data.user });
+        }
+        state.currentUser = persistEmbeddedUser(result.data.user) || normalizeUser(result.data.user) || state.currentUser;
+      }
+
+      state.writingAssistant = {
+        ...state.writingAssistant,
+        loading: false,
+        error: "",
+        result: result.data || {}
+      };
+      render();
+    } catch (error) {
+      state.writingAssistant = {
+        ...state.writingAssistant,
+        loading: false,
+        error: error?.message || "تعذر تغيير النبرة الآن."
+      };
+      render();
+    }
+  }
+
   function splitReplyToBullets(text) {
     const cleaned = coerceDisplayText(text).replace(/\[object Object\]/g, "").trim();
     if (!cleaned) return ["لم يصلنا نص واضح من الخدمة."];
@@ -3688,6 +3923,7 @@
       if (writingTaskButton) {
         state.writingAssistant.taskType = writingTaskButton.getAttribute("data-writing-task") || "generate";
         state.writingAssistant.error = "";
+        state.writingAssistant.result = null;
         render();
         return;
       }
@@ -3717,6 +3953,67 @@
         }).catch(() => {
           showToast("تعذر نسخ النص الآن.");
         });
+        return;
+      }
+
+      const toneOption = event.target.closest("[data-tone-option]");
+      if (toneOption) {
+        state.writingAssistant.toneTarget = toneOption.getAttribute("data-tone-option") || "formal";
+        state.writingAssistant.error = "";
+        render();
+        return;
+      }
+
+      const toneExample = event.target.closest("[data-tone-example]");
+      if (toneExample) {
+        const exampleLabel = toneExample.getAttribute("data-tone-example") || "";
+        const examples = {
+          "رسالة بريد رسمية": "نحتاج نبلغ العميل أن المشروع تأخر يومين، ونبغى الكلام يكون محترم وواضح.",
+          "محتوى تعليمي": "الذكاء الاصطناعي يساعد الطلاب على فهم الدروس بشكل أسرع إذا استخدموه بطريقة صحيحة.",
+          "تقرير عمل": "خلصنا المرحلة الأولى من المشروع واحتجنا نراجع بعض التفاصيل قبل التسليم.",
+          "منشور تسويقي": "منصتنا تساعدك تكتب محتوى أفضل وتوفر وقتك في إعداد النصوص.",
+          "دعوة فعالية": "ندعوكم لحضور لقاء تعريفي عن أدوات Orlixor وكيف تساعد في العمل اليومي."
+        };
+        state.writingAssistant.toneText = examples[exampleLabel] || exampleLabel;
+        state.writingAssistant.error = "";
+        render();
+        return;
+      }
+
+      if (event.target.closest("[data-copy-tone-result]")) {
+        const text = coerceDisplayText(state.writingAssistant.result?.output || "");
+        if (!text) {
+          showToast("لا يوجد نص جاهز للنسخ.");
+          return;
+        }
+        navigator.clipboard?.writeText(text).then(() => {
+          showToast("تم نسخ النص.");
+        }).catch(() => {
+          showToast("تعذر نسخ النص الآن.");
+        });
+        return;
+      }
+
+      if (event.target.closest("[data-download-tone-result]")) {
+        const text = coerceDisplayText(state.writingAssistant.result?.output || "");
+        if (!text) {
+          showToast("لا يوجد نص جاهز للتنزيل.");
+          return;
+        }
+        const blob = new Blob([text], { type: "text/plain;charset=utf-8" });
+        const link = document.createElement("a");
+        link.href = URL.createObjectURL(blob);
+        link.download = "orlixor-tone-result.txt";
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        setTimeout(() => URL.revokeObjectURL(link.href), 500);
+        showToast("تم تجهيز ملف النص.");
+        return;
+      }
+
+      if (event.target.closest("[data-retry-tone]")) {
+        submitToneTool();
         return;
       }
 
@@ -3816,6 +4113,12 @@
         state.writingAssistant[key] = writingField.value;
         state.writingAssistant.error = "";
       }
+
+      const toneField = event.target.closest("[data-tone-field]");
+      if (toneField && toneField.getAttribute("data-tone-field") === "text") {
+        state.writingAssistant.toneText = toneField.value;
+        state.writingAssistant.error = "";
+      }
     });
 
     app.addEventListener("change", (event) => {
@@ -3839,6 +4142,13 @@
           state.writingAssistant.error = "";
           return;
         }
+      }
+
+      const toneField = event.target.closest("[data-tone-field]");
+      if (toneField && toneField.getAttribute("data-tone-field") === "level") {
+        state.writingAssistant.toneLevel = toneField.value;
+        state.writingAssistant.error = "";
+        return;
       }
 
       const filePicker = event.target.closest("#guestFilePicker");
@@ -3920,6 +4230,13 @@
       if (smartSearchForm) {
         event.preventDefault();
         submitSmartSearch();
+        return;
+      }
+
+      const toneForm = event.target.closest("[data-tone-form]");
+      if (toneForm) {
+        event.preventDefault();
+        submitToneTool();
         return;
       }
 

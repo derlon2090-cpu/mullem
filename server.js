@@ -50,6 +50,7 @@ const OPENAI_MODEL_PRO = String(process.env.ORLIXOR_PRO_MODEL || process.env.OPE
 const OPENAI_MODEL_CREATIVE = String(process.env.ORLIXOR_CREATIVE_MODEL || process.env.OPENAI_MODEL_CREATIVE || "gpt-4.1-mini").trim();
 const OPENAI_MODEL_SEARCH = String(process.env.ORLIXOR_SEARCH_MODEL || process.env.OPENAI_MODEL_SEARCH || OPENAI_MODEL_DEFAULT || "gpt-4.1-mini").trim();
 const OPENAI_MODEL_WRITING = String(process.env.ORLIXOR_WRITING_MODEL || process.env.OPENAI_MODEL_WRITING || OPENAI_MODEL_CREATIVE || OPENAI_MODEL_DEFAULT || "gpt-4.1-mini").trim();
+const OPENAI_MODEL_TONE = String(process.env.ORLIXOR_TONE_MODEL || process.env.OPENAI_MODEL_TONE || OPENAI_MODEL_WRITING || "gpt-4.1-mini").trim();
 const OPENAI_IMAGE_MODEL = String(process.env.OPENAI_IMAGE_MODEL || "dall-e-3").trim();
 const OPENAI_RESPONSES_ENDPOINT = String(process.env.OPENAI_RESPONSES_ENDPOINT || "https://api.openai.com/v1/responses").trim();
 const OPENAI_EMBEDDINGS_ENDPOINT = String(process.env.OPENAI_EMBEDDINGS_ENDPOINT || "https://api.openai.com/v1/embeddings").trim();
@@ -69,6 +70,7 @@ const RATE_LIMIT_SOLVE_MAX = Math.max(1, Number(process.env.RATE_LIMIT_SOLVE_MAX
 const RATE_LIMIT_GENERAL_MAX = Math.max(1, Number(process.env.RATE_LIMIT_GENERAL_MAX || 60));
 const SEARCH_XP_COST = Math.max(1, Number(process.env.SEARCH_XP_COST || 10));
 const SEARCH_DEEP_XP_COST = Math.max(SEARCH_XP_COST, Number(process.env.SEARCH_DEEP_XP_COST || 15));
+const TONE_XP_COST = Math.max(1, Number(process.env.TONE_XP_COST || 5));
 const WRITING_XP_COSTS = Object.freeze({
   rewrite: Math.max(1, Number(process.env.WRITING_REWRITE_XP_COST || 5)),
   tone: Math.max(1, Number(process.env.WRITING_TONE_XP_COST || 5)),
@@ -1723,6 +1725,92 @@ function buildWritingPrompt({ taskType, inputText, details, options }) {
   ];
 }
 
+const TONE_OPTIONS = Object.freeze({
+  formal: {
+    label: "رسمي",
+    hint: "مناسب للمراسلات والتقارير",
+    prompt: "حوّل النص إلى نبرة رسمية مناسبة للأعمال والمراسلات."
+  },
+  friendly: {
+    label: "ودود",
+    hint: "واضح وبسيط وقريب من القارئ",
+    prompt: "حوّل النص إلى نبرة ودودة وقريبة من القارئ."
+  },
+  marketing: {
+    label: "تسويقي",
+    hint: "جذاب ومؤثر لزيادة التفاعل",
+    prompt: "حوّل النص إلى نبرة تسويقية جذابة ومقنعة."
+  },
+  academic: {
+    label: "أكاديمي",
+    hint: "علمي وموثوق ومناسب للبحوث",
+    prompt: "حوّل النص إلى نبرة أكاديمية واضحة وموثوقة."
+  },
+  concise: {
+    label: "مختصر",
+    hint: "موجز ومباشر في الطرح",
+    prompt: "اجعل النص مختصرًا ومباشرًا مع الحفاظ على المعنى."
+  },
+  inspiring: {
+    label: "ملهم",
+    hint: "محفز وملهم للقارئ",
+    prompt: "حوّل النص إلى نبرة ملهمة ومحفزة."
+  }
+});
+
+const TONE_LEVELS = Object.freeze({
+  light: "عدّل النص بشكل خفيف جدًا.",
+  balanced: "عدّل النص بشكل متوازن مع الحفاظ على روح النص.",
+  strong: "أعد صياغة النص بوضوح أكبر مع تحسين الأسلوب بشكل ملحوظ."
+});
+
+function normalizeToneKey(value) {
+  const key = String(value || "formal").trim().toLowerCase();
+  return Object.prototype.hasOwnProperty.call(TONE_OPTIONS, key) ? key : "formal";
+}
+
+function normalizeToneLevel(value) {
+  const key = String(value || "balanced").trim().toLowerCase();
+  return Object.prototype.hasOwnProperty.call(TONE_LEVELS, key) ? key : "balanced";
+}
+
+function getToneProfile(user) {
+  return {
+    key: "writing-tone",
+    name: "Orlixor Tone",
+    openaiModel: OPENAI_MODEL_TONE || OPENAI_MODEL_WRITING || OPENAI_MODEL_DEFAULT,
+    temperature: 0.55,
+    maxOutputTokens: isFreeUser(user) ? 500 : 700,
+    maxContextTokens: isFreeUser(user) ? FREE_MAX_CONTEXT_TOKENS : 2200,
+    minXpCost: TONE_XP_COST,
+    maxXpCost: TONE_XP_COST,
+    systemPrompt: [
+      "أنت أداة تغيير النبرة في Orlixor.",
+      "مهمتك تغيير نبرة النص فقط بدون تغيير المعنى.",
+      "أعد النص النهائي فقط.",
+      "لا تضف شرحًا.",
+      "لا تذكر أسماء مزودي الخدمة أو النماذج التقنية."
+    ].join("\n")
+  };
+}
+
+function buildTonePrompt({ text, tone, level }) {
+  const toneKey = normalizeToneKey(tone);
+  const levelKey = normalizeToneLevel(level);
+  return [
+    { role: "system", content: getToneProfile().systemPrompt },
+    {
+      role: "user",
+      content: [
+        `النبرة المطلوبة: ${TONE_OPTIONS[toneKey].prompt}`,
+        `مستوى التعديل: ${TONE_LEVELS[levelKey]}`,
+        "النص:",
+        String(text || "").trim()
+      ].join("\n\n")
+    }
+  ];
+}
+
 function getSmartSearchSourceInstruction(sourceType) {
   const key = String(sourceType || "all").trim().toLowerCase();
   if (key === "news") return "ركز على الأخبار والمصادر الحديثة، وتجنب النتائج القديمة إذا لم تكن مهمة.";
@@ -2886,6 +2974,81 @@ async function handleSmartSearch(req, res) {
   });
 }
 
+async function handleToneTool(req, res) {
+  const payload = await parseJsonBody(req);
+  const text = requireTextField(payload.text || payload.input_text || payload.inputText, "text", 4000);
+  const tone = normalizeToneKey(payload.tone);
+  const level = normalizeToneLevel(payload.level);
+  const auth = await getAuthContext(req);
+  const activeUser = auth?.user ? await syncUserDailyProgress(auth.user, "استخدم تغيير النبرة") : null;
+
+  if (!activeUser) {
+    throw createHttpError(401, "Authentication is required to use tone changer.");
+  }
+
+  if (text.trim().length < 5) {
+    throw createHttpError(422, "Text is too short.");
+  }
+
+  if (text.length > 4000) {
+    throw createHttpError(413, "Text is too long. Please shorten it or upgrade.");
+  }
+
+  const currentXp = Math.max(0, Number(activeUser.xp || 0));
+  if (currentXp < TONE_XP_COST) {
+    throw createHttpError(402, `Insufficient XP balance. Tone changer needs ${TONE_XP_COST} XP.`);
+  }
+
+  const profile = getToneProfile(activeUser);
+  const result = await callOpenAI({
+    modelProfile: profile,
+    input: buildResponsesInput(buildTonePrompt({ text, tone, level }))
+  });
+  const output = sanitizeModelDisplayText(result.text);
+
+  if (!output) {
+    throw createHttpError(502, "Tone changer returned an empty response.");
+  }
+
+  const chargedUser = await chargeUserForMessage(
+    activeUser,
+    TONE_XP_COST,
+    `استخدم تغيير النبرة (${TONE_OPTIONS[tone].label})`
+  );
+
+  if (isDatabaseReady() && typeof databaseClient.saveToolUsage === "function") {
+    await databaseClient.saveToolUsage({
+      user_id: activeUser.id,
+      tool_key: "writing_assistant",
+      task_type: "tone",
+      input_text: text,
+      output_text: output,
+      xp_cost: TONE_XP_COST,
+      input_tokens: Number(result.usage?.input_tokens || result.usage?.prompt_tokens || 0),
+      output_tokens: Number(result.usage?.output_tokens || result.usage?.completion_tokens || 0),
+      metadata: {
+        tone,
+        tone_label: TONE_OPTIONS[tone].label,
+        level
+      }
+    });
+  }
+
+  sendJson(req, res, 200, {
+    success: true,
+    data: {
+      output,
+      tone,
+      level,
+      task_type: "tone",
+      tool: "tone_changer",
+      xp_spent: TONE_XP_COST,
+      xp_remaining: Math.max(0, Number(chargedUser?.xp || activeUser.xp || 0)),
+      user: chargedUser ? buildApiUser(chargedUser) : buildApiUser(activeUser)
+    }
+  });
+}
+
 async function handleWritingAssistant(req, res) {
   const payload = await parseJsonBody(req);
   const taskType = normalizeWritingTask(payload.task_type || payload.taskType || "generate");
@@ -3396,6 +3559,11 @@ async function routeRequest(req, res) {
 
   if (req.method === "POST" && requestPath === "/api/tools/smart-search") {
     await handleSmartSearch(req, res);
+    return;
+  }
+
+  if (req.method === "POST" && requestPath === "/api/tools/tone") {
+    await handleToneTool(req, res);
     return;
   }
 
