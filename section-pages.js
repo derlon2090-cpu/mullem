@@ -443,6 +443,11 @@
       expandLevel: "medium",
       expandFocus: "details",
       expandAudience: "عام",
+      summaryText: "",
+      summaryType: "bullets",
+      summaryLength: "medium",
+      summaryPointsCount: 5,
+      summaryAudience: "عام",
       language: "العربية",
       length: "متوسط (300 - 500 كلمة)",
       loading: false,
@@ -2550,6 +2555,178 @@
     `;
   }
 
+  function renderSummarizeAssistantMain(profile, writing, tasks, activeTask) {
+    const summaryTypes = [
+      ["bullets", "نقاط رئيسية", "أهم الأفكار كنقاط", icons.notes],
+      ["paragraph", "ملخص فقرة", "فقرة مختصرة مترابطة", icons.document],
+      ["executive", "ملخص تنفيذي", "قرارات وأفكار مهمة", icons.subjects]
+    ];
+    const summaryLengths = [
+      ["short", "قصير", "ملخص سريع"],
+      ["medium", "متوسط", "توازن مناسب"],
+      ["detailed", "مفصل", "تفاصيل أكثر"]
+    ];
+    const pointOptions = [3, 4, 5, 6, 7, 8, 9, 10];
+    const audienceOptions = ["عام", "طلاب", "عملاء", "فريق عمل", "أكاديمي"];
+    const examples = [
+      "ملخص اجتماع",
+      "تلخيص محاضرة",
+      "ملخص كتاب",
+      "تلخيص تقرير بحثي",
+      "ملخص مقال طويل"
+    ];
+    const output = coerceDisplayText(writing.result?.output || "");
+    const textLength = String(writing.summaryText || "").length;
+    const xpCost = writing.summaryLength === "detailed" || textLength > 6000 ? 10 : 6;
+
+    return `
+      <section class="guest-main tools-main writing-main tone-main summary-main" aria-label="تلخيص النص">
+        <header class="guest-main-topbar tools-main-topbar">
+          ${renderModelSwitcher()}
+          ${renderHomeTopActions()}
+        </header>
+
+        <div class="writing-page tone-page expand-page summary-page">
+          <button class="writing-back tone-back" type="button" data-tools-back>
+            <span aria-hidden="true">←</span>
+            <span>العودة إلى الأدوات</span>
+          </button>
+
+          <header class="writing-hero tone-hero">
+            <div class="writing-title tone-title">
+              <h1>مساعد الكتابة</h1>
+              <span aria-hidden="true">${icons.edit}</span>
+            </div>
+            <p>اكتب وحسّن نصوصك باحترافية وجودة عالية</p>
+          </header>
+
+          <div class="writing-task-tabs tone-task-tabs" role="list" aria-label="أنواع الكتابة">
+            ${tasks.map(([key, title, description, icon]) => `
+              <button class="writing-task-card ${activeTask === key ? "is-active" : ""}" type="button" data-writing-task="${escapeHtml(key)}">
+                <span aria-hidden="true">${icon}</span>
+                <strong>${escapeHtml(title)}</strong>
+                <small>${escapeHtml(description)}</small>
+              </button>
+            `).join("")}
+          </div>
+
+          <section class="tone-layout expand-layout summary-layout">
+            <aside class="tone-settings-card expand-settings-card summary-settings-card">
+              <h2>إعدادات تلخيص النص</h2>
+
+              <p class="summary-option-title">${icons.settings}<span>نوع الملخص</span></p>
+              <div class="summary-choice-grid summary-type-grid" role="list" aria-label="نوع الملخص">
+                ${summaryTypes.map(([key, label, hint, icon]) => `
+                  <button class="summary-choice ${writing.summaryType === key ? "is-active" : ""}" type="button" data-summary-type="${escapeHtml(key)}">
+                    <span class="summary-choice-icon" aria-hidden="true">${icon}</span>
+                    <strong>${escapeHtml(label)}</strong>
+                    <small>${escapeHtml(hint)}</small>
+                    <i aria-hidden="true">${writing.summaryType === key ? "●" : ""}</i>
+                  </button>
+                `).join("")}
+              </div>
+
+              <p class="summary-option-title">${icons.notes}<span>طول الملخص</span></p>
+              <div class="summary-choice-grid summary-length-grid" role="list" aria-label="طول الملخص">
+                ${summaryLengths.map(([key, label, hint]) => `
+                  <button class="summary-choice summary-length-choice ${writing.summaryLength === key ? "is-active" : ""}" type="button" data-summary-length="${escapeHtml(key)}">
+                    <strong>${escapeHtml(label)}</strong>
+                    <small>${escapeHtml(hint)}</small>
+                    <i aria-hidden="true">${writing.summaryLength === key ? "●" : ""}</i>
+                  </button>
+                `).join("")}
+              </div>
+
+              <label class="tone-level summary-level">
+                <span>${icons.notes}<b>عدد النقاط</b></span>
+                <select data-summary-field="pointsCount">
+                  ${pointOptions.map((item) => `
+                    <option value="${item}" ${Number(writing.summaryPointsCount || 5) === item ? "selected" : ""}>${item} نقاط</option>
+                  `).join("")}
+                </select>
+              </label>
+
+              <label class="tone-level summary-level">
+                <span>${icons.user}<b>الجمهور المستهدف (اختياري)</b></span>
+                <select data-summary-field="audience">
+                  ${audienceOptions.map((item) => `
+                    <option value="${escapeHtml(item)}" ${writing.summaryAudience === item ? "selected" : ""}>${escapeHtml(item)}</option>
+                  `).join("")}
+                </select>
+              </label>
+
+              <button class="tone-submit expand-submit summary-submit ${isAuthenticated() ? "" : "requires-auth"}" type="submit" form="summarizeTextForm" ${writing.loading ? "disabled" : ""}>
+                ${writing.loading ? "جاري تلخيص النص..." : "تلخيص النص"}
+                ${icons.sparkle}
+              </button>
+              <small class="tone-cost">تكلفة العملية: ${xpCost} XP</small>
+            </aside>
+
+            <form class="tone-editor-card expand-editor-card summary-editor-card" id="summarizeTextForm" data-summary-form>
+              <section class="tone-text-panel expand-text-panel summary-text-panel">
+                <header>
+                  <div>
+                    <h2>النص الأصلي</h2>
+                    <p>أدخل النص الذي تريد تلخيصه</p>
+                  </div>
+                  ${icons.document}
+                </header>
+                <textarea
+                  maxlength="12000"
+                  data-summary-field="text"
+                  placeholder="الصق النص الطويل هنا..."
+                >${escapeHtml(writing.summaryText || "")}</textarea>
+                <small>${escapeHtml(String(textLength))}/12000</small>
+              </section>
+
+              <div class="tone-divider" aria-hidden="true">↓</div>
+
+              <section class="tone-text-panel tone-output-panel expand-text-panel summary-text-panel">
+                <header>
+                  <div>
+                    <h2>الملخص الناتج</h2>
+                    <p>النص بعد تلخيصه</p>
+                  </div>
+                  ${icons.ai}
+                </header>
+                <div class="tone-output-box expand-output-box summary-output-box ${output ? "" : "is-empty"}">${output ? formatSmartSearchAnswer(output) : "<p>سيظهر الملخص هنا بعد تنفيذ العملية.</p>"}</div>
+                <small>${escapeHtml(String(output.length))}/4000</small>
+              </section>
+
+              <div class="tone-result-actions expand-result-actions summary-result-actions">
+                <button type="button" data-copy-summary-result ${output ? "" : "disabled"}>${icons.copy}<span>نسخ النص</span></button>
+                <button type="button" data-download-summary-result ${output ? "" : "disabled"}><span aria-hidden="true">↓</span><span>تنزيل</span></button>
+                <button type="button" data-retry-summary ${output ? "" : "disabled"}>${icons.refresh}<span>إعادة المحاولة</span></button>
+              </div>
+            </form>
+          </section>
+
+          ${writing.error ? `
+            <section class="writing-result is-error tone-error">
+              <strong>تعذر تلخيص النص</strong>
+              <p>${escapeHtml(writing.error)}</p>
+            </section>
+          ` : ""}
+
+          <section class="tone-examples expand-examples summary-examples">
+            <header>
+              <h2>أمثلة سريعة</h2>
+              ${icons.bolt}
+            </header>
+            <div>
+              ${examples.map((item) => `
+                <button type="button" data-summary-example="${escapeHtml(item)}">
+                  <span>${escapeHtml(item)}</span>
+                  ${icons.document}
+                </button>
+              `).join("")}
+            </div>
+          </section>
+        </div>
+      </section>
+    `;
+  }
+
   function renderWritingAssistantMain(profile) {
     const writing = state.writingAssistant || {};
     const activeTask = writing.taskType || "generate";
@@ -2566,6 +2743,9 @@
     }
     if (activeTask === "expand") {
       return renderExpandAssistantMain(profile, writing, tasks, activeTask);
+    }
+    if (activeTask === "summarize") {
+      return renderSummarizeAssistantMain(profile, writing, tasks, activeTask);
     }
     const selectOptions = {
       contentType: ["مقال", "منشور", "رسالة", "إعلان", "ملخص", "سكربت"],
@@ -3783,6 +3963,94 @@
     }
   }
 
+  async function submitSummarizeTextTool() {
+    const textField = app.querySelector('[data-summary-field="text"]');
+    const pointsField = app.querySelector('[data-summary-field="pointsCount"]');
+    const audienceField = app.querySelector('[data-summary-field="audience"]');
+    const text = String(textField?.value || state.writingAssistant.summaryText || "").trim();
+    const summaryType = String(state.writingAssistant.summaryType || "bullets");
+    const summaryLength = String(state.writingAssistant.summaryLength || "medium");
+    const pointsCount = Number(pointsField?.value || state.writingAssistant.summaryPointsCount || 5);
+    const audience = String(audienceField?.value || state.writingAssistant.summaryAudience || "عام").trim() || "عام";
+
+    if (text.length < 30) {
+      state.writingAssistant.error = "النص قصير جدًا للتلخيص. الصق فقرة أو نصًا أطول قليلًا.";
+      render();
+      return;
+    }
+
+    if (!isAuthenticated()) {
+      state.writingAssistant = {
+        ...state.writingAssistant,
+        summaryText: text,
+        summaryType,
+        summaryLength,
+        summaryPointsCount: Number.isFinite(pointsCount) ? pointsCount : 5,
+        summaryAudience: audience,
+        error: ""
+      };
+      openAuthModal("سجّل دخولك لاستخدام تلخيص النص وحفظ النتيجة داخل حسابك.");
+      return;
+    }
+
+    const apiClient = getApiClient();
+    if (!apiClient?.summarizeText) {
+      state.writingAssistant.error = "خدمة تلخيص النص غير جاهزة الآن.";
+      render();
+      return;
+    }
+
+    state.writingAssistant = {
+      ...state.writingAssistant,
+      summaryText: text,
+      summaryType,
+      summaryLength,
+      summaryPointsCount: Number.isFinite(pointsCount) ? pointsCount : 5,
+      summaryAudience: audience,
+      loading: true,
+      error: "",
+      result: null
+    };
+    render();
+
+    try {
+      const result = await apiClient.summarizeText({
+        text,
+        summaryType,
+        summaryLength,
+        pointsCount: state.writingAssistant.summaryPointsCount,
+        audience
+      });
+
+      if (!result?.ok) {
+        throw new Error(result?.message || "تعذر تلخيص النص الآن.");
+      }
+
+      if (result.data?.user) {
+        const token = apiClient.getToken?.();
+        if (token) {
+          apiClient.setSession?.({ token, user: result.data.user });
+        }
+        state.currentUser = persistEmbeddedUser(result.data.user) || normalizeUser(result.data.user) || state.currentUser;
+      }
+
+      state.writingAssistant = {
+        ...state.writingAssistant,
+        loading: false,
+        error: "",
+        result: result.data || {}
+      };
+      render();
+    } catch (error) {
+      state.writingAssistant = {
+        ...state.writingAssistant,
+        loading: false,
+        error: error?.message || "تعذر تلخيص النص الآن."
+      };
+      render();
+    }
+  }
+
   function splitReplyToBullets(text) {
     const cleaned = coerceDisplayText(text).replace(/\[object Object\]/g, "").trim();
     if (!cleaned) return ["لم يصلنا نص واضح من الخدمة."];
@@ -4324,6 +4592,75 @@
         return;
       }
 
+      const summaryType = event.target.closest("[data-summary-type]");
+      if (summaryType) {
+        state.writingAssistant.summaryType = summaryType.getAttribute("data-summary-type") || "bullets";
+        state.writingAssistant.error = "";
+        render();
+        return;
+      }
+
+      const summaryLength = event.target.closest("[data-summary-length]");
+      if (summaryLength) {
+        state.writingAssistant.summaryLength = summaryLength.getAttribute("data-summary-length") || "medium";
+        state.writingAssistant.error = "";
+        render();
+        return;
+      }
+
+      const summaryExample = event.target.closest("[data-summary-example]");
+      if (summaryExample) {
+        const exampleLabel = summaryExample.getAttribute("data-summary-example") || "";
+        const examples = {
+          "ملخص اجتماع": "ناقش الفريق خطة إطلاق المنتج خلال الربع القادم، وتم الاتفاق على تحسين صفحة التسجيل، وتبسيط تجربة المستخدم، وتجهيز حملة تعريفية قبل الإطلاق بأسبوعين. كما تقرر متابعة مؤشرات التسجيل يوميًا وتوزيع المهام على فرق التصميم والتطوير والتسويق.",
+          "تلخيص محاضرة": "تناولت المحاضرة مفهوم الذكاء الاصطناعي وتطبيقاته في التعليم والصحة والأعمال، مع التركيز على أهمية استخدامه بمسؤولية، وفهم حدوده، والتحقق من النتائج قبل الاعتماد عليها في القرارات المهمة.",
+          "ملخص كتاب": "يتحدث الكتاب عن بناء العادات الصغيرة وكيف يمكن للتغييرات البسيطة المتكررة أن تصنع نتائج كبيرة على المدى الطويل، ويؤكد أن البيئة والوضوح والاستمرارية أهم من الحماس المؤقت.",
+          "تلخيص تقرير بحثي": "يشير التقرير إلى أن استخدام الأدوات الذكية في بيئات العمل يزيد الإنتاجية عند دمجه مع تدريب مناسب وسياسات واضحة لحماية البيانات، لكنه يتطلب متابعة مستمرة لتقليل الأخطاء وتحسين جودة المخرجات.",
+          "ملخص مقال طويل": "يتناول المقال أثر التقنية الحديثة على الحياة اليومية، موضحًا كيف ساعدت في تسريع الوصول للمعلومات وتحسين التواصل، مع الإشارة إلى تحديات الخصوصية والانتباه والاستخدام المتوازن."
+        };
+        state.writingAssistant.summaryText = examples[exampleLabel] || exampleLabel;
+        state.writingAssistant.error = "";
+        render();
+        return;
+      }
+
+      if (event.target.closest("[data-copy-summary-result]")) {
+        const text = coerceDisplayText(state.writingAssistant.result?.output || "");
+        if (!text) {
+          showToast("لا يوجد ملخص جاهز للنسخ.");
+          return;
+        }
+        navigator.clipboard?.writeText(text).then(() => {
+          showToast("تم نسخ الملخص.");
+        }).catch(() => {
+          showToast("تعذر نسخ الملخص الآن.");
+        });
+        return;
+      }
+
+      if (event.target.closest("[data-download-summary-result]")) {
+        const text = coerceDisplayText(state.writingAssistant.result?.output || "");
+        if (!text) {
+          showToast("لا يوجد ملخص جاهز للتنزيل.");
+          return;
+        }
+        const blob = new Blob([text], { type: "text/plain;charset=utf-8" });
+        const link = document.createElement("a");
+        link.href = URL.createObjectURL(blob);
+        link.download = "orlixor-summary.txt";
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        setTimeout(() => URL.revokeObjectURL(link.href), 500);
+        showToast("تم تجهيز ملف الملخص.");
+        return;
+      }
+
+      if (event.target.closest("[data-retry-summary]")) {
+        submitSummarizeTextTool();
+        return;
+      }
+
       const cardButton = event.target.closest("[data-card]");
       if (cardButton) {
         const label = cardButton.getAttribute("data-card") || "";
@@ -4432,6 +4769,12 @@
         state.writingAssistant.expandText = expandField.value;
         state.writingAssistant.error = "";
       }
+
+      const summaryField = event.target.closest("[data-summary-field]");
+      if (summaryField && summaryField.getAttribute("data-summary-field") === "text") {
+        state.writingAssistant.summaryText = summaryField.value;
+        state.writingAssistant.error = "";
+      }
     });
 
     app.addEventListener("change", (event) => {
@@ -4474,6 +4817,21 @@
         }
         if (key === "audience") {
           state.writingAssistant.expandAudience = expandField.value;
+          state.writingAssistant.error = "";
+          return;
+        }
+      }
+
+      const summaryField = event.target.closest("[data-summary-field]");
+      if (summaryField) {
+        const key = summaryField.getAttribute("data-summary-field");
+        if (key === "pointsCount") {
+          state.writingAssistant.summaryPointsCount = Number(summaryField.value || 5);
+          state.writingAssistant.error = "";
+          return;
+        }
+        if (key === "audience") {
+          state.writingAssistant.summaryAudience = summaryField.value;
           state.writingAssistant.error = "";
           return;
         }
@@ -4572,6 +4930,13 @@
       if (expandForm) {
         event.preventDefault();
         submitExpandTextTool();
+        return;
+      }
+
+      const summaryForm = event.target.closest("[data-summary-form]");
+      if (summaryForm) {
+        event.preventDefault();
+        submitSummarizeTextTool();
         return;
       }
 

@@ -52,6 +52,7 @@ const OPENAI_MODEL_SEARCH = String(process.env.ORLIXOR_SEARCH_MODEL || process.e
 const OPENAI_MODEL_WRITING = String(process.env.ORLIXOR_WRITING_MODEL || process.env.OPENAI_MODEL_WRITING || OPENAI_MODEL_CREATIVE || OPENAI_MODEL_DEFAULT || "gpt-4.1-mini").trim();
 const OPENAI_MODEL_TONE = String(process.env.ORLIXOR_TONE_MODEL || process.env.OPENAI_MODEL_TONE || OPENAI_MODEL_WRITING || "gpt-4.1-mini").trim();
 const OPENAI_MODEL_EXPAND = String(process.env.ORLIXOR_EXPAND_MODEL || process.env.OPENAI_MODEL_EXPAND || OPENAI_MODEL_WRITING || "gpt-4.1-mini").trim();
+const OPENAI_MODEL_SUMMARY = String(process.env.ORLIXOR_SUMMARY_MODEL || process.env.OPENAI_MODEL_SUMMARY || OPENAI_MODEL_WRITING || "gpt-4.1-mini").trim();
 const OPENAI_IMAGE_MODEL = String(process.env.OPENAI_IMAGE_MODEL || "dall-e-3").trim();
 const OPENAI_RESPONSES_ENDPOINT = String(process.env.OPENAI_RESPONSES_ENDPOINT || "https://api.openai.com/v1/responses").trim();
 const OPENAI_EMBEDDINGS_ENDPOINT = String(process.env.OPENAI_EMBEDDINGS_ENDPOINT || "https://api.openai.com/v1/embeddings").trim();
@@ -74,6 +75,8 @@ const SEARCH_DEEP_XP_COST = Math.max(SEARCH_XP_COST, Number(process.env.SEARCH_D
 const TONE_XP_COST = Math.max(1, Number(process.env.TONE_XP_COST || 5));
 const EXPAND_XP_COST = Math.max(1, Number(process.env.EXPAND_XP_COST || process.env.WRITING_EXPAND_XP_COST || 8));
 const EXPAND_LONG_XP_COST = Math.max(EXPAND_XP_COST, Number(process.env.EXPAND_LONG_XP_COST || 12));
+const SUMMARY_XP_COST = Math.max(1, Number(process.env.SUMMARY_XP_COST || process.env.WRITING_SUMMARIZE_XP_COST || 6));
+const SUMMARY_LONG_XP_COST = Math.max(SUMMARY_XP_COST, Number(process.env.SUMMARY_LONG_XP_COST || 10));
 const WRITING_XP_COSTS = Object.freeze({
   rewrite: Math.max(1, Number(process.env.WRITING_REWRITE_XP_COST || 5)),
   tone: Math.max(1, Number(process.env.WRITING_TONE_XP_COST || 5)),
@@ -1901,6 +1904,96 @@ function buildExpandPrompt({ text, level, focus, audience }) {
   ];
 }
 
+const SUMMARY_TYPES = Object.freeze({
+  bullets: {
+    label: "نقاط رئيسية",
+    prompt: "لخّص النص في نقاط رئيسية واضحة."
+  },
+  paragraph: {
+    label: "ملخص فقرة",
+    prompt: "لخّص النص في فقرة واحدة مختصرة ومترابطة."
+  },
+  executive: {
+    label: "ملخص تنفيذي",
+    prompt: "اكتب ملخصًا تنفيذيًا احترافيًا يبرز أهم القرارات والأفكار."
+  }
+});
+
+const SUMMARY_LENGTHS = Object.freeze({
+  short: {
+    label: "قصير",
+    prompt: "اجعل الملخص قصيرًا جدًا."
+  },
+  medium: {
+    label: "متوسط",
+    prompt: "اجعل الملخص متوسط الطول."
+  },
+  detailed: {
+    label: "مفصل",
+    prompt: "اجعل الملخص مفصلًا ومنظمًا."
+  }
+});
+
+function normalizeSummaryType(value) {
+  const key = String(value || "bullets").trim().toLowerCase();
+  return Object.prototype.hasOwnProperty.call(SUMMARY_TYPES, key) ? key : "bullets";
+}
+
+function normalizeSummaryLength(value) {
+  const key = String(value || "medium").trim().toLowerCase();
+  return Object.prototype.hasOwnProperty.call(SUMMARY_LENGTHS, key) ? key : "medium";
+}
+
+function normalizePointsCount(value) {
+  const numeric = Number(value || 5);
+  if (!Number.isFinite(numeric)) return 5;
+  return Math.max(3, Math.min(Math.round(numeric), 10));
+}
+
+function getSummaryProfile(user, summaryLength = "medium") {
+  const normalizedLength = normalizeSummaryLength(summaryLength);
+  const isDetailed = normalizedLength === "detailed";
+  return {
+    key: "writing-summary",
+    name: "Orlixor Summary",
+    openaiModel: OPENAI_MODEL_SUMMARY || OPENAI_MODEL_WRITING || OPENAI_MODEL_DEFAULT,
+    temperature: 0.3,
+    maxOutputTokens: isFreeUser(user) ? (isDetailed ? 500 : 420) : (isDetailed ? 900 : 500),
+    maxContextTokens: isFreeUser(user) ? FREE_MAX_CONTEXT_TOKENS : 5000,
+    minXpCost: isDetailed ? SUMMARY_LONG_XP_COST : SUMMARY_XP_COST,
+    maxXpCost: isDetailed ? SUMMARY_LONG_XP_COST : SUMMARY_XP_COST,
+    systemPrompt: [
+      "أنت أداة تلخيص النص في Orlixor.",
+      "لخّص النص بدقة ووضوح.",
+      "لا تضف معلومات من خارج النص.",
+      "لا تغيّر المعنى.",
+      "لا تذكر أسماء مزودي الخدمة أو النماذج التقنية.",
+      "أعد الناتج فقط بدون شرح إضافي."
+    ].join("\n")
+  };
+}
+
+function buildSummaryPrompt({ text, summaryType, summaryLength, pointsCount, audience }) {
+  const typeKey = normalizeSummaryType(summaryType);
+  const lengthKey = normalizeSummaryLength(summaryLength);
+  const safeAudience = sanitizeOptionalText(audience, 80) || "عام";
+  const safePointsCount = normalizePointsCount(pointsCount);
+  return [
+    { role: "system", content: getSummaryProfile(null, lengthKey).systemPrompt },
+    {
+      role: "user",
+      content: [
+        `نوع الملخص: ${SUMMARY_TYPES[typeKey].prompt}`,
+        `طول الملخص: ${SUMMARY_LENGTHS[lengthKey].prompt}`,
+        `عدد النقاط إن وجدت: ${safePointsCount}`,
+        `الجمهور المستهدف: ${safeAudience}`,
+        "النص:",
+        String(text || "").trim()
+      ].join("\n\n")
+    }
+  ];
+}
+
 function getSmartSearchSourceInstruction(sourceType) {
   const key = String(sourceType || "all").trim().toLowerCase();
   if (key === "news") return "ركز على الأخبار والمصادر الحديثة، وتجنب النتائج القديمة إذا لم تكن مهمة.";
@@ -3219,6 +3312,91 @@ async function handleExpandTextTool(req, res) {
   });
 }
 
+async function handleSummarizeTextTool(req, res) {
+  const payload = await parseJsonBody(req);
+  const text = requireTextField(payload.text || payload.input_text || payload.inputText, "text", 12000);
+  const summaryType = normalizeSummaryType(payload.summaryType || payload.summary_type);
+  const summaryLength = normalizeSummaryLength(payload.summaryLength || payload.summary_length);
+  const pointsCount = normalizePointsCount(payload.pointsCount || payload.points_count);
+  const audience = sanitizeOptionalText(payload.audience, 80) || "عام";
+  const auth = await getAuthContext(req);
+  const activeUser = auth?.user ? await syncUserDailyProgress(auth.user, "استخدم تلخيص النص") : null;
+
+  if (!activeUser) {
+    throw createHttpError(401, "Authentication is required to summarize text.");
+  }
+
+  if (text.trim().length < 30) {
+    throw createHttpError(422, "Text is too short to summarize.");
+  }
+
+  if (text.length > 12000) {
+    throw createHttpError(413, "Text is too long. Please split it or upgrade.");
+  }
+
+  const xpCost = text.length > 6000 || summaryLength === "detailed"
+    ? SUMMARY_LONG_XP_COST
+    : SUMMARY_XP_COST;
+  const currentXp = Math.max(0, Number(activeUser.xp || 0));
+  if (currentXp < xpCost) {
+    throw createHttpError(402, `Insufficient XP balance. Text summary needs ${xpCost} XP.`);
+  }
+
+  const profile = getSummaryProfile(activeUser, summaryLength);
+  const result = await callOpenAI({
+    modelProfile: profile,
+    input: buildResponsesInput(buildSummaryPrompt({ text, summaryType, summaryLength, pointsCount, audience }))
+  });
+  const output = sanitizeModelDisplayText(result.text);
+
+  if (!output) {
+    throw createHttpError(502, "Text summary returned an empty response.");
+  }
+
+  const chargedUser = await chargeUserForMessage(
+    activeUser,
+    xpCost,
+    `استخدم تلخيص النص (${SUMMARY_TYPES[summaryType].label})`
+  );
+
+  if (isDatabaseReady() && typeof databaseClient.saveToolUsage === "function") {
+    await databaseClient.saveToolUsage({
+      user_id: activeUser.id,
+      tool_key: "writing_assistant",
+      task_type: "summarize",
+      input_text: text,
+      output_text: output,
+      xp_cost: xpCost,
+      input_tokens: Number(result.usage?.input_tokens || result.usage?.prompt_tokens || 0),
+      output_tokens: Number(result.usage?.output_tokens || result.usage?.completion_tokens || 0),
+      metadata: {
+        summary_type: summaryType,
+        summary_type_label: SUMMARY_TYPES[summaryType].label,
+        summary_length: summaryLength,
+        summary_length_label: SUMMARY_LENGTHS[summaryLength].label,
+        points_count: pointsCount,
+        audience
+      }
+    });
+  }
+
+  sendJson(req, res, 200, {
+    success: true,
+    data: {
+      output,
+      summary_type: summaryType,
+      summary_length: summaryLength,
+      points_count: pointsCount,
+      audience,
+      task_type: "summarize",
+      tool: "text_summarizer",
+      xp_spent: xpCost,
+      xp_remaining: Math.max(0, Number(chargedUser?.xp || activeUser.xp || 0)),
+      user: chargedUser ? buildApiUser(chargedUser) : buildApiUser(activeUser)
+    }
+  });
+}
+
 async function handleWritingAssistant(req, res) {
   const payload = await parseJsonBody(req);
   const taskType = normalizeWritingTask(payload.task_type || payload.taskType || "generate");
@@ -3739,6 +3917,11 @@ async function routeRequest(req, res) {
 
   if (req.method === "POST" && requestPath === "/api/tools/expand-text") {
     await handleExpandTextTool(req, res);
+    return;
+  }
+
+  if (req.method === "POST" && requestPath === "/api/tools/summarize-text") {
+    await handleSummarizeTextTool(req, res);
     return;
   }
 

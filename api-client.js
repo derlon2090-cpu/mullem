@@ -917,6 +917,13 @@
     });
   }
 
+  async function summarizeText(payload) {
+    return request("/tools/summarize-text", {
+      method: "POST",
+      body: payload
+    });
+  }
+
   async function getHealth() {
     return request("/health", {
       method: "GET",
@@ -1021,6 +1028,7 @@
     runWritingAssistant,
     changeTone,
     expandText,
+    summarizeText,
     getHealth,
     streamChat,
     getChatSessions,
