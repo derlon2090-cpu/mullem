@@ -53,6 +53,7 @@ const OPENAI_MODEL_WRITING = String(process.env.ORLIXOR_WRITING_MODEL || process
 const OPENAI_MODEL_TONE = String(process.env.ORLIXOR_TONE_MODEL || process.env.OPENAI_MODEL_TONE || OPENAI_MODEL_WRITING || "gpt-4.1-mini").trim();
 const OPENAI_MODEL_EXPAND = String(process.env.ORLIXOR_EXPAND_MODEL || process.env.OPENAI_MODEL_EXPAND || OPENAI_MODEL_WRITING || "gpt-4.1-mini").trim();
 const OPENAI_MODEL_SUMMARY = String(process.env.ORLIXOR_SUMMARY_MODEL || process.env.OPENAI_MODEL_SUMMARY || OPENAI_MODEL_WRITING || "gpt-4.1-mini").trim();
+const OPENAI_MODEL_CORRECTION = String(process.env.ORLIXOR_CORRECTION_MODEL || process.env.OPENAI_MODEL_CORRECTION || OPENAI_MODEL_WRITING || "gpt-4.1-mini").trim();
 const OPENAI_IMAGE_MODEL = String(process.env.OPENAI_IMAGE_MODEL || "dall-e-3").trim();
 const OPENAI_RESPONSES_ENDPOINT = String(process.env.OPENAI_RESPONSES_ENDPOINT || "https://api.openai.com/v1/responses").trim();
 const OPENAI_EMBEDDINGS_ENDPOINT = String(process.env.OPENAI_EMBEDDINGS_ENDPOINT || "https://api.openai.com/v1/embeddings").trim();
@@ -77,6 +78,8 @@ const EXPAND_XP_COST = Math.max(1, Number(process.env.EXPAND_XP_COST || process.
 const EXPAND_LONG_XP_COST = Math.max(EXPAND_XP_COST, Number(process.env.EXPAND_LONG_XP_COST || 12));
 const SUMMARY_XP_COST = Math.max(1, Number(process.env.SUMMARY_XP_COST || process.env.WRITING_SUMMARIZE_XP_COST || 6));
 const SUMMARY_LONG_XP_COST = Math.max(SUMMARY_XP_COST, Number(process.env.SUMMARY_LONG_XP_COST || 10));
+const CORRECTION_XP_COST = Math.max(1, Number(process.env.CORRECTION_XP_COST || process.env.WRITING_CORRECTION_XP_COST || 5));
+const CORRECTION_STRONG_COST = Math.max(CORRECTION_XP_COST, Number(process.env.CORRECTION_STRONG_COST || 7));
 const WRITING_XP_COSTS = Object.freeze({
   rewrite: Math.max(1, Number(process.env.WRITING_REWRITE_XP_COST || 5)),
   tone: Math.max(1, Number(process.env.WRITING_TONE_XP_COST || 5)),
@@ -1817,6 +1820,89 @@ function buildTonePrompt({ text, tone, level }) {
   ];
 }
 
+const CORRECTION_TYPES = Object.freeze({
+  spelling: {
+    label: "إملائي فقط",
+    hint: "تصحيح الكلمات وعلامات الترقيم",
+    prompt: "صحّح الأخطاء الإملائية فقط."
+  },
+  grammar: {
+    label: "نحوي فقط",
+    hint: "تدقيق التراكيب والجمل",
+    prompt: "صحّح الأخطاء النحوية فقط."
+  },
+  full: {
+    label: "النحوي والإملائي",
+    hint: "تصحيح شامل وواضح",
+    prompt: "صحّح الأخطاء الإملائية والنحوية وعلامات الترقيم."
+  }
+});
+
+const CORRECTION_LEVELS = Object.freeze({
+  light: {
+    label: "بسيط",
+    prompt: "قم بتصحيح بسيط فقط بدون تغيير الأسلوب."
+  },
+  balanced: {
+    label: "متوسط (موصى به)",
+    prompt: "صحّح النص مع تحسين بسيط في الأسلوب."
+  },
+  strong: {
+    label: "قوي",
+    prompt: "أعد صياغة النص بشكل احترافي مع تصحيح كامل."
+  }
+});
+
+function normalizeCorrectionType(value) {
+  const key = String(value || "full").trim().toLowerCase();
+  return Object.prototype.hasOwnProperty.call(CORRECTION_TYPES, key) ? key : "full";
+}
+
+function normalizeCorrectionLevel(value) {
+  const key = String(value || "balanced").trim().toLowerCase();
+  return Object.prototype.hasOwnProperty.call(CORRECTION_LEVELS, key) ? key : "balanced";
+}
+
+function getCorrectionProfile(user, level = "balanced") {
+  const normalizedLevel = normalizeCorrectionLevel(level);
+  return {
+    key: "writing-correction",
+    name: "Orlixor Correction",
+    openaiModel: OPENAI_MODEL_CORRECTION || OPENAI_MODEL_WRITING || OPENAI_MODEL_DEFAULT,
+    temperature: normalizedLevel === "strong" ? 0.36 : 0.3,
+    maxOutputTokens: isFreeUser(user) ? 400 : 700,
+    maxContextTokens: isFreeUser(user) ? FREE_MAX_CONTEXT_TOKENS : 2500,
+    minXpCost: normalizedLevel === "strong" ? CORRECTION_STRONG_COST : CORRECTION_XP_COST,
+    maxXpCost: normalizedLevel === "strong" ? CORRECTION_STRONG_COST : CORRECTION_XP_COST,
+    systemPrompt: [
+      "أنت أداة تصحيح لغوي في Orlixor.",
+      "مهمتك تصحيح النص فقط.",
+      "لا تغيّر المعنى الأساسي.",
+      "لا تضف شرحًا خارج النص المصحح.",
+      "إذا كان النص صحيحًا لغويًا ولا يحتاج تعديلًا، أعد العبارة التالية فقط: النص صحيح لغويًا ✅",
+      "لا تذكر أسماء مزودي الخدمة أو النماذج التقنية."
+    ].join("\n")
+  };
+}
+
+function buildCorrectionPrompt({ text, type, level, keepStyle }) {
+  const typeKey = normalizeCorrectionType(type);
+  const levelKey = normalizeCorrectionLevel(level);
+  return [
+    { role: "system", content: getCorrectionProfile(null, levelKey).systemPrompt },
+    {
+      role: "user",
+      content: [
+        `نوع التصحيح: ${CORRECTION_TYPES[typeKey].prompt}`,
+        `مستوى التصحيح: ${CORRECTION_LEVELS[levelKey].prompt}`,
+        keepStyle ? "حافظ على أسلوب الكاتب وترتيب الفقرات قدر الإمكان." : "يمكنك تحسين الأسلوب بوضوح مع الحفاظ على المعنى.",
+        "النص:",
+        String(text || "").trim()
+      ].join("\n\n")
+    }
+  ];
+}
+
 const EXPAND_LEVELS = Object.freeze({
   light: {
     label: "توسيع خفيف",
@@ -3232,6 +3318,86 @@ async function handleToneTool(req, res) {
   });
 }
 
+async function handleCorrectTextTool(req, res) {
+  const payload = await parseJsonBody(req);
+  const text = requireTextField(payload.text || payload.input_text || payload.inputText, "text", 5000);
+  const type = normalizeCorrectionType(payload.type || payload.correctionType || payload.correction_type);
+  const level = normalizeCorrectionLevel(payload.level || payload.correctionLevel || payload.correction_level);
+  const keepStyle = payload.keepStyle !== false && payload.keep_style !== false;
+  const auth = await getAuthContext(req);
+  const activeUser = auth?.user ? await syncUserDailyProgress(auth.user, "استخدم التصحيح اللغوي") : null;
+
+  if (!activeUser) {
+    throw createHttpError(401, "Authentication is required to correct text.");
+  }
+
+  if (text.trim().length < 5) {
+    throw createHttpError(422, "Text is too short.");
+  }
+
+  if (text.length > 5000) {
+    throw createHttpError(413, "Text is too long. Please shorten it.");
+  }
+
+  const xpCost = level === "strong" ? CORRECTION_STRONG_COST : CORRECTION_XP_COST;
+  const currentXp = Math.max(0, Number(activeUser.xp || 0));
+  if (currentXp < xpCost) {
+    throw createHttpError(402, `Insufficient XP balance. Text correction needs ${xpCost} XP.`);
+  }
+
+  const profile = getCorrectionProfile(activeUser, level);
+  const result = await callOpenAI({
+    modelProfile: profile,
+    input: buildResponsesInput(buildCorrectionPrompt({ text, type, level, keepStyle }))
+  });
+  const output = sanitizeModelDisplayText(result.text);
+
+  if (!output) {
+    throw createHttpError(502, "Text correction returned an empty response.");
+  }
+
+  const chargedUser = await chargeUserForMessage(
+    activeUser,
+    xpCost,
+    `استخدم التصحيح اللغوي (${CORRECTION_TYPES[type].label})`
+  );
+
+  if (isDatabaseReady() && typeof databaseClient.saveToolUsage === "function") {
+    await databaseClient.saveToolUsage({
+      user_id: activeUser.id,
+      tool_key: "writing_assistant",
+      task_type: "correction",
+      input_text: text,
+      output_text: output,
+      xp_cost: xpCost,
+      input_tokens: Number(result.usage?.input_tokens || result.usage?.prompt_tokens || 0),
+      output_tokens: Number(result.usage?.output_tokens || result.usage?.completion_tokens || 0),
+      metadata: {
+        type,
+        type_label: CORRECTION_TYPES[type].label,
+        level,
+        level_label: CORRECTION_LEVELS[level].label,
+        keep_style: keepStyle
+      }
+    });
+  }
+
+  sendJson(req, res, 200, {
+    success: true,
+    data: {
+      output,
+      type,
+      level,
+      keep_style: keepStyle,
+      task_type: "correction",
+      tool: "text_corrector",
+      xp_spent: xpCost,
+      xp_remaining: Math.max(0, Number(chargedUser?.xp || activeUser.xp || 0)),
+      user: chargedUser ? buildApiUser(chargedUser) : buildApiUser(activeUser)
+    }
+  });
+}
+
 async function handleExpandTextTool(req, res) {
   const payload = await parseJsonBody(req);
   const text = requireTextField(payload.text || payload.input_text || payload.inputText, "text", 3500);
@@ -3912,6 +4078,11 @@ async function routeRequest(req, res) {
 
   if (req.method === "POST" && requestPath === "/api/tools/tone") {
     await handleToneTool(req, res);
+    return;
+  }
+
+  if (req.method === "POST" && requestPath === "/api/tools/correct-text") {
+    await handleCorrectTextTool(req, res);
     return;
   }
 

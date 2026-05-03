@@ -910,6 +910,13 @@
     });
   }
 
+  async function correctText(payload) {
+    return request("/tools/correct-text", {
+      method: "POST",
+      body: payload
+    });
+  }
+
   async function expandText(payload) {
     return request("/tools/expand-text", {
       method: "POST",
@@ -1027,6 +1034,7 @@
     smartSearch,
     runWritingAssistant,
     changeTone,
+    correctText,
     expandText,
     summarizeText,
     getHealth,

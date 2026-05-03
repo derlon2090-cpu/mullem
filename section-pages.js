@@ -439,6 +439,10 @@
       toneText: "",
       toneTarget: "formal",
       toneLevel: "balanced",
+      correctionText: "",
+      correctionType: "full",
+      correctionLevel: "balanced",
+      correctionKeepStyle: true,
       expandText: "",
       expandLevel: "medium",
       expandFocus: "details",
@@ -2399,6 +2403,179 @@
     `;
   }
 
+  function renderCorrectionAssistantMain(profile, writing, tasks, activeTask) {
+    const correctionTypes = [
+      ["full", "النحوي والإملائي", "تصحيح كامل للنص", icons.notes],
+      ["grammar", "النحوي فقط", "تدقيق تركيب الجمل", icons.document],
+      ["spelling", "الإملائي فقط", "تصحيح الكلمات والترقيم", icons.tests]
+    ];
+    const levelOptions = [
+      ["balanced", "متوسط (موصى به)"],
+      ["light", "بسيط"],
+      ["strong", "قوي"]
+    ];
+    const styleOptions = [
+      ["keep", "الحفاظ على الأسلوب"],
+      ["improve", "تحسين الأسلوب"]
+    ];
+    const examples = [
+      "تصحيح مقال",
+      "تصحيح رسالة",
+      "تدقيق تقرير",
+      "تصحيح بحث",
+      "مراجعة محتوى"
+    ];
+    const output = coerceDisplayText(writing.result?.output || "");
+    const textLength = String(writing.correctionText || "").length;
+    const xpCost = writing.correctionLevel === "strong" ? 7 : 5;
+    const keepStyleValue = writing.correctionKeepStyle === false ? "improve" : "keep";
+
+    return `
+      <section class="guest-main tools-main writing-main tone-main correction-main" aria-label="تصحيح لغوي">
+        <header class="guest-main-topbar tools-main-topbar">
+          ${renderModelSwitcher()}
+          ${renderHomeTopActions()}
+        </header>
+
+        <div class="writing-page tone-page correction-page">
+          <button class="writing-back tone-back" type="button" data-tools-back>
+            <span aria-hidden="true">←</span>
+            <span>العودة إلى الأدوات</span>
+          </button>
+
+          <header class="writing-hero tone-hero">
+            <div class="writing-title tone-title">
+              <h1>مساعد الكتابة</h1>
+              <span aria-hidden="true">${icons.edit}</span>
+            </div>
+            <p>اكتب وحسّن نصوصك باحترافية وجودة عالية</p>
+          </header>
+
+          <div class="writing-task-tabs tone-task-tabs correction-task-tabs" role="list" aria-label="أنواع الكتابة">
+            ${tasks.map(([key, title, description, icon]) => `
+              <button class="writing-task-card ${activeTask === key ? "is-active" : ""}" type="button" data-writing-task="${escapeHtml(key)}">
+                <span aria-hidden="true">${icon}</span>
+                <strong>${escapeHtml(title)}</strong>
+                <small>${escapeHtml(description)}</small>
+              </button>
+            `).join("")}
+          </div>
+
+          <section class="tone-layout correction-layout">
+            <aside class="tone-settings-card correction-settings-card">
+              <h2>إعدادات التصحيح اللغوي</h2>
+
+              <p>نوع التصحيح</p>
+              <div class="correction-type-grid" role="list" aria-label="نوع التصحيح">
+                ${correctionTypes.map(([key, label, hint, icon]) => `
+                  <button class="correction-choice ${writing.correctionType === key ? "is-active" : ""}" type="button" data-correction-type="${escapeHtml(key)}">
+                    <span class="correction-choice-icon" aria-hidden="true">${icon}</span>
+                    <strong>${escapeHtml(label)}</strong>
+                    <small>${escapeHtml(hint)}</small>
+                    <i aria-hidden="true">${writing.correctionType === key ? "●" : ""}</i>
+                  </button>
+                `).join("")}
+              </div>
+
+              <label class="tone-level correction-level">
+                <span>${icons.tests}<b>مستوى التدقيق</b></span>
+                <select data-correction-field="level">
+                  ${levelOptions.map(([key, label]) => `
+                    <option value="${escapeHtml(key)}" ${writing.correctionLevel === key ? "selected" : ""}>${escapeHtml(label)}</option>
+                  `).join("")}
+                </select>
+                <small>دقيق ومتوازن بين التصحيح والتنسيق</small>
+              </label>
+
+              <label class="tone-level correction-level">
+                <span>${icons.internet}<b>أسلوب النص</b></span>
+                <select data-correction-field="style">
+                  ${styleOptions.map(([key, label]) => `
+                    <option value="${escapeHtml(key)}" ${keepStyleValue === key ? "selected" : ""}>${escapeHtml(label)}</option>
+                  `).join("")}
+                </select>
+                <small>اختر هل تريد الحفاظ على الأسلوب أو تحسينه</small>
+              </label>
+
+              <label class="correction-toggle">
+                <input type="checkbox" data-correction-field="keepStyle" ${writing.correctionKeepStyle === false ? "" : "checked"}>
+                <span aria-hidden="true"></span>
+                <b>الحفاظ على التنسيق</b>
+                <small>الحفاظ على العناوين والقوائم والنقاط</small>
+              </label>
+
+              <button class="tone-submit correction-submit ${isAuthenticated() ? "" : "requires-auth"}" type="submit" form="correctionTextForm" ${writing.loading ? "disabled" : ""}>
+                ${writing.loading ? "جاري التصحيح..." : "تصحيح النص"}
+                ${icons.sparkle}
+              </button>
+              <small class="tone-cost">تكلفة العملية: ${escapeHtml(String(xpCost))} XP</small>
+            </aside>
+
+            <form class="tone-editor-card correction-editor-card" id="correctionTextForm" data-correction-form>
+              <section class="tone-text-panel correction-text-panel">
+                <header>
+                  <div>
+                    <h2>النص الأصلي</h2>
+                    <p>ادخل النص الذي تريد تصحيحه</p>
+                  </div>
+                  ${icons.document}
+                </header>
+                <textarea
+                  maxlength="5000"
+                  data-correction-field="text"
+                  placeholder="الصق النص الذي تريد تدقيقه هنا..."
+                >${escapeHtml(writing.correctionText || "")}</textarea>
+                <small>${escapeHtml(String(textLength))}/5000</small>
+              </section>
+
+              <div class="tone-divider" aria-hidden="true">↓</div>
+
+              <section class="tone-text-panel tone-output-panel correction-output-panel">
+                <header>
+                  <div>
+                    <h2>النص بعد التصحيح</h2>
+                    <p>النص المصحح والمحسن</p>
+                  </div>
+                  ${icons.ai}
+                </header>
+                <div class="tone-output-box correction-output-box ${output ? "" : "is-empty"}">${output ? formatSmartSearchAnswer(output) : "<p>سيظهر النص المصحح هنا.</p>"}</div>
+                <small>${escapeHtml(String(output.length))}/5000</small>
+              </section>
+
+              <div class="tone-result-actions correction-result-actions">
+                <button type="button" data-copy-correction-result ${output ? "" : "disabled"}>${icons.copy}<span>نسخ النص</span></button>
+                <button type="button" data-download-correction-result ${output ? "" : "disabled"}><span aria-hidden="true">↓</span><span>تنزيل</span></button>
+                <button type="button" data-retry-correction ${output ? "" : "disabled"}>${icons.refresh}<span>إعادة المحاولة</span></button>
+              </div>
+            </form>
+          </section>
+
+          ${writing.error ? `
+            <section class="writing-result is-error tone-error">
+              <strong>تعذر تصحيح النص</strong>
+              <p>${escapeHtml(writing.error)}</p>
+            </section>
+          ` : ""}
+
+          <section class="tone-examples correction-examples">
+            <header>
+              <h2>أمثلة سريعة</h2>
+              ${icons.bolt}
+            </header>
+            <div>
+              ${examples.map((item) => `
+                <button type="button" data-correction-example="${escapeHtml(item)}">
+                  <span>${escapeHtml(item)}</span>
+                  ${icons.document}
+                </button>
+              `).join("")}
+            </div>
+          </section>
+        </div>
+      </section>
+    `;
+  }
+
   function renderExpandAssistantMain(profile, writing, tasks, activeTask) {
     const levelOptions = [
       ["light", "خفيف", "توسيع خفيف"],
@@ -2746,6 +2923,9 @@
     }
     if (activeTask === "summarize") {
       return renderSummarizeAssistantMain(profile, writing, tasks, activeTask);
+    }
+    if (activeTask === "rewrite") {
+      return renderCorrectionAssistantMain(profile, writing, tasks, activeTask);
     }
     const selectOptions = {
       contentType: ["مقال", "منشور", "رسالة", "إعلان", "ملخص", "سكربت"],
@@ -3880,6 +4060,83 @@
     }
   }
 
+  async function submitCorrectionTextTool() {
+    const textField = app.querySelector('[data-correction-field="text"]');
+    const levelField = app.querySelector('[data-correction-field="level"]');
+    const styleField = app.querySelector('[data-correction-field="style"]');
+    const keepStyleField = app.querySelector('[data-correction-field="keepStyle"]');
+    const text = String(textField?.value || state.writingAssistant.correctionText || "").trim();
+    const type = String(state.writingAssistant.correctionType || "full");
+    const level = String(levelField?.value || state.writingAssistant.correctionLevel || "balanced");
+    const style = String(styleField?.value || (state.writingAssistant.correctionKeepStyle === false ? "improve" : "keep"));
+    const keepStyle = keepStyleField ? Boolean(keepStyleField.checked) : style !== "improve";
+
+    if (text.length < 5) {
+      state.writingAssistant.error = "النص قصير جدًا. اكتب جملة أو فقرة لتصحيحها.";
+      render();
+      return;
+    }
+
+    if (!isAuthenticated()) {
+      state.writingAssistant = {
+        ...state.writingAssistant,
+        correctionText: text,
+        correctionType: type,
+        correctionLevel: level,
+        correctionKeepStyle: keepStyle
+      };
+      openAuthModal("سجّل دخولك لاستخدام التصحيح اللغوي وحفظ النتيجة في حسابك.");
+      return;
+    }
+
+    const apiClient = getApiClient();
+    if (!apiClient?.correctText) {
+      state.writingAssistant.error = "خدمة التصحيح اللغوي غير جاهزة الآن.";
+      render();
+      return;
+    }
+
+    state.writingAssistant = {
+      ...state.writingAssistant,
+      correctionText: text,
+      correctionType: type,
+      correctionLevel: level,
+      correctionKeepStyle: keepStyle,
+      loading: true,
+      error: "",
+      result: null
+    };
+    render();
+
+    try {
+      const result = await apiClient.correctText({
+        text,
+        type,
+        level,
+        keepStyle
+      });
+      const data = result?.data || result || {};
+      const nextUser = data.user || result?.user;
+      if (nextUser) {
+        setSessionUser(nextUser);
+      }
+      state.writingAssistant = {
+        ...state.writingAssistant,
+        loading: false,
+        result: data,
+        error: ""
+      };
+      render();
+    } catch (error) {
+      state.writingAssistant = {
+        ...state.writingAssistant,
+        loading: false,
+        error: error?.message || "تعذر تصحيح النص الآن."
+      };
+      render();
+    }
+  }
+
   async function submitExpandTextTool() {
     const textField = app.querySelector('[data-expand-field="text"]');
     const levelField = app.querySelector('[data-expand-field="level"]');
@@ -4531,6 +4788,67 @@
         return;
       }
 
+      const correctionType = event.target.closest("[data-correction-type]");
+      if (correctionType) {
+        state.writingAssistant.correctionType = correctionType.getAttribute("data-correction-type") || "full";
+        state.writingAssistant.error = "";
+        render();
+        return;
+      }
+
+      const correctionExample = event.target.closest("[data-correction-example]");
+      if (correctionExample) {
+        const exampleLabel = correctionExample.getAttribute("data-correction-example") || "";
+        const examples = {
+          "تصحيح مقال": "يعد الذكاء الاصطناعي من التقنيات الحديثه التي تغير عالمنا بسرعه كبيره. حيث يساعد في تحسين العمليات وزياده الكفاءه وتقليل التكاليف.",
+          "تصحيح رسالة": "السلام عليكم، نود ابلاغكم انه تم استلام طلبكم وسيتم مراجعته في اقرب وقت ممكن وشكرا لكم.",
+          "تدقيق تقرير": "يوضح التقرير ان الفريق انجز المرحلة الاولى بنجاح، لكن يوجد بعض الملاحظات التي تحتاج الى مراجعة قبل التسليم النهائي.",
+          "تصحيح بحث": "تواجه هذه التقنيات العديد من التحديات مثل خصوصية البيانات وامانها ومستقبل الوظائف.",
+          "مراجعة محتوى": "منصتنا تساعد المستخدمين على كتابة محتوى افضل وتنظيم افكارهم بشكل اسرع وادق."
+        };
+        state.writingAssistant.correctionText = examples[exampleLabel] || exampleLabel;
+        state.writingAssistant.error = "";
+        render();
+        return;
+      }
+
+      if (event.target.closest("[data-copy-correction-result]")) {
+        const text = coerceDisplayText(state.writingAssistant.result?.output || "");
+        if (!text) {
+          showToast("لا يوجد نص مصحح جاهز للنسخ.");
+          return;
+        }
+        navigator.clipboard?.writeText(text).then(() => {
+          showToast("تم نسخ النص.");
+        }).catch(() => {
+          showToast("تعذر نسخ النص الآن.");
+        });
+        return;
+      }
+
+      if (event.target.closest("[data-download-correction-result]")) {
+        const text = coerceDisplayText(state.writingAssistant.result?.output || "");
+        if (!text) {
+          showToast("لا يوجد نص مصحح جاهز للتنزيل.");
+          return;
+        }
+        const blob = new Blob([text], { type: "text/plain;charset=utf-8" });
+        const link = document.createElement("a");
+        link.href = URL.createObjectURL(blob);
+        link.download = "orlixor-corrected-text.txt";
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        setTimeout(() => URL.revokeObjectURL(link.href), 500);
+        showToast("تم تجهيز ملف النص.");
+        return;
+      }
+
+      if (event.target.closest("[data-retry-correction]")) {
+        submitCorrectionTextTool();
+        return;
+      }
+
       const expandFocus = event.target.closest("[data-expand-focus]");
       if (expandFocus) {
         state.writingAssistant.expandFocus = expandFocus.getAttribute("data-expand-focus") || "details";
@@ -4764,6 +5082,12 @@
         state.writingAssistant.error = "";
       }
 
+      const correctionField = event.target.closest("[data-correction-field]");
+      if (correctionField && correctionField.getAttribute("data-correction-field") === "text") {
+        state.writingAssistant.correctionText = correctionField.value;
+        state.writingAssistant.error = "";
+      }
+
       const expandField = event.target.closest("[data-expand-field]");
       if (expandField && expandField.getAttribute("data-expand-field") === "text") {
         state.writingAssistant.expandText = expandField.value;
@@ -4805,6 +5129,29 @@
         state.writingAssistant.toneLevel = toneField.value;
         state.writingAssistant.error = "";
         return;
+      }
+
+      const correctionField = event.target.closest("[data-correction-field]");
+      if (correctionField) {
+        const key = correctionField.getAttribute("data-correction-field");
+        if (key === "level") {
+          state.writingAssistant.correctionLevel = correctionField.value;
+          state.writingAssistant.error = "";
+          render();
+          return;
+        }
+        if (key === "style") {
+          state.writingAssistant.correctionKeepStyle = correctionField.value !== "improve";
+          state.writingAssistant.error = "";
+          render();
+          return;
+        }
+        if (key === "keepStyle") {
+          state.writingAssistant.correctionKeepStyle = Boolean(correctionField.checked);
+          state.writingAssistant.error = "";
+          render();
+          return;
+        }
       }
 
       const expandField = event.target.closest("[data-expand-field]");
@@ -4923,6 +5270,13 @@
       if (toneForm) {
         event.preventDefault();
         submitToneTool();
+        return;
+      }
+
+      const correctionForm = event.target.closest("[data-correction-form]");
+      if (correctionForm) {
+        event.preventDefault();
+        submitCorrectionTextTool();
         return;
       }
 
