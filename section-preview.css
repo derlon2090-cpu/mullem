@@ -5894,6 +5894,302 @@ body[data-workspace-mode="home"] .guest-root {
   margin-top: 24px;
 }
 
+.style-main > .tools-main-topbar {
+  display: none;
+}
+
+.style-page {
+  width: min(100%, 1320px);
+  padding-top: 2px;
+}
+
+.style-page .tone-back {
+  margin-bottom: 0;
+  color: #6b4cff;
+  font-size: 0.82rem;
+  font-weight: 950;
+}
+
+.style-page .tone-hero {
+  margin: -4px 0 24px;
+}
+
+.style-page .tone-title {
+  gap: 12px;
+}
+
+.style-page .tone-title h1 {
+  font-size: clamp(1.55rem, 2vw, 2.05rem);
+  letter-spacing: -0.035em;
+}
+
+.style-page .tone-title > span {
+  width: 46px;
+  height: 46px;
+  border-radius: 15px;
+  background: linear-gradient(145deg, rgba(111, 76, 255, 0.16), rgba(111, 76, 255, 0.07));
+}
+
+.style-page .tone-hero p {
+  margin-top: 8px;
+  color: #9aa1b8;
+  font-size: 0.9rem;
+}
+
+.style-page .correction-task-tabs {
+  gap: 14px;
+  margin-bottom: 22px;
+}
+
+.style-page .writing-task-card {
+  min-height: 78px;
+  border-radius: 16px;
+  padding: 13px 16px;
+  grid-template-columns: 34px minmax(0, 1fr);
+  background: rgba(255, 255, 255, 0.96);
+  box-shadow: 0 18px 40px rgba(22, 30, 68, 0.035);
+}
+
+.style-page .writing-task-card span {
+  width: 34px;
+  height: 34px;
+  border-radius: 12px;
+}
+
+.style-page .writing-task-card strong {
+  font-size: 0.84rem;
+}
+
+.style-page .writing-task-card small {
+  font-size: 0.69rem;
+}
+
+.style-page .writing-task-card.is-active {
+  border-color: rgba(111, 76, 255, 0.64);
+  background: linear-gradient(145deg, rgba(111, 76, 255, 0.075), rgba(255, 255, 255, 0.98));
+}
+
+.style-layout {
+  grid-template-columns: 420px minmax(0, 1fr);
+  gap: 18px;
+  align-items: stretch;
+}
+
+.style-settings-card,
+.style-editor-card,
+.style-examples {
+  border-radius: 18px;
+  border-color: rgba(111, 76, 255, 0.12);
+  box-shadow: 0 18px 42px rgba(22, 30, 68, 0.035);
+}
+
+.style-settings-card {
+  min-height: 0;
+  padding: 24px 24px 20px;
+}
+
+.style-settings-card h2 {
+  margin-bottom: 22px;
+  font-size: 1.03rem;
+}
+
+.style-settings-card > p:not(.summary-option-title) {
+  margin-bottom: 12px;
+  text-align: center;
+}
+
+.style-goal-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  margin-bottom: 18px;
+}
+
+.style-choice {
+  min-height: 72px;
+  border-radius: 13px;
+  grid-template-columns: 30px minmax(0, 1fr) 18px;
+  padding: 10px 9px;
+}
+
+.style-choice .correction-choice-icon {
+  width: 30px;
+  height: 30px;
+  border-radius: 11px;
+}
+
+.style-choice strong {
+  font-size: 0.72rem;
+}
+
+.style-choice small {
+  font-size: 0.58rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.style-choice i,
+.style-level-grid .summary-choice i {
+  font-size: 0;
+}
+
+.style-choice.is-active,
+.style-level-grid .summary-choice.is-active {
+  background: linear-gradient(145deg, rgba(111, 76, 255, 0.095), rgba(255, 255, 255, 0.98));
+}
+
+.style-level-grid {
+  gap: 10px;
+  margin-bottom: 18px;
+}
+
+.style-level-grid .summary-choice {
+  min-height: 68px;
+  border-radius: 13px;
+  padding: 10px 12px;
+}
+
+.style-level-grid .summary-choice strong {
+  font-size: 0.82rem;
+}
+
+.style-level-grid .summary-choice small {
+  font-size: 0.68rem;
+}
+
+.style-page .tone-level {
+  margin-top: 0;
+}
+
+.style-page .tone-level select {
+  height: 44px;
+  border-radius: 13px;
+}
+
+.style-page .correction-toggle {
+  min-height: 70px;
+  margin-top: 16px;
+  display: grid;
+  grid-template-columns: 48px 1fr;
+  grid-template-rows: auto auto;
+  align-items: center;
+}
+
+.style-page .correction-toggle input {
+  grid-row: 1 / span 2;
+}
+
+.style-page .correction-toggle span {
+  display: none;
+}
+
+.style-page .correction-toggle b,
+.style-page .correction-toggle small {
+  text-align: right;
+}
+
+.style-page .correction-submit {
+  height: 48px;
+  margin-top: 14px;
+  border-radius: 13px;
+  font-size: 0.9rem;
+}
+
+.style-page .tone-cost {
+  margin-top: 14px;
+}
+
+.style-editor-card {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.style-text-panel {
+  padding: 24px 26px 18px;
+}
+
+.style-output-panel {
+  padding-top: 22px;
+}
+
+.style-text-panel header {
+  margin-bottom: 14px;
+}
+
+.style-text-panel h2 {
+  font-size: 0.98rem;
+}
+
+.style-text-panel p {
+  font-size: 0.76rem;
+}
+
+.style-page .tone-text-panel textarea,
+.style-page .tone-output-box {
+  min-height: 138px;
+  border-radius: 13px;
+  padding: 20px 22px;
+  font-size: 0.94rem;
+  font-weight: 850;
+  line-height: 1.9;
+}
+
+.style-page .tone-output-box {
+  min-height: 142px;
+}
+
+.style-output-box:not(.is-empty) {
+  border-color: rgba(111, 76, 255, 0.36);
+  background: linear-gradient(145deg, rgba(111, 76, 255, 0.08), rgba(255, 255, 255, 0.98));
+}
+
+.style-page .tone-divider {
+  margin-top: 0;
+}
+
+.style-result-actions {
+  width: min(100%, 520px);
+  padding: 0 26px 22px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.style-result-actions button {
+  min-height: 42px;
+  border-radius: 12px;
+}
+
+.style-examples {
+  position: relative;
+  margin-top: 20px;
+  padding: 18px 22px;
+}
+
+.style-examples header {
+  margin-bottom: 14px;
+}
+
+.style-examples header::after {
+  content: "عرض الكل";
+  position: absolute;
+  inset-inline-end: 22px;
+  color: #6b4cff;
+  font-size: 0.78rem;
+  font-weight: 950;
+}
+
+.style-examples > div {
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.style-examples button {
+  min-height: 52px;
+  border-radius: 13px;
+  padding-inline: 18px;
+  background: linear-gradient(145deg, rgba(250, 249, 255, 0.96), rgba(255, 255, 255, 0.94));
+}
+
 .guest-rail-btn {
   width: 48px;
   height: 48px;
@@ -6089,6 +6385,14 @@ body[data-workspace-mode="home"] .guest-root {
     grid-template-columns: 1fr;
   }
 
+  .style-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .style-page .writing-task-card {
+    flex-basis: 180px;
+  }
+
   .tone-examples > div {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
@@ -6130,6 +6434,12 @@ body[data-workspace-mode="home"] .guest-root {
   .summary-type-grid,
   .summary-length-grid,
   .tone-result-actions {
+    grid-template-columns: 1fr;
+  }
+
+  .style-goal-grid,
+  .style-level-grid,
+  .style-examples > div {
     grid-template-columns: 1fr;
   }
 

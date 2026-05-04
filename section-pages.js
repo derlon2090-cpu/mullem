@@ -2914,8 +2914,9 @@
       ["clarity", "وضوح النص", "إزالة الغموض والتكرار", icons.ai],
       ["professional", "احترافية أعلى", "أسلوب مناسب للأعمال", icons.projects || icons.settings],
       ["persuasive", "جاذبية وإقناع", "نص أقوى وأكثر تأثيرًا", icons.bolt],
-      ["organized", "تنظيم أفضل", "ترتيب الأفكار بوضوح", icons.notes],
-      ["smooth", "بساطة وسلاسة", "صياغة مريحة للقارئ", icons.ai]
+      ["smooth", "بساطة وسلاسة", "صياغة مريحة للقارئ", icons.ai],
+      ["impact", "قوة وتأثير", "نبرة أقوى وأكثر حضورًا", icons.bolt],
+      ["organized", "تنظيم أفضل", "ترتيب الأفكار بوضوح", icons.notes]
     ];
     const styleLevels = [
       ["light", "خفيف", "تحسين بسيط"],
