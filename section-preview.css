@@ -6329,6 +6329,89 @@ body[data-workspace-mode="home"] .guest-root {
   font-size: 0.56rem;
 }
 
+/* Style assistant cards need a wider text lane like the reference mockup. */
+.style-goal-grid .style-choice {
+  position: relative;
+  display: block;
+  min-height: 78px;
+  padding: 14px 56px 12px 34px;
+  text-align: right;
+}
+
+.style-goal-grid .style-choice .correction-choice-icon {
+  position: absolute;
+  inset-block-start: 50%;
+  inset-inline-end: 13px;
+  transform: translateY(-50%);
+}
+
+.style-goal-grid .style-choice i {
+  position: absolute;
+  inset-block-start: 50%;
+  inset-inline-start: 13px;
+  transform: translateY(-50%);
+}
+
+.style-goal-grid .style-choice strong,
+.style-goal-grid .style-choice small {
+  display: block;
+  grid-column: auto;
+  grid-row: auto;
+  max-width: none;
+  overflow: visible;
+  text-align: right;
+  text-overflow: clip;
+  white-space: normal;
+}
+
+.style-goal-grid .style-choice strong {
+  margin-bottom: 4px;
+  font-size: 0.78rem;
+  line-height: 1.24;
+}
+
+.style-goal-grid .style-choice small {
+  font-size: 0.62rem;
+  line-height: 1.33;
+}
+
+.style-level-grid .summary-choice {
+  position: relative;
+  display: block;
+  min-height: 72px;
+  padding: 13px 18px 12px 36px;
+  text-align: right;
+}
+
+.style-level-grid .summary-choice i {
+  position: absolute;
+  inset-block-start: 17px;
+  inset-inline-start: 14px;
+}
+
+.style-level-grid .summary-choice strong,
+.style-level-grid .summary-choice small {
+  display: block;
+  grid-column: auto;
+  grid-row: auto;
+  max-width: none;
+  overflow: visible;
+  text-align: right;
+  text-overflow: clip;
+  white-space: normal;
+}
+
+.style-level-grid .summary-choice strong {
+  margin-bottom: 4px;
+  font-size: 0.86rem;
+  line-height: 1.25;
+}
+
+.style-level-grid .summary-choice small {
+  font-size: 0.68rem;
+  line-height: 1.3;
+}
+
 .guest-rail-btn {
   width: 48px;
   height: 48px;
