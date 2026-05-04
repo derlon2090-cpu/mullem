@@ -4289,10 +4289,23 @@
         level,
         keepStyle
       });
+
+      if (!result?.ok) {
+        throw new Error(result?.message || "تعذر تصحيح النص الآن.");
+      }
+
       const data = result?.data || result || {};
       const nextUser = data.user || result?.user;
       if (nextUser) {
-        setSessionUser(nextUser);
+        try {
+          const token = apiClient.getToken?.();
+          if (token) {
+            apiClient.setSession?.({ token, user: nextUser });
+          }
+          state.currentUser = persistEmbeddedUser(nextUser) || normalizeUser(nextUser) || state.currentUser;
+        } catch (sessionError) {
+          console.warn("XP UI update failed:", sessionError);
+        }
       }
       state.writingAssistant = {
         ...state.writingAssistant,
