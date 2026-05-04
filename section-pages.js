@@ -2103,7 +2103,6 @@
   }
 
   function renderToolsMain(profile) {
-    return renderWritingEditingToolsMain();
     const categories = ["الكل", "كتابة وتحرير", "تلخيص وتنظيم", "تحليل وبيانات", "إنتاجية", "تعليم وتعلم", "أدوات مجانية"];
     const tools = [
       {
@@ -2152,8 +2151,12 @@
 
     return `
       <section class="guest-main tools-main" aria-label="أدوات الذكاء الاصطناعي">
-        <header class="guest-main-topbar tools-main-topbar">
-          ${renderModelSwitcher()}
+        <header class="guest-main-topbar tools-main-topbar is-tools-index">
+          <button class="tools-back-chat tools-back-chat-inline" type="button" data-return-chat>
+            <span aria-hidden="true">←</span>
+            <b>العودة إلى الشات</b>
+            <i aria-hidden="true">${icons.chat}</i>
+          </button>
           ${renderHomeTopActions()}
         </header>
 

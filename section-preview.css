@@ -7450,3 +7450,167 @@ body[data-workspace-mode="home"] .guest-root {
     font-size: 1.2rem;
   }
 }
+
+/* Restore tools index and place the large model card on the chat interface only */
+.tools-main-topbar.is-tools-index {
+  direction: rtl;
+  width: min(100%, 1120px);
+  margin: 0 auto 16px;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.tools-main-topbar.is-tools-index .tools-back-chat {
+  position: static;
+  inset: auto;
+  min-height: 44px;
+  padding: 0 16px;
+  border-radius: 14px;
+  white-space: nowrap;
+}
+
+.tools-main-topbar.is-tools-index .home-top-actions {
+  direction: ltr;
+  margin-inline-start: auto;
+}
+
+.guest-shell.is-home-workspace .home-main-topbar .model-switcher-wrap {
+  width: clamp(320px, 34vw, 430px);
+  min-width: clamp(320px, 34vw, 430px);
+}
+
+.guest-shell.is-home-workspace .home-main-topbar .ai-switcher {
+  position: relative;
+  width: 100%;
+  min-height: 72px;
+  justify-content: flex-start;
+  gap: 18px;
+  padding: 0 22px;
+  border-radius: 22px;
+  overflow: hidden;
+  background: rgba(255, 255, 255, 0.94);
+  border: 1px solid rgba(118, 88, 255, 0.14);
+  box-shadow: 0 18px 42px rgba(32, 22, 86, 0.08);
+}
+
+.guest-shell.is-home-workspace .home-main-topbar .ai-switcher-mark {
+  width: 58px;
+  height: 58px;
+  flex: 0 0 58px;
+  border-radius: 50%;
+  background: linear-gradient(145deg, rgba(111, 76, 255, 0.16), rgba(111, 76, 255, 0.05));
+  box-shadow: inset 0 0 0 1px rgba(111, 76, 255, 0.08);
+}
+
+.guest-shell.is-home-workspace .home-main-topbar .ai-switcher-mark img {
+  width: 38px;
+  height: 38px;
+}
+
+.guest-shell.is-home-workspace .home-main-topbar .ai-switcher-divider {
+  display: inline-block;
+  width: 1px;
+  height: 44px;
+  flex: 0 0 1px;
+  background: linear-gradient(180deg, transparent, rgba(118, 88, 255, 0.22), transparent);
+}
+
+.guest-shell.is-home-workspace .home-main-topbar .ai-switcher-name {
+  position: relative;
+  z-index: 1;
+  color: #151936;
+  font-size: clamp(1.55rem, 2.1vw, 2rem);
+  font-weight: 950;
+  letter-spacing: -0.045em;
+  line-height: 1;
+}
+
+.guest-shell.is-home-workspace .home-main-topbar .ai-switcher-caret {
+  position: relative;
+  z-index: 1;
+  margin-inline-start: auto;
+  color: #161936;
+  font-style: normal;
+  font-size: 1.45rem;
+  font-weight: 950;
+}
+
+.guest-shell.is-home-workspace .home-main-topbar .ai-switcher-dots {
+  position: absolute;
+  inset-inline-end: 0;
+  top: 0;
+  width: 96px;
+  height: 100%;
+  opacity: 0.5;
+  pointer-events: none;
+  background-image: radial-gradient(circle, rgba(111, 76, 255, 0.44) 1.5px, transparent 1.7px);
+  background-size: 12px 12px;
+  mask-image: radial-gradient(circle at 100% 50%, #000 0 36%, transparent 72%);
+}
+
+.guest-shell.is-sidebar-collapsed {
+  grid-template-columns: 76px minmax(0, 1fr) 286px;
+}
+
+.guest-shell.is-home-workspace.is-sidebar-collapsed,
+.guest-shell.is-tools-workspace.is-sidebar-collapsed {
+  grid-template-columns: 76px minmax(0, 1fr);
+}
+
+.guest-shell.is-sidebar-collapsed .guest-sidebar {
+  width: 76px;
+  min-width: 76px;
+  max-width: 76px;
+  padding: 24px 8px 22px;
+  gap: 22px;
+}
+
+.guest-shell.is-sidebar-collapsed .guest-sidebar-head {
+  gap: 24px;
+}
+
+.guest-shell.is-sidebar-collapsed .guest-brand {
+  width: 48px;
+  height: 48px;
+}
+
+.guest-shell.is-sidebar-collapsed .guest-brand .guest-brand-mark {
+  width: 44px;
+  height: 44px;
+}
+
+.guest-shell.is-sidebar-collapsed .guest-sidebar-toggle,
+.guest-shell.is-sidebar-collapsed .guest-rail-btn {
+  width: 48px;
+  height: 48px;
+  border-radius: 15px;
+}
+
+.guest-shell.is-sidebar-collapsed .guest-new-chat,
+.guest-shell.is-sidebar-collapsed .guest-rail-btn.is-tools {
+  width: 56px;
+  height: 58px;
+  min-height: 58px;
+  border-radius: 17px;
+}
+
+.guest-shell.is-sidebar-collapsed .guest-collapsed-tools {
+  gap: 20px;
+}
+
+@media (max-width: 860px) {
+  .guest-shell.is-home-workspace .home-main-topbar .model-switcher-wrap {
+    width: min(100%, 390px);
+    min-width: 0;
+  }
+
+  .guest-shell.is-home-workspace .home-main-topbar .ai-switcher {
+    min-height: 64px;
+    border-radius: 20px;
+  }
+
+  .tools-main-topbar.is-tools-index {
+    flex-direction: row;
+    align-items: center;
+  }
+}
