@@ -1139,10 +1139,10 @@ async function issueAuthToken(user, deviceName = "mullem-web") {
   return rawToken;
 }
 
-async function ensureDefaultUsers() {
-  if (!isDatabaseReady()) return;
+async function ensureDefaultUsers(client = databaseClient) {
+  if (!client || typeof client.isReady !== "function" || !client.isReady()) return;
 
-  await databaseClient.ensureUserByEmail({
+  await client.ensureUserByEmail({
     name: DEFAULT_ADMIN_NAME,
     email: DEFAULT_ADMIN_EMAIL,
     password_hash: hashPassword(DEFAULT_ADMIN_PASSWORD),
@@ -1153,7 +1153,7 @@ async function ensureDefaultUsers() {
     activity: "حساب إدارة افتراضي"
   });
 
-  await databaseClient.ensureUserByEmail({
+  await client.ensureUserByEmail({
     name: DEFAULT_STUDENT_NAME,
     email: DEFAULT_STUDENT_EMAIL,
     password_hash: hashPassword(DEFAULT_STUDENT_PASSWORD),
@@ -1228,12 +1228,14 @@ async function requireAdminUser(req) {
 }
 
 async function initializeDatabaseLayer() {
+  let primaryClient = null;
+
   try {
     if (!ensureDatabaseRuntimeDependency()) {
       throw new Error("PostgreSQL runtime dependency is unavailable.");
     }
     const { createPostgresDatabaseClient } = require("./postgres-db");
-    databaseClient = createPostgresDatabaseClient({
+    primaryClient = createPostgresDatabaseClient({
       connectionString: DATABASE_URL,
       host: DB_HOST,
       port: DB_PORT,
@@ -1241,16 +1243,27 @@ async function initializeDatabaseLayer() {
       username: DB_USERNAME,
       password: DB_PASSWORD
     });
-    await databaseClient.initialize();
-    if (!databaseClient.isReady()) {
-      const postgresState = typeof databaseClient.getState === "function" ? databaseClient.getState() : null;
+    await primaryClient.initialize();
+    if (!primaryClient.isReady()) {
+      const postgresState = typeof primaryClient.getState === "function" ? primaryClient.getState() : null;
       throw new Error(
         postgresState?.message ||
         "Neon/PostgreSQL connection is not ready. Set DATABASE_URL or one of the supported Neon/Postgres environment variables."
       );
     }
-    await ensureDefaultUsers();
-    databaseState = databaseClient.getState();
+    databaseClient = primaryClient;
+    await ensureDefaultUsers(primaryClient);
+    databaseState = typeof primaryClient.getState === "function"
+      ? primaryClient.getState()
+      : {
+          configured: true,
+          connected: true,
+          driver: "postgres",
+          host: DB_HOST,
+          port: DB_PORT,
+          database: DB_DATABASE,
+          message: "PostgreSQL/Neon connected successfully."
+        };
   } catch (error) {
     console.error(`[mullem] primary database init warning: ${String(error?.message || error)}`);
     if (IS_CLOUD_RUNTIME) {
@@ -1267,11 +1280,12 @@ async function initializeDatabaseLayer() {
       return;
     }
     const { createFallbackDatabaseClient } = require("./fallback-db");
-    databaseClient = createFallbackDatabaseClient();
-    await databaseClient.initialize();
-    await ensureDefaultUsers();
+    const fallbackClient = createFallbackDatabaseClient();
+    await fallbackClient.initialize();
+    databaseClient = fallbackClient;
+    await ensureDefaultUsers(fallbackClient);
     databaseState = {
-      ...databaseClient.getState(),
+      ...fallbackClient.getState(),
       driver: "fallback-file",
       host: DB_HOST || "fallback",
       port: DB_PORT || 0,
@@ -4389,10 +4403,15 @@ async function routeRequest(req, res) {
 const server = http.createServer((req, res) => {
   routeRequest(req, res).catch((error) => {
     const statusCode = Number(error?.statusCode) || 500;
+    if (statusCode >= 500) {
+      console.error("[mullem] request failed", error);
+    }
     sendJson(req, res, statusCode, {
       success: false,
       code: statusCode >= 500 ? "server_error" : "request_error",
-      message: String(error?.message || "Internal server error")
+      message: statusCode >= 500
+        ? "تعذر تنفيذ الطلب الآن. أعد المحاولة بعد قليل."
+        : String(error?.message || "Internal server error")
     });
   });
 });

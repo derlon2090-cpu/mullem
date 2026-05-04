@@ -151,6 +151,9 @@
       if (/static hosting detected/i.test(message)) {
         return "تعذر الوصول إلى خادم الموقع الآن. حدّث الصفحة أو أعد المحاولة بعد قليل.";
       }
+      if (/getState|cannot read propert/i.test(message)) {
+        return "تعذر تثبيت جلسة تسجيل الدخول الآن. أعد المحاولة بعد قليل.";
+      }
       return message;
     }
 
