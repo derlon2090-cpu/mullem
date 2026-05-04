@@ -6190,6 +6190,84 @@ body[data-workspace-mode="home"] .guest-root {
   background: linear-gradient(145deg, rgba(250, 249, 255, 0.96), rgba(255, 255, 255, 0.94));
 }
 
+/* Keep compact writing-tool choices contained on narrow side panels. */
+.expand-focus-option,
+.summary-choice,
+.correction-choice,
+.style-choice {
+  box-sizing: border-box;
+  min-width: 0;
+  overflow: hidden;
+  direction: rtl;
+}
+
+.expand-focus-option > *,
+.summary-choice > *,
+.correction-choice > *,
+.style-choice > * {
+  min-width: 0;
+}
+
+.expand-focus-option strong,
+.expand-focus-option small,
+.summary-choice strong,
+.summary-choice small,
+.correction-choice strong,
+.correction-choice small,
+.style-choice strong,
+.style-choice small {
+  display: -webkit-box;
+  max-width: 100%;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+  text-align: right;
+  white-space: normal;
+  -webkit-box-orient: vertical;
+}
+
+.expand-focus-option strong,
+.summary-choice strong,
+.correction-choice strong,
+.style-choice strong {
+  line-height: 1.38;
+  -webkit-line-clamp: 2;
+}
+
+.expand-focus-option small,
+.summary-choice small,
+.correction-choice small,
+.style-choice small {
+  line-height: 1.45;
+  -webkit-line-clamp: 2;
+}
+
+.summary-type-grid .summary-choice,
+.summary-length-grid .summary-choice,
+.correction-type-grid .correction-choice,
+.style-goal-grid .style-choice,
+.style-level-grid .summary-choice,
+.expand-focus-grid .expand-focus-option {
+  align-content: center;
+}
+
+.summary-type-grid .summary-choice strong,
+.summary-length-grid .summary-choice strong,
+.correction-type-grid .correction-choice strong,
+.style-goal-grid .style-choice strong,
+.style-level-grid .summary-choice strong,
+.expand-focus-grid .expand-focus-option strong {
+  font-size: clamp(0.62rem, 0.78vw, 0.78rem);
+}
+
+.summary-type-grid .summary-choice small,
+.summary-length-grid .summary-choice small,
+.correction-type-grid .correction-choice small,
+.style-goal-grid .style-choice small,
+.style-level-grid .summary-choice small,
+.expand-focus-grid .expand-focus-option small {
+  font-size: clamp(0.54rem, 0.68vw, 0.66rem);
+}
+
 .guest-rail-btn {
   width: 48px;
   height: 48px;
