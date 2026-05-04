@@ -6190,7 +6190,7 @@ body[data-workspace-mode="home"] .guest-root {
   background: linear-gradient(145deg, rgba(250, 249, 255, 0.96), rgba(255, 255, 255, 0.94));
 }
 
-/* Keep compact writing-tool choices contained on narrow side panels. */
+/* Keep compact writing-tool choices readable without breaking Arabic words. */
 .expand-focus-option,
 .summary-choice,
 .correction-choice,
@@ -6216,29 +6216,33 @@ body[data-workspace-mode="home"] .guest-root {
 .correction-choice small,
 .style-choice strong,
 .style-choice small {
-  display: -webkit-box;
+  display: block;
   max-width: 100%;
   overflow: hidden;
-  overflow-wrap: anywhere;
+  overflow-wrap: normal;
   text-align: right;
   white-space: normal;
-  -webkit-box-orient: vertical;
+  word-break: keep-all;
 }
 
 .expand-focus-option strong,
 .summary-choice strong,
 .correction-choice strong,
 .style-choice strong {
-  line-height: 1.38;
-  -webkit-line-clamp: 2;
+  color: #172044;
+  font-size: 0.74rem;
+  font-weight: 950;
+  line-height: 1.42;
 }
 
 .expand-focus-option small,
 .summary-choice small,
 .correction-choice small,
 .style-choice small {
+  color: #9aa1b8;
+  font-size: 0.6rem;
+  font-weight: 850;
   line-height: 1.45;
-  -webkit-line-clamp: 2;
 }
 
 .summary-type-grid .summary-choice,
@@ -6250,22 +6254,31 @@ body[data-workspace-mode="home"] .guest-root {
   align-content: center;
 }
 
-.summary-type-grid .summary-choice strong,
 .summary-length-grid .summary-choice strong,
-.correction-type-grid .correction-choice strong,
-.style-goal-grid .style-choice strong,
-.style-level-grid .summary-choice strong,
-.expand-focus-grid .expand-focus-option strong {
-  font-size: clamp(0.62rem, 0.78vw, 0.78rem);
+.style-level-grid .summary-choice strong {
+  font-size: 0.82rem;
 }
 
-.summary-type-grid .summary-choice small,
 .summary-length-grid .summary-choice small,
-.correction-type-grid .correction-choice small,
+.style-level-grid .summary-choice small {
+  font-size: 0.66rem;
+}
+
+.style-goal-grid .style-choice {
+  min-height: 74px;
+  padding: 10px 11px;
+}
+
+.style-goal-grid .style-choice strong,
+.correction-type-grid .correction-choice strong,
+.summary-type-grid .summary-choice strong {
+  font-size: 0.7rem;
+}
+
 .style-goal-grid .style-choice small,
-.style-level-grid .summary-choice small,
-.expand-focus-grid .expand-focus-option small {
-  font-size: clamp(0.54rem, 0.68vw, 0.66rem);
+.correction-type-grid .correction-choice small,
+.summary-type-grid .summary-choice small {
+  font-size: 0.56rem;
 }
 
 .guest-rail-btn {
