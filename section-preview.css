@@ -7614,3 +7614,71 @@ body[data-workspace-mode="home"] .guest-root {
     align-items: center;
   }
 }
+
+/* Final scope: the large model switcher belongs to the chat home only. */
+.guest-shell:not(.is-home-workspace) .model-switcher-wrap,
+.guest-shell.is-tools-workspace .model-switcher-wrap,
+.guest-shell.is-home-workspace .guest-main-topbar:not(.home-main-topbar) .model-switcher-wrap {
+  display: none !important;
+}
+
+.guest-shell.is-home-workspace .home-main-topbar .model-switcher-wrap {
+  display: inline-flex !important;
+  width: clamp(248px, 28vw, 330px);
+  min-width: clamp(248px, 28vw, 330px);
+}
+
+.guest-shell.is-home-workspace .home-main-topbar .ai-switcher {
+  min-height: 54px;
+  gap: 12px;
+  padding: 0 14px;
+  border-radius: 17px;
+  box-shadow: 0 14px 34px rgba(32, 22, 86, 0.06);
+}
+
+.guest-shell.is-home-workspace .home-main-topbar .ai-switcher-mark {
+  width: 42px;
+  height: 42px;
+  flex: 0 0 42px;
+}
+
+.guest-shell.is-home-workspace .home-main-topbar .ai-switcher-mark img,
+.guest-shell.is-home-workspace .home-main-topbar .ai-switcher-mark svg {
+  width: 28px;
+  height: 28px;
+}
+
+.guest-shell.is-home-workspace .home-main-topbar .ai-switcher-divider {
+  height: 32px;
+}
+
+.guest-shell.is-home-workspace .home-main-topbar .ai-switcher-name {
+  font-size: clamp(1.12rem, 1.45vw, 1.38rem);
+  letter-spacing: -0.035em;
+}
+
+.guest-shell.is-home-workspace .home-main-topbar .ai-switcher-caret {
+  font-size: 1rem;
+}
+
+.guest-shell.is-home-workspace .home-main-topbar .ai-switcher-dots {
+  width: 68px;
+  opacity: 0.36;
+  background-size: 10px 10px;
+}
+
+@media (max-width: 760px) {
+  .guest-shell.is-home-workspace .home-main-topbar .model-switcher-wrap {
+    width: min(100%, 300px);
+    min-width: 0;
+  }
+
+  .guest-shell.is-home-workspace .home-main-topbar .ai-switcher {
+    min-height: 50px;
+    border-radius: 16px;
+  }
+
+  .guest-shell.is-home-workspace .home-main-topbar .ai-switcher-name {
+    font-size: 1.08rem;
+  }
+}
