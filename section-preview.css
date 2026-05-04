@@ -6208,6 +6208,54 @@ body[data-workspace-mode="home"] .guest-root {
   min-width: 0;
 }
 
+.expand-focus-option > span,
+.summary-choice-icon,
+.correction-choice-icon,
+.style-choice .correction-choice-icon {
+  grid-column: 1;
+  grid-row: 1 / span 2;
+}
+
+.expand-focus-option strong,
+.summary-choice strong,
+.correction-choice strong,
+.style-choice strong {
+  grid-column: 2;
+  grid-row: 1;
+}
+
+.expand-focus-option small,
+.summary-choice small,
+.correction-choice small,
+.style-choice small {
+  grid-column: 2;
+  grid-row: 2;
+}
+
+.expand-focus-option i,
+.summary-choice i,
+.correction-choice i,
+.style-choice i {
+  grid-column: 3;
+  grid-row: 1 / span 2;
+  justify-self: center;
+}
+
+.summary-length-choice strong,
+.style-level-grid .summary-choice strong {
+  grid-column: 1;
+}
+
+.summary-length-choice small,
+.style-level-grid .summary-choice small {
+  grid-column: 1;
+}
+
+.summary-length-choice i,
+.style-level-grid .summary-choice i {
+  grid-column: 2;
+}
+
 .expand-focus-option strong,
 .expand-focus-option small,
 .summary-choice strong,
