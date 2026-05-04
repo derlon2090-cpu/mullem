@@ -190,6 +190,7 @@ function hydrateUserRow(row) {
     plan_type: String(row.plan_type || row.package_key || row.package_name || "starter").trim() || "starter",
     last_reset: row.last_reset || row.last_active_date || null,
     last_daily_xp_claimed_date: row.last_daily_xp_claimed_date || row.last_reset || row.last_active_date || null,
+    last_daily_xp_granted_at: row.last_daily_xp_granted_at || null,
     signup_bonus_claimed: normalizeBoolean(row.signup_bonus_claimed)
   };
 }
@@ -209,7 +210,7 @@ function buildAssignments(changes = {}, mappings = {}) {
     } else if (key === "is_active" || key === "is_default" || key === "is_archived" || key === "signup_bonus_claimed") {
       sets.push(`${column} = $${values.length + 1}`);
       values.push(Boolean(changes[key]));
-    } else if (key === "package_started_at" || key === "package_expires_at") {
+    } else if (key === "package_started_at" || key === "package_expires_at" || key === "last_daily_xp_granted_at") {
       sets.push(`${column} = $${values.length + 1}`);
       values.push(toSqlDateTime(changes[key]));
     } else {
@@ -375,6 +376,7 @@ function createPostgresDatabaseClient(rawConfig = {}) {
         last_active_date DATE NULL,
         last_reset DATE NULL,
         last_daily_xp_claimed_date DATE NULL,
+        last_daily_xp_granted_at TIMESTAMPTZ NULL,
         signup_bonus_claimed BOOLEAN NOT NULL DEFAULT TRUE,
         achievements JSONB NULL,
         status VARCHAR(20) NOT NULL DEFAULT 'active',
@@ -395,6 +397,7 @@ function createPostgresDatabaseClient(rawConfig = {}) {
     await ensureColumn("app_users", "total_xp", "total_xp INTEGER NOT NULL DEFAULT 50");
     await ensureColumn("app_users", "last_reset", "last_reset DATE NULL");
     await ensureColumn("app_users", "last_daily_xp_claimed_date", "last_daily_xp_claimed_date DATE NULL");
+    await ensureColumn("app_users", "last_daily_xp_granted_at", "last_daily_xp_granted_at TIMESTAMPTZ NULL");
     await ensureColumn("app_users", "signup_bonus_claimed", "signup_bonus_claimed BOOLEAN NOT NULL DEFAULT TRUE");
     await ensureColumn("app_users", "motivation_score", "motivation_score INTEGER NOT NULL DEFAULT 0");
     await ensureColumn("app_packages", "duration_days", "duration_days INTEGER NOT NULL DEFAULT 0");
@@ -546,6 +549,18 @@ function createPostgresDatabaseClient(rawConfig = {}) {
     `);
     await pool.query("CREATE INDEX IF NOT EXISTS idx_tool_usage_user_created ON tool_usage (user_id, created_at DESC)");
     await pool.query("CREATE INDEX IF NOT EXISTS idx_tool_usage_tool_task ON tool_usage (tool_key, task_type)");
+
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS xp_ledger (
+        id BIGSERIAL PRIMARY KEY,
+        user_id BIGINT NOT NULL REFERENCES app_users(id) ON DELETE CASCADE,
+        amount INTEGER NOT NULL,
+        type VARCHAR(40) NOT NULL,
+        reason TEXT NULL,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )
+    `);
+    await pool.query("CREATE INDEX IF NOT EXISTS idx_xp_ledger_user_created ON xp_ledger (user_id, created_at DESC)");
 
     await pool.query(`
       CREATE TABLE IF NOT EXISTS app_api_tokens (
@@ -1079,6 +1094,27 @@ function createPostgresDatabaseClient(rawConfig = {}) {
     return rows[0] || null;
   }
 
+  async function recordXpLedger(payload = {}) {
+    const userId = Number(payload.user_id || payload.userId);
+    const amount = Math.round(Number(payload.amount || 0) || 0);
+    const type = String(payload.type || "").trim().toLowerCase().slice(0, 40);
+    if (!userId || !type || !amount) return null;
+    const rows = await query(
+      `
+        INSERT INTO xp_ledger (user_id, amount, type, reason)
+        VALUES ($1, $2, $3, $4)
+        RETURNING *
+      `,
+      [
+        userId,
+        amount,
+        type,
+        String(payload.reason || "").trim() || null
+      ]
+    );
+    return rows[0] || null;
+  }
+
   async function findPackageById(packageId) {
     const rows = await query("SELECT * FROM app_packages WHERE id = $1 LIMIT 1", [Number(packageId)]);
     return normalizePackageRow(rows[0] || null);
@@ -1307,6 +1343,7 @@ function createPostgresDatabaseClient(rawConfig = {}) {
       last_active_date: payload.last_active_date || null,
       last_reset: payload.last_reset || payload.last_active_date || null,
       last_daily_xp_claimed_date: payload.last_daily_xp_claimed_date || payload.last_reset || payload.last_active_date || null,
+      last_daily_xp_granted_at: payload.last_daily_xp_granted_at || null,
       signup_bonus_claimed: "signup_bonus_claimed" in payload ? normalizeBoolean(payload.signup_bonus_claimed) : true,
       achievements: JSON.stringify(normalizeAchievements(payload.achievements)),
       status: String(payload.status || "active").trim().toLowerCase() || "active",
@@ -1317,10 +1354,10 @@ function createPostgresDatabaseClient(rawConfig = {}) {
       `
         INSERT INTO app_users (
           name, email, password_hash, role, stage, grade, subject, package_id, package_name, plan_type, package_started_at, package_expires_at,
-          xp, total_xp, streak_days, motivation_score, last_active_date, last_reset, last_daily_xp_claimed_date, signup_bonus_claimed, achievements, status, activity
+          xp, total_xp, streak_days, motivation_score, last_active_date, last_reset, last_daily_xp_claimed_date, last_daily_xp_granted_at, signup_bonus_claimed, achievements, status, activity
         ) VALUES (
           $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12,
-          $13, $14, $15, $16, $17, $18, $19, $20, $21::jsonb, $22, $23
+          $13, $14, $15, $16, $17, $18, $19, $20, $21, $22::jsonb, $23, $24
         )
         RETURNING id
       `,
@@ -1344,6 +1381,7 @@ function createPostgresDatabaseClient(rawConfig = {}) {
         insertPayload.last_active_date,
         insertPayload.last_reset,
         insertPayload.last_daily_xp_claimed_date,
+        insertPayload.last_daily_xp_granted_at,
         insertPayload.signup_bonus_claimed,
         insertPayload.achievements,
         insertPayload.status,
@@ -1375,6 +1413,7 @@ function createPostgresDatabaseClient(rawConfig = {}) {
     if ("last_active_date" in nextChanges) nextChanges.last_active_date = nextChanges.last_active_date || null;
     if ("last_reset" in nextChanges) nextChanges.last_reset = nextChanges.last_reset || null;
     if ("last_daily_xp_claimed_date" in nextChanges) nextChanges.last_daily_xp_claimed_date = nextChanges.last_daily_xp_claimed_date || null;
+    if ("last_daily_xp_granted_at" in nextChanges) nextChanges.last_daily_xp_granted_at = nextChanges.last_daily_xp_granted_at || null;
     if ("signup_bonus_claimed" in nextChanges) nextChanges.signup_bonus_claimed = normalizeBoolean(nextChanges.signup_bonus_claimed);
     if ("xp" in nextChanges && !("total_xp" in nextChanges)) nextChanges.total_xp = nextChanges.xp;
     if ("total_xp" in nextChanges && !("xp" in nextChanges)) nextChanges.xp = nextChanges.total_xp;
@@ -1402,6 +1441,7 @@ function createPostgresDatabaseClient(rawConfig = {}) {
       last_active_date: "last_active_date",
       last_reset: "last_reset",
       last_daily_xp_claimed_date: "last_daily_xp_claimed_date",
+      last_daily_xp_granted_at: "last_daily_xp_granted_at",
       signup_bonus_claimed: "signup_bonus_claimed",
       achievements: "achievements",
       status: "status",
@@ -1738,6 +1778,7 @@ function createPostgresDatabaseClient(rawConfig = {}) {
     saveMessageEmbedding,
     saveFeedback,
     saveToolUsage,
+    recordXpLedger,
     findPackageById,
     findDefaultPackage,
     findPackageByKeyOrName,

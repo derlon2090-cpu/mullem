@@ -54,6 +54,7 @@ const OPENAI_MODEL_TONE = String(process.env.ORLIXOR_TONE_MODEL || process.env.O
 const OPENAI_MODEL_EXPAND = String(process.env.ORLIXOR_EXPAND_MODEL || process.env.OPENAI_MODEL_EXPAND || OPENAI_MODEL_WRITING || "gpt-4.1-mini").trim();
 const OPENAI_MODEL_SUMMARY = String(process.env.ORLIXOR_SUMMARY_MODEL || process.env.OPENAI_MODEL_SUMMARY || OPENAI_MODEL_WRITING || "gpt-4.1-mini").trim();
 const OPENAI_MODEL_CORRECTION = String(process.env.ORLIXOR_CORRECTION_MODEL || process.env.OPENAI_MODEL_CORRECTION || OPENAI_MODEL_WRITING || "gpt-4.1-mini").trim();
+const OPENAI_MODEL_STYLE = String(process.env.ORLIXOR_STYLE_MODEL || process.env.OPENAI_MODEL_STYLE || OPENAI_MODEL_WRITING || "gpt-4.1-mini").trim();
 const OPENAI_IMAGE_MODEL = String(process.env.OPENAI_IMAGE_MODEL || "dall-e-3").trim();
 const OPENAI_RESPONSES_ENDPOINT = String(process.env.OPENAI_RESPONSES_ENDPOINT || "https://api.openai.com/v1/responses").trim();
 const OPENAI_EMBEDDINGS_ENDPOINT = String(process.env.OPENAI_EMBEDDINGS_ENDPOINT || "https://api.openai.com/v1/embeddings").trim();
@@ -80,11 +81,14 @@ const SUMMARY_XP_COST = Math.max(1, Number(process.env.SUMMARY_XP_COST || proces
 const SUMMARY_LONG_XP_COST = Math.max(SUMMARY_XP_COST, Number(process.env.SUMMARY_LONG_XP_COST || 10));
 const CORRECTION_XP_COST = Math.max(1, Number(process.env.CORRECTION_XP_COST || process.env.WRITING_CORRECTION_XP_COST || 5));
 const CORRECTION_STRONG_COST = Math.max(CORRECTION_XP_COST, Number(process.env.CORRECTION_STRONG_COST || 7));
+const STYLE_XP_COST = Math.max(1, Number(process.env.STYLE_XP_COST || process.env.WRITING_STYLE_XP_COST || 5));
+const STYLE_DEEP_XP_COST = Math.max(STYLE_XP_COST, Number(process.env.STYLE_DEEP_XP_COST || 8));
 const WRITING_XP_COSTS = Object.freeze({
   rewrite: Math.max(1, Number(process.env.WRITING_REWRITE_XP_COST || 5)),
   tone: Math.max(1, Number(process.env.WRITING_TONE_XP_COST || 5)),
   summarize: Math.max(1, Number(process.env.WRITING_SUMMARIZE_XP_COST || 6)),
   expand: Math.max(1, Number(process.env.WRITING_EXPAND_XP_COST || 8)),
+  style: STYLE_XP_COST,
   generate: Math.max(1, Number(process.env.WRITING_GENERATE_XP_COST || 10)),
   longGenerate: Math.max(1, Number(process.env.WRITING_LONG_GENERATE_XP_COST || 15))
 });
@@ -750,6 +754,21 @@ function diffDays(fromStamp, toStamp) {
   return Math.round((to - from) / 86400000);
 }
 
+function parseTimestampMs(value) {
+  if (!value) return 0;
+  const date = value instanceof Date ? value : new Date(value);
+  const time = date.getTime();
+  return Number.isFinite(time) ? time : 0;
+}
+
+function canGrantDailyXp(lastGrantedAt, lastClaimDate, todayStamp) {
+  const lastGrantedMs = parseTimestampMs(lastGrantedAt);
+  if (lastGrantedMs) {
+    return Date.now() - lastGrantedMs >= 24 * 60 * 60 * 1000;
+  }
+  return String(lastClaimDate || "") !== String(todayStamp || "");
+}
+
 function addDays(date, days) {
   return new Date(date.getTime() + (Math.max(0, Number(days) || 0) * 86400000));
 }
@@ -793,7 +812,7 @@ async function ensureUserPackageLifecycle(user) {
     return user;
   }
 
-  return databaseClient.updateUser(user.id, {
+  const updatedUser = await databaseClient.updateUser(user.id, {
     package_id: defaultPackage.id,
     package_name: defaultPackage.display_name,
     plan_type: defaultPackage.package_key || "starter",
@@ -801,6 +820,7 @@ async function ensureUserPackageLifecycle(user) {
     package_expires_at: null,
     activity: `انتهت مدة باقة ${String(user.package_name || user.package || "الحالية").trim()} وعاد الحساب إلى ${defaultPackage.display_name}`
   });
+  return updatedUser;
 }
 
 async function syncUserDailyProgress(user, activityText = "") {
@@ -813,8 +833,11 @@ async function syncUserDailyProgress(user, activityText = "") {
   const today = getTodayStamp();
   const lastActiveDate = String(effectiveUser.last_active_date || "");
   const lastDailyClaimDate = String(effectiveUser.last_daily_xp_claimed_date || effectiveUser.last_reset || "");
+  const lastDailyGrantedAt = effectiveUser.last_daily_xp_granted_at || null;
   const signupBonusClaimed = effectiveUser.signup_bonus_claimed !== false;
-  if (lastDailyClaimDate === today && signupBonusClaimed) {
+  const shouldGrantDailyXp = canGrantDailyXp(lastDailyGrantedAt, lastDailyClaimDate, today);
+
+  if (!shouldGrantDailyXp && signupBonusClaimed) {
     if (activityText) {
       return databaseClient.updateUser(effectiveUser.id, {
         last_active_date: today,
@@ -840,17 +863,17 @@ async function syncUserDailyProgress(user, activityText = "") {
 
   const packageDailyXp = Math.max(0, Number(effectiveUser.package_daily_xp || 0));
   const isPaidPackage = packageDailyXp > 0;
-  const shouldGrantDailyXp = lastDailyClaimDate !== today;
   const dailyXpAward = shouldGrantDailyXp ? (isPaidPackage ? packageDailyXp : DAILY_LOGIN_XP_REWARD) : 0;
   const currentXp = Number(effectiveUser.xp || 0);
   const baseXp = signupBonusClaimed ? currentXp : currentXp + FIRST_SIGNUP_XP;
   const nextXp = isPaidPackage && shouldGrantDailyXp ? packageDailyXp : baseXp + dailyXpAward;
   const packageLabel = String(effectiveUser.package_name || effectiveUser.package || "التمهيدية").trim() || "التمهيدية";
 
-  return databaseClient.updateUser(effectiveUser.id, {
+  const updatedUser = await databaseClient.updateUser(effectiveUser.id, {
     last_active_date: today,
     last_reset: today,
     last_daily_xp_claimed_date: today,
+    last_daily_xp_granted_at: shouldGrantDailyXp ? new Date().toISOString() : lastDailyGrantedAt,
     signup_bonus_claimed: true,
     streak_days: streakDays,
     motivation_score: Number(effectiveUser.motivation_score || 0) + DAILY_MOTIVATION_BONUS,
@@ -860,6 +883,31 @@ async function syncUserDailyProgress(user, activityText = "") {
     achievements,
     activity: activityText || `تجددت باقته اليومية (${packageLabel}) وحصل على ${dailyXpAward} XP`
   });
+
+  if (typeof databaseClient.recordXpLedger === "function") {
+    try {
+      if (!signupBonusClaimed && FIRST_SIGNUP_XP > 0) {
+        await databaseClient.recordXpLedger({
+          user_id: effectiveUser.id,
+          amount: FIRST_SIGNUP_XP,
+          type: "signup_bonus",
+          reason: "First signup XP"
+        });
+      }
+      if (shouldGrantDailyXp && dailyXpAward > 0) {
+        await databaseClient.recordXpLedger({
+          user_id: effectiveUser.id,
+          amount: dailyXpAward,
+          type: "daily_grant",
+          reason: `Daily XP renewal (${packageLabel})`
+        });
+      }
+    } catch (error) {
+      console.warn("XP ledger write failed:", error.message);
+    }
+  }
+
+  return updatedUser;
 }
 
 function isImageAttachmentName(value) {
@@ -975,11 +1023,26 @@ async function chargeUserForMessage(user, cost, activityText) {
 
   const xpCost = Math.max(0, Math.round(Number(cost) || 0));
   const nextXp = Math.max(0, Math.max(0, Number(user.xp || 0)) - xpCost);
-  return databaseClient.updateUser(user.id, {
+  const updatedUser = await databaseClient.updateUser(user.id, {
     xp: nextXp,
     total_xp: nextXp,
     activity: activityText || `تم خصم ${xpCost} XP مقابل استخدام الشات`
   });
+
+  if (typeof databaseClient.recordXpLedger === "function" && xpCost > 0) {
+    try {
+      await databaseClient.recordXpLedger({
+        user_id: user.id,
+        amount: -xpCost,
+        type: "usage",
+        reason: activityText || "XP usage"
+      });
+    } catch (error) {
+      console.warn("XP usage ledger write failed:", error.message);
+    }
+  }
+
+  return updatedUser;
 }
 
 function hashPassword(password, salt = crypto.randomBytes(16).toString("hex")) {
@@ -1053,6 +1116,8 @@ function buildApiUser(user) {
     lastReset: user.last_reset || user.last_active_date || null,
     last_daily_xp_claimed_date: user.last_daily_xp_claimed_date || user.last_reset || user.last_active_date || null,
     lastDailyXpClaimedDate: user.last_daily_xp_claimed_date || user.last_reset || user.last_active_date || null,
+    last_daily_xp_granted_at: user.last_daily_xp_granted_at || null,
+    lastDailyXpGrantedAt: user.last_daily_xp_granted_at || null,
     signup_bonus_claimed: user.signup_bonus_claimed !== false,
     signupBonusClaimed: user.signup_bonus_claimed !== false,
     achievements: Array.isArray(user.achievements) ? user.achievements : [],
@@ -2073,6 +2138,99 @@ function buildSummaryPrompt({ text, summaryType, summaryLength, pointsCount, aud
         `طول الملخص: ${SUMMARY_LENGTHS[lengthKey].prompt}`,
         `عدد النقاط إن وجدت: ${safePointsCount}`,
         `الجمهور المستهدف: ${safeAudience}`,
+        "النص:",
+        String(text || "").trim()
+      ].join("\n\n")
+    }
+  ];
+}
+
+const STYLE_GOALS = Object.freeze({
+  clarity: {
+    label: "وضوح النص",
+    prompt: "حسّن النص ليكون أوضح وأسهل فهمًا، مع إزالة الغموض والتكرار."
+  },
+  professional: {
+    label: "احترافية أعلى",
+    prompt: "ارفع مستوى النص ليكون أكثر احترافية ومناسبًا للأعمال والمراسلات."
+  },
+  persuasive: {
+    label: "جاذبية وإقناع",
+    prompt: "اجعل النص أكثر جاذبية وإقناعًا مع الحفاظ على المعنى الأساسي."
+  },
+  organized: {
+    label: "تنظيم أفضل",
+    prompt: "نظّم النص ورتّب الأفكار بشكل أوضح وأكثر سلاسة."
+  },
+  smooth: {
+    label: "بساطة وسلاسة",
+    prompt: "اجعل النص أبسط وأسلس للقارئ بدون تغيير الفكرة."
+  }
+});
+
+const STYLE_LEVELS = Object.freeze({
+  light: {
+    label: "خفيف",
+    prompt: "قم بتحسين خفيف فقط بدون تغيير واضح في الأسلوب."
+  },
+  balanced: {
+    label: "متوسط",
+    prompt: "حسّن النص بشكل متوازن مع الحفاظ على روح النص."
+  },
+  deep: {
+    label: "عميق",
+    prompt: "أعد صياغة النص بأسلوب احترافي واضح مع تحسين شامل."
+  }
+});
+
+function normalizeStyleGoal(value) {
+  const key = String(value || "clarity").trim().toLowerCase();
+  return Object.prototype.hasOwnProperty.call(STYLE_GOALS, key) ? key : "clarity";
+}
+
+function normalizeStyleLevel(value) {
+  const key = String(value || "balanced").trim().toLowerCase();
+  return Object.prototype.hasOwnProperty.call(STYLE_LEVELS, key) ? key : "balanced";
+}
+
+function getStyleProfile(user, level = "balanced") {
+  const normalizedLevel = normalizeStyleLevel(level);
+  const isDeep = normalizedLevel === "deep";
+  return {
+    key: "writing-style",
+    name: "Orlixor Style",
+    openaiModel: OPENAI_MODEL_STYLE || OPENAI_MODEL_WRITING || OPENAI_MODEL_DEFAULT,
+    temperature: 0.45,
+    maxOutputTokens: isFreeUser(user) ? 400 : (isDeep ? 900 : 650),
+    maxContextTokens: isFreeUser(user) ? FREE_MAX_CONTEXT_TOKENS : 2500,
+    minXpCost: isDeep ? STYLE_DEEP_XP_COST : STYLE_XP_COST,
+    maxXpCost: isDeep ? STYLE_DEEP_XP_COST : STYLE_XP_COST,
+    systemPrompt: [
+      "أنت أداة تحسين الأسلوب في Orlixor.",
+      "حسّن النص ليكون أوضح وأكثر احترافية.",
+      "حافظ على المعنى الأصلي.",
+      "لا تضف معلومات غير موجودة في النص.",
+      "أعد النص المحسّن فقط بدون شرح.",
+      "لا تذكر أسماء مزودي الخدمة أو النماذج التقنية."
+    ].join("\n")
+  };
+}
+
+function buildStylePrompt({ text, goal, level, keepMeaning, audience }) {
+  const goalKey = normalizeStyleGoal(goal);
+  const levelKey = normalizeStyleLevel(level);
+  const safeAudience = sanitizeOptionalText(audience, 80) || "عام";
+  return [
+    { role: "system", content: getStyleProfile(null, levelKey).systemPrompt },
+    {
+      role: "user",
+      content: [
+        `هدف التحسين: ${STYLE_GOALS[goalKey].prompt}`,
+        `مستوى التحسين: ${STYLE_LEVELS[levelKey].prompt}`,
+        `الجمهور المستهدف: ${safeAudience}`,
+        keepMeaning === false
+          ? "يمكن تحسين الأسلوب بحرية مع عدم تغيير الفكرة الأساسية."
+          : "حافظ على المعنى الأصلي بدقة ولا تغيّر الفكرة.",
         "النص:",
         String(text || "").trim()
       ].join("\n\n")
@@ -3563,6 +3721,89 @@ async function handleSummarizeTextTool(req, res) {
   });
 }
 
+async function handleImproveStyleTool(req, res) {
+  const payload = await parseJsonBody(req);
+  const text = requireTextField(payload.text || payload.input_text || payload.inputText, "text", 5000);
+  const goal = normalizeStyleGoal(payload.goal || payload.styleGoal || payload.style_goal);
+  const level = normalizeStyleLevel(payload.level || payload.styleLevel || payload.style_level);
+  const keepMeaning = payload.keepMeaning !== false && payload.keep_meaning !== false;
+  const audience = sanitizeOptionalText(payload.audience, 80) || "عام";
+  const auth = await getAuthContext(req);
+  const activeUser = auth?.user ? await syncUserDailyProgress(auth.user, "استخدم تحسين الأسلوب") : null;
+
+  if (!activeUser) {
+    throw createHttpError(401, "Authentication is required to improve style.");
+  }
+
+  if (text.trim().length < 10) {
+    throw createHttpError(422, "Text is too short to improve style.");
+  }
+
+  if (text.length > 5000) {
+    throw createHttpError(413, "Text is too long. Please shorten it.");
+  }
+
+  const xpCost = level === "deep" || text.length > 2500 ? STYLE_DEEP_XP_COST : STYLE_XP_COST;
+  const currentXp = Math.max(0, Number(activeUser.xp || 0));
+  if (currentXp < xpCost) {
+    throw createHttpError(402, `Insufficient XP balance. Style improvement needs ${xpCost} XP.`);
+  }
+
+  const profile = getStyleProfile(activeUser, level);
+  const result = await callOpenAI({
+    modelProfile: profile,
+    input: buildResponsesInput(buildStylePrompt({ text, goal, level, keepMeaning, audience }))
+  });
+  const output = sanitizeModelDisplayText(result.text);
+
+  if (!output) {
+    throw createHttpError(502, "Style improver returned an empty response.");
+  }
+
+  const chargedUser = await chargeUserForMessage(
+    activeUser,
+    xpCost,
+    `استخدم تحسين الأسلوب (${STYLE_GOALS[goal].label})`
+  );
+
+  if (isDatabaseReady() && typeof databaseClient.saveToolUsage === "function") {
+    await databaseClient.saveToolUsage({
+      user_id: activeUser.id,
+      tool_key: "writing_assistant",
+      task_type: "style",
+      input_text: text,
+      output_text: output,
+      xp_cost: xpCost,
+      input_tokens: Number(result.usage?.input_tokens || result.usage?.prompt_tokens || 0),
+      output_tokens: Number(result.usage?.output_tokens || result.usage?.completion_tokens || 0),
+      metadata: {
+        goal,
+        goal_label: STYLE_GOALS[goal].label,
+        level,
+        level_label: STYLE_LEVELS[level].label,
+        keep_meaning: keepMeaning,
+        audience
+      }
+    });
+  }
+
+  sendJson(req, res, 200, {
+    success: true,
+    data: {
+      output,
+      goal,
+      level,
+      keep_meaning: keepMeaning,
+      audience,
+      task_type: "style",
+      tool: "style_improver",
+      xp_spent: xpCost,
+      xp_remaining: Math.max(0, Number(chargedUser?.xp || activeUser.xp || 0)),
+      user: chargedUser ? buildApiUser(chargedUser) : buildApiUser(activeUser)
+    }
+  });
+}
+
 async function handleWritingAssistant(req, res) {
   const payload = await parseJsonBody(req);
   const taskType = normalizeWritingTask(payload.task_type || payload.taskType || "generate");
@@ -4093,6 +4334,11 @@ async function routeRequest(req, res) {
 
   if (req.method === "POST" && requestPath === "/api/tools/summarize-text") {
     await handleSummarizeTextTool(req, res);
+    return;
+  }
+
+  if (req.method === "POST" && requestPath === "/api/tools/improve-style") {
+    await handleImproveStyleTool(req, res);
     return;
   }
 

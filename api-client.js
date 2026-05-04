@@ -931,6 +931,13 @@
     });
   }
 
+  async function improveStyle(payload) {
+    return request("/tools/improve-style", {
+      method: "POST",
+      body: payload
+    });
+  }
+
   async function getHealth() {
     return request("/health", {
       method: "GET",
@@ -1037,6 +1044,7 @@
     correctText,
     expandText,
     summarizeText,
+    improveStyle,
     getHealth,
     streamChat,
     getChatSessions,

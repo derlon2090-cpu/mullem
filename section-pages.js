@@ -451,6 +451,11 @@
       summaryType: "bullets",
       summaryLength: "medium",
       summaryPointsCount: 5,
+      styleText: "",
+      styleGoal: "clarity",
+      styleLevel: "balanced",
+      styleAudience: "عام",
+      styleKeepMeaning: true,
       summaryAudience: "عام",
       language: "العربية",
       length: "متوسط (300 - 500 كلمة)",
@@ -2904,6 +2909,171 @@
     `;
   }
 
+  function renderStyleAssistantMain(profile, writing, tasks, activeTask) {
+    const styleGoals = [
+      ["clarity", "وضوح النص", "إزالة الغموض والتكرار", icons.ai],
+      ["professional", "احترافية أعلى", "أسلوب مناسب للأعمال", icons.projects || icons.settings],
+      ["persuasive", "جاذبية وإقناع", "نص أقوى وأكثر تأثيرًا", icons.bolt],
+      ["organized", "تنظيم أفضل", "ترتيب الأفكار بوضوح", icons.notes],
+      ["smooth", "بساطة وسلاسة", "صياغة مريحة للقارئ", icons.ai]
+    ];
+    const styleLevels = [
+      ["light", "خفيف", "تحسين بسيط"],
+      ["balanced", "متوسط", "تحسين متوازن"],
+      ["deep", "عميق", "تحسين شامل"]
+    ];
+    const audienceOptions = ["عام", "طلاب", "عملاء", "فريق عمل", "أكاديمي"];
+    const examples = ["رسالة رسمية", "محتوى إبداعي", "مقال تسويقي", "تقرير عمل", "نص أكاديمي"];
+    const output = coerceDisplayText(writing.result?.output || "");
+    const textLength = String(writing.styleText || "").length;
+    const xpCost = writing.styleLevel === "deep" || textLength > 2500 ? 8 : 5;
+
+    return `
+      <section class="guest-main tools-main writing-main tone-main correction-main style-main" aria-label="تحسين الأسلوب">
+        <header class="guest-main-topbar tools-main-topbar">
+          ${renderModelSwitcher()}
+          ${renderHomeTopActions()}
+        </header>
+
+        <div class="writing-page tone-page correction-page style-page">
+          <button class="writing-back tone-back" type="button" data-tools-back>
+            <span aria-hidden="true">←</span>
+            <span>العودة إلى الأدوات</span>
+          </button>
+
+          <header class="writing-hero tone-hero">
+            <div class="writing-title tone-title">
+              <h1>مساعد الكتابة</h1>
+              <span aria-hidden="true">${icons.edit}</span>
+            </div>
+            <p>اكتب وحسّن نصوصك باحترافية وجودة عالية</p>
+          </header>
+
+          <div class="writing-task-tabs tone-task-tabs correction-task-tabs" role="list" aria-label="أنواع الكتابة">
+            ${tasks.map(([key, title, description, icon]) => `
+              <button class="writing-task-card ${activeTask === key ? "is-active" : ""}" type="button" data-writing-task="${escapeHtml(key)}">
+                <span aria-hidden="true">${icon}</span>
+                <strong>${escapeHtml(title)}</strong>
+                <small>${escapeHtml(description)}</small>
+              </button>
+            `).join("")}
+          </div>
+
+          <section class="tone-layout correction-layout style-layout">
+            <aside class="tone-settings-card correction-settings-card style-settings-card">
+              <h2>إعدادات تحسين الأسلوب</h2>
+
+              <p>الهدف من التحسين</p>
+              <div class="correction-type-grid style-goal-grid" role="list" aria-label="هدف التحسين">
+                ${styleGoals.map(([key, label, hint, icon]) => `
+                  <button class="correction-choice style-choice ${writing.styleGoal === key ? "is-active" : ""}" type="button" data-style-goal="${escapeHtml(key)}">
+                    <span class="correction-choice-icon" aria-hidden="true">${icon}</span>
+                    <strong>${escapeHtml(label)}</strong>
+                    <small>${escapeHtml(hint)}</small>
+                    <i aria-hidden="true">${writing.styleGoal === key ? "●" : ""}</i>
+                  </button>
+                `).join("")}
+              </div>
+
+              <p class="summary-option-title">${icons.settings}<span>مستوى التحسين</span></p>
+              <div class="summary-choice-grid summary-length-grid style-level-grid" role="list" aria-label="مستوى التحسين">
+                ${styleLevels.map(([key, label, hint]) => `
+                  <button class="summary-choice summary-length-choice ${writing.styleLevel === key ? "is-active" : ""}" type="button" data-style-level="${escapeHtml(key)}">
+                    <strong>${escapeHtml(label)}</strong>
+                    <small>${escapeHtml(hint)}</small>
+                    <i aria-hidden="true">${writing.styleLevel === key ? "●" : ""}</i>
+                  </button>
+                `).join("")}
+              </div>
+
+              <label class="tone-level correction-level">
+                <span>${icons.user}<b>الجمهور المستهدف (اختياري)</b></span>
+                <select data-style-field="audience">
+                  ${audienceOptions.map((item) => `
+                    <option value="${escapeHtml(item)}" ${writing.styleAudience === item ? "selected" : ""}>${escapeHtml(item)}</option>
+                  `).join("")}
+                </select>
+              </label>
+
+              <label class="correction-toggle">
+                <input type="checkbox" data-style-field="keepMeaning" ${writing.styleKeepMeaning === false ? "" : "checked"}>
+                <span aria-hidden="true"></span>
+                <b>الحفاظ على المعنى الأصلي</b>
+                <small>الحفاظ على الفكرة والمعنى دون تغيير</small>
+              </label>
+
+              <button class="tone-submit correction-submit style-submit ${isAuthenticated() ? "" : "requires-auth"}" type="submit" form="improveStyleForm" ${writing.loading ? "disabled" : ""}>
+                ${writing.loading ? "جاري تحسين الأسلوب..." : "تحسين الأسلوب"}
+                ${icons.sparkle}
+              </button>
+              <small class="tone-cost">تكلفة العملية: ${escapeHtml(String(xpCost))} XP</small>
+            </aside>
+
+            <form class="tone-editor-card correction-editor-card style-editor-card" id="improveStyleForm" data-style-form>
+              <section class="tone-text-panel correction-text-panel style-text-panel">
+                <header>
+                  <div>
+                    <h2>النص الأصلي</h2>
+                    <p>أدخل النص الذي تريد تحسين أسلوبه</p>
+                  </div>
+                  ${icons.document}
+                </header>
+                <textarea
+                  maxlength="5000"
+                  data-style-field="text"
+                  placeholder="الصق النص الذي تريد تحسينه هنا..."
+                >${escapeHtml(writing.styleText || "")}</textarea>
+                <small>${escapeHtml(String(textLength))}/5000</small>
+              </section>
+
+              <div class="tone-divider" aria-hidden="true">↓</div>
+
+              <section class="tone-text-panel tone-output-panel correction-output-panel style-output-panel">
+                <header>
+                  <div>
+                    <h2>النص بعد تحسين الأسلوب</h2>
+                    <p>النص الناتج بعد تحسين أسلوبه</p>
+                  </div>
+                  ${icons.ai}
+                </header>
+                <div class="tone-output-box correction-output-box style-output-box ${output ? "" : "is-empty"}">${output ? formatSmartSearchAnswer(output) : "<p>سيظهر النص المحسّن هنا بعد تنفيذ العملية.</p>"}</div>
+                <small>${escapeHtml(String(output.length))}/5000</small>
+              </section>
+
+              <div class="tone-result-actions correction-result-actions style-result-actions">
+                <button type="button" data-copy-style-result ${output ? "" : "disabled"}>${icons.copy}<span>نسخ النص</span></button>
+                <button type="button" data-download-style-result ${output ? "" : "disabled"}><span aria-hidden="true">↓</span><span>تنزيل</span></button>
+                <button type="button" data-retry-style ${output ? "" : "disabled"}>${icons.refresh}<span>إعادة المحاولة</span></button>
+              </div>
+            </form>
+          </section>
+
+          ${writing.error ? `
+            <section class="writing-result is-error tone-error">
+              <strong>تعذر تحسين الأسلوب</strong>
+              <p>${escapeHtml(writing.error)}</p>
+            </section>
+          ` : ""}
+
+          <section class="tone-examples correction-examples style-examples">
+            <header>
+              <h2>أمثلة سريعة</h2>
+              ${icons.bolt}
+            </header>
+            <div>
+              ${examples.map((item) => `
+                <button type="button" data-style-example="${escapeHtml(item)}">
+                  <span>${escapeHtml(item)}</span>
+                  ${icons.document}
+                </button>
+              `).join("")}
+            </div>
+          </section>
+        </div>
+      </section>
+    `;
+  }
+
   function renderWritingAssistantMain(profile) {
     const writing = state.writingAssistant || {};
     const activeTask = writing.taskType || "generate";
@@ -2926,6 +3096,9 @@
     }
     if (activeTask === "rewrite") {
       return renderCorrectionAssistantMain(profile, writing, tasks, activeTask);
+    }
+    if (activeTask === "style") {
+      return renderStyleAssistantMain(profile, writing, tasks, activeTask);
     }
     const selectOptions = {
       contentType: ["مقال", "منشور", "رسالة", "إعلان", "ملخص", "سكربت"],
@@ -4308,6 +4481,94 @@
     }
   }
 
+  async function submitImproveStyleTool() {
+    const textField = app.querySelector('[data-style-field="text"]');
+    const audienceField = app.querySelector('[data-style-field="audience"]');
+    const keepMeaningField = app.querySelector('[data-style-field="keepMeaning"]');
+    const text = String(textField?.value || state.writingAssistant.styleText || "").trim();
+    const goal = String(state.writingAssistant.styleGoal || "clarity");
+    const level = String(state.writingAssistant.styleLevel || "balanced");
+    const audience = String(audienceField?.value || state.writingAssistant.styleAudience || "عام").trim() || "عام";
+    const keepMeaning = keepMeaningField ? Boolean(keepMeaningField.checked) : state.writingAssistant.styleKeepMeaning !== false;
+
+    if (text.length < 10) {
+      state.writingAssistant.error = "النص قصير جدًا. اكتب جملة أو فقرة واضحة لتحسينها.";
+      render();
+      return;
+    }
+
+    if (!isAuthenticated()) {
+      state.writingAssistant = {
+        ...state.writingAssistant,
+        styleText: text,
+        styleGoal: goal,
+        styleLevel: level,
+        styleAudience: audience,
+        styleKeepMeaning: keepMeaning,
+        error: ""
+      };
+      openAuthModal("سجّل دخولك لاستخدام تحسين الأسلوب وحفظ النتيجة داخل حسابك.");
+      return;
+    }
+
+    const apiClient = getApiClient();
+    if (!apiClient?.improveStyle) {
+      state.writingAssistant.error = "خدمة تحسين الأسلوب غير جاهزة الآن.";
+      render();
+      return;
+    }
+
+    state.writingAssistant = {
+      ...state.writingAssistant,
+      styleText: text,
+      styleGoal: goal,
+      styleLevel: level,
+      styleAudience: audience,
+      styleKeepMeaning: keepMeaning,
+      loading: true,
+      error: "",
+      result: null
+    };
+    render();
+
+    try {
+      const result = await apiClient.improveStyle({
+        text,
+        goal,
+        level,
+        audience,
+        keepMeaning
+      });
+
+      if (!result?.ok) {
+        throw new Error(result?.message || "تعذر تحسين الأسلوب الآن.");
+      }
+
+      if (result.data?.user) {
+        const token = apiClient.getToken?.();
+        if (token) {
+          apiClient.setSession?.({ token, user: result.data.user });
+        }
+        state.currentUser = persistEmbeddedUser(result.data.user) || normalizeUser(result.data.user) || state.currentUser;
+      }
+
+      state.writingAssistant = {
+        ...state.writingAssistant,
+        loading: false,
+        error: "",
+        result: result.data || {}
+      };
+      render();
+    } catch (error) {
+      state.writingAssistant = {
+        ...state.writingAssistant,
+        loading: false,
+        error: error?.message || "تعذر تحسين الأسلوب الآن."
+      };
+      render();
+    }
+  }
+
   function splitReplyToBullets(text) {
     const cleaned = coerceDisplayText(text).replace(/\[object Object\]/g, "").trim();
     if (!cleaned) return ["لم يصلنا نص واضح من الخدمة."];
@@ -4979,6 +5240,75 @@
         return;
       }
 
+      const styleGoal = event.target.closest("[data-style-goal]");
+      if (styleGoal) {
+        state.writingAssistant.styleGoal = styleGoal.getAttribute("data-style-goal") || "clarity";
+        state.writingAssistant.error = "";
+        render();
+        return;
+      }
+
+      const styleLevel = event.target.closest("[data-style-level]");
+      if (styleLevel) {
+        state.writingAssistant.styleLevel = styleLevel.getAttribute("data-style-level") || "balanced";
+        state.writingAssistant.error = "";
+        render();
+        return;
+      }
+
+      const styleExample = event.target.closest("[data-style-example]");
+      if (styleExample) {
+        const exampleLabel = styleExample.getAttribute("data-style-example") || "";
+        const examples = {
+          "رسالة رسمية": "نرغب في إبلاغكم بأننا سنبدأ تنفيذ الخطة الجديدة الأسبوع القادم، ونأمل من الجميع التعاون لإنجاحها.",
+          "محتوى إبداعي": "التقنية تغير العالم بسرعة كبيرة وتفتح فرصًا جديدة للتعلم والعمل والإبداع.",
+          "مقال تسويقي": "منتجنا يساعد الفرق على إنجاز أعمالها بسرعة أكبر وتنظيم أفضل وتجربة استخدام مريحة.",
+          "تقرير عمل": "شهد المشروع تقدمًا واضحًا هذا الأسبوع، وتم إنجاز معظم المهام الأساسية مع وجود بعض النقاط التي تحتاج متابعة.",
+          "نص أكاديمي": "تساهم القراءة المنتظمة في تطوير التفكير النقدي وتحسين القدرة على تحليل المعلومات وفهمها."
+        };
+        state.writingAssistant.styleText = examples[exampleLabel] || exampleLabel;
+        state.writingAssistant.error = "";
+        render();
+        return;
+      }
+
+      if (event.target.closest("[data-copy-style-result]")) {
+        const text = coerceDisplayText(state.writingAssistant.result?.output || "");
+        if (!text) {
+          showToast("لا يوجد نص محسّن جاهز للنسخ.");
+          return;
+        }
+        navigator.clipboard?.writeText(text).then(() => {
+          showToast("تم نسخ النص.");
+        }).catch(() => {
+          showToast("تعذر نسخ النص الآن.");
+        });
+        return;
+      }
+
+      if (event.target.closest("[data-download-style-result]")) {
+        const text = coerceDisplayText(state.writingAssistant.result?.output || "");
+        if (!text) {
+          showToast("لا يوجد نص محسّن جاهز للتنزيل.");
+          return;
+        }
+        const blob = new Blob([text], { type: "text/plain;charset=utf-8" });
+        const link = document.createElement("a");
+        link.href = URL.createObjectURL(blob);
+        link.download = "orlixor-style-result.txt";
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        setTimeout(() => URL.revokeObjectURL(link.href), 500);
+        showToast("تم تجهيز ملف النص.");
+        return;
+      }
+
+      if (event.target.closest("[data-retry-style]")) {
+        submitImproveStyleTool();
+        return;
+      }
+
       const cardButton = event.target.closest("[data-card]");
       if (cardButton) {
         const label = cardButton.getAttribute("data-card") || "";
@@ -5099,6 +5429,12 @@
         state.writingAssistant.summaryText = summaryField.value;
         state.writingAssistant.error = "";
       }
+
+      const styleField = event.target.closest("[data-style-field]");
+      if (styleField && styleField.getAttribute("data-style-field") === "text") {
+        state.writingAssistant.styleText = styleField.value;
+        state.writingAssistant.error = "";
+      }
     });
 
     app.addEventListener("change", (event) => {
@@ -5180,6 +5516,22 @@
         if (key === "audience") {
           state.writingAssistant.summaryAudience = summaryField.value;
           state.writingAssistant.error = "";
+          return;
+        }
+      }
+
+      const styleField = event.target.closest("[data-style-field]");
+      if (styleField) {
+        const key = styleField.getAttribute("data-style-field");
+        if (key === "audience") {
+          state.writingAssistant.styleAudience = styleField.value;
+          state.writingAssistant.error = "";
+          return;
+        }
+        if (key === "keepMeaning") {
+          state.writingAssistant.styleKeepMeaning = Boolean(styleField.checked);
+          state.writingAssistant.error = "";
+          render();
           return;
         }
       }
@@ -5291,6 +5643,13 @@
       if (summaryForm) {
         event.preventDefault();
         submitSummarizeTextTool();
+        return;
+      }
+
+      const styleForm = event.target.closest("[data-style-form]");
+      if (styleForm) {
+        event.preventDefault();
+        submitImproveStyleTool();
         return;
       }
 
