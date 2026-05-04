@@ -5584,7 +5584,7 @@ body[data-workspace-mode="home"] .guest-root {
 }
 
 .summary-layout {
-  grid-template-columns: 360px minmax(0, 1fr);
+  grid-template-columns: 390px minmax(0, 1fr);
 }
 
 .summary-settings-card {
@@ -5715,7 +5715,7 @@ body[data-workspace-mode="home"] .guest-root {
 }
 
 .correction-layout {
-  grid-template-columns: 360px minmax(0, 1fr);
+  grid-template-columns: 390px minmax(0, 1fr);
 }
 
 .correction-settings-card {
@@ -6434,10 +6434,10 @@ body[data-workspace-mode="home"] .guest-root {
   position: relative;
   display: flex;
   flex-direction: column;
-  justify-content: center;
-  align-items: flex-end;
-  min-height: 124px;
-  padding: 16px 56px 16px 34px;
+  justify-content: flex-start;
+  align-items: stretch;
+  min-height: 118px;
+  padding: 14px 14px 44px;
   overflow: hidden;
   direction: rtl;
   text-align: right;
@@ -6446,19 +6446,21 @@ body[data-workspace-mode="home"] .guest-root {
 .correction-type-grid .correction-choice:not(.style-choice) .correction-choice-icon {
   position: absolute;
   right: 14px;
-  top: 50%;
-  width: 34px;
-  height: 34px;
-  transform: translateY(-50%);
+  bottom: 14px;
+  width: 32px;
+  height: 32px;
+  transform: none;
 }
 
 .correction-type-grid .correction-choice:not(.style-choice) i {
   position: absolute;
-  left: 14px;
+  left: 15px;
   top: 50%;
-  width: 18px;
-  height: 18px;
+  width: 17px;
+  height: 17px;
   transform: translateY(-50%);
+  display: grid;
+  place-items: center;
   border-color: rgba(139, 148, 174, 0.34);
   background: transparent;
   color: transparent;
@@ -6493,23 +6495,25 @@ body[data-workspace-mode="home"] .guest-root {
   text-align: right;
   text-overflow: clip;
   white-space: normal;
+  text-wrap: balance;
   word-break: normal;
-  overflow-wrap: normal;
+  overflow-wrap: break-word;
+  letter-spacing: 0;
 }
 
 .correction-type-grid .correction-choice:not(.style-choice) strong {
   color: #172044;
-  font-size: 0.9rem;
+  font-size: 0.82rem;
   font-weight: 950;
-  line-height: 1.24;
+  line-height: 1.32;
 }
 
 .correction-type-grid .correction-choice:not(.style-choice) small {
   margin-top: 4px;
   color: #9aa1b8;
-  font-size: 0.68rem;
+  font-size: 0.61rem;
   font-weight: 850;
-  line-height: 1.28;
+  line-height: 1.35;
 }
 
 /* Summary cards use the same non-overlapping lanes as the reference. */
@@ -6517,10 +6521,10 @@ body[data-workspace-mode="home"] .guest-root {
   position: relative;
   display: flex;
   flex-direction: column;
-  justify-content: center;
-  align-items: flex-end;
-  min-height: 116px;
-  padding: 16px 56px 16px 34px;
+  justify-content: flex-start;
+  align-items: stretch;
+  min-height: 112px;
+  padding: 14px 14px 44px;
   overflow: hidden;
   direction: rtl;
   text-align: right;
@@ -6529,19 +6533,21 @@ body[data-workspace-mode="home"] .guest-root {
 .summary-type-grid .summary-choice .summary-choice-icon {
   position: absolute;
   right: 14px;
-  top: 50%;
-  width: 34px;
-  height: 34px;
-  transform: translateY(-50%);
+  bottom: 14px;
+  width: 32px;
+  height: 32px;
+  transform: none;
 }
 
 .summary-type-grid .summary-choice i {
   position: absolute;
-  left: 14px;
+  left: 15px;
   top: 50%;
-  width: 18px;
-  height: 18px;
+  width: 17px;
+  height: 17px;
   transform: translateY(-50%);
+  display: grid;
+  place-items: center;
   color: transparent;
   font-size: 0;
 }
@@ -6571,23 +6577,25 @@ body[data-workspace-mode="home"] .guest-root {
   text-align: right;
   text-overflow: clip;
   white-space: normal;
+  text-wrap: balance;
   word-break: normal;
-  overflow-wrap: normal;
+  overflow-wrap: break-word;
+  letter-spacing: 0;
 }
 
 .summary-type-grid .summary-choice strong {
   color: #172044;
-  font-size: 0.9rem;
+  font-size: 0.82rem;
   font-weight: 950;
-  line-height: 1.24;
+  line-height: 1.32;
 }
 
 .summary-type-grid .summary-choice small {
   margin-top: 4px;
   color: #9aa1b8;
-  font-size: 0.68rem;
+  font-size: 0.61rem;
   font-weight: 850;
-  line-height: 1.28;
+  line-height: 1.35;
 }
 
 .summary-length-grid .summary-length-choice {
@@ -6609,6 +6617,8 @@ body[data-workspace-mode="home"] .guest-root {
   width: 18px;
   height: 18px;
   transform: translateY(-50%);
+  display: grid;
+  place-items: center;
   color: transparent;
   font-size: 0;
 }
