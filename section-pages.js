@@ -1594,8 +1594,10 @@
       <div class="model-switcher-wrap">
         <button class="ai-switcher" type="button" data-model-menu aria-expanded="${state.modelMenuOpen ? "true" : "false"}">
           <span class="ai-switcher-mark">${icons.logo}</span>
-          <span>${escapeHtml(activeProfile.name)}</span>
-          <i aria-hidden="true">⌄</i>
+          <span class="ai-switcher-divider" aria-hidden="true"></span>
+          <span class="ai-switcher-name">${escapeHtml(activeProfile.name)}</span>
+          <i class="ai-switcher-caret" aria-hidden="true">⌄</i>
+          <span class="ai-switcher-dots" aria-hidden="true"></span>
         </button>
         <div class="model-menu ${state.modelMenuOpen ? "is-open" : ""}" data-model-menu-panel ${state.modelMenuOpen ? "" : "hidden"}>
           <div class="model-menu-head">
@@ -2004,7 +2006,104 @@
     `;
   }
 
+  function renderWritingEditingToolsMain() {
+    const categories = ["الكل", "كتابة المقالات", "تحرير وتحسين", "تلخيص", "العناوين والأفكار", "إعادة الصياغة", "التدقيق اللغوي"];
+    const tools = [
+      {
+        title: "تدقيق لغوي",
+        description: "تدقيق شامل للإملاء والنحو وعلامات الترقيم",
+        icon: icons.tests
+      },
+      {
+        title: "تحسين النص",
+        description: "حسّن النصوص لتكون أكثر وضوحًا وجاذبية واحترافية",
+        icon: icons.sparkle
+      },
+      {
+        title: "مقدمة جذابة",
+        description: "اكتب مقدمات تجذب القارئ من أول سطر",
+        icon: icons.notes
+      },
+      {
+        title: "كتابة مقال كامل",
+        description: "أنشئ مقالات احترافية ومنسقة في أي موضوع تريده",
+        icon: icons.edit
+      },
+      {
+        title: "اقتباسات",
+        description: "ابحث عن اقتباسات ملهمة ومناسبة لموضوعك",
+        icon: icons.chat
+      },
+      {
+        title: "إنشاء مخطط",
+        description: "أنشئ مخططًا منظمًا لمقالك أو بحثك أو مشروعك",
+        icon: icons.menu
+      },
+      {
+        title: "أفكار الكتابة",
+        description: "احصل على أفكار إبداعية لمواضيع ومقالات جديدة",
+        icon: icons.bolt
+      },
+      {
+        title: "إعادة صياغة النص",
+        description: "أعد صياغة النص مع الحفاظ على المعنى الأصلي",
+        icon: icons.refresh
+      }
+    ];
+
+    return `
+      <section class="guest-main tools-main tools-writing-main" aria-label="الكتابة والتحرير">
+        <header class="guest-main-topbar tools-main-topbar">
+          ${renderModelSwitcher()}
+          ${renderHomeTopActions()}
+        </header>
+
+        <div class="tools-page writing-tools-page">
+          <button class="tools-back-chat" type="button" data-return-chat>
+            <span aria-hidden="true">←</span>
+            <b>العودة إلى الشات</b>
+            <i aria-hidden="true">${icons.chat}</i>
+          </button>
+
+          <header class="tools-hero writing-tools-hero">
+            <span class="tools-hero-icon">${icons.edit}</span>
+            <h1>الكتابة والتحرير</h1>
+            <p>أدوات احترافية تساعدك على كتابة وتحرير محتوى عالي الجودة</p>
+          </header>
+
+          <div class="tools-filters writing-tools-filters" aria-label="تصنيفات أدوات الكتابة">
+            ${categories.map((category, index) => `
+              <button class="tools-filter ${index === 0 ? "active" : ""}" type="button">
+                ${escapeHtml(category)}
+              </button>
+            `).join("")}
+          </div>
+
+          <section class="tools-grid writing-tools-grid" aria-label="أدوات الكتابة والتحرير">
+            ${tools.map((tool) => `
+              <button class="tool-card writing-tool-card" type="button" data-tool-key="writing-assistant">
+                <span class="tool-favorite" aria-hidden="true">${icons.star}</span>
+                <span class="tool-icon">${tool.icon}</span>
+                <strong>${escapeHtml(tool.title)}</strong>
+                <p>${escapeHtml(tool.description)}</p>
+                <span class="tool-foot">
+                  <small>متاح في: طويق، برو</small>
+                  <b>مجاني</b>
+                </span>
+              </button>
+            `).join("")}
+          </section>
+
+          <p class="tools-suggest writing-tools-suggest">
+            هل لديك اقتراح أداة جديدة؟ <button type="button" data-open-account>أخبرنا عن رأيك</button>
+          </p>
+        </div>
+      </section>
+    `;
+  }
+
   function renderToolsMain(profile) {
+    return renderWritingEditingToolsMain();
     const categories = ["الكل", "كتابة وتحرير", "تلخيص وتنظيم", "تحليل وبيانات", "إنتاجية", "تعليم وتعلم", "أدوات مجانية"];
     const tools = [
       {
@@ -4806,8 +4905,15 @@
         state.homeConversationOpen = false;
         state.openThreadMenuId = "";
         state.toolView = "tools";
-        setSidebarCollapsed(false);
         setSection("ai-tools");
+        return;
+      }
+
+      if (event.target.closest("[data-return-chat]")) {
+        state.homeConversationOpen = false;
+        state.openThreadMenuId = "";
+        state.toolView = "tools";
+        setSection("dashboard");
         return;
       }
 
@@ -4951,7 +5057,6 @@
           state.toolView = "smart-search";
           state.openThreadMenuId = "";
           state.modelMenuOpen = false;
-          setSidebarCollapsed(false);
           render();
           return;
         }
@@ -4959,7 +5064,6 @@
           state.toolView = "writing-assistant";
           state.openThreadMenuId = "";
           state.modelMenuOpen = false;
-          setSidebarCollapsed(false);
           render();
           return;
         }
