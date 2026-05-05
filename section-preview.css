@@ -7682,3 +7682,155 @@ body[data-workspace-mode="home"] .guest-root {
     font-size: 1.08rem;
   }
 }
+
+/* Final polish requested: compact chat switcher, smaller collapsed rail, and top-left back button. */
+.guest-shell.is-home-workspace .home-main-topbar .model-switcher-wrap {
+  width: clamp(220px, 24vw, 290px);
+  min-width: clamp(220px, 24vw, 290px);
+}
+
+.guest-shell.is-home-workspace .home-main-topbar .ai-switcher {
+  min-height: 48px;
+  gap: 10px;
+  padding: 0 12px;
+  border-radius: 15px;
+}
+
+.guest-shell.is-home-workspace .home-main-topbar .ai-switcher-mark {
+  width: 36px;
+  height: 36px;
+  flex-basis: 36px;
+}
+
+.guest-shell.is-home-workspace .home-main-topbar .ai-switcher-mark img,
+.guest-shell.is-home-workspace .home-main-topbar .ai-switcher-mark svg {
+  width: 24px;
+  height: 24px;
+}
+
+.guest-shell.is-home-workspace .home-main-topbar .ai-switcher-divider {
+  height: 28px;
+}
+
+.guest-shell.is-home-workspace .home-main-topbar .ai-switcher-name {
+  font-size: clamp(1rem, 1.25vw, 1.18rem);
+}
+
+.guest-shell.is-home-workspace .home-main-topbar .ai-switcher-dots {
+  width: 56px;
+}
+
+.tools-back-chat,
+.tools-main-topbar.is-tools-index .tools-back-chat,
+.tools-back-chat.tools-back-chat-inline {
+  position: absolute;
+  inset: auto auto auto 0;
+  left: 0;
+  right: auto;
+  top: 0;
+  min-height: 36px;
+  padding: 0 12px;
+  border-radius: 12px;
+  font-size: 0.78rem;
+  gap: 6px;
+  white-space: nowrap;
+}
+
+.tools-back-chat i,
+.tools-back-chat svg {
+  width: 15px;
+  height: 15px;
+}
+
+.tools-main-topbar.is-tools-index {
+  position: relative;
+  min-height: 48px;
+}
+
+.guest-shell.is-sidebar-collapsed {
+  grid-template-columns: 68px minmax(0, 1fr) 286px;
+}
+
+.guest-shell.is-home-workspace.is-sidebar-collapsed,
+.guest-shell.is-tools-workspace.is-sidebar-collapsed {
+  grid-template-columns: 68px minmax(0, 1fr);
+}
+
+.guest-shell.is-sidebar-collapsed .guest-sidebar {
+  width: 68px;
+  min-width: 68px;
+  max-width: 68px;
+  padding: 20px 6px;
+  gap: 18px;
+}
+
+.guest-shell.is-sidebar-collapsed .guest-brand {
+  width: 44px;
+  height: 44px;
+}
+
+.guest-shell.is-sidebar-collapsed .guest-brand .guest-brand-mark {
+  width: 40px;
+  height: 40px;
+}
+
+.guest-shell.is-sidebar-collapsed .guest-sidebar-toggle,
+.guest-shell.is-sidebar-collapsed .guest-rail-btn {
+  width: 44px;
+  height: 44px;
+  min-height: 44px;
+  border-radius: 14px;
+}
+
+.guest-shell.is-sidebar-collapsed .guest-new-chat,
+.guest-shell.is-sidebar-collapsed .guest-rail-btn.is-tools {
+  width: 50px;
+  height: 54px;
+  min-height: 54px;
+  border-radius: 16px;
+}
+
+.guest-shell.is-sidebar-collapsed .guest-new-chat {
+  display: grid;
+  place-items: center;
+  padding: 0;
+}
+
+.guest-shell.is-sidebar-collapsed .guest-new-chat i {
+  display: grid;
+  width: 100%;
+  height: 100%;
+  place-items: center;
+  margin: 0;
+}
+
+.guest-shell.is-sidebar-collapsed .guest-new-chat i svg {
+  width: 25px;
+  height: 25px;
+}
+
+.guest-shell.is-sidebar-collapsed .guest-collapsed-tools {
+  gap: 17px;
+}
+
+.guest-shell.is-sidebar-collapsed .guest-rail-btn svg {
+  width: 23px;
+  height: 23px;
+}
+
+.guest-shell.is-sidebar-collapsed .guest-rail-btn.is-tools svg {
+  width: 21px;
+  height: 21px;
+}
+
+.guest-shell.is-sidebar-collapsed .guest-rail-btn.is-tools .guest-rail-label {
+  font-size: 0.6rem;
+  line-height: 1.05;
+}
+
+@media (max-width: 760px) {
+  .guest-shell.is-home-workspace .home-main-topbar .model-switcher-wrap {
+    width: min(100%, 270px);
+    min-width: 0;
+  }
+}

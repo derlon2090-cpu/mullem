@@ -1069,6 +1069,26 @@
     return date.toLocaleDateString("ar-SA", { month: "short", day: "numeric" });
   }
 
+  function getConversationSortTime(value) {
+    const date = value ? new Date(value) : null;
+    return date && !Number.isNaN(date.getTime()) ? date.getTime() : Date.now();
+  }
+
+  function getThreadSortTime(thread) {
+    const rawTime = thread?.sortTime || thread?.updatedAtMs || thread?.stats?.sortTime || 0;
+    return Number(rawTime) || 0;
+  }
+
+  function sortThreadGroupsByNewest(sectionKey) {
+    const groups = state.threadState[sectionKey];
+    if (!Array.isArray(groups)) return;
+
+    groups.forEach((groupEntry) => {
+      if (!Array.isArray(groupEntry.items)) return;
+      groupEntry.items.sort((first, second) => getThreadSortTime(second) - getThreadSortTime(first));
+    });
+  }
+
   function normalizeApiMessages(messages) {
     return (Array.isArray(messages) ? messages : [])
       .map((message) => {
@@ -1093,10 +1113,12 @@
     if (!apiId) return null;
     const normalizedMessages = normalizeApiMessages(messages);
     const updatedAt = summary.last_message_at || summary.updated_at || summary.created_at;
+    const sortTime = getConversationSortTime(updatedAt);
     const stats = {
       created: formatConversationTime(summary.created_at),
       messages: normalizedMessages.length ? `${normalizedMessages.length} رسالة` : "محفوظة",
-      updated: formatConversationTime(updatedAt)
+      updated: formatConversationTime(updatedAt),
+      sortTime
     };
     let primaryThread = null;
 
@@ -1112,6 +1134,8 @@
       nextThread.time = formatConversationTime(updatedAt);
       nextThread.fileLabel = summary.project_id ? "مشروع محفوظ" : "محفوظ في حسابك";
       nextThread.stats = stats;
+      nextThread.sortTime = sortTime;
+      nextThread.updatedAtMs = sortTime;
       if (normalizedMessages.length || !nextThread.messages?.length) {
         nextThread.messages = normalizedMessages;
       }
@@ -1122,6 +1146,7 @@
       if (sectionKey === state.section || !primaryThread) {
         primaryThread = nextThread;
       }
+      sortThreadGroupsByNewest(sectionKey);
     });
 
     return primaryThread;
@@ -3827,6 +3852,7 @@
       if (result?.ok) {
         const items = Array.isArray(result.data?.items) ? result.data.items : [];
         items.forEach((item) => upsertSavedConversationThread(item));
+        getSavedConversationSections().forEach((sectionKey) => sortThreadGroupsByNewest(sectionKey));
         state.savedConversationsLoaded = true;
         saveConversationIdsForCurrentUser();
         const activeThread = getActiveThread();
@@ -3867,6 +3893,7 @@
 
   function createNewThreadFromDraft(title = "محادثة جديدة") {
     const sectionKey = state.section;
+    const nowSortTime = Date.now();
     const newThread = thread(
       `thread-${Date.now()}`,
       title,
@@ -3878,9 +3905,11 @@
         "بعد الدخول يصبح الإرسال الفعلي مرتبطًا بحسابك."
       ]),
       "بدون ملف",
-      { created: "الآن", messages: "0 رسائل", updated: "الآن" }
+      { created: "الآن", messages: "0 رسائل", updated: "الآن", sortTime: nowSortTime }
     );
     newThread.messages = [];
+    newThread.sortTime = nowSortTime;
+    newThread.updatedAtMs = nowSortTime;
 
     const todayGroup = state.threadState[sectionKey][0];
     if (todayGroup) {
@@ -3888,6 +3917,7 @@
     } else {
       state.threadState[sectionKey].unshift(group("اليوم", [newThread]));
     }
+    sortThreadGroupsByNewest(sectionKey);
     state.activeThreadId[sectionKey] = newThread.id;
     setComposerValue("", sectionKey);
   }
@@ -3988,12 +4018,17 @@
 
     threadEntry.messages.push(newUserMessage, pendingAssistant);
     state.homeConversationOpen = true;
+    const sentAtMs = Date.now();
     threadEntry.time = "الآن";
+    threadEntry.sortTime = sentAtMs;
+    threadEntry.updatedAtMs = sentAtMs;
     threadEntry.stats = {
       ...(threadEntry.stats || {}),
       updated: "الآن",
-      messages: `${Math.max(1, threadEntry.messages.length)} رسالة`
+      messages: `${Math.max(1, threadEntry.messages.length)} رسالة`,
+      sortTime: sentAtMs
     };
+    sortThreadGroupsByNewest(state.section);
     state.sending = true;
     setComposerValue("");
     render();
@@ -4059,11 +4094,20 @@
           body: assistantReply("تم توليد الرد بنجاح.", splitReplyToBullets(result.data.assistant_message.body))
         });
         if (result.data.conversation_id) {
+          const savedAt = new Date().toISOString();
+          const savedAtMs = getConversationSortTime(savedAt);
+          threadEntry.sortTime = savedAtMs;
+          threadEntry.updatedAtMs = savedAtMs;
+          threadEntry.stats = {
+            ...(threadEntry.stats || {}),
+            updated: "الآن",
+            sortTime: savedAtMs
+          };
           upsertSavedConversationThread({
             id: String(result.data.conversation_id),
             title: input || threadEntry.title,
-            last_message_at: new Date().toISOString(),
-            created_at: threadEntry.stats?.created || new Date().toISOString()
+            last_message_at: savedAt,
+            created_at: threadEntry.stats?.created || savedAt
           }, threadEntry.messages);
           state.hydratedConversationIds[String(result.data.conversation_id)] = true;
           saveConversationIdsForCurrentUser();
