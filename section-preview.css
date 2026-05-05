@@ -7834,3 +7834,32 @@ body[data-workspace-mode="home"] .guest-root {
     min-width: 0;
   }
 }
+
+/* Tools pages use the same top actions as the chat home: XP, bell, theme, avatar on the visual right. */
+.guest-shell.is-tools-workspace .tools-main-topbar {
+  direction: ltr;
+  justify-content: flex-end;
+}
+
+.guest-shell.is-tools-workspace .tools-main-topbar.is-tools-index {
+  direction: ltr;
+  justify-content: space-between;
+}
+
+.guest-shell.is-tools-workspace .tools-main-topbar .home-top-actions {
+  direction: ltr !important;
+  flex-direction: row;
+  justify-content: flex-end;
+  margin-left: auto;
+  margin-right: 0;
+}
+
+.guest-shell.is-tools-workspace .tools-main-topbar .home-top-actions .ghost-balance span:not(.balance-caret) {
+  direction: rtl;
+  unicode-bidi: plaintext;
+}
+
+.guest-shell.is-tools-workspace .tools-main-topbar .tools-back-chat {
+  margin-right: auto;
+  margin-left: 0;
+}
