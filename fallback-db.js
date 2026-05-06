@@ -160,7 +160,8 @@ function createEmptyState() {
       projects: 1,
       messages: 1,
       guestUsage: 1,
-      xpLedger: 1
+      xpLedger: 1,
+      adminLogs: 1
     },
     packages: clone(DEFAULT_PACKAGES),
     users: [],
@@ -169,7 +170,8 @@ function createEmptyState() {
     conversations: [],
     messages: [],
     guestUsage: [],
-    xpLedger: []
+    xpLedger: [],
+    adminLogs: []
   };
 }
 
@@ -389,6 +391,28 @@ function createFallbackDatabaseClient() {
     data.packages[index] = next;
     persist();
     return { ...next, benefits: normalizeBenefits(next.benefits) };
+  }
+
+  async function createPackage(payload = {}) {
+    const packageKey = String(payload.package_key || payload.key || "").trim().toLowerCase().replace(/\s+/g, "_");
+    const displayName = String(payload.display_name || payload.name || "").trim();
+    if (!packageKey || !displayName) return null;
+    const item = {
+      id: nextId("packages"),
+      package_key: packageKey,
+      display_name: displayName,
+      daily_xp: Math.max(0, Math.round(Number(payload.daily_xp || payload.dailyXp || 0) || 0)),
+      price_sar: Math.max(0, Number(payload.price_sar || payload.priceSar || payload.monthly_price || 0) || 0),
+      duration_days: Math.max(0, Math.round(Number(payload.duration_days || payload.durationDays || 30) || 30)),
+      summary: String(payload.summary || "").trim(),
+      benefits: normalizeBenefits(payload.benefits || payload.features || []),
+      is_active: "is_active" in payload ? (normalizeBoolean(payload.is_active) ? 1 : 0) : 1,
+      is_default: 0,
+      sort_order: Math.max(0, Math.round(Number(payload.sort_order || payload.sortOrder || 99) || 99))
+    };
+    data.packages.push(item);
+    persist();
+    return { ...item, benefits: normalizeBenefits(item.benefits) };
   }
 
   async function findUserByEmail(email) {
@@ -738,11 +762,139 @@ function createFallbackDatabaseClient() {
       amount,
       type,
       reason: String(payload.reason || "").trim(),
+      admin_id: payload.admin_id || payload.adminId ? Number(payload.admin_id || payload.adminId) : null,
       created_at: nowIso()
     };
     data.xpLedger.push(entry);
     persist();
     return { ...entry };
+  }
+
+  async function recordAdminLog(payload = {}) {
+    const action = String(payload.action || "").trim().slice(0, 80);
+    if (!action) return null;
+    const entry = {
+      id: nextId("adminLogs"),
+      admin_id: payload.admin_id || payload.adminId ? Number(payload.admin_id || payload.adminId) : null,
+      action,
+      target_type: String(payload.target_type || payload.targetType || "").trim().slice(0, 80),
+      target_id: payload.target_id || payload.targetId ? String(payload.target_id || payload.targetId).slice(0, 120) : "",
+      details_json: payload.details_json || payload.details || payload.detailsJson || null,
+      ip_address: String(payload.ip_address || payload.ipAddress || "").trim().slice(0, 80),
+      created_at: nowIso()
+    };
+    data.adminLogs.push(entry);
+    persist();
+    return { ...entry };
+  }
+
+  async function listSubscriptions(options = {}) {
+    const status = String(options.status || "").trim().toLowerCase();
+    const limit = Math.max(1, Math.min(Number(options.limit || 80), 250));
+    const rows = data.users
+      .filter((user) => !status || (status === "active" && Number(user.package_daily_xp || 0) > 0))
+      .map((user) => ({
+        id: `fallback-sub-${user.id}`,
+        user_id: user.id,
+        package_key: user.package_key || user.plan_type || "starter",
+        package_name: user.package_name || user.package || "مجاني محدود",
+        daily_xp: Number(user.package_daily_xp || 0),
+        price_sar: Number(user.package_price_sar || 0),
+        status: Number(user.package_daily_xp || 0) > 0 ? "active" : "free",
+        started_at: user.package_started_at || null,
+        expires_at: user.package_expires_at || null,
+        created_at: user.created_at || null,
+        user_name: user.name,
+        user_email: user.email,
+        user_xp: user.xp
+      }))
+      .slice(0, limit);
+    return rows;
+  }
+
+  async function assignPackageToUser(payload = {}) {
+    const userId = Number(payload.user_id || payload.userId);
+    const index = data.users.findIndex((item) => Number(item.id) === userId);
+    const selectedPackage = payload.package_id
+      ? findPackageByIdSync(payload.package_id)
+      : findPackageByKeyOrNameSync(payload.package_key || payload.planKey || payload.package || "");
+    if (index === -1 || !selectedPackage) return null;
+    const durationDays = Math.max(1, Math.round(Number(payload.duration_days || payload.durationDays || selectedPackage.duration_days || 30) || 30));
+    const startDate = new Date();
+    const expiresAt = addDays(startDate, durationDays);
+    data.users[index] = {
+      ...mergePackageIntoUser(data.users[index], selectedPackage),
+      package_started_at: startDate.toISOString(),
+      package_expires_at: expiresAt.toISOString(),
+      updated_at: nowIso()
+    };
+    persist();
+    return { ...data.users[index] };
+  }
+
+  async function adjustUserXpByAdmin(payload = {}) {
+    const userId = Number(payload.user_id || payload.userId);
+    const amount = Math.round(Number(payload.amount || 0) || 0);
+    const index = data.users.findIndex((item) => Number(item.id) === userId);
+    if (index === -1 || !amount) return null;
+    const reason = String(payload.reason || "Admin XP adjustment").trim();
+    const adminId = payload.admin_id || payload.adminId ? Number(payload.admin_id || payload.adminId) : null;
+    data.users[index].xp = Math.max(0, Number(data.users[index].xp || 0) + amount);
+    data.users[index].total_xp = data.users[index].xp;
+    data.users[index].activity = reason;
+    data.users[index].updated_at = nowIso();
+    await recordXpLedger({
+      user_id: userId,
+      amount,
+      type: payload.type || (amount >= 0 ? "admin_add" : "admin_remove"),
+      reason,
+      admin_id: adminId
+    });
+    await recordAdminLog({
+      admin_id: adminId,
+      action: amount >= 0 ? "ADMIN_ADD_XP" : "ADMIN_REMOVE_XP",
+      target_type: "user",
+      target_id: userId,
+      details: { amount, reason },
+      ip_address: payload.ip_address || payload.ipAddress || ""
+    });
+    persist();
+    return { ...data.users[index] };
+  }
+
+  async function listXpLedger(options = {}) {
+    const limit = Math.max(1, Math.min(Number(options.limit || 100), 500));
+    const userId = options.user_id || options.userId ? String(options.user_id || options.userId) : "";
+    return [...data.xpLedger]
+      .filter((entry) => !userId || String(entry.user_id) === userId)
+      .sort((a, b) => String(b.created_at || "").localeCompare(String(a.created_at || "")))
+      .slice(0, limit)
+      .map((entry) => {
+        const user = findUserByIdSync(entry.user_id) || {};
+        const admin = findUserByIdSync(entry.admin_id) || {};
+        return {
+          ...entry,
+          user_name: user.name || "",
+          user_email: user.email || "",
+          admin_name: admin.name || "",
+          admin_email: admin.email || ""
+        };
+      });
+  }
+
+  async function listAdminLogs(options = {}) {
+    const limit = Math.max(1, Math.min(Number(options.limit || 100), 500));
+    return [...data.adminLogs]
+      .sort((a, b) => String(b.created_at || "").localeCompare(String(a.created_at || "")))
+      .slice(0, limit)
+      .map((entry) => {
+        const admin = findUserByIdSync(entry.admin_id) || {};
+        return {
+          ...entry,
+          admin_name: admin.name || "",
+          admin_email: admin.email || ""
+        };
+      });
   }
 
   async function grantDailyXpIfNeeded(userId, options = {}) {
@@ -841,14 +993,30 @@ function createFallbackDatabaseClient() {
   }
 
   async function getAdminStats() {
+    const activeSubscriptions = data.users.filter((item) => Number(item.package_daily_xp || 0) > 0);
+    const xpUsed = data.xpLedger
+      .filter((item) => Number(item.amount || 0) < 0)
+      .reduce((total, item) => total + Math.abs(Number(item.amount || 0)), 0);
     return {
       total_users: data.users.length,
+      users_count: data.users.length,
       total_students: data.users.filter((item) => String(item.role) === "student").length,
+      students_count: data.users.filter((item) => String(item.role) === "student").length,
       total_admins: data.users.filter((item) => String(item.role) === "admin").length,
+      admins_count: data.users.filter((item) => String(item.role || "").includes("admin")).length,
+      active_users_count: data.users.filter((item) => String(item.status || "active") === "active").length,
+      active_subscriptions_count: activeSubscriptions.length,
+      revenue_total: activeSubscriptions.reduce((total, item) => total + Number(item.package_price_sar || 0), 0),
+      xp_used_total: xpUsed,
+      today_requests_count: data.messages.filter((item) => String(item.created_at || "").slice(0, 10) === getTodayStamp()).length,
       total_projects: data.projects.length,
+      projects_count: data.projects.length,
       total_conversations: data.conversations.length,
+      conversations_count: data.conversations.length,
       total_messages: data.messages.length,
-      active_packages: data.packages.filter((item) => Number(item.is_active || 0) === 1).length
+      messages_count: data.messages.length,
+      active_packages: data.packages.filter((item) => Number(item.is_active || 0) === 1).length,
+      packages_count: data.packages.filter((item) => Number(item.is_active || 0) === 1).length
     };
   }
 
@@ -892,9 +1060,16 @@ function createFallbackDatabaseClient() {
     findDefaultPackage,
     findPackageByKeyOrName,
     listPackages,
+    createPackage,
     updatePackage,
     recordXpLedger,
     grantDailyXpIfNeeded,
+    listSubscriptions,
+    assignPackageToUser,
+    adjustUserXpByAdmin,
+    listXpLedger,
+    recordAdminLog,
+    listAdminLogs,
     findUserByEmail,
     findUserById,
     createUser,

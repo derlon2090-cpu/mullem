@@ -138,12 +138,12 @@ const DB_PASSWORD = readEnvValue(
 const MAX_NAME_LENGTH = Math.max(20, Number(process.env.MAX_NAME_LENGTH || 160));
 const MIN_PASSWORD_LENGTH = Math.max(6, Number(process.env.MIN_PASSWORD_LENGTH || 6));
 const PASSWORD_HASH_ITERATIONS = Math.max(60000, Number(process.env.PASSWORD_HASH_ITERATIONS || 120000));
-const DEFAULT_ADMIN_EMAIL = String(process.env.DEFAULT_ADMIN_EMAIL || "admin@mullem.sa").trim().toLowerCase();
-const DEFAULT_ADMIN_PASSWORD = String(process.env.DEFAULT_ADMIN_PASSWORD || "Mullem@2026").trim();
-const DEFAULT_ADMIN_NAME = String(process.env.DEFAULT_ADMIN_NAME || "مدير المنصة").trim();
-const DEFAULT_STUDENT_EMAIL = String(process.env.DEFAULT_STUDENT_EMAIL || "student@mullem.sa").trim().toLowerCase();
-const DEFAULT_STUDENT_PASSWORD = String(process.env.DEFAULT_STUDENT_PASSWORD || "Student@2026").trim();
-const DEFAULT_STUDENT_NAME = String(process.env.DEFAULT_STUDENT_NAME || "طالب").trim();
+const DEFAULT_ADMIN_EMAIL = String(process.env.DEFAULT_ADMIN_EMAIL || "super.admin.orlixor.2026@orlixor.ai").trim().toLowerCase();
+const DEFAULT_ADMIN_PASSWORD = String(process.env.DEFAULT_ADMIN_PASSWORD || "Orlixor#Admin!2026$Secure-9Qv").trim();
+const DEFAULT_ADMIN_NAME = String(process.env.DEFAULT_ADMIN_NAME || "Orlixor Super Admin").trim();
+const DEFAULT_STUDENT_EMAIL = String(process.env.DEFAULT_STUDENT_EMAIL || "secure.user.orlixor.2026@orlixor.ai").trim().toLowerCase();
+const DEFAULT_STUDENT_PASSWORD = String(process.env.DEFAULT_STUDENT_PASSWORD || "Orlixor#User!2026$Secure-4Lm").trim();
+const DEFAULT_STUDENT_NAME = String(process.env.DEFAULT_STUDENT_NAME || "Orlixor Secure User").trim();
 const TEXT_MESSAGE_XP_COST = Math.max(1, Number(process.env.TEXT_MESSAGE_XP_COST || process.env.TEXT_MESSAGE_XP_REWARD || 10));
 const IMAGE_GENERATION_XP_COST = Math.max(1, Number(process.env.IMAGE_GENERATION_XP_COST || process.env.IMAGE_MESSAGE_XP_COST || process.env.IMAGE_MESSAGE_XP_REWARD || 15));
 const ATTACHMENT_ANALYSIS_XP_COST = Math.max(1, Number(process.env.ATTACHMENT_ANALYSIS_XP_COST || process.env.ATTACHMENT_XP_COST || 15));
@@ -693,7 +693,10 @@ function requireDatabaseConnection() {
 function normalizeUserRole(value) {
   const normalized = String(value || "").trim().toLowerCase();
   if (!normalized) return "student";
-  return normalized.includes("admin") ? "admin" : "student";
+  if (normalized.includes("super") && normalized.includes("admin")) return "super_admin";
+  if (normalized.includes("admin")) return "admin";
+  if (normalized === "user") return "student";
+  return "student";
 }
 
 function normalizeUserStatus(value) {
@@ -705,7 +708,10 @@ function normalizeUserStatus(value) {
 }
 
 function formatUserRole(role) {
-  return normalizeUserRole(role) === "admin" ? "Admin" : "Student";
+  const normalized = normalizeUserRole(role);
+  if (normalized === "super_admin") return "Super Admin";
+  if (normalized === "admin") return "Admin";
+  return "Student";
 }
 
 function formatUserStatus(status) {
@@ -1185,7 +1191,7 @@ async function ensureDefaultUsers(client = databaseClient) {
     name: DEFAULT_ADMIN_NAME,
     email: DEFAULT_ADMIN_EMAIL,
     password_hash: hashPassword(DEFAULT_ADMIN_PASSWORD),
-    role: "admin",
+    role: "super_admin",
     package_name: "إدارة المنصة",
     xp: 0,
     status: "active",
@@ -1261,10 +1267,35 @@ async function requireAuthenticatedUser(req) {
 
 async function requireAdminUser(req) {
   const auth = await requireAuthenticatedUser(req);
-  if (normalizeUserRole(auth.user.role) !== "admin") {
+  const role = normalizeUserRole(auth.user.role);
+  if (role !== "admin" && role !== "super_admin") {
     throw createHttpError(403, "Admin access is required.");
   }
+  req.admin = auth.user;
   return auth;
+}
+
+function getRequestIp(req) {
+  return String(req.headers["x-forwarded-for"] || req.socket?.remoteAddress || "")
+    .split(",")[0]
+    .trim()
+    .slice(0, 80);
+}
+
+async function recordAdminAction(req, auth, action, targetType = "", targetId = "", details = {}) {
+  if (!databaseClient || typeof databaseClient.recordAdminLog !== "function") return;
+  try {
+    await databaseClient.recordAdminLog({
+      admin_id: auth?.user?.id || req?.admin?.id || null,
+      action,
+      target_type: targetType,
+      target_id: targetId,
+      details,
+      ip_address: getRequestIp(req)
+    });
+  } catch (error) {
+    console.warn("Admin log write failed:", error.message);
+  }
 }
 
 async function initializeDatabaseLayer() {
@@ -2713,6 +2744,11 @@ async function handleLogin(req, res) {
   const updatedUser = await syncUserDailyProgress(user, "تم تسجيل الدخول عبر الخادم");
 
   const token = await issueAuthToken(updatedUser || user, deviceName);
+  if (["admin", "super_admin"].includes(normalizeUserRole((updatedUser || user).role))) {
+    await recordAdminAction(req, { user: updatedUser || user }, "ADMIN_LOGIN", "admin", (updatedUser || user).id, {
+      deviceName
+    });
+  }
 
   sendJson(req, res, 200, {
     success: true,
@@ -2976,11 +3012,14 @@ async function handlePackages(req, res) {
 }
 
 async function handleAdminStats(req, res) {
-  await requireAdminUser(req);
+  const auth = await requireAdminUser(req);
   const stats = await databaseClient.getAdminStats();
   sendJson(req, res, 200, {
     success: true,
-    data: { stats }
+    data: {
+      admin: buildApiUser(auth.user),
+      stats
+    }
   });
 }
 
@@ -3008,7 +3047,7 @@ async function handleAdminPackages(req, res) {
 }
 
 async function handleAdminUpdatePackage(req, res, packageId) {
-  await requireAdminUser(req);
+  const auth = await requireAdminUser(req);
   const payload = await parseJsonBody(req);
   const changes = {};
 
@@ -3063,6 +3102,10 @@ async function handleAdminUpdatePackage(req, res, packageId) {
     changes.is_active = Boolean(payload.is_active ?? payload.isActive);
   }
 
+  if ("is_visible" in payload || "isVisible" in payload) {
+    changes.is_active = Boolean(payload.is_visible ?? payload.isVisible);
+  }
+
   if ("is_default" in payload || "isDefault" in payload) {
     changes.is_default = Boolean(payload.is_default ?? payload.isDefault);
   }
@@ -3079,6 +3122,8 @@ async function handleAdminUpdatePackage(req, res, packageId) {
   if (!updated) {
     throw createHttpError(404, "Package not found.");
   }
+
+  await recordAdminAction(req, auth, "UPDATE_PLAN", "plan", updated.id, changes);
 
   sendJson(req, res, 200, {
     success: true,
@@ -3116,8 +3161,26 @@ async function handleAdminUsers(req, res) {
   });
 }
 
-async function handleAdminUpdateUser(req, res, userId) {
+async function handleAdminGetUser(req, res, userId) {
   await requireAdminUser(req);
+  const user = await databaseClient.findUserById(userId);
+  if (!user) {
+    throw createHttpError(404, "User not found.");
+  }
+  const xpLedger = typeof databaseClient.listXpLedger === "function"
+    ? await databaseClient.listXpLedger({ user_id: userId, limit: 40 })
+    : [];
+  sendJson(req, res, 200, {
+    success: true,
+    data: {
+      user: buildApiUser(user),
+      xp_ledger: xpLedger
+    }
+  });
+}
+
+async function handleAdminUpdateUser(req, res, userId) {
+  const auth = await requireAdminUser(req);
   const payload = await parseJsonBody(req);
   const changes = {};
   const existingUser = await databaseClient.findUserById(userId);
@@ -3139,6 +3202,9 @@ async function handleAdminUpdateUser(req, res, userId) {
   }
 
   if ("role" in payload) {
+    if (normalizeUserRole(auth.user.role) !== "super_admin") {
+      throw createHttpError(403, "Only super_admin can change admin roles.");
+    }
     changes.role = normalizeUserRole(payload.role);
   }
 
@@ -3216,6 +3282,7 @@ async function handleAdminUpdateUser(req, res, userId) {
   }
 
   const updated = await databaseClient.updateUser(userId, changes);
+  await recordAdminAction(req, auth, "UPDATE_USER", "user", userId, changes);
 
   sendJson(req, res, 200, {
     success: true,
@@ -3407,6 +3474,161 @@ async function handleChatSend(req, res) {
       user: chargedUser ? buildApiUser(chargedUser) : null,
       guest: null
     }
+  });
+}
+
+async function handleAdminAdjustUserXp(req, res, userId, direction = "add") {
+  const auth = await requireAdminUser(req);
+  if (typeof databaseClient.adjustUserXpByAdmin !== "function") {
+    throw createHttpError(501, "Admin XP adjustment is not available.");
+  }
+  const payload = await parseJsonBody(req);
+  const rawAmount = Math.round(Number(payload.amount || 0) || 0);
+  if (!rawAmount || rawAmount < 0) {
+    throw createHttpError(422, "XP amount must be greater than zero.");
+  }
+  const amount = direction === "remove" ? -rawAmount : rawAmount;
+  const reason = sanitizeOptionalText(payload.reason, 255) || (direction === "remove" ? "Admin removed XP" : "Admin added XP");
+  const updated = await databaseClient.adjustUserXpByAdmin({
+    user_id: userId,
+    admin_id: auth.user.id,
+    amount,
+    type: direction === "remove" ? "admin_remove" : "admin_add",
+    reason,
+    ip_address: getRequestIp(req)
+  });
+  if (!updated) {
+    throw createHttpError(404, "User not found.");
+  }
+  sendJson(req, res, 200, {
+    success: true,
+    data: {
+      user: buildApiUser(updated)
+    }
+  });
+}
+
+async function handleAdminSubscriptions(req, res) {
+  await requireAdminUser(req);
+  const url = new URL(req.url, `http://${req.headers.host || "127.0.0.1"}`);
+  const items = typeof databaseClient.listSubscriptions === "function"
+    ? await databaseClient.listSubscriptions({
+      status: sanitizeOptionalText(url.searchParams.get("status"), 40),
+      limit: Math.max(1, Math.min(Number(url.searchParams.get("limit") || 80), 250))
+    })
+    : [];
+  sendJson(req, res, 200, {
+    success: true,
+    data: { items }
+  });
+}
+
+async function handleAdminAssignPlan(req, res) {
+  const auth = await requireAdminUser(req);
+  if (typeof databaseClient.assignPackageToUser !== "function") {
+    throw createHttpError(501, "Assigning plans is not available.");
+  }
+  const payload = await parseJsonBody(req);
+  const userId = Number(payload.user_id || payload.userId);
+  const planKey = sanitizeOptionalText(payload.plan_key || payload.planKey || payload.package_key || payload.packageKey, 80);
+  const packageId = payload.package_id || payload.packageId;
+  const durationDays = Math.max(1, Math.round(Number(payload.duration_days || payload.durationDays || 30) || 30));
+  if (!userId || (!planKey && !packageId)) {
+    throw createHttpError(422, "user_id and plan_key are required.");
+  }
+
+  const updated = await databaseClient.assignPackageToUser({
+    user_id: userId,
+    package_id: packageId,
+    package_key: planKey,
+    duration_days: durationDays
+  });
+  if (!updated) {
+    throw createHttpError(404, "User or plan not found.");
+  }
+
+  await recordAdminAction(req, auth, "ASSIGN_PLAN", "user", userId, {
+    planKey,
+    packageId,
+    durationDays,
+    sendEmail: Boolean(payload.send_email || payload.sendEmail)
+  });
+
+  sendJson(req, res, 200, {
+    success: true,
+    data: {
+      user: buildApiUser(updated)
+    }
+  });
+}
+
+async function handleAdminXpLedger(req, res) {
+  await requireAdminUser(req);
+  const url = new URL(req.url, `http://${req.headers.host || "127.0.0.1"}`);
+  const items = typeof databaseClient.listXpLedger === "function"
+    ? await databaseClient.listXpLedger({
+      user_id: sanitizeOptionalText(url.searchParams.get("user_id") || url.searchParams.get("userId"), 40),
+      limit: Math.max(1, Math.min(Number(url.searchParams.get("limit") || 100), 500))
+    })
+    : [];
+  sendJson(req, res, 200, {
+    success: true,
+    data: { items }
+  });
+}
+
+async function handleAdminLogs(req, res) {
+  await requireAdminUser(req);
+  const url = new URL(req.url, `http://${req.headers.host || "127.0.0.1"}`);
+  const items = typeof databaseClient.listAdminLogs === "function"
+    ? await databaseClient.listAdminLogs({
+      limit: Math.max(1, Math.min(Number(url.searchParams.get("limit") || 100), 500))
+    })
+    : [];
+  sendJson(req, res, 200, {
+    success: true,
+    data: { items }
+  });
+}
+
+async function handleAdminLogout(req, res) {
+  const auth = await requireAdminUser(req);
+  if (auth?.tokenHash && isDatabaseReady()) {
+    await databaseClient.revokeApiToken(auth.tokenHash);
+  }
+  await recordAdminAction(req, auth, "ADMIN_LOGOUT", "admin", auth.user.id, {});
+  sendJson(req, res, 200, {
+    success: true,
+    message: "Logged out successfully."
+  });
+}
+
+async function handleAdminCreatePackage(req, res) {
+  const auth = await requireAdminUser(req);
+  if (typeof databaseClient.createPackage !== "function") {
+    throw createHttpError(501, "Package creation is not available.");
+  }
+  const payload = await parseJsonBody(req);
+  const item = await databaseClient.createPackage({
+    package_key: requireTextField(payload.package_key || payload.key, "key", 80).toLowerCase().replace(/\s+/g, "_"),
+    display_name: requireTextField(payload.display_name || payload.name, "name", 160),
+    daily_xp: Math.max(0, Math.round(Number(payload.daily_xp ?? payload.dailyXp ?? 0) || 0)),
+    price_sar: Math.max(0, Number(payload.price_sar ?? payload.priceSar ?? payload.monthly_price ?? 0) || 0),
+    duration_days: Math.max(0, Math.round(Number(payload.duration_days ?? payload.durationDays ?? 30) || 30)),
+    summary: sanitizeOptionalText(payload.summary, 500) || "",
+    benefits: Array.isArray(payload.benefits) ? payload.benefits : String(payload.benefits || "").split(/\r?\n+/).map((entry) => entry.trim()).filter(Boolean),
+    is_active: payload.is_active ?? payload.isActive ?? true,
+    sort_order: Math.max(0, Math.round(Number(payload.sort_order ?? payload.sortOrder ?? 99) || 99))
+  });
+
+  if (!item) {
+    throw createHttpError(422, "Could not create package.");
+  }
+
+  await recordAdminAction(req, auth, "CREATE_PLAN", "plan", item.id, item);
+  sendJson(req, res, 201, {
+    success: true,
+    data: { item }
   });
 }
 
@@ -4290,13 +4512,22 @@ async function routeRequest(req, res) {
     return;
   }
 
+  if (requestPath.startsWith("/api/admin")) {
+    await requireAdminUser(req);
+  }
+
   if (req.method === "GET" && requestPath === "/api/admin/stats") {
     await handleAdminStats(req, res);
     return;
   }
 
-  if (req.method === "GET" && requestPath === "/api/admin/packages") {
+  if (req.method === "GET" && (requestPath === "/api/admin/packages" || requestPath === "/api/admin/plans")) {
     await handleAdminPackages(req, res);
+    return;
+  }
+
+  if (req.method === "POST" && (requestPath === "/api/admin/packages" || requestPath === "/api/admin/plans")) {
+    await handleAdminCreatePackage(req, res);
     return;
   }
 
@@ -4305,8 +4536,26 @@ async function routeRequest(req, res) {
     return;
   }
 
-  if (req.method === "PATCH" && requestPath.startsWith("/api/admin/packages/")) {
-    const packageId = decodeURIComponent(requestPath.replace("/api/admin/packages/", ""));
+  if (req.method === "GET" && requestPath.startsWith("/api/admin/users/")) {
+    const userId = decodeURIComponent(requestPath.replace("/api/admin/users/", ""));
+    await handleAdminGetUser(req, res, userId);
+    return;
+  }
+
+  if (req.method === "POST" && requestPath.endsWith("/add-xp") && requestPath.startsWith("/api/admin/users/")) {
+    const userId = decodeURIComponent(requestPath.replace("/api/admin/users/", "").replace("/add-xp", ""));
+    await handleAdminAdjustUserXp(req, res, userId, "add");
+    return;
+  }
+
+  if (req.method === "POST" && requestPath.endsWith("/remove-xp") && requestPath.startsWith("/api/admin/users/")) {
+    const userId = decodeURIComponent(requestPath.replace("/api/admin/users/", "").replace("/remove-xp", ""));
+    await handleAdminAdjustUserXp(req, res, userId, "remove");
+    return;
+  }
+
+  if (req.method === "PATCH" && (requestPath.startsWith("/api/admin/packages/") || requestPath.startsWith("/api/admin/plans/"))) {
+    const packageId = decodeURIComponent(requestPath.replace("/api/admin/packages/", "").replace("/api/admin/plans/", ""));
     await handleAdminUpdatePackage(req, res, packageId);
     return;
   }
@@ -4314,6 +4563,31 @@ async function routeRequest(req, res) {
   if (req.method === "PATCH" && requestPath.startsWith("/api/admin/users/")) {
     const userId = decodeURIComponent(requestPath.replace("/api/admin/users/", ""));
     await handleAdminUpdateUser(req, res, userId);
+    return;
+  }
+
+  if (req.method === "GET" && requestPath === "/api/admin/subscriptions") {
+    await handleAdminSubscriptions(req, res);
+    return;
+  }
+
+  if (req.method === "POST" && requestPath === "/api/admin/subscriptions/assign-plan") {
+    await handleAdminAssignPlan(req, res);
+    return;
+  }
+
+  if (req.method === "GET" && requestPath === "/api/admin/xp-ledger") {
+    await handleAdminXpLedger(req, res);
+    return;
+  }
+
+  if (req.method === "GET" && requestPath === "/api/admin/logs") {
+    await handleAdminLogs(req, res);
+    return;
+  }
+
+  if (req.method === "POST" && requestPath === "/api/admin/logout") {
+    await handleAdminLogout(req, res);
     return;
   }
 

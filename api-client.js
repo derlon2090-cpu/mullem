@@ -885,6 +885,67 @@
     });
   }
 
+  async function createAdminPackage(payload) {
+    return request("/admin/plans", {
+      method: "POST",
+      body: payload
+    });
+  }
+
+  async function addAdminUserXp(userId, payload) {
+    return request(`/admin/users/${encodeURIComponent(String(userId))}/add-xp`, {
+      method: "POST",
+      body: payload
+    });
+  }
+
+  async function removeAdminUserXp(userId, payload) {
+    return request(`/admin/users/${encodeURIComponent(String(userId))}/remove-xp`, {
+      method: "POST",
+      body: payload
+    });
+  }
+
+  async function getAdminSubscriptions(params = {}) {
+    const query = new URLSearchParams();
+    Object.entries(params || {}).forEach(([key, value]) => {
+      if (value == null || value === "") return;
+      query.set(key, String(value));
+    });
+    return request(`/admin/subscriptions${query.toString() ? `?${query.toString()}` : ""}`);
+  }
+
+  async function assignAdminPlan(payload) {
+    return request("/admin/subscriptions/assign-plan", {
+      method: "POST",
+      body: payload
+    });
+  }
+
+  async function getAdminXpLedger(params = {}) {
+    const query = new URLSearchParams();
+    Object.entries(params || {}).forEach(([key, value]) => {
+      if (value == null || value === "") return;
+      query.set(key, String(value));
+    });
+    return request(`/admin/xp-ledger${query.toString() ? `?${query.toString()}` : ""}`);
+  }
+
+  async function getAdminLogs(params = {}) {
+    const query = new URLSearchParams();
+    Object.entries(params || {}).forEach(([key, value]) => {
+      if (value == null || value === "") return;
+      query.set(key, String(value));
+    });
+    return request(`/admin/logs${query.toString() ? `?${query.toString()}` : ""}`);
+  }
+
+  async function adminLogout() {
+    return request("/admin/logout", {
+      method: "POST"
+    });
+  }
+
   async function sendChat(payload) {
     return request("/chat/send", {
       method: "POST",
@@ -1038,8 +1099,16 @@
     getAdminStats,
     getAdminPackages,
     getAdminUsers,
+    createAdminPackage,
     updateAdminPackage,
     updateAdminUser,
+    addAdminUserXp,
+    removeAdminUserXp,
+    getAdminSubscriptions,
+    assignAdminPlan,
+    getAdminXpLedger,
+    getAdminLogs,
+    adminLogout,
     sendChat,
     smartSearch,
     runWritingAssistant,

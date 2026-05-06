@@ -624,10 +624,27 @@ function createPostgresDatabaseClient(rawConfig = {}) {
         amount INTEGER NOT NULL,
         type VARCHAR(40) NOT NULL,
         reason TEXT NULL,
+        admin_id BIGINT NULL REFERENCES app_users(id) ON DELETE SET NULL,
         created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
       )
     `);
+    await ensureColumn("xp_ledger", "admin_id", "admin_id BIGINT NULL REFERENCES app_users(id) ON DELETE SET NULL");
     await pool.query("CREATE INDEX IF NOT EXISTS idx_xp_ledger_user_created ON xp_ledger (user_id, created_at DESC)");
+
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS admin_logs (
+        id BIGSERIAL PRIMARY KEY,
+        admin_id BIGINT NULL REFERENCES app_users(id) ON DELETE SET NULL,
+        action VARCHAR(80) NOT NULL,
+        target_type VARCHAR(80) NULL,
+        target_id VARCHAR(120) NULL,
+        details_json JSONB NULL,
+        ip_address VARCHAR(80) NULL,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )
+    `);
+    await pool.query("CREATE INDEX IF NOT EXISTS idx_admin_logs_admin_created ON admin_logs (admin_id, created_at DESC)");
+    await pool.query("CREATE INDEX IF NOT EXISTS idx_admin_logs_target ON admin_logs (target_type, target_id)");
 
     await pool.query(`
       CREATE TABLE IF NOT EXISTS app_api_tokens (
@@ -1168,15 +1185,37 @@ function createPostgresDatabaseClient(rawConfig = {}) {
     if (!userId || !type || !amount) return null;
     const rows = await query(
       `
-        INSERT INTO xp_ledger (user_id, amount, type, reason)
-        VALUES ($1, $2, $3, $4)
+        INSERT INTO xp_ledger (user_id, amount, type, reason, admin_id)
+        VALUES ($1, $2, $3, $4, $5)
         RETURNING *
       `,
       [
         userId,
         amount,
         type,
-        String(payload.reason || "").trim() || null
+        String(payload.reason || "").trim() || null,
+        payload.admin_id || payload.adminId ? Number(payload.admin_id || payload.adminId) : null
+      ]
+    );
+    return rows[0] || null;
+  }
+
+  async function recordAdminLog(payload = {}) {
+    const action = String(payload.action || "").trim().slice(0, 80);
+    if (!action) return null;
+    const rows = await query(
+      `
+        INSERT INTO admin_logs (admin_id, action, target_type, target_id, details_json, ip_address)
+        VALUES ($1, $2, $3, $4, $5::jsonb, $6)
+        RETURNING *
+      `,
+      [
+        payload.admin_id || payload.adminId ? Number(payload.admin_id || payload.adminId) : null,
+        action,
+        String(payload.target_type || payload.targetType || "").trim().slice(0, 80) || null,
+        payload.target_id || payload.targetId ? String(payload.target_id || payload.targetId).slice(0, 120) : null,
+        payload.details_json || payload.details || payload.detailsJson ? JSON.stringify(payload.details_json || payload.details || payload.detailsJson) : null,
+        String(payload.ip_address || payload.ipAddress || "").trim().slice(0, 80) || null
       ]
     );
     return rows[0] || null;
@@ -1303,10 +1342,10 @@ function createPostgresDatabaseClient(rawConfig = {}) {
       for (const entry of ledgerEntries) {
         await client.query(
           `
-            INSERT INTO xp_ledger (user_id, amount, type, reason)
-            VALUES ($1, $2, $3, $4)
+            INSERT INTO xp_ledger (user_id, amount, type, reason, admin_id)
+            VALUES ($1, $2, $3, $4, $5)
           `,
-          [safeUserId, entry.amount, entry.type, entry.reason]
+          [safeUserId, entry.amount, entry.type, entry.reason, null]
         );
       }
 
@@ -1504,6 +1543,208 @@ function createPostgresDatabaseClient(rawConfig = {}) {
     }
 
     return findPackageById(packageId);
+  }
+
+  async function createPackage(payload = {}) {
+    const packageKey = String(payload.package_key || payload.key || "").trim().toLowerCase().replace(/\s+/g, "_");
+    const displayName = String(payload.display_name || payload.name || "").trim();
+    if (!packageKey || !displayName) return null;
+    const rows = await query(
+      `
+        INSERT INTO app_packages (
+          package_key, display_name, daily_xp, price_sar, duration_days, summary, benefits, is_active, is_default, sort_order
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, FALSE, $9)
+        RETURNING id
+      `,
+      [
+        packageKey,
+        displayName,
+        Math.max(0, Math.round(Number(payload.daily_xp || payload.dailyXp || 0) || 0)),
+        Math.max(0, Number(payload.price_sar || payload.priceSar || payload.monthly_price || 0) || 0),
+        Math.max(0, Math.round(Number(payload.duration_days || payload.durationDays || 30) || 30)),
+        String(payload.summary || "").trim() || null,
+        serializeBenefits(payload.benefits || payload.features || []),
+        "is_active" in payload ? normalizeBoolean(payload.is_active) : true,
+        Math.max(0, Math.round(Number(payload.sort_order || payload.sortOrder || 99) || 99))
+      ]
+    );
+    return findPackageById(rows[0].id);
+  }
+
+  async function listSubscriptions(options = {}) {
+    const limit = Math.max(1, Math.min(Number(options.limit || 80), 250));
+    const status = String(options.status || "").trim().toLowerCase();
+    const params = [];
+    const where = [];
+    if (status) {
+      params.push(status);
+      where.push(`s.status = $${params.length}`);
+    }
+    params.push(limit);
+    const rows = await query(
+      `
+        SELECT
+          s.*,
+          u.name AS user_name,
+          u.email AS user_email,
+          u.xp AS user_xp
+        FROM app_subscriptions s
+        LEFT JOIN app_users u ON u.id = s.user_id
+        ${where.length ? `WHERE ${where.join(" AND ")}` : ""}
+        ORDER BY COALESCE(s.expires_at, s.created_at) DESC, s.id DESC
+        LIMIT $${params.length}
+      `,
+      params
+    );
+    return rows;
+  }
+
+  async function assignPackageToUser(payload = {}) {
+    const userId = Number(payload.user_id || payload.userId);
+    const selectedPackage = payload.package_id
+      ? await findPackageById(payload.package_id)
+      : await findPackageByKeyOrName(payload.package_key || payload.planKey || payload.package || "");
+    if (!userId || !selectedPackage) return null;
+
+    const durationDays = Math.max(1, Math.round(Number(payload.duration_days || payload.durationDays || selectedPackage.duration_days || 30) || 30));
+    const startDate = new Date();
+    const expiresAt = new Date(startDate.getTime() + (durationDays * 86400000));
+
+    const client = await pool.connect();
+    try {
+      await client.query("BEGIN");
+      await client.query("UPDATE app_users SET package_id = $1, package_name = $2, plan_type = $3, package_started_at = $4, package_expires_at = $5, updated_at = NOW() WHERE id = $6", [
+        selectedPackage.id,
+        selectedPackage.display_name,
+        selectedPackage.package_key,
+        toSqlDateTime(startDate),
+        toSqlDateTime(expiresAt),
+        userId
+      ]);
+      await client.query("UPDATE app_subscriptions SET status = 'replaced', updated_at = NOW() WHERE user_id = $1 AND status = 'active'", [userId]);
+      await client.query(
+        `
+          INSERT INTO app_subscriptions (
+            user_id, package_id, package_key, package_name, daily_xp, price_sar, duration_days, status, started_at, expires_at
+          ) VALUES ($1, $2, $3, $4, $5, $6, $7, 'active', $8, $9)
+        `,
+        [
+          userId,
+          selectedPackage.id,
+          selectedPackage.package_key,
+          selectedPackage.display_name,
+          Number(selectedPackage.daily_xp || 0),
+          Number(selectedPackage.price_sar || 0),
+          durationDays,
+          toSqlDateTime(startDate),
+          toSqlDateTime(expiresAt)
+        ]
+      );
+      await client.query("COMMIT");
+    } catch (error) {
+      try {
+        await client.query("ROLLBACK");
+      } catch (_) {}
+      throw error;
+    } finally {
+      client.release();
+    }
+
+    return findUserById(userId);
+  }
+
+  async function adjustUserXpByAdmin(payload = {}) {
+    const userId = Number(payload.user_id || payload.userId);
+    const adminId = payload.admin_id || payload.adminId ? Number(payload.admin_id || payload.adminId) : null;
+    const amount = Math.round(Number(payload.amount || 0) || 0);
+    const type = String(payload.type || (amount >= 0 ? "admin_add" : "admin_remove")).trim().toLowerCase();
+    const reason = String(payload.reason || "").trim() || "Admin XP adjustment";
+    if (!userId || !amount) return null;
+
+    const client = await pool.connect();
+    try {
+      await client.query("BEGIN");
+      const userResult = await client.query("SELECT * FROM app_users WHERE id = $1 FOR UPDATE", [userId]);
+      const user = userResult.rows[0] || null;
+      if (!user) throw new Error("User not found");
+      const nextXp = Math.max(0, Number(user.xp || 0) + amount);
+      await client.query("UPDATE app_users SET xp = $1, total_xp = $1, activity = $2, updated_at = NOW() WHERE id = $3", [
+        nextXp,
+        reason.slice(0, 255),
+        userId
+      ]);
+      await client.query(
+        "INSERT INTO xp_ledger (user_id, amount, type, reason, admin_id) VALUES ($1, $2, $3, $4, $5)",
+        [userId, amount, type, reason, adminId]
+      );
+      await client.query(
+        "INSERT INTO admin_logs (admin_id, action, target_type, target_id, details_json, ip_address) VALUES ($1, $2, 'user', $3, $4::jsonb, $5)",
+        [
+          adminId,
+          amount >= 0 ? "ADMIN_ADD_XP" : "ADMIN_REMOVE_XP",
+          String(userId),
+          JSON.stringify({ amount, reason }),
+          String(payload.ip_address || payload.ipAddress || "").slice(0, 80) || null
+        ]
+      );
+      await client.query("COMMIT");
+      return findUserById(userId);
+    } catch (error) {
+      try {
+        await client.query("ROLLBACK");
+      } catch (_) {}
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
+  async function listXpLedger(options = {}) {
+    const limit = Math.max(1, Math.min(Number(options.limit || 100), 500));
+    const userId = options.user_id || options.userId ? Number(options.user_id || options.userId) : null;
+    const params = [];
+    const where = [];
+    if (userId) {
+      params.push(userId);
+      where.push(`x.user_id = $${params.length}`);
+    }
+    params.push(limit);
+    const rows = await query(
+      `
+        SELECT
+          x.*,
+          u.name AS user_name,
+          u.email AS user_email,
+          a.name AS admin_name,
+          a.email AS admin_email
+        FROM xp_ledger x
+        LEFT JOIN app_users u ON u.id = x.user_id
+        LEFT JOIN app_users a ON a.id = x.admin_id
+        ${where.length ? `WHERE ${where.join(" AND ")}` : ""}
+        ORDER BY x.created_at DESC, x.id DESC
+        LIMIT $${params.length}
+      `,
+      params
+    );
+    return rows;
+  }
+
+  async function listAdminLogs(options = {}) {
+    const limit = Math.max(1, Math.min(Number(options.limit || 100), 500));
+    const rows = await query(
+      `
+        SELECT
+          l.*,
+          a.name AS admin_name,
+          a.email AS admin_email
+        FROM admin_logs l
+        LEFT JOIN app_users a ON a.id = l.admin_id
+        ORDER BY l.created_at DESC, l.id DESC
+        LIMIT $1
+      `,
+      [limit]
+    );
+    return rows;
   }
 
   async function findUserByEmail(email) {
@@ -1922,13 +2163,21 @@ function createPostgresDatabaseClient(rawConfig = {}) {
     const messageRows = await query("SELECT COUNT(*) AS messages_count FROM messages");
     const projectRows = await query("SELECT COUNT(*) AS projects_count FROM app_projects WHERE is_archived = FALSE");
     const packageRows = await query("SELECT COUNT(*) AS packages_count FROM app_packages WHERE is_active = TRUE");
+    const subscriptionRows = await query("SELECT COUNT(*) AS active_subscriptions_count, COALESCE(SUM(price_sar), 0) AS revenue_total FROM app_subscriptions WHERE status = 'active'");
+    const xpRows = await query("SELECT COALESCE(SUM(ABS(amount)), 0) AS xp_used_total FROM xp_ledger WHERE amount < 0");
+    const todayRows = await query("SELECT COUNT(*) AS today_requests_count FROM messages WHERE created_at >= CURRENT_DATE");
 
     const userCountsRow = userCountsRows[0] || {};
+    const subscriptionRow = subscriptionRows[0] || {};
     return {
       users_count: Number(userCountsRow.users_count || 0),
       students_count: Number(userCountsRow.students_count || 0),
       admins_count: Number(userCountsRow.admins_count || 0),
       active_users_count: Number(userCountsRow.active_users_count || 0),
+      active_subscriptions_count: Number(subscriptionRow.active_subscriptions_count || 0),
+      revenue_total: Number(subscriptionRow.revenue_total || 0),
+      xp_used_total: Number(xpRows?.[0]?.xp_used_total || 0),
+      today_requests_count: Number(todayRows?.[0]?.today_requests_count || 0),
       conversations_count: Number(conversationRows?.[0]?.conversations_count || 0),
       messages_count: Number(messageRows?.[0]?.messages_count || 0),
       projects_count: Number(projectRows?.[0]?.projects_count || 0),
@@ -2003,7 +2252,14 @@ function createPostgresDatabaseClient(rawConfig = {}) {
     findDefaultPackage,
     findPackageByKeyOrName,
     listPackages,
+    createPackage,
     updatePackage,
+    listSubscriptions,
+    assignPackageToUser,
+    adjustUserXpByAdmin,
+    listXpLedger,
+    recordAdminLog,
+    listAdminLogs,
     findUserByEmail,
     findUserById,
     createUser,

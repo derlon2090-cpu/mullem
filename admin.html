@@ -3,214 +3,268 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta name="theme-color" content="#22c55e">
-  <script>
-    if ("scrollRestoration" in history) history.scrollRestoration = "manual";
-    if (location.hash === "#chat") history.replaceState(null, "", location.pathname + location.search);
-  </script>
-  <title>ملم | لوحة الأدمن</title>
+  <meta name="theme-color" content="#6d4bff">
+  <title>Orlixor | لوحة الأدمن</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800;900&display=swap" rel="stylesheet">
   <link rel="icon" type="image/svg+xml" href="favicon.svg">
   <link rel="stylesheet" href="styles.css">
 </head>
-<body>
-  <div class="shell">
-    <header class="topbar">
-      <div class="brand-wrap">
-        <div class="brand-mark brand-mark-logo-image" aria-hidden="true">
-          <img src="favicon.svg" alt="">
+<body class="admin-console-body">
+  <main class="orlixor-admin-console">
+    <section class="admin-secure-login" data-admin-login-view>
+      <div class="admin-login-shell">
+        <div class="admin-login-brand">
+          <span class="orlixor-admin-logo-mark">O</span>
+          <strong>Orlixor</strong>
         </div>
-        <div class="brand-text">
-          <div class="brand-name">لوحة أدمن ملم</div>
-          <div class="brand-copy">إدارة الأسئلة والمستخدمين والاشتراكات ومراقبة تكامل الـ API من مكان واحد.</div>
-        </div>
-      </div>
-      <div class="topbar-actions">
-        <a class="top-chip top-link" href="student.html">العودة إلى الشات</a>
-        <button class="top-chip top-link" type="button" data-admin-logout hidden>تسجيل الخروج</button>
-      </div>
-    </header>
-  </div>
-
-  <main class="page-wrap">
-    <div class="shell admin-auth-shell" data-admin-auth>
-      <section class="admin-login-card">
-        <h2>دخول الأدمن</h2>
-        <p>أدخل بريد الأدمن وكلمة المرور للوصول إلى لوحة الإدارة.</p>
-        <form class="admin-login-form" data-admin-login-form>
-          <input class="field" type="email" data-admin-email placeholder="البريد الإلكتروني">
-          <div class="password-field">
-            <input class="field" id="admin-password" type="password" data-admin-password placeholder="كلمة المرور">
-            <button class="password-toggle" type="button" data-password-toggle="admin-password" aria-label="إظهار كلمة المرور" aria-pressed="false">👁</button>
-          </div>
-          <button class="primary-btn" type="submit">دخول لوحة الأدمن</button>
-          <div class="small-copy" data-admin-login-state>الدخول محمي ببريد وكلمة مرور.</div>
+        <h1>دخول لوحة الأدمن</h1>
+        <p>الدخول محمي من السيرفر. لا يتم فتح اللوحة إلا بحساب يحمل صلاحية admin أو super_admin.</p>
+        <form class="admin-secure-form" data-admin-login-form>
+          <label>
+            البريد الإلكتروني
+            <input class="field" type="email" data-admin-email autocomplete="username" placeholder="super.admin.orlixor.2026@orlixor.ai" required>
+          </label>
+          <label>
+            كلمة المرور
+            <input class="field" type="password" data-admin-password autocomplete="current-password" placeholder="كلمة مرور الأدمن" required>
+          </label>
+          <button class="primary-btn" type="submit">دخول لوحة التحكم</button>
+          <div class="admin-login-hint" data-admin-login-state>استخدم بيانات الأدمن الصعبة التي تم ضبطها على السيرفر.</div>
         </form>
-      </section>
-    </div>
+      </div>
+    </section>
 
-    <div class="shell admin-wrap" data-admin-app hidden>
-      <div class="admin-layout admin-layout-modern">
-        <aside class="admin-sidebar">
-          <section class="admin-sidebar-card">
-            <span class="eyebrow">لوحة التشغيل</span>
-            <h2>إدارة منصة ملم</h2>
-            <p>لوحة تشغيل يومية مرتبة حول المستخدمين، الباقات، النشاط، ثم الإعدادات التشغيلية دون زحمة الأقسام الثانوية.</p>
-          </section>
+    <section class="admin-dashboard-shell" data-admin-app hidden>
+      <aside class="admin-right-sidebar">
+        <div class="admin-sidebar-brand">
+          <span class="orlixor-admin-logo-mark">O</span>
+          <strong>Orlixor</strong>
+        </div>
+        <nav class="admin-console-nav" aria-label="أقسام لوحة الأدمن">
+          <button class="is-active" type="button" data-admin-tab="dashboard"><span>⌂</span>لوحة التحكم</button>
+          <button type="button" data-admin-tab="users"><span>👥</span>المستخدمون</button>
+          <button type="button" data-admin-tab="plans"><span>♕</span>الباقات والاشتراكات</button>
+          <button type="button" data-admin-tab="payments"><span>▣</span>المدفوعات والفواتير</button>
+          <button type="button" data-admin-tab="transactions"><span>▤</span>سجل المعاملات</button>
+          <button type="button" data-admin-tab="xp"><span>ϟ</span>إدارة XP</button>
+          <button type="button" data-admin-tab="tools"><span>◔</span>الأدوات والتقارير</button>
+          <button type="button" data-admin-tab="messages"><span>✉</span>الرسائل والإشعارات</button>
+          <button type="button" data-admin-tab="support"><span>☏</span>طلبات الدعم</button>
+          <button type="button" data-admin-tab="settings"><span>⚙</span>الإعدادات</button>
+          <button type="button" data-admin-tab="logs"><span>▱</span>سجل النظام</button>
+        </nav>
+        <button class="admin-sidebar-logout" type="button" data-admin-logout>تسجيل خروج <span>⇱</span></button>
+      </aside>
 
-          <nav class="admin-sidebar-nav admin-tab-nav admin-tab-nav-modern" aria-label="أقسام لوحة الأدمن">
-            <button class="admin-nav-link is-active" type="button" data-admin-tab-link="users">المستخدمون</button>
-            <button class="admin-nav-link" type="button" data-admin-tab-link="packages">الباقات والاشتراكات</button>
-            <button class="admin-nav-link" type="button" data-admin-tab-link="reports">النشاط والتقارير</button>
-            <button class="admin-nav-link" type="button" data-admin-tab-link="settings">الإعدادات</button>
-          </nav>
+      <section class="admin-main-stage">
+        <header class="admin-top-strip">
+          <div class="admin-profile-mini">
+            <div class="admin-avatar" data-admin-avatar>أ</div>
+            <div>
+              <strong data-admin-name>أحمد السبيعي</strong>
+              <span data-admin-role>Super Admin</span>
+            </div>
+          </div>
+          <div class="admin-top-actions">
+            <button class="admin-icon-button" type="button" aria-label="التنبيهات">🔔<span>12</span></button>
+            <button class="admin-icon-button" type="button" aria-label="البريد">✉</button>
+            <label class="admin-search-box">
+              <input type="search" data-admin-global-search placeholder="ابحث عن شيء...">
+              <kbd>⌘K</kbd>
+            </label>
+          </div>
+        </header>
 
-          <section class="admin-sidebar-card admin-sidebar-note">
-            <strong>طريقة العمل</strong>
-            <span>ابدأ من المستخدمين والحسابات، ثم الباقات، ثم راقب النشاط، وبعدها عد إلى الإعدادات وبنك الأسئلة عند الحاجة فقط.</span>
-          </section>
-        </aside>
-
-        <div class="admin-main">
-          <section id="admin-users" class="admin-section-stack admin-tab-panel is-active" data-admin-tab-panel="users">
-            <section class="admin-hero-panel admin-tab-hero">
-              <div class="admin-hero-copy">
-                <span class="eyebrow">المستخدمون أولًا</span>
-                <h2>أدر الحسابات والباقات والرصيد من مكان واحد</h2>
-                <p>الواجهة الأساسية للأدمن صارت مركزة على المستخدم، الباقة الحالية، الرصيد، والحالة مع إجراءات مباشرة وسريعة.</p>
+        <div class="admin-panel-scroll">
+          <section class="admin-tab-panel is-active" data-admin-panel="dashboard">
+            <div class="admin-dashboard-title">
+              <div>
+                <h1>لوحة التحكم</h1>
+                <p>مرحبًا بك في لوحة إدارة Orlixor 👋</p>
               </div>
-              <div class="admin-hero-actions">
-                <button class="primary-btn top-cta-link" type="button" data-admin-switch-tab="packages">الباقات والاشتراكات</button>
-                <button class="helper-btn" type="button" data-admin-switch-tab="reports">النشاط والتقارير</button>
-                <button class="helper-btn" type="button" data-admin-switch-tab="settings">الإعدادات</button>
+              <div class="admin-date-controls">
+                <button type="button">آخر 30 يوم</button>
+                <button type="button">18 أبريل 2025 - 18 مايو 2025</button>
               </div>
+            </div>
+            <section class="admin-kpi-row" data-admin-stats></section>
+            <section class="admin-dashboard-grid">
+              <article class="admin-glass-panel admin-plan-distribution">
+                <h2>توزيع المستخدمين حسب الباقة</h2>
+                <div class="admin-donut-layout">
+                  <div class="admin-donut" data-plan-donut><strong data-total-users>0</strong><span>مستخدم</span></div>
+                  <div class="admin-donut-legend" data-plan-legend></div>
+                </div>
+                <button class="mini-btn" type="button" data-jump-tab="users">عرض التفاصيل</button>
+              </article>
+              <article class="admin-glass-panel admin-xp-chart">
+                <div class="admin-panel-title-row">
+                  <h2>استهلاك XP (آخر 30 يوم)</h2>
+                  <button type="button">يومي⌄</button>
+                </div>
+                <div class="admin-line-chart" data-xp-chart></div>
+              </article>
+              <article class="admin-glass-panel admin-operations">
+                <h2>آخر العمليات</h2>
+                <div class="admin-activity-list" data-recent-operations></div>
+                <button class="mini-btn" type="button" data-jump-tab="logs">عرض كل العمليات</button>
+              </article>
             </section>
-
-            <section class="stats-grid" data-admin-stats></section>
-
-            <div class="admin-section-head">
-              <div>
-                <h3>إدارة المستخدمين</h3>
-                <p>فلترة الحسابات والبحث فيها، ثم تعديل الباقة والرصيد والحالة وسجل النشاط من نفس البطاقة مباشرة.</p>
-              </div>
-            </div>
-
-            <div class="admin-grid admin-grid-single">
-              <article class="admin-panel admin-users-panel">
-                <div class="admin-toolbar">
-                  <input class="field" type="search" data-admin-user-search placeholder="ابحث باسم المستخدم أو بريده الإلكتروني">
-                  <select class="field" data-admin-user-package-filter>
-                    <option value="">كل الباقات</option>
-                  </select>
-                  <select class="field" data-admin-user-status-filter>
-                    <option value="">كل الحالات</option>
-                    <option value="active">النشطة</option>
-                    <option value="suspended">الموقوفة</option>
-                    <option value="banned">المحظورة</option>
-                  </select>
-                </div>
-                <div data-users-table></div>
+            <section class="admin-dashboard-grid admin-dashboard-grid-bottom">
+              <article class="admin-glass-panel">
+                <h2>أعلى المستخدمين استهلاكًا لـ XP</h2>
+                <div class="admin-table-wrap" data-top-users></div>
               </article>
-            </div>
-          </section>
-
-          <section id="admin-packages" class="admin-section-stack admin-tab-panel" data-admin-tab-panel="packages" hidden>
-            <div class="admin-section-head">
-              <div>
-                <h3>الباقات والاشتراكات</h3>
-                <p>عدّل الباقات ومزاياها، ثم راجع المشتركين داخل كل خطة من نفس التبويب بدون فصل زائد بين البيانات.</p>
-              </div>
-            </div>
-
-            <div class="admin-grid admin-grid-balanced">
-              <article class="admin-panel">
-                <h3 class="admin-section-title">إعدادات الباقات</h3>
-                <p class="admin-subtitle">تعديل الاسم والسعر والمدة وميزات كل باقة مباشرة من قاعدة البيانات.</p>
-                <div class="admin-list admin-list-wide" data-admin-packages></div>
+              <article class="admin-glass-panel">
+                <h2>أحدث الاشتراكات</h2>
+                <div class="admin-table-wrap" data-recent-subscriptions></div>
               </article>
-
-              <article class="admin-panel">
-                <h3 class="admin-section-title">المشتركون الحاليون</h3>
-                <p class="admin-subtitle">عرض المستخدمين داخل كل باقة، ومعرفة الرصيد والحالة وتاريخ الاشتراك بشكل سريع.</p>
-                <div class="admin-list" data-subscribers-list></div>
-              </article>
-            </div>
-          </section>
-
-          <section id="admin-reports" class="admin-section-stack admin-tab-panel" data-admin-tab-panel="reports" hidden>
-            <div class="admin-section-head">
-              <div>
-                <h3>النشاط والتقارير</h3>
-                <p>مكان واحد للإعجابات وعدم الإعجاب وسجل النشاطات والتقارير النهائية بدل تشتيتها وسط الإدارة اليومية.</p>
-              </div>
-            </div>
-
-            <div class="admin-grid admin-grid-balanced">
-              <article class="admin-panel">
-                <h3 class="admin-section-title">الإعجابات وعدم الإعجاب</h3>
-                <div class="admin-list" data-feedback-list></div>
-              </article>
-
-              <article class="admin-panel">
-                <h3 class="admin-section-title">سجل النشاطات</h3>
-                <p class="admin-subtitle">آخر الأنشطة الإدارية والتعليمية الظاهرة في هذه النسخة.</p>
-                <div class="admin-list" data-activity-list></div>
-              </article>
-            </div>
-
-            <article class="admin-panel">
-              <h3 class="admin-section-title">التقارير</h3>
-              <div class="admin-list" data-report-list></div>
-            </article>
-          </section>
-
-          <section id="admin-settings" class="admin-section-stack admin-tab-panel" data-admin-tab-panel="settings" hidden>
-            <div class="admin-section-head">
-              <div>
-                <h3>الإعدادات</h3>
-                <p>إدارة التغطية التعليمية وبنك الأسئلة والإعدادات المرتبطة بالمحتوى والمصادر الموثوقة من دون تزاحم على الصفحة الرئيسية.</p>
-              </div>
-            </div>
-
-            <div class="admin-grid admin-grid-balanced">
-              <article class="admin-panel">
-                <h3 class="admin-section-title">التغطية التعليمية</h3>
-                <p class="admin-subtitle">الصفوف والمواد والفصول والدروس لمعرفة أماكن القوة والنقص داخل البنك.</p>
-                <div class="admin-list" data-grade-bank-panels></div>
-              </article>
-
-              <article class="admin-panel">
-                <h3 class="admin-section-title">المصادر الموثوقة</h3>
-                <p class="admin-subtitle">مواقع البحث والتحقق المعتمدة لطبقة الويب عند الحاجة فقط.</p>
-                <div class="admin-source-list">
-                  <span class="admin-source-chip">المنهج السعودي أولًا</span>
-                  <span class="admin-source-chip">بنك الأسئلة الداخلي</span>
-                  <span class="admin-source-chip">المواقع التعليمية الموثوقة</span>
-                  <span class="admin-source-chip">الويب للتحقق فقط</span>
+              <article class="admin-glass-panel admin-quick-actions">
+                <h2>إجراءات سريعة</h2>
+                <div>
+                  <button type="button" data-jump-tab="users">إضافة مستخدم</button>
+                  <button type="button" data-jump-tab="subscriptions">إرسال باقة</button>
+                  <button type="button" data-jump-tab="xp">إضافة XP</button>
+                  <button type="button" data-jump-tab="xp">سحب XP</button>
+                  <button type="button" data-jump-tab="plans">إدارة الباقات</button>
+                  <button type="button" data-jump-tab="tools">التقارير</button>
                 </div>
               </article>
-            </div>
+            </section>
+          </section>
 
-            <article class="admin-panel">
-              <h3 class="admin-section-title">بنك الأسئلة</h3>
-              <p class="admin-subtitle">ملخص البنك والبحث داخله وجدول العناصر الحالية. تم إخراج الإضافة اليدوية من الصفحة الرئيسية لتقليل الزحام.</p>
-              <div class="admin-search-row">
-                <input class="field" type="search" data-bank-search placeholder="ابحث في بنك الأسئلة باسم السؤال أو جزء منه">
-              </div>
-              <div class="admin-list" data-question-bank-summary></div>
-              <div data-question-bank-table></div>
-            </article>
+          <section class="admin-tab-panel" data-admin-panel="users" hidden>
+            <div class="admin-section-heading">
+              <h1>المستخدمون</h1>
+              <p>بحث، تفعيل، تعطيل، تعديل باقة، وإدارة XP لكل مستخدم.</p>
+            </div>
+            <div class="admin-toolbar-line">
+              <input class="field" type="search" data-user-search placeholder="بحث بالاسم أو الإيميل">
+              <select class="field" data-user-status>
+                <option value="">كل الحالات</option>
+                <option value="active">نشط</option>
+                <option value="suspended">موقوف</option>
+                <option value="banned">محظور</option>
+              </select>
+            </div>
+            <div class="admin-table-wrap" data-users-table></div>
+          </section>
+
+          <section class="admin-tab-panel" data-admin-panel="plans" hidden>
+            <div class="admin-section-heading">
+              <h1>الباقات والاشتراكات</h1>
+              <p>تعديل السعر، XP اليومي، المميزات، التفعيل، والإظهار.</p>
+            </div>
+            <div class="admin-plan-editor-grid" data-plans-list></div>
+          </section>
+
+          <section class="admin-tab-panel" data-admin-panel="subscriptions" hidden>
+            <div class="admin-section-heading">
+              <h1>إرسال باقة لمستخدم</h1>
+              <p>اختر المستخدم والباقة والمدة، وسيتم تسجيل العملية في سجلات الأدمن.</p>
+            </div>
+            <form class="admin-action-form" data-assign-plan-form>
+              <select class="field" data-assign-user required></select>
+              <select class="field" data-assign-plan required></select>
+              <input class="field" type="number" min="1" value="30" data-assign-days placeholder="مدة الاشتراك بالأيام">
+              <label class="admin-check"><input type="checkbox" data-assign-email> إرسال إيميل للمستخدم</label>
+              <button class="primary-btn" type="submit">إرسال الباقة</button>
+            </form>
+            <div class="admin-table-wrap" data-subscriptions-table></div>
+          </section>
+
+          <section class="admin-tab-panel" data-admin-panel="payments" hidden>
+            <div class="admin-section-heading">
+              <h1>المدفوعات والفواتير</h1>
+              <p>عرض المدفوعات والفواتير التقريبية حسب الاشتراكات النشطة.</p>
+            </div>
+            <div class="admin-table-wrap" data-payments-table></div>
+          </section>
+
+          <section class="admin-tab-panel" data-admin-panel="transactions" hidden>
+            <div class="admin-section-heading">
+              <h1>سجل المعاملات</h1>
+              <p>كل عمليات XP والاشتراكات والتعديلات المهمة.</p>
+            </div>
+            <div class="admin-table-wrap" data-transactions-table></div>
+          </section>
+
+          <section class="admin-tab-panel" data-admin-panel="xp" hidden>
+            <div class="admin-section-heading">
+              <h1>إدارة XP</h1>
+              <p>إضافة أو خصم XP بسبب واضح، مع حفظ السجل واسم الأدمن.</p>
+            </div>
+            <form class="admin-action-form" data-xp-form>
+              <select class="field" data-xp-user required></select>
+              <input class="field" type="number" min="1" data-xp-amount placeholder="كمية XP" required>
+              <input class="field" type="text" data-xp-reason placeholder="السبب">
+              <button class="primary-btn" type="submit" data-xp-action="add">إضافة XP</button>
+              <button class="secondary-btn" type="submit" data-xp-action="remove">سحب XP</button>
+            </form>
+            <div class="admin-table-wrap" data-xp-ledger-table></div>
+          </section>
+
+          <section class="admin-tab-panel" data-admin-panel="tools" hidden>
+            <div class="admin-section-heading">
+              <h1>الأدوات والتقارير</h1>
+              <p>تحكم تشغيلي في ظهور الأدوات المجانية وأدوات المشتركين.</p>
+            </div>
+            <div class="admin-tools-grid" data-tools-grid></div>
+          </section>
+
+          <section class="admin-tab-panel" data-admin-panel="messages" hidden>
+            <div class="admin-section-heading">
+              <h1>الرسائل والإشعارات</h1>
+              <p>إعداد رسائل البريد والإشعارات الخاصة بالباقات وXP.</p>
+            </div>
+            <div class="admin-settings-grid" data-messages-grid></div>
+          </section>
+
+          <section class="admin-tab-panel" data-admin-panel="support" hidden>
+            <div class="admin-section-heading">
+              <h1>طلبات الدعم</h1>
+              <p>مساحة متابعة التذاكر والطلبات الواردة من المستخدمين.</p>
+            </div>
+            <div class="admin-empty-panel">لا توجد طلبات دعم مفتوحة الآن.</div>
+          </section>
+
+          <section class="admin-tab-panel" data-admin-panel="settings" hidden>
+            <div class="admin-section-heading">
+              <h1>الإعدادات</h1>
+              <p>إعدادات البريد، XP، الموقع، والصلاحيات.</p>
+            </div>
+            <div class="admin-settings-grid" data-settings-grid></div>
+          </section>
+
+          <section class="admin-tab-panel" data-admin-panel="logs" hidden>
+            <div class="admin-section-heading">
+              <h1>سجل النظام</h1>
+              <p>كل عملية أدمن محفوظة مع الوقت وIP والهدف.</p>
+            </div>
+            <div class="admin-table-wrap" data-admin-logs-table></div>
           </section>
         </div>
-      </div>
-    </div>
+      </section>
+
+      <aside class="admin-left-art">
+        <div class="admin-left-profile">
+          <div class="admin-avatar admin-avatar-large" data-admin-avatar-large>أ</div>
+          <strong data-admin-name-side>أحمد السبيعي</strong>
+          <span data-admin-role-side>Super Admin</span>
+        </div>
+        <div class="admin-orlixor-figure">
+          <div class="admin-orlixor-core">◇</div>
+          <div class="admin-orlixor-bars">▥</div>
+          <div class="admin-orlixor-bolt">ϟ</div>
+        </div>
+      </aside>
+    </section>
   </main>
 
   <script src="mullem-config.js?v=20260409-5"></script>
-  <script src="api-client.js?v=20260410-6"></script>
-  <script src="admin.js?v=20260410-7"></script>
-  <script src="admin-packages.js?v=20260410-3"></script>
+  <script src="api-client.js?v=20260506-admin-secure"></script>
+  <script src="admin-dashboard.js?v=20260506-orlixor"></script>
 </body>
 </html>
