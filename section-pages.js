@@ -1237,6 +1237,20 @@
     return 1500;
   }
 
+  function hasSubscriberToolsAccess(user = state.currentUser) {
+    if (!user || !isAuthenticated()) return false;
+    const planText = [
+      user?.packageKey,
+      user?.planType,
+      user?.plan_type,
+      user?.package,
+      user?.package_name,
+      user?.packageName
+    ].map((item) => String(item || "").trim().toLowerCase()).join(" ");
+    const dailyXp = Number(user?.packageDailyXp || user?.package_daily_xp || 0);
+    return dailyXp >= 80 || /(^|\s|_)(pro|spark|pro_plus|tuwaiq|pro_max|pioneer|elite|ultra)(\s|_|$)|شرارة|طويق|الرائد/.test(planText);
+  }
+
   function showXpWarning({ tokens, xp, maxAllowed }) {
     const safeTokens = Math.max(0, Number(tokens) || 0);
     const safeXp = Math.max(1, Number(xp) || 1);
@@ -2212,7 +2226,7 @@
                 <strong>${escapeHtml(tool.title)}</strong>
                 <p>${escapeHtml(tool.description)}</p>
                 <span class="tool-foot">
-                  <small>متاح في: طويق، برو</small>
+                  <small>متاح في: شرارة، طويق، الرائد</small>
                   <b>مجاني</b>
                 </span>
               </button>
@@ -2335,6 +2349,7 @@
   }
 
   function renderSubscriberToolsMain(profile) {
+    const hasSubscriberAccess = hasSubscriberToolsAccess();
     const toolIcons = {
       hd: '<svg viewBox="0 0 24 24"><rect x="4" y="5" width="16" height="14" rx="3"/><path d="M8 15V9M8 12h3M11 15V9M14 9h2.2A2.8 2.8 0 0 1 19 11.8v.4A2.8 2.8 0 0 1 16.2 15H14Z"/></svg>',
       imagePlus: '<svg viewBox="0 0 24 24"><rect x="4" y="6" width="14" height="14" rx="2"/><path d="m7 16 3-3 2.5 2.5L15 13l3 3"/><circle cx="9" cy="10" r="1.3"/><path d="M18 4v6M15 7h6"/></svg>',
@@ -2389,6 +2404,10 @@
         </header>
 
         <div class="tools-page free-tools-page">
+          <button class="free-tools-back-link" type="button" data-open-tools>
+            <span aria-hidden="true">←</span>
+            <b>العودة إلى الأدوات</b>
+          </button>
           <header class="free-tools-hero">
             <div class="free-tools-title">
               <span class="free-tools-gift" aria-hidden="true">${icons.gift}</span>
@@ -2396,12 +2415,15 @@
               <span class="free-tools-sparkle" aria-hidden="true">${icons.sparkle}</span>
             </div>
             <p>مجموعة من الأدوات الحصرية المتقدمة التي تعمل مباشرة في متصفحك</p>
-            <span class="free-tools-locked-badge">${icons.lock}<b>هذه الأدوات متاحة فقط للمشتركين</b></span>
+            <span class="free-tools-locked-badge ${hasSubscriberAccess ? "is-open" : ""}">
+              ${hasSubscriberAccess ? icons.sparkle : icons.lock}
+              <b>${hasSubscriberAccess ? "متاحة في باقتك الحالية" : "متاحة لباقة شرارة وطويق والرائد"}</b>
+            </span>
           </header>
 
           <section class="free-tools-grid" aria-label="قائمة الأدوات المجانية للمشتركين">
             ${tools.map((tool) => `
-              <button class="free-tool-card requires-auth" type="button" data-open-upgrade data-card="${escapeHtml(tool.title)}" aria-label="${escapeHtml(`${tool.title} - للمشتركين فقط`)}">
+              <button class="free-tool-card ${hasSubscriberAccess ? "is-unlocked" : "requires-auth"}" type="button" ${hasSubscriberAccess ? `data-card="${escapeHtml(tool.title)}" data-subscriber-tool-card` : `data-open-upgrade data-card="${escapeHtml(tool.title)}"`} aria-label="${escapeHtml(`${tool.title} - ${hasSubscriberAccess ? "متاح في باقتك" : "للمشتركين فقط"}`)}">
                 <span class="free-tool-body">
                   <span class="free-tool-icon" aria-hidden="true">${tool.icon}</span>
                   <span class="free-tool-copy">
@@ -2409,7 +2431,10 @@
                     <small>${escapeHtml(tool.description)}</small>
                   </span>
                 </span>
-                <span class="free-tool-lock"><b>للمشتركين فقط</b>${icons.lock}</span>
+                <span class="free-tool-lock ${hasSubscriberAccess ? "is-open" : ""}">
+                  <b>${hasSubscriberAccess ? "متاح في باقتك" : "للمشتركين فقط"}</b>
+                  ${hasSubscriberAccess ? icons.sparkle : icons.lock}
+                </span>
               </button>
             `).join("")}
           </section>
@@ -2424,10 +2449,17 @@
                 </span>
               </span>
             `).join("")}
-            <button class="free-tools-pricing-btn" type="button" data-open-upgrade>
-              <span>عرض الباقات</span>
-              ${icons.crown}
-            </button>
+            ${hasSubscriberAccess ? `
+              <span class="free-tools-plan-badge">
+                ${icons.crown}
+                <span>الأدوات والمزايا مفعلة لشرارة وطويق والرائد</span>
+              </span>
+            ` : `
+              <button class="free-tools-pricing-btn" type="button" data-open-upgrade>
+                <span>عرض الباقات</span>
+                ${icons.crown}
+              </button>
+            `}
           </footer>
         </div>
       </section>

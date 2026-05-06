@@ -4337,6 +4337,29 @@ body[data-workspace-mode="home"] .guest-root {
   padding: 0 0 26px;
 }
 
+.free-tools-back-link {
+  width: fit-content;
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0 0 16px auto;
+  padding: 0;
+  border: 0;
+  color: #6b4cff;
+  background: transparent;
+  font: inherit;
+  font-size: 1.12rem;
+  font-weight: 950;
+  direction: ltr;
+  cursor: pointer;
+}
+
+.free-tools-back-link span {
+  font-size: 1.2em;
+  line-height: 1;
+}
+
 .free-tools-main svg {
   width: 1em;
   height: 1em;
@@ -4451,6 +4474,12 @@ body[data-workspace-mode="home"] .guest-root {
   font-weight: 950;
 }
 
+.free-tools-locked-badge.is-open {
+  color: #0f8d62;
+  background: rgba(21, 190, 128, 0.08);
+  border-color: rgba(21, 190, 128, 0.16);
+}
+
 .free-tools-grid {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -4481,6 +4510,17 @@ body[data-workspace-mode="home"] .guest-root {
   transform: translateY(-2px);
   border-color: rgba(111, 76, 255, 0.22);
   box-shadow: 0 20px 40px rgba(59, 45, 126, 0.09);
+}
+
+.free-tool-card.is-unlocked {
+  border-color: rgba(21, 190, 128, 0.16);
+  box-shadow: 0 16px 34px rgba(21, 190, 128, 0.07);
+}
+
+.free-tool-card.is-unlocked .free-tool-icon,
+.free-tool-lock.is-open {
+  color: #0f8d62;
+  background: rgba(21, 190, 128, 0.08);
 }
 
 .free-tool-body {
@@ -4644,6 +4684,28 @@ body[data-workspace-mode="home"] .guest-root {
   cursor: pointer;
 }
 
+.free-tools-plan-badge {
+  min-width: 230px;
+  min-height: 56px;
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 0 16px;
+  border-radius: 10px;
+  color: #0f8d62;
+  background: rgba(21, 190, 128, 0.08);
+  border: 1px solid rgba(21, 190, 128, 0.16);
+  font-size: 0.88rem;
+  font-weight: 950;
+}
+
+.free-tools-plan-badge svg {
+  width: 22px;
+  height: 22px;
+}
+
 .free-tools-pricing-btn svg {
   width: 22px;
   height: 22px;
@@ -4663,7 +4725,8 @@ body[data-workspace-mode="home"] .guest-root {
     flex: 1 1 30%;
   }
 
-  .free-tools-pricing-btn {
+  .free-tools-pricing-btn,
+  .free-tools-plan-badge {
     min-width: 190px;
   }
 }
@@ -4722,7 +4785,8 @@ body[data-workspace-mode="home"] .guest-root {
     width: 100%;
   }
 
-  .free-tools-pricing-btn {
+  .free-tools-pricing-btn,
+  .free-tools-plan-badge {
     width: 100%;
     grid-column: 1 / -1;
   }
