@@ -3635,6 +3635,7 @@
         </div>
 
         <div class="guest-collapsed-tools" aria-label="اختصارات الشريط الجانبي">
+          <button class="guest-rail-btn ${isAuthenticated() ? "" : "requires-auth"}" type="button" data-new-chat aria-label="دردشة جديدة">${icons.edit}</button>
           <button class="guest-rail-btn" type="button" data-focus-history-search aria-label="البحث في المحادثات">${icons.search}</button>
           <button class="guest-rail-btn is-tools" type="button" data-open-tools aria-label="أدوات">${icons.settings}<span class="guest-rail-label">أدوات</span></button>
           <button class="guest-rail-btn" type="button" data-open-account aria-label="المزيد">${icons.menu}</button>
