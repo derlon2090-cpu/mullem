@@ -105,8 +105,10 @@ If Render is your backend, the Neon URL must be set in the Render Web Service en
 ## XP and package rules
 
 - New student accounts start with `50 XP`.
-- Free accounts receive `5 XP` once per new login day.
-- Paid packages reset the daily balance to the package daily XP amount.
+- Daily XP is granted only once after a full `24 hours` from the last grant, using server time.
+- Free accounts receive `5 XP` every 24 hours.
+- Paid packages add their daily XP every 24 hours: `80`, `250`, or `600 XP`.
+- Daily grants are written to `xp_ledger` and guarded by a database row lock in PostgreSQL.
 - Text chat requests cost about `5-15 XP` depending on model and response length.
 - Image attachments cost `15 XP`.
 - File/document analysis is routed to `Orlixor AI Pro` and starts around `15 XP`.
@@ -134,6 +136,7 @@ The Node backend creates and maintains these PostgreSQL tables automatically on 
 - `user_memory`: safe long-term preferences and useful facts for improving the experience.
 - `message_embeddings`: optional embeddings for memory retrieval when `ORLIXOR_ENABLE_EMBEDDINGS=true`.
 - `feedback`: user ratings for assistant messages.
+- `xp_ledger`: audit log for signup bonuses, daily grants, and usage deductions.
 - `app_guest_usage`: guest usage tracking when guest mode is enabled.
 
 ## Deploy on Railway

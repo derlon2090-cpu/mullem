@@ -149,6 +149,12 @@ const IMAGE_GENERATION_XP_COST = Math.max(1, Number(process.env.IMAGE_GENERATION
 const ATTACHMENT_ANALYSIS_XP_COST = Math.max(1, Number(process.env.ATTACHMENT_ANALYSIS_XP_COST || process.env.ATTACHMENT_XP_COST || 15));
 const DAILY_LOGIN_XP_REWARD = Math.max(0, Number(process.env.DAILY_LOGIN_XP_REWARD || 5));
 const FIRST_SIGNUP_XP = Math.max(0, Number(process.env.FIRST_SIGNUP_XP || 50));
+const DAILY_XP_BY_PLAN = Object.freeze({
+  free: DAILY_LOGIN_XP_REWARD,
+  spark: 80,
+  tuwaiq: 250,
+  pioneer: 600
+});
 const FREE_MAX_OUTPUT_TOKENS = Math.max(120, Math.min(Number(process.env.FREE_MAX_OUTPUT_TOKENS || 500), 1200));
 const FREE_MAX_CONTEXT_TOKENS = Math.max(500, Math.min(Number(process.env.FREE_MAX_CONTEXT_TOKENS || 1500), 6000));
 const DAILY_MOTIVATION_BONUS = Math.max(1, Number(process.env.DAILY_MOTIVATION_BONUS || 5));
@@ -761,12 +767,38 @@ function parseTimestampMs(value) {
   return Number.isFinite(time) ? time : 0;
 }
 
-function canGrantDailyXp(lastGrantedAt, lastClaimDate, todayStamp) {
+function canGrantDailyXp(lastGrantedAt) {
   const lastGrantedMs = parseTimestampMs(lastGrantedAt);
-  if (lastGrantedMs) {
-    return Date.now() - lastGrantedMs >= 24 * 60 * 60 * 1000;
+  if (!lastGrantedMs) return true;
+  return Date.now() - lastGrantedMs >= 24 * 60 * 60 * 1000;
+}
+
+function getDailyXpPlanKey(user = {}) {
+  const planText = [
+    user.plan_type,
+    user.planType,
+    user.package_key,
+    user.packageKey,
+    user.package_name,
+    user.packageName,
+    user.package
+  ].map((item) => String(item || "").trim().toLowerCase()).join(" ");
+  const packageDailyXp = Math.max(0, Number(user.package_daily_xp || user.packageDailyXp || 0));
+
+  if (/(^|\s)(pro_max|pioneer|elite|ultra)(\s|$)/.test(planText) || packageDailyXp >= 600) return "pioneer";
+  if (/(^|\s)(pro_plus|tuwaiq|plus)(\s|$)/.test(planText) || packageDailyXp >= 250) return "tuwaiq";
+  if (/(^|\s)(pro|spark)(\s|$)/.test(planText) || packageDailyXp >= 80) return "spark";
+  return "free";
+}
+
+function getDailyXpForUserPlan(user = {}) {
+  const planKey = getDailyXpPlanKey(user);
+  if (Object.prototype.hasOwnProperty.call(DAILY_XP_BY_PLAN, planKey)) {
+    return Math.max(0, Number(DAILY_XP_BY_PLAN[planKey] || 0));
   }
-  return String(lastClaimDate || "") !== String(todayStamp || "");
+
+  const packageDailyXp = Math.max(0, Number(user.package_daily_xp || user.packageDailyXp || 0));
+  return packageDailyXp > 0 ? packageDailyXp : DAILY_XP_BY_PLAN.free;
 }
 
 function addDays(date, days) {
@@ -830,12 +862,21 @@ async function syncUserDailyProgress(user, activityText = "") {
 
   const effectiveUser = await ensureUserPackageLifecycle(user) || user;
 
+  if (typeof databaseClient.grantDailyXpIfNeeded === "function") {
+    return databaseClient.grantDailyXpIfNeeded(effectiveUser.id, {
+      activity: activityText,
+      firstSignupXp: FIRST_SIGNUP_XP,
+      defaultDailyXp: DAILY_LOGIN_XP_REWARD,
+      dailyXpByPlan: DAILY_XP_BY_PLAN,
+      motivationBonus: DAILY_MOTIVATION_BONUS
+    });
+  }
+
   const today = getTodayStamp();
   const lastActiveDate = String(effectiveUser.last_active_date || "");
-  const lastDailyClaimDate = String(effectiveUser.last_daily_xp_claimed_date || effectiveUser.last_reset || "");
   const lastDailyGrantedAt = effectiveUser.last_daily_xp_granted_at || null;
   const signupBonusClaimed = effectiveUser.signup_bonus_claimed !== false;
-  const shouldGrantDailyXp = canGrantDailyXp(lastDailyGrantedAt, lastDailyClaimDate, today);
+  const shouldGrantDailyXp = canGrantDailyXp(lastDailyGrantedAt);
 
   if (!shouldGrantDailyXp && signupBonusClaimed) {
     if (activityText) {
@@ -861,12 +902,10 @@ async function syncUserDailyProgress(user, activityText = "") {
   if (streakDays >= 5 && !achievements.includes("5_days_streak")) achievements.push("5_days_streak");
   if (streakDays >= 30 && !achievements.includes("30_days_streak")) achievements.push("30_days_streak");
 
-  const packageDailyXp = Math.max(0, Number(effectiveUser.package_daily_xp || 0));
-  const isPaidPackage = packageDailyXp > 0;
-  const dailyXpAward = shouldGrantDailyXp ? (isPaidPackage ? packageDailyXp : DAILY_LOGIN_XP_REWARD) : 0;
+  const dailyXpAward = shouldGrantDailyXp ? getDailyXpForUserPlan(effectiveUser) : 0;
   const currentXp = Number(effectiveUser.xp || 0);
   const baseXp = signupBonusClaimed ? currentXp : currentXp + FIRST_SIGNUP_XP;
-  const nextXp = isPaidPackage && shouldGrantDailyXp ? packageDailyXp : baseXp + dailyXpAward;
+  const nextXp = baseXp + dailyXpAward;
   const packageLabel = String(effectiveUser.package_name || effectiveUser.package || "التمهيدية").trim() || "التمهيدية";
 
   const updatedUser = await databaseClient.updateUser(effectiveUser.id, {
@@ -1168,6 +1207,7 @@ async function ensureDefaultUsers(client = databaseClient) {
     last_active_date: getTodayStamp(),
     last_reset: getTodayStamp(),
     last_daily_xp_claimed_date: getTodayStamp(),
+    last_daily_xp_granted_at: new Date().toISOString(),
     signup_bonus_claimed: true,
     motivation_score: 0,
     status: "active",
@@ -2633,6 +2673,7 @@ async function handleRegister(req, res) {
     last_active_date: getTodayStamp(),
     last_reset: getTodayStamp(),
     last_daily_xp_claimed_date: getTodayStamp(),
+    last_daily_xp_granted_at: new Date().toISOString(),
     signup_bonus_claimed: true,
     status: "active",
     activity: "أنشأ حسابًا جديدًا"

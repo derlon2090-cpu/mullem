@@ -79,8 +79,72 @@ function normalizeBenefits(value) {
     .filter(Boolean);
 }
 
+function normalizeBoolean(value) {
+  if (typeof value === "boolean") return value;
+  if (typeof value === "number") return value === 1;
+  const text = String(value || "").trim().toLowerCase();
+  return text === "1" || text === "true" || text === "yes" || text === "on";
+}
+
 function getTodayStamp() {
   return new Date().toISOString().slice(0, 10);
+}
+
+function parseTimestampMs(value) {
+  if (!value) return 0;
+  const date = value instanceof Date ? value : new Date(value);
+  const time = date.getTime();
+  return Number.isFinite(time) ? time : 0;
+}
+
+function canGrantDailyXp(lastGrantedAt, now = new Date()) {
+  const lastGrantedMs = parseTimestampMs(lastGrantedAt);
+  if (!lastGrantedMs) return true;
+  return now.getTime() - lastGrantedMs >= 24 * 60 * 60 * 1000;
+}
+
+function parseDateStampMs(value) {
+  const match = String(value || "").slice(0, 10).match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!match) return 0;
+  return Date.UTC(Number(match[1]), Number(match[2]) - 1, Number(match[3]));
+}
+
+function diffDateStamps(startDate, endDate) {
+  const start = parseDateStampMs(startDate);
+  const end = parseDateStampMs(endDate);
+  if (!start || !end) return 0;
+  return Math.round((end - start) / 86400000);
+}
+
+function getDailyXpPlanKey(user = {}) {
+  const planText = [
+    user.plan_type,
+    user.planType,
+    user.package_key,
+    user.packageKey,
+    user.package_name,
+    user.packageName,
+    user.package
+  ].map((item) => String(item || "").trim().toLowerCase()).join(" ");
+  const packageDailyXp = Math.max(0, Number(user.package_daily_xp || user.packageDailyXp || 0));
+
+  if (/(^|\s)(pro_max|pioneer|elite|ultra)(\s|$)/.test(planText) || packageDailyXp >= 600) return "pioneer";
+  if (/(^|\s)(pro_plus|tuwaiq|plus)(\s|$)/.test(planText) || packageDailyXp >= 250) return "tuwaiq";
+  if (/(^|\s)(pro|spark)(\s|$)/.test(planText) || packageDailyXp >= 80) return "spark";
+  return "free";
+}
+
+function getDailyXpForUserPlan(user = {}, options = {}) {
+  const dailyXpByPlan = options.dailyXpByPlan && typeof options.dailyXpByPlan === "object" ? options.dailyXpByPlan : {};
+  const planKey = getDailyXpPlanKey(user);
+  if (Object.prototype.hasOwnProperty.call(dailyXpByPlan, planKey)) {
+    return Math.max(0, Math.round(Number(dailyXpByPlan[planKey] || 0)));
+  }
+
+  const packageDailyXp = Math.max(0, Number(user.package_daily_xp || user.packageDailyXp || 0));
+  return packageDailyXp > 0
+    ? Math.round(packageDailyXp)
+    : Math.max(0, Math.round(Number(options.defaultDailyXp || 5)));
 }
 
 function addDays(date, days) {
@@ -95,7 +159,8 @@ function createEmptyState() {
       tokens: 1,
       projects: 1,
       messages: 1,
-      guestUsage: 1
+      guestUsage: 1,
+      xpLedger: 1
     },
     packages: clone(DEFAULT_PACKAGES),
     users: [],
@@ -103,7 +168,8 @@ function createEmptyState() {
     projects: [],
     conversations: [],
     messages: [],
-    guestUsage: []
+    guestUsage: [],
+    xpLedger: []
   };
 }
 
@@ -347,12 +413,15 @@ function createFallbackDatabaseClient() {
       stage: String(payload.stage || "").trim(),
       grade: String(payload.grade || "").trim(),
       subject: String(payload.subject || "").trim(),
-      xp: Number.isFinite(Number(payload.xp)) ? Number(payload.xp) : 50,
-      total_xp: Number.isFinite(Number(payload.total_xp ?? payload.xp)) ? Number(payload.total_xp ?? payload.xp) : 50,
+      xp: Number.isFinite(Number(payload.xp)) ? Number(payload.xp) : 0,
+      total_xp: Number.isFinite(Number(payload.total_xp ?? payload.xp)) ? Number(payload.total_xp ?? payload.xp) : 0,
       streak_days: Number(payload.streak_days || 0),
       motivation_score: Number(payload.motivation_score || 0),
       last_active_date: payload.last_active_date || null,
       last_reset: payload.last_reset || payload.last_active_date || null,
+      last_daily_xp_claimed_date: payload.last_daily_xp_claimed_date || payload.last_reset || payload.last_active_date || null,
+      last_daily_xp_granted_at: payload.last_daily_xp_granted_at || null,
+      signup_bonus_claimed: "signup_bonus_claimed" in payload ? normalizeBoolean(payload.signup_bonus_claimed) : false,
       achievements: Array.isArray(payload.achievements) ? payload.achievements : [],
       status: String(payload.status || "active").trim().toLowerCase() || "active",
       activity: String(payload.activity || "").trim(),
@@ -657,6 +726,120 @@ function createFallbackDatabaseClient() {
     return { ...row };
   }
 
+  async function recordXpLedger(payload = {}) {
+    const userId = Number(payload.user_id || payload.userId);
+    const amount = Math.round(Number(payload.amount || 0) || 0);
+    const type = String(payload.type || "").trim().toLowerCase().slice(0, 40);
+    if (!userId || !type || !amount) return null;
+
+    const entry = {
+      id: nextId("xpLedger"),
+      user_id: userId,
+      amount,
+      type,
+      reason: String(payload.reason || "").trim(),
+      created_at: nowIso()
+    };
+    data.xpLedger.push(entry);
+    persist();
+    return { ...entry };
+  }
+
+  async function grantDailyXpIfNeeded(userId, options = {}) {
+    const index = data.users.findIndex((item) => String(item.id) === String(userId));
+    if (index === -1) return null;
+
+    const user = data.users[index];
+    const now = new Date();
+    const nowStamp = now.toISOString();
+    const today = getTodayStamp();
+    const activity = String(options.activity || options.activityText || "").trim().slice(0, 255);
+    const role = String(user.role || "student").trim().toLowerCase();
+    const canReceiveXp = role !== "admin";
+    const firstSignupXp = Math.max(0, Math.round(Number(options.firstSignupXp ?? 50) || 0));
+    const motivationBonus = Math.max(0, Math.round(Number(options.motivationBonus || 0) || 0));
+    const signupBonusClaimed = user.signup_bonus_claimed !== false;
+    const shouldGrantSignup = canReceiveXp && !signupBonusClaimed && firstSignupXp > 0;
+    const shouldGrantDaily = canReceiveXp && canGrantDailyXp(user.last_daily_xp_granted_at, now);
+    const dailyXpAward = shouldGrantDaily ? getDailyXpForUserPlan(user, options) : 0;
+
+    let nextXp = Math.max(0, Number(user.xp || 0));
+    const ledgerEntries = [];
+
+    if (shouldGrantSignup) {
+      nextXp += firstSignupXp;
+      ledgerEntries.push({
+        amount: firstSignupXp,
+        type: "signup_bonus",
+        reason: "First signup bonus"
+      });
+    }
+
+    if (dailyXpAward > 0) {
+      nextXp += dailyXpAward;
+      ledgerEntries.push({
+        amount: dailyXpAward,
+        type: "daily_grant",
+        reason: `Daily XP grant for ${getDailyXpPlanKey(user)}`
+      });
+    }
+
+    if (shouldGrantSignup || dailyXpAward > 0) {
+      const lastActiveDate = String(user.last_active_date || "");
+      let streakDays = Number(user.streak_days || 0);
+      if (!lastActiveDate) {
+        streakDays = 1;
+      } else {
+        const gap = diffDateStamps(lastActiveDate, today);
+        if (gap === 1) streakDays += 1;
+        else if (gap > 1) streakDays = 1;
+        else if (gap < 0) streakDays = Math.max(1, streakDays);
+      }
+
+      const achievements = Array.isArray(user.achievements) ? [...user.achievements] : [];
+      if (streakDays >= 5 && !achievements.includes("5_days_streak")) achievements.push("5_days_streak");
+      if (streakDays >= 30 && !achievements.includes("30_days_streak")) achievements.push("30_days_streak");
+
+      Object.assign(user, {
+        last_active_date: today,
+        last_reset: today,
+        signup_bonus_claimed: shouldGrantSignup ? true : signupBonusClaimed,
+        streak_days: streakDays,
+        motivation_score: Number(user.motivation_score || 0) + motivationBonus,
+        xp: nextXp,
+        total_xp: nextXp,
+        plan_type: String(user.package_key || user.plan_type || user.package_name || "starter").trim() || "starter",
+        achievements,
+        activity: activity || `Daily XP grant: +${dailyXpAward} XP`,
+        updated_at: nowStamp
+      });
+
+      if (dailyXpAward > 0) {
+        user.last_daily_xp_claimed_date = today;
+        user.last_daily_xp_granted_at = nowStamp;
+      }
+    } else if (activity) {
+      user.last_active_date = today;
+      user.activity = activity;
+      user.updated_at = nowStamp;
+    }
+
+    for (const entry of ledgerEntries) {
+      data.xpLedger.push({
+        id: nextId("xpLedger"),
+        user_id: Number(user.id),
+        amount: entry.amount,
+        type: entry.type,
+        reason: entry.reason,
+        created_at: nowStamp
+      });
+    }
+
+    data.users[index] = user;
+    persist();
+    return { ...user };
+  }
+
   async function getAdminStats() {
     return {
       total_users: data.users.length,
@@ -710,6 +893,8 @@ function createFallbackDatabaseClient() {
     findPackageByKeyOrName,
     listPackages,
     updatePackage,
+    recordXpLedger,
+    grantDailyXpIfNeeded,
     findUserByEmail,
     findUserById,
     createUser,
