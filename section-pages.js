@@ -2128,54 +2128,50 @@
   }
 
   function renderToolsMain(profile) {
-    const categories = ["الكل", "كتابة وتحرير", "تلخيص وتنظيم", "تحليل وبيانات", "إنتاجية", "تعليم وتعلم", "أدوات مجانية"];
+    const toolIcons = {
+      hd: '<svg viewBox="0 0 24 24"><rect x="4" y="5" width="16" height="14" rx="3"/><path d="M8 15V9M8 12h3M11 15V9M14 9h2.2A2.8 2.8 0 0 1 19 11.8v.4A2.8 2.8 0 0 1 16.2 15H14Z"/></svg>',
+      imagePlus: '<svg viewBox="0 0 24 24"><rect x="4" y="6" width="14" height="14" rx="2"/><path d="m7 16 3-3 2.5 2.5L15 13l3 3"/><circle cx="9" cy="10" r="1.3"/><path d="M18 4v6M15 7h6"/></svg>',
+      pngPdf: '<svg viewBox="0 0 24 24"><path d="M5 4h9l4 4v8H5Z"/><path d="M14 4v5h5"/><path d="M8 12h5M8 15h3"/><rect x="12" y="11" width="8" height="9" rx="1.4"/><path d="M14 16h4M14 18h2"/></svg>',
+      pdfPng: '<svg viewBox="0 0 24 24"><path d="M5 4h9l4 4v8H5Z"/><path d="M14 4v5h5"/><path d="M8 13h5"/><rect x="11" y="10" width="9" height="10" rx="1.5"/><path d="m13 17 2-2 1.4 1.4 1.1-1.1 1.5 1.7"/><circle cx="14" cy="13" r=".9"/></svg>',
+      image: '<svg viewBox="0 0 24 24"><rect x="4" y="5" width="16" height="14" rx="2.5"/><path d="m7 16 3.2-3.2 2.7 2.7 2.3-2.3L19 17"/><circle cx="9" cy="10" r="1.4"/></svg>',
+      crop: '<svg viewBox="0 0 24 24"><path d="M6 3v13a2 2 0 0 0 2 2h13"/><path d="M3 6h13a2 2 0 0 1 2 2v13"/><path d="M9 9h6v6H9z"/></svg>',
+      compress: '<svg viewBox="0 0 24 24"><path d="M9 3v6H3M15 3v6h6M9 21v-6H3M15 21v-6h6"/><path d="M3 9l6-6M21 9l-6-6M3 15l6 6M21 15l-6 6"/></svg>',
+      unlock: '<svg viewBox="0 0 24 24"><rect x="5" y="10" width="14" height="10" rx="2"/><path d="M9 10V7.5A3.5 3.5 0 0 1 15 5"/></svg>',
+      split: '<svg viewBox="0 0 24 24"><path d="M7 3h8l4 4v14H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2Z"/><path d="M15 3v5h5M9 8h2M9 12h6M9 16h6"/></svg>',
+      merge: '<svg viewBox="0 0 24 24"><path d="M6 4h8l3 3v9H6Z"/><path d="M14 4v4h4"/><path d="M9 19h9V9"/><path d="M9 11h5M9 14h5"/></svg>',
+      watermark: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="7"/><path d="m7 17 10-10M8.5 8.5l7 7M12 5v14M5 12h14"/></svg>',
+      ocr: '<svg viewBox="0 0 24 24"><path d="M4 8V5h3M17 5h3v3M20 16v3h-3M7 19H4v-3"/><path d="M8 9h8M12 9v7M9.5 16h5"/></svg>'
+    };
+
     const tools = [
-      {
-        key: "smart-search",
-        title: "البحث الذكي",
-        description: "البحث عن معلومات دقيقة من مصادر موثوقة",
-        icon: icons.search
-      },
-      {
-        key: "writing-assistant",
-        title: "مساعد الكتابة",
-        description: "كتابة وتحسين النصوص بجودة عالية وبأسلوب احترافي",
-        icon: icons.edit
-      },
-      {
-        title: "صناعة ملخصات",
-        description: "إنشاء ملخصات احترافية من النصوص أو الملفات",
-        icon: icons.document
-      },
-      {
-        title: "تلخيص محتوى",
-        description: "تلخيص أي نص طويل إلى نقاط مختصرة وواضحة",
-        icon: icons.notes
-      },
-      {
-        title: "ترجمة ذكية",
-        description: "ترجمة النصوص بدقة عالية ولغة واضحة",
-        icon: icons.internet
-      },
-      {
-        title: "استخراج البيانات",
-        description: "استخراج البيانات من النصوص والملفات المنظمة",
-        icon: icons.tests
-      },
-      {
-        title: "أفكار ومقترحات",
-        description: "الحصول على أفكار إبداعية لمشاريعك ومحتواك",
-        icon: icons.sparkle
-      },
-      {
-        title: "تحليل المحتوى",
-        description: "تحليل النصوص واستخراج المفاهيم الرئيسية",
-        icon: icons.ai
-      }
+      { title: "رفع جودة الصورة", description: "رفع جودة الصورة وتكبيرها مع الحفاظ على التفاصيل", icon: toolIcons.hd },
+      { title: "توضيح الصورة", description: "تحسين وضوح الصورة وإزالة الضبابية", icon: toolIcons.imagePlus },
+      { title: "تحويل PNG إلى PDF", description: "حول صور PNG إلى ملف PDF بسهولة", icon: toolIcons.pngPdf },
+      { title: "تحويل PDF إلى PNG", description: "حول صفحات PDF إلى صور PNG عالية الجودة", icon: toolIcons.pdfPng },
+      { title: "تحويل صيغة الصورة", description: "تحويل الصور بين مختلف الصيغ (JPG, PNG, WebP)", icon: toolIcons.image },
+      { title: "تدوير الصورة", description: "تدوير الصور إلى أي اتجاه بسهولة", icon: icons.refresh },
+      { title: "قص الصورة", description: "قص وتحديد الجزء المطلوب من الصورة", icon: toolIcons.crop },
+      { title: "ضغط الصور", description: "تقليل حجم الصور مع الحفاظ على الجودة", icon: toolIcons.compress },
+      { title: "إزالة حماية PDF", description: "إزالة كلمة المرور من ملفات PDF", icon: toolIcons.unlock },
+      { title: "حماية PDF", description: "إضافة كلمة مرور لحماية ملفات PDF", icon: icons.lock },
+      { title: "تقسيم PDF", description: "تقسيم ملف PDF إلى صفحات منفصلة", icon: toolIcons.split },
+      { title: "دمج ملفات PDF", description: "دمج عدة ملفات PDF في ملف واحد", icon: toolIcons.merge },
+      { title: "استخراج النص من الصورة", description: "استخراج النصوص من الصور (OCR) بدقة عالية", icon: toolIcons.ocr },
+      { title: "حذف علامة مائية", description: "إزالة العلامات المائية من ملفات PDF", icon: toolIcons.watermark },
+      { title: "حذف صفحات PDF", description: "حذف صفحات محددة من ملف PDF", icon: icons.delete },
+      { title: "تعديل مستند PDF", description: "تعديل النصوص والروابط في ملفات PDF", icon: icons.edit }
+    ];
+
+    const highlights = [
+      { title: "جودة احترافية", description: "نتائج عالية الجودة في كل مرة", icon: icons.gem },
+      { title: "أداء عالي", description: "معالجة سريعة داخل متصفحك", icon: icons.bolt },
+      { title: "بدون حدود", description: "استخدام غير محدود لكافة الأدوات", icon: '<svg viewBox="0 0 24 24"><path d="M7.5 15.5C4.5 15.5 3 13.6 3 12s1.5-3.5 4.5-3.5c4 0 5 7 9 7 3 0 4.5-1.9 4.5-3.5s-1.5-3.5-4.5-3.5c-4 0-5 7-9 7Z"/></svg>' },
+      { title: "خصوصية وأمان", description: "ملفاتك تُعالج محلياً ولا يتم رفعها للخادم", icon: '<svg viewBox="0 0 24 24"><path d="M12 3 20 6v5.8c0 4.6-3.1 7.6-8 9.2-4.9-1.6-8-4.6-8-9.2V6Z"/><path d="m8.8 12 2.1 2.1 4.6-4.8"/></svg>' },
+      { title: "أدوات حصرية", description: "أدوات متقدمة لا تتوفر في الخطة المجانية", icon: '<svg viewBox="0 0 24 24"><path d="M12 3 14.2 8l5.4.4-4.1 3.6 1.3 5.2L12 14.5 7.2 17.2 8.5 12 4.4 8.4 9.8 8Z"/><circle cx="12" cy="12" r="8.5"/></svg>' }
     ];
 
     return `
-      <section class="guest-main tools-main" aria-label="أدوات الذكاء الاصطناعي">
+      <section class="guest-main tools-main free-tools-main" aria-label="أدوات مجانية للمشتركين">
         <header class="guest-main-topbar tools-main-topbar is-tools-index">
           <button class="tools-back-chat tools-back-chat-inline" type="button" data-return-chat>
             <span aria-hidden="true">←</span>
@@ -2185,42 +2181,47 @@
           ${renderHomeTopActions()}
         </header>
 
-        <div class="tools-page">
-          <header class="tools-hero">
-            <div class="tools-title-row">
-              <h1>أدوات الذكاء الاصطناعي</h1>
-              <span class="tools-title-icon" aria-hidden="true">${icons.settings}</span>
+        <div class="tools-page free-tools-page">
+          <header class="free-tools-hero">
+            <div class="free-tools-title">
+              <span class="free-tools-gift" aria-hidden="true">${icons.gift}</span>
+              <h1><span>أدوات مجانية</span> <b>للمشتركين</b></h1>
+              <span class="free-tools-sparkle" aria-hidden="true">${icons.sparkle}</span>
             </div>
-            <p>مجموعة من الأدوات الذكية لمساعدتك في العمل والإبداع</p>
+            <p>مجموعة من الأدوات الحصرية المتقدمة التي تعمل مباشرة في متصفحك</p>
+            <span class="free-tools-locked-badge">${icons.lock}<b>هذه الأدوات متاحة فقط للمشتركين</b></span>
           </header>
 
-          <div class="tools-filters" aria-label="تصنيفات الأدوات">
-            ${categories.map((category, index) => `
-              <button class="tools-filter ${index === 0 ? "is-active" : ""}" type="button">
-                ${escapeHtml(category)}
-              </button>
-            `).join("")}
-          </div>
-
-          <section class="tools-grid">
+          <section class="free-tools-grid" aria-label="قائمة الأدوات المجانية للمشتركين">
             ${tools.map((tool) => `
-              <button class="tool-card ${isAuthenticated() ? "" : "requires-auth"}" type="button" data-tool-key="${escapeHtml(tool.key || "")}" data-card="${escapeHtml(tool.title)}">
-                <span class="tool-card-star" aria-hidden="true">${icons.star}</span>
-                <span class="tool-card-icon" aria-hidden="true">${tool.icon}</span>
-                <strong>${escapeHtml(tool.title)}</strong>
-                <span class="tool-card-copy">${escapeHtml(tool.description)}</span>
-                <span class="tool-card-meta">
-                  <b>مجاني</b>
-                  <small>متاح في: طويق، برو</small>
+              <button class="free-tool-card requires-auth" type="button" data-open-upgrade data-card="${escapeHtml(tool.title)}" aria-label="${escapeHtml(`${tool.title} - للمشتركين فقط`)}">
+                <span class="free-tool-body">
+                  <span class="free-tool-icon" aria-hidden="true">${tool.icon}</span>
+                  <span class="free-tool-copy">
+                    <strong>${escapeHtml(tool.title)}</strong>
+                    <small>${escapeHtml(tool.description)}</small>
+                  </span>
                 </span>
+                <span class="free-tool-lock"><b>للمشتركين فقط</b>${icons.lock}</span>
               </button>
             `).join("")}
           </section>
 
-          <p class="tools-suggest">
-            هل لديك اقتراح لأداة جديدة؟
-            <button type="button" data-card="اقتراح أداة جديدة">أخبرنا عن رأيك</button>
-          </p>
+          <footer class="free-tools-benefits" aria-label="مزايا الأدوات">
+            ${highlights.map((item) => `
+              <span class="free-tools-benefit">
+                <i aria-hidden="true">${item.icon}</i>
+                <span>
+                  <b>${escapeHtml(item.title)}</b>
+                  <small>${escapeHtml(item.description)}</small>
+                </span>
+              </span>
+            `).join("")}
+            <button class="free-tools-pricing-btn" type="button" data-open-upgrade>
+              <span>عرض الباقات</span>
+              ${icons.crown}
+            </button>
+          </footer>
         </div>
       </section>
     `;
