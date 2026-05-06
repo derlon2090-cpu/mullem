@@ -4,6 +4,7 @@
 
   const LOGIN_FRAME_URL = "login.html?embed=1&mode=login";
   const LOGIN_PAGE_URL = "login.html";
+  const ADMIN_PAGE_URL = "admin.html";
   const STUDENT_PAGE_URL = "student.html";
   const GUEST_URL = "guest.html";
   const HOME_URL = "index.html";
@@ -657,6 +658,27 @@
       : null;
   }
 
+  function normalizeRoleKey(value) {
+    return String(value || "").trim().toLowerCase().replace(/[\s-]+/g, "_");
+  }
+
+  function isAdminRole(value) {
+    const role = normalizeRoleKey(value);
+    return role === "admin" || role === "super_admin" || (role.includes("super") && role.includes("admin"));
+  }
+
+  function redirectToAdminDashboard() {
+    try {
+      localStorage.setItem("mlm_admin_session", "1");
+      localStorage.removeItem(legacyStorageKeys.currentUser);
+    } catch (_) {
+      // Ignore storage issues; admin.html is still protected by the server session.
+    }
+    if (!window.location.pathname.toLowerCase().endsWith("/admin.html")) {
+      window.location.href = ADMIN_PAGE_URL;
+    }
+  }
+
   function syncSessionFromCookies() {
     try {
       window.mullemApiClient?.restorePersistentAuthFromCookies?.();
@@ -672,7 +694,7 @@
       id: String(user.id || ""),
       name: String(user.name || "").trim() || "مستخدم",
       email: String(user.email || "").trim(),
-      role: String(user.role || "student").toLowerCase(),
+      role: normalizeRoleKey(user.role || "student"),
       stage: String(user.stage || "").trim(),
       grade: String(user.grade || "").trim(),
       subject: String(user.subject || "").trim(),
@@ -694,7 +716,11 @@
     if (!apiClient?.hasToken?.()) return null;
 
     const normalized = normalizeUser(user);
-    if (!normalized?.id || normalized.role === "admin") return null;
+    if (!normalized?.id) return null;
+    if (isAdminRole(normalized.role)) {
+      redirectToAdminDashboard();
+      return null;
+    }
     try {
       const users = loadJson(legacyStorageKeys.users, []);
       const existing = users.find((entry) => String(entry.id) === normalized.id) || {};
@@ -742,6 +768,11 @@
       user: payload.user
     });
 
+    if (isAdminRole(payload.user?.role || payload.role)) {
+      redirectToAdminDashboard();
+      return null;
+    }
+
     return persistEmbeddedUser(payload.user);
   }
 
@@ -763,7 +794,11 @@
     }
 
     const apiUser = normalizeUser(apiClient?.getSessionUser?.());
-    if (apiUser && apiUser.role !== "admin") return apiUser;
+    if (apiUser && isAdminRole(apiUser.role)) {
+      redirectToAdminDashboard();
+      return null;
+    }
+    if (apiUser) return apiUser;
 
     // Do not trust legacy local users without a verified API session user.
     // This prevents stale "guest/member" cards from unlocking UI after logout or expired tokens.
@@ -783,6 +818,10 @@
     sessionRefreshPromise = apiClient.me()
       .then((result) => {
         if (result?.ok && result.data?.user) {
+          if (isAdminRole(result.data.user.role)) {
+            redirectToAdminDashboard();
+            return;
+          }
           state.currentUser = persistEmbeddedUser(result.data.user) || getActiveUser();
           ensureAccountConversationState();
           render();
@@ -6024,6 +6063,10 @@
           token: payload.token,
           user: payload.user
         });
+      }
+      if (isAdminRole(payload.user?.role || payload.role)) {
+        redirectToAdminDashboard();
+        return;
       }
       state.currentUser = persistEmbeddedUser(payload.user) || getActiveUser();
       ensureAccountConversationState();

@@ -230,13 +230,14 @@ function completeStudentApiLogin(user, message, passwordOverride = "") {
   finishAuthSuccess({ role: "student", user: normalizedUser }, "index.html");
 }
 
-function completeAdminApiLogin(message) {
+function completeAdminApiLogin(message, user = null) {
   localStorage.setItem(storageKeys.adminSession, "1");
   localStorage.removeItem(storageKeys.currentUser);
   persistClientAuthState();
   clearPendingAuth();
   setSuccessState(message || "تم تسجيل دخول الأدمن بنجاح عبر الخادم.");
-  finishAuthSuccess({ role: "admin" }, "admin.html");
+  const sessionUser = user || window.mullemApiClient?.getSessionUser?.() || null;
+  finishAuthSuccess({ role: formatAuthRole(sessionUser?.role || "admin"), user: sessionUser }, "admin.html");
 }
 
 function shouldFallbackToLocalAuth(result) {
@@ -649,7 +650,7 @@ loginForm?.addEventListener("submit", async (event) => {
 
   if (apiResult.ok && apiResult.data?.user) {
     if (isAuthAdminRole(apiResult.data.user.role)) {
-      completeAdminApiLogin("تم تسجيل دخول الأدمن بنجاح.");
+      completeAdminApiLogin("تم تسجيل دخول الأدمن بنجاح.", apiResult.data.user);
       return;
     }
 

@@ -14,6 +14,27 @@ const storageKeys = {
   resumePrompt: "mlm_resume_prompt"
 };
 
+function normalizeAppRoleKey(value) {
+  return String(value || "").trim().toLowerCase().replace(/[\s-]+/g, "_");
+}
+
+function isAppAdminRole(value) {
+  const role = normalizeAppRoleKey(value);
+  return role === "admin" || role === "super_admin" || (role.includes("super") && role.includes("admin"));
+}
+
+function redirectAdminSessionFromLegacyPage() {
+  try {
+    localStorage.setItem("mlm_admin_session", "1");
+    localStorage.removeItem(storageKeys.currentUser);
+  } catch (_) {
+    // Ignore storage issues; admin.html verifies the server-side session.
+  }
+  if (!window.location.pathname.toLowerCase().endsWith("/admin.html")) {
+    window.location.href = "admin.html";
+  }
+}
+
 const gradeOptions = [
   "الأول الابتدائي",
   "الثاني الابتدائي",
@@ -496,7 +517,12 @@ function getSessionBackedUser() {
     if (!apiClient || typeof apiClient.getSessionUser !== "function") return null;
 
     const sessionUser = apiClient.getSessionUser();
-    if (!sessionUser?.id || String(sessionUser.role || "").toLowerCase() === "admin") {
+    if (!sessionUser?.id) {
+      return null;
+    }
+
+    if (isAppAdminRole(sessionUser.role)) {
+      redirectAdminSessionFromLegacyPage();
       return null;
     }
 
@@ -509,7 +535,7 @@ function getSessionBackedUser() {
       ...(existingUser || {}),
       ...sessionUser,
       id: normalizedId,
-      role: existingUser?.role || (String(sessionUser.role || "").toLowerCase() === "admin" ? "Admin" : "Student")
+      role: existingUser?.role || "Student"
     };
 
     const nextUsers = [
@@ -526,6 +552,17 @@ function getSessionBackedUser() {
 }
 
 function getActiveUser() {
+  try {
+    const apiClient = window.mullemApiClient;
+    const sessionUser = apiClient?.getSessionUser?.();
+    if (apiClient?.hasToken?.() && isAppAdminRole(sessionUser?.role)) {
+      redirectAdminSessionFromLegacyPage();
+      return null;
+    }
+  } catch (_) {
+    // Fall back to the local user path.
+  }
+
   const users = getUsers();
   const currentId = String(localStorage.getItem(storageKeys.currentUser) || "").trim();
   const localUser = users.find((user) => String(user.id) === currentId) || null;
