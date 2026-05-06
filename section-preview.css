@@ -4315,12 +4315,12 @@ body[data-workspace-mode="home"] .guest-root {
   background: linear-gradient(180deg, #ffffff 0%, #fbfbff 100%);
 }
 
-.guest-shell.is-tools-workspace {
+.guest-shell.is-tools-workspace.is-subscriber-tools {
   width: min(1680px, calc(100% - 28px));
   grid-template-columns: 270px minmax(0, 1fr);
 }
 
-.guest-shell.is-tools-workspace .guest-sidepanel {
+.guest-shell.is-tools-workspace.is-subscriber-tools .guest-sidepanel {
   display: none;
 }
 
@@ -8328,19 +8328,19 @@ body[data-workspace-mode="home"] .guest-root {
 }
 
 @media (max-width: 760px) {
-  .guest-shell.is-tools-workspace {
+  .guest-shell.is-tools-workspace.is-subscriber-tools {
     width: 100%;
     min-height: 100vh;
     display: block;
     padding: 0;
   }
 
-  .guest-shell.is-tools-workspace .guest-sidebar,
-  .guest-shell.is-tools-workspace .guest-sidepanel {
+  .guest-shell.is-tools-workspace.is-subscriber-tools .guest-sidebar,
+  .guest-shell.is-tools-workspace.is-subscriber-tools .guest-sidepanel {
     display: none;
   }
 
-  .guest-shell.is-tools-workspace .free-tools-main {
+  .guest-shell.is-tools-workspace.is-subscriber-tools .free-tools-main {
     width: 100%;
     min-height: 100vh;
     border: 0;

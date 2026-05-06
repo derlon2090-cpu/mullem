@@ -2128,6 +2128,113 @@
   }
 
   function renderToolsMain(profile) {
+    const categories = [
+      { title: "الكل" },
+      { title: "كتابة وتحرير" },
+      { title: "تلخيص وتنظيم" },
+      { title: "تحليل وبيانات" },
+      { title: "إنتاجية" },
+      { title: "تعليم وتعلم" },
+      { title: "أدوات مجانية", freeTools: true }
+    ];
+    const tools = [
+      {
+        key: "smart-search",
+        title: "البحث الذكي",
+        description: "البحث عن معلومات دقيقة من مصادر موثوقة",
+        icon: icons.search
+      },
+      {
+        key: "writing-assistant",
+        title: "مساعد الكتابة",
+        description: "كتابة وتحسين النصوص بجودة عالية وبأسلوب احترافي",
+        icon: icons.edit
+      },
+      {
+        title: "صناعة ملخصات",
+        description: "إنشاء ملخصات احترافية من النصوص أو الملفات",
+        icon: icons.document
+      },
+      {
+        title: "تلخيص محتوى",
+        description: "تلخيص أي نص طويل إلى نقاط مختصرة وواضحة",
+        icon: icons.notes
+      },
+      {
+        title: "ترجمة ذكية",
+        description: "ترجمة النصوص بدقة عالية ولغة واضحة",
+        icon: icons.internet
+      },
+      {
+        title: "استخراج البيانات",
+        description: "استخراج البيانات من النصوص والملفات المنظمة",
+        icon: icons.tests
+      },
+      {
+        title: "أفكار ومقترحات",
+        description: "الحصول على أفكار إبداعية لمشاريعك ومحتواك",
+        icon: icons.sparkle
+      },
+      {
+        title: "تحليل المحتوى",
+        description: "تحليل النصوص واستخراج المفاهيم الرئيسية",
+        icon: icons.ai
+      }
+    ];
+
+    return `
+      <section class="guest-main tools-main" aria-label="أدوات الذكاء الاصطناعي">
+        <header class="guest-main-topbar tools-main-topbar is-tools-index">
+          <button class="tools-back-chat tools-back-chat-inline" type="button" data-return-chat>
+            <span aria-hidden="true">←</span>
+            <b>العودة إلى الشات</b>
+            <i aria-hidden="true">${icons.chat}</i>
+          </button>
+          ${renderHomeTopActions()}
+        </header>
+
+        <div class="tools-page">
+          <header class="tools-hero">
+            <div class="tools-title-row">
+              <h1>أدوات الذكاء الاصطناعي</h1>
+              <span class="tools-title-icon" aria-hidden="true">${icons.settings}</span>
+            </div>
+            <p>مجموعة من الأدوات الذكية لمساعدتك في العمل والإبداع</p>
+          </header>
+
+          <div class="tools-filters" aria-label="تصنيفات الأدوات">
+            ${categories.map((category, index) => `
+              <button class="tools-filter ${index === 0 ? "is-active" : ""}" type="button" ${category.freeTools ? "data-open-free-tools" : ""}>
+                ${escapeHtml(category.title)}
+              </button>
+            `).join("")}
+          </div>
+
+          <section class="tools-grid">
+            ${tools.map((tool) => `
+              <button class="tool-card ${isAuthenticated() ? "" : "requires-auth"}" type="button" data-tool-key="${escapeHtml(tool.key || "")}" data-card="${escapeHtml(tool.title)}">
+                <span class="tool-card-star" aria-hidden="true">${icons.star}</span>
+                <span class="tool-card-icon" aria-hidden="true">${tool.icon}</span>
+                <strong>${escapeHtml(tool.title)}</strong>
+                <span class="tool-card-copy">${escapeHtml(tool.description)}</span>
+                <span class="tool-card-meta">
+                  <b>مجاني</b>
+                  <small>متاح في: طويق، برو</small>
+                </span>
+              </button>
+            `).join("")}
+          </section>
+
+          <p class="tools-suggest">
+            هل لديك اقتراح لأداة جديدة؟
+            <button type="button" data-card="اقتراح أداة جديدة">أخبرنا عن رأيك</button>
+          </p>
+        </div>
+      </section>
+    `;
+  }
+
+  function renderSubscriberToolsMain(profile) {
     const toolIcons = {
       hd: '<svg viewBox="0 0 24 24"><rect x="4" y="5" width="16" height="14" rx="3"/><path d="M8 15V9M8 12h3M11 15V9M14 9h2.2A2.8 2.8 0 0 1 19 11.8v.4A2.8 2.8 0 0 1 16.2 15H14Z"/></svg>',
       imagePlus: '<svg viewBox="0 0 24 24"><rect x="4" y="6" width="14" height="14" rx="2"/><path d="m7 16 3-3 2.5 2.5L15 13l3 3"/><circle cx="9" cy="10" r="1.3"/><path d="M18 4v6M15 7h6"/></svg>',
@@ -3438,6 +3545,9 @@
       if (state.toolView === "writing-assistant") {
         return renderWritingAssistantMain(profile);
       }
+      if (state.toolView === "subscriber-tools") {
+        return renderSubscriberToolsMain(profile);
+      }
       return renderToolsMain(profile);
     }
     if (isHomeWorkspace) {
@@ -3730,8 +3840,9 @@
   function renderShell() {
     const profile = getProfile();
     const isToolsWorkspace = state.section === "ai-tools";
+    const isSubscriberTools = isToolsWorkspace && state.toolView === "subscriber-tools";
     app.innerHTML = `
-      <div class="guest-shell ${state.theme === "dark" ? "theme-dark" : ""} ${isHomeWorkspace ? "is-home-workspace" : ""} ${isToolsWorkspace ? "is-tools-workspace" : ""} ${state.sidebarCollapsed ? "is-sidebar-collapsed" : ""}">
+      <div class="guest-shell ${state.theme === "dark" ? "theme-dark" : ""} ${isHomeWorkspace ? "is-home-workspace" : ""} ${isToolsWorkspace ? "is-tools-workspace" : ""} ${isSubscriberTools ? "is-subscriber-tools" : ""} ${state.sidebarCollapsed ? "is-sidebar-collapsed" : ""}">
         ${renderSidebar()}
         ${renderMain(profile)}
         ${isHomeWorkspace ? "" : renderRightPanel(profile)}
@@ -4954,6 +5065,14 @@
         state.openThreadMenuId = "";
         state.toolView = "tools";
         setSection("ai-tools");
+        return;
+      }
+
+      if (event.target.closest("[data-open-free-tools]")) {
+        state.toolView = "subscriber-tools";
+        state.openThreadMenuId = "";
+        state.modelMenuOpen = false;
+        render();
         return;
       }
 
