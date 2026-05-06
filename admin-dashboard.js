@@ -356,6 +356,7 @@
               <td><mark class="admin-state">${escapeHtml(user.status || "active")}</mark></td>
               <td class="admin-row-actions">
                 <button type="button" data-toggle-user="${escapeHtml(user.id)}">${String(user.status || "").toLowerCase() === "active" ? "تعطيل" : "تفعيل"}</button>
+                <button class="admin-danger-btn" type="button" data-ban-user="${escapeHtml(user.id)}">${String(user.status || "").toLowerCase() === "banned" ? "فك الحظر" : "حظر"}</button>
                 <button type="button" data-user-remove-plan="${escapeHtml(user.id)}">حذف الباقة</button>
                 <button type="button" data-user-add-xp="${escapeHtml(user.id)}">+ XP</button>
                 <button type="button" data-user-remove-xp="${escapeHtml(user.id)}">- XP</button>
@@ -514,6 +515,26 @@
     await loadAdminData();
   }
 
+  async function toggleUserBan(userId) {
+    const user = state.users.find((item) => String(item.id) === String(userId));
+    if (!user) return;
+    const isBanned = String(user.status || "").toLowerCase() === "banned";
+    if (!isBanned) {
+      const confirmed = window.confirm(`حظر ${user.name || "المستخدم"} من دخول الموقع؟`);
+      if (!confirmed) return;
+    }
+    const nextStatus = isBanned ? "active" : "banned";
+    const result = await api.updateAdminUser(userId, {
+      status: nextStatus,
+      activity: isBanned ? "تم فك حظر المستخدم من لوحة الأدمن" : "تم حظر المستخدم من دخول الموقع عبر لوحة الأدمن"
+    });
+    if (!result.ok) {
+      window.alert(result.message || "تعذر تحديث حظر المستخدم.");
+      return;
+    }
+    await loadAdminData();
+  }
+
   async function saveUserPlan(userId) {
     const select = $$("[data-user-plan-select]").find((node) => node.dataset.userPlanSelect === String(userId));
     const packageId = select?.value;
@@ -618,6 +639,11 @@
     const toggleButton = event.target.closest("[data-toggle-user]");
     if (toggleButton) {
       await toggleUser(toggleButton.dataset.toggleUser);
+      return;
+    }
+    const banButton = event.target.closest("[data-ban-user]");
+    if (banButton) {
+      await toggleUserBan(banButton.dataset.banUser);
       return;
     }
     const addXp = event.target.closest("[data-user-add-xp]");
