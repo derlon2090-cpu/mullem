@@ -162,6 +162,8 @@ function getAuthReturnUrl(defaultUrl) {
   try {
     const target = new URL(requested, window.location.href);
     if (target.origin !== window.location.origin) return defaultUrl;
+    const targetPath = String(target.pathname || "").toLowerCase();
+    if (targetPath.endsWith("/admin.html") || targetPath.endsWith("admin.html")) return defaultUrl;
     return `${target.pathname}${target.search}${target.hash}` || defaultUrl;
   } catch (_) {
     return defaultUrl;

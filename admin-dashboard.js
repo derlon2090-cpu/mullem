@@ -68,6 +68,21 @@
     .replace(/"/g, "&quot;")
     .replace(/'/g, "&#039;");
 
+  function buildLoginUrl() {
+    const loginUrl = new URL("login.html", window.location.href);
+    loginUrl.searchParams.set("mode", "login");
+    loginUrl.searchParams.set("return", "admin.html");
+    return loginUrl.href;
+  }
+
+  function redirectToLogin() {
+    window.location.href = buildLoginUrl();
+  }
+
+  function redirectToUserWorkspace() {
+    window.location.href = "index.html";
+  }
+
   function isAdminRole(user) {
     const role = String(user?.role || "").toLowerCase();
     return role.includes("admin");
@@ -96,14 +111,19 @@
 
   async function ensureAdminSession() {
     if (!api?.hasToken?.()) {
-      setLoginVisible(true);
+      redirectToLogin();
       return false;
     }
 
     const result = await api.me();
-    if (!result.ok || !isAdminRole(result.data?.user)) {
+    if (!result.ok) {
       api.clearSession?.();
-      setLoginVisible(true);
+      redirectToLogin();
+      return false;
+    }
+
+    if (!isAdminRole(result.data?.user)) {
+      redirectToUserWorkspace();
       return false;
     }
 
@@ -459,7 +479,7 @@
       else await api?.logout?.();
     } finally {
       api?.clearSession?.();
-      setLoginVisible(true);
+      redirectToLogin();
     }
   });
 
