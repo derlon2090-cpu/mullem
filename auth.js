@@ -49,12 +49,26 @@ const storageKeys = {
 };
 
 const adminCredentials = {
-  email: "admin@mullem.sa",
-  password: "Mullem@2026"
+  email: "super.admin.orlixor.2026@orlixor.ai",
+  password: "Orlixor#Admin!2026$Secure-9Qv"
 };
 
 const isEmbeddedAuth = new URLSearchParams(window.location.search).get("embed") === "1";
 const authBridgeKey = "mlm_auth_bridge";
+
+function normalizeAuthRoleKey(value) {
+  return String(value || "").trim().toLowerCase().replace(/[\s-]+/g, "_");
+}
+
+function isAuthAdminRole(value) {
+  const role = normalizeAuthRoleKey(value);
+  return role === "admin" || role === "super_admin" || (role.includes("super") && role.includes("admin"));
+}
+
+function formatAuthRole(value) {
+  if (!isAuthAdminRole(value)) return "Student";
+  return normalizeAuthRoleKey(value).includes("super") ? "Super Admin" : "Admin";
+}
 
 try {
   window.mullemApiClient?.restorePersistentAuthFromCookies?.();
@@ -69,7 +83,7 @@ try {
   const apiClient = getApiClient();
   const hasApiSession = Boolean(apiClient?.hasToken?.());
   const sessionUser = apiClient?.getSessionUser?.();
-  const isStudentSession = Boolean(hasApiSession && sessionUser && String(sessionUser.role || "").toLowerCase() !== "admin");
+  const isStudentSession = Boolean(hasApiSession && sessionUser && !isAuthAdminRole(sessionUser.role));
   if (!isEmbeddedAuth && activeAdminSession === "1" && hasApiSession) {
     window.location.href = "admin.html";
   } else if (!isEmbeddedAuth && isStudentSession && !window.location.pathname.endsWith("admin.html")) {
@@ -181,7 +195,7 @@ function normalizeApiUserForLocal(user) {
     name: user?.name || existing?.name || "",
     email: String(user?.email || existing?.email || "").toLowerCase(),
     password: existing?.password || "",
-    role: String(user?.role || existing?.role || "student").toLowerCase() === "admin" ? "Admin" : "Student",
+    role: formatAuthRole(user?.role || existing?.role || "student"),
     stage: user?.stage || existing?.stage || inferStageFromGrade(user?.grade || existing?.grade || ""),
     grade: user?.grade || existing?.grade || "",
     subject: existing?.subject || "الرياضيات",
@@ -634,7 +648,7 @@ loginForm?.addEventListener("submit", async (event) => {
   event.stopImmediatePropagation();
 
   if (apiResult.ok && apiResult.data?.user) {
-    if (String(apiResult.data.user.role || "").toLowerCase() === "admin") {
+    if (isAuthAdminRole(apiResult.data.user.role)) {
       completeAdminApiLogin("تم تسجيل دخول الأدمن بنجاح.");
       return;
     }
@@ -929,7 +943,7 @@ if (isEmbeddedAuth) {
   const activeAdminSession = localStorage.getItem(storageKeys.adminSession);
   if (activeAdminSession === "1" && hasApiSession) {
     notifyEmbeddedAuthSuccess({ role: "admin" });
-  } else if (hasApiSession && String(sessionUser.role || "").toLowerCase() !== "admin") {
+  } else if (hasApiSession && !isAuthAdminRole(sessionUser.role)) {
     notifyEmbeddedAuthSuccess(buildSessionPayload({ role: "student", user: sessionUser }));
   }
 }

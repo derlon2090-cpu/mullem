@@ -89,7 +89,7 @@
       id: user.id ?? null,
       name: user.name || "",
       email: user.email || "",
-      role: user.role || "student",
+      role: formatSessionRole(user.role || "student"),
       stage: user.stage || "",
       grade: user.grade || "",
       subject: user.subject || "",
@@ -105,6 +105,20 @@
       last_reset: user.last_reset || user.lastReset || user.lastActiveDate || user.last_active_date || "",
       xp: Number.isFinite(Number(user.xp)) ? Number(user.xp) : 0
     };
+  }
+
+  function normalizeRoleKey(value) {
+    return String(value || "").trim().toLowerCase().replace(/[\s-]+/g, "_");
+  }
+
+  function isAdminRole(value) {
+    const role = normalizeRoleKey(value);
+    return role === "admin" || role === "super_admin" || (role.includes("super") && role.includes("admin"));
+  }
+
+  function formatSessionRole(value) {
+    if (!isAdminRole(value)) return "Student";
+    return normalizeRoleKey(value).includes("super") ? "Super Admin" : "Admin";
   }
 
   function sanitizeBaseUrl(value) {
@@ -357,7 +371,7 @@
 
   function isAuthenticatedStudent() {
     const sessionUser = getSessionUser();
-    return Boolean(hasToken() && sessionUser && String(sessionUser.role || "").toLowerCase() !== "admin");
+    return Boolean(hasToken() && sessionUser && !isAdminRole(sessionUser.role));
   }
 
   function isPublicLandingPage() {
@@ -375,7 +389,6 @@
 
   function normalizeLegacyUser(user, existingUser = null) {
     const existing = existingUser || {};
-    const role = String(user?.role || existing.role || "student").toLowerCase();
     const status = String(user?.status || existing.status || "active").toLowerCase();
 
     return {
@@ -383,7 +396,7 @@
       name: user?.name || existing.name || "",
       email: String(user?.email || existing.email || "").toLowerCase(),
       password: existing.password || "",
-      role: role === "admin" ? "Admin" : "Student",
+      role: formatSessionRole(user?.role || existing.role || "student"),
       stage: user?.stage || existing.stage || "",
       grade: user?.grade || existing.grade || "",
       subject: user?.subject || existing.subject || "",
@@ -435,7 +448,7 @@
 
     saveJson("mlm_users", nextUsers);
 
-    if (String(sessionUser.role || "").toLowerCase() === "admin") {
+    if (isAdminRole(sessionUser.role)) {
       localStorage.setItem("mlm_admin_session", "1");
       localStorage.removeItem("mlm_current_user");
       return;
