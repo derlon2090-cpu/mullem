@@ -5821,7 +5821,7 @@ body[data-workspace-mode="home"] .guest-root {
 .image-clarifier-controls {
   margin-top: 18px;
   display: grid;
-  grid-template-columns: minmax(160px, 210px) minmax(0, 1fr) minmax(0, 1fr);
+  grid-template-columns: minmax(150px, 190px) repeat(3, minmax(0, 1fr));
   gap: 14px;
   align-items: stretch;
   border-radius: 14px;

@@ -490,6 +490,7 @@
       height: 0,
       quality: "medium",
       noise: "medium",
+      contrast: true,
       originalUrl: "",
       resultUrl: "",
       resultSize: 0,
@@ -1515,6 +1516,7 @@
       resultUrl: "",
       resultSize: 0,
       progress: 0,
+      error: "",
       status
     };
   }
@@ -1533,6 +1535,7 @@
       height: 0,
       quality: "medium",
       noise: "medium",
+      contrast: true,
       originalUrl: "",
       resultUrl: "",
       resultSize: 0,
@@ -1544,52 +1547,101 @@
     };
   }
 
-  function applyImageClarifierFilter(ctx, width, height, quality, noise) {
-    const imageData = ctx.getImageData(0, 0, width, height);
+  function adjustClarifierContrastBrightness(imageData, level) {
     const data = imageData.data;
-    const noiseMix = ({ light: 0.07, medium: 0.13, strong: 0.2 }[noise] || 0.13);
-    const sharpAmount = ({ light: 0.38, medium: 0.62, strong: 0.88 }[quality] || 0.62);
-    const contrast = ({ light: 1.035, medium: 1.06, strong: 1.09 }[quality] || 1.06);
-    const brightness = ({ light: 1, medium: 2, strong: 3 }[quality] || 2);
-    const original = new Uint8ClampedArray(data);
+    const settings = {
+      light: { contrast: 1.05, brightness: 2 },
+      medium: { contrast: 1.1, brightness: 4 },
+      strong: { contrast: 1.16, brightness: 6 }
+    };
+    const active = settings[level] || settings.medium;
 
-    if (width > 2 && height > 2) {
-      for (let y = 1; y < height - 1; y += 1) {
-        for (let x = 1; x < width - 1; x += 1) {
-          const index = (y * width + x) * 4;
-          for (let channel = 0; channel < 3; channel += 1) {
-            let sum = 0;
-            for (let oy = -1; oy <= 1; oy += 1) {
-              for (let ox = -1; ox <= 1; ox += 1) {
-                sum += original[((y + oy) * width + (x + ox)) * 4 + channel];
-              }
+    for (let index = 0; index < data.length; index += 4) {
+      data[index] = clampImageValue((data[index] - 128) * active.contrast + 128 + active.brightness);
+      data[index + 1] = clampImageValue((data[index + 1] - 128) * active.contrast + 128 + active.brightness);
+      data[index + 2] = clampImageValue((data[index + 2] - 128) * active.contrast + 128 + active.brightness);
+    }
+
+    return imageData;
+  }
+
+  function denoiseClarifierImageData(imageData, width, height, level) {
+    if (level === "off" || width <= 2 || height <= 2) return imageData;
+    const src = imageData.data;
+    const output = new Uint8ClampedArray(src);
+    const blend = level === "strong" ? 0.35 : 0.22;
+
+    for (let y = 1; y < height - 1; y += 1) {
+      for (let x = 1; x < width - 1; x += 1) {
+        for (let channel = 0; channel < 3; channel += 1) {
+          let total = 0;
+          let count = 0;
+
+          for (let ky = -1; ky <= 1; ky += 1) {
+            for (let kx = -1; kx <= 1; kx += 1) {
+              const pixelIndex = ((y + ky) * width + (x + kx)) * 4 + channel;
+              total += src[pixelIndex];
+              count += 1;
             }
-            const average = sum / 9;
-            data[index + channel] = clampImageValue(original[index + channel] * (1 - noiseMix) + average * noiseMix);
           }
+
+          const currentIndex = (y * width + x) * 4 + channel;
+          const average = total / count;
+          output[currentIndex] = clampImageValue(src[currentIndex] * (1 - blend) + average * blend);
         }
       }
     }
 
-    const denoised = new Uint8ClampedArray(data);
-    if (width > 2 && height > 2) {
-      for (let y = 1; y < height - 1; y += 1) {
-        for (let x = 1; x < width - 1; x += 1) {
-          const index = (y * width + x) * 4;
-          for (let channel = 0; channel < 3; channel += 1) {
-            const center = denoised[index + channel];
-            const average = (
-              denoised[((y - 1) * width + x) * 4 + channel] +
-              denoised[((y + 1) * width + x) * 4 + channel] +
-              denoised[(y * width + (x - 1)) * 4 + channel] +
-              denoised[(y * width + (x + 1)) * 4 + channel]
-            ) / 4;
-            const sharpened = center + (center - average) * sharpAmount;
-            data[index + channel] = clampImageValue((sharpened - 128) * contrast + 128 + brightness);
+    imageData.data.set(output);
+    return imageData;
+  }
+
+  function sharpenClarifierImageData(imageData, width, height, level) {
+    if (width <= 2 || height <= 2) return imageData;
+    const strength = {
+      light: 0.25,
+      medium: 0.45,
+      strong: 0.7
+    }[level] || 0.45;
+    const src = imageData.data;
+    const output = new Uint8ClampedArray(src);
+    const kernel = [
+      0, -strength, 0,
+      -strength, 1 + 4 * strength, -strength,
+      0, -strength, 0
+    ];
+
+    for (let y = 1; y < height - 1; y += 1) {
+      for (let x = 1; x < width - 1; x += 1) {
+        for (let channel = 0; channel < 3; channel += 1) {
+          let sum = 0;
+          let kernelIndex = 0;
+
+          for (let ky = -1; ky <= 1; ky += 1) {
+            for (let kx = -1; kx <= 1; kx += 1) {
+              const pixelIndex = ((y + ky) * width + (x + kx)) * 4 + channel;
+              sum += src[pixelIndex] * kernel[kernelIndex];
+              kernelIndex += 1;
+            }
           }
+
+          output[(y * width + x) * 4 + channel] = clampImageValue(sum);
         }
       }
     }
+
+    imageData.data.set(output);
+    return imageData;
+  }
+
+  function applyImageClarifierFilter(ctx, width, height, clarityLevel, denoiseLevel, contrastEnabled) {
+    let imageData = ctx.getImageData(0, 0, width, height);
+
+    if (contrastEnabled) {
+      imageData = adjustClarifierContrastBrightness(imageData, clarityLevel);
+    }
+    imageData = denoiseClarifierImageData(imageData, width, height, denoiseLevel);
+    imageData = sharpenClarifierImageData(imageData, width, height, clarityLevel);
 
     ctx.putImageData(imageData, 0, 0);
   }
@@ -1642,7 +1694,7 @@
         loading: false,
         progress: 0,
         error: "",
-        status: "تم تحميل الصورة. اختر مستوى التوضيح ثم اضغط تحسين الصورة."
+        status: "تم تحميل الصورة. اختر مستوى التوضيح ثم اضغط توضيح الصورة."
       };
       render();
     } catch (_) {
@@ -1688,7 +1740,8 @@
         outputCanvas.width,
         outputCanvas.height,
         String(clarifier.quality || "medium"),
-        String(clarifier.noise || "medium")
+        String(clarifier.noise || "medium"),
+        clarifier.contrast !== false
       );
 
       const blob = await new Promise((resolve) => {
@@ -3128,6 +3181,7 @@
     const hasAccess = hasSubscriberToolsAccess();
     const quality = String(clarifier.quality || "medium");
     const noise = String(clarifier.noise || "medium");
+    const contrastEnabled = clarifier.contrast !== false;
     const hasImage = Boolean(clarifier.originalUrl);
     const hasResult = Boolean(clarifier.resultUrl);
     const canRun = hasAccess && hasImage && !clarifier.loading;
@@ -3137,6 +3191,7 @@
     const waveIcon = '<svg viewBox="0 0 24 24"><path d="M4 8c2.5-3 5.5-3 8 0s5.5 3 8 0"/><path d="M4 16c2.5-3 5.5-3 8 0s5.5 3 8 0"/></svg>';
     const downloadIcon = '<svg viewBox="0 0 24 24"><path d="M12 3v12"/><path d="m7.5 10.5 4.5 4.5 4.5-4.5"/><path d="M5 21h14"/></svg>';
     const qualityLabels = { light: "خفيف", medium: "متوسط", strong: "قوي" };
+    const noiseLabels = { off: "إيقاف", medium: "متوسط", strong: "قوي" };
     const typeLabel = String(clarifier.fileType || "").replace("image/", "").toUpperCase() || "-";
     const features = [
       "تحسين ملامح ووضوح تفاصيل الصورة",
@@ -3217,26 +3272,34 @@
 
           <section class="image-clarifier-controls">
             <button class="image-clarifier-run" type="button" data-image-clarifier-run ${canRun ? "" : "disabled"}>
-              ${clarifier.loading ? "جاري التحسين..." : "تحسين الصورة"}
+              ${clarifier.loading ? "جاري التوضيح..." : "توضيح الصورة"}
               ${icons.sparkle}
             </button>
             <label>
-              <span>مستوى التحسين</span>
+              <span>مستوى التوضيح</span>
               <select data-image-clarifier-quality>
-                <option value="light" ${quality === "light" ? "selected" : ""}>خفيف</option>
-                <option value="medium" ${quality === "medium" ? "selected" : ""}>متوسط</option>
-                <option value="strong" ${quality === "strong" ? "selected" : ""}>قوي</option>
+                <option value="light" ${quality === "light" ? "selected" : ""}>توضيح خفيف</option>
+                <option value="medium" ${quality === "medium" ? "selected" : ""}>توضيح متوسط</option>
+                <option value="strong" ${quality === "strong" ? "selected" : ""}>توضيح قوي</option>
               </select>
               ${tuneIcon}
             </label>
             <label>
-              <span>معالجة الضوضاء</span>
+              <span>تقليل الضوضاء</span>
               <select data-image-clarifier-noise>
-                <option value="light" ${noise === "light" ? "selected" : ""}>خفيفة</option>
-                <option value="medium" ${noise === "medium" ? "selected" : ""}>متوسطة</option>
-                <option value="strong" ${noise === "strong" ? "selected" : ""}>قوية</option>
+                <option value="off" ${noise === "off" ? "selected" : ""}>بدون تقليل ضوضاء</option>
+                <option value="medium" ${noise === "medium" ? "selected" : ""}>تقليل متوسط</option>
+                <option value="strong" ${noise === "strong" ? "selected" : ""}>تقليل قوي</option>
               </select>
               ${waveIcon}
+            </label>
+            <label>
+              <span>تحسين التباين</span>
+              <select data-image-clarifier-contrast>
+                <option value="on" ${contrastEnabled ? "selected" : ""}>تشغيل</option>
+                <option value="off" ${contrastEnabled ? "" : "selected"}>إيقاف</option>
+              </select>
+              ${icons.bolt}
             </label>
           </section>
 
@@ -3276,7 +3339,9 @@
                 <div><dt>الحجم</dt><dd>${hasImage ? escapeHtml(formatImageEnhancerFileSize(clarifier.fileSize)) : "-"}</dd></div>
                 <div><dt>الأبعاد</dt><dd>${hasImage ? escapeHtml(`${clarifier.width || 0} × ${clarifier.height || 0}`) : "-"}</dd></div>
                 <div><dt>النوع</dt><dd>${hasImage ? escapeHtml(typeLabel) : "-"}</dd></div>
-                <div><dt>التحسين</dt><dd>${escapeHtml(qualityLabels[quality] || "متوسط")}</dd></div>
+                <div><dt>التوضيح</dt><dd>${escapeHtml(qualityLabels[quality] || "متوسط")}</dd></div>
+                <div><dt>الضوضاء</dt><dd>${escapeHtml(noiseLabels[noise] || "متوسط")}</dd></div>
+                <div><dt>التباين</dt><dd>${contrastEnabled ? "تشغيل" : "إيقاف"}</dd></div>
               </dl>
               ${hasResult ? `
                 <a class="image-clarifier-download" href="${escapeHtml(clarifier.resultUrl)}" download="orlixor-clarified.png">
@@ -6800,17 +6865,25 @@
         state.imageClarifier.quality = ["light", "medium", "strong"].includes(imageClarifierQuality.value)
           ? imageClarifierQuality.value
           : "medium";
-        clearImageClarifierResult("الإعدادات تغيّرت. شغّل التحسين من جديد.");
+        clearImageClarifierResult("الإعدادات تغيّرت. شغّل التوضيح من جديد.");
         render();
         return;
       }
 
       const imageClarifierNoise = event.target.closest("[data-image-clarifier-noise]");
       if (imageClarifierNoise) {
-        state.imageClarifier.noise = ["light", "medium", "strong"].includes(imageClarifierNoise.value)
+        state.imageClarifier.noise = ["off", "medium", "strong"].includes(imageClarifierNoise.value)
           ? imageClarifierNoise.value
           : "medium";
-        clearImageClarifierResult("الإعدادات تغيّرت. شغّل التحسين من جديد.");
+        clearImageClarifierResult("الإعدادات تغيّرت. شغّل التوضيح من جديد.");
+        render();
+        return;
+      }
+
+      const imageClarifierContrast = event.target.closest("[data-image-clarifier-contrast]");
+      if (imageClarifierContrast) {
+        state.imageClarifier.contrast = imageClarifierContrast.value !== "off";
+        clearImageClarifierResult("الإعدادات تغيّرت. شغّل التوضيح من جديد.");
         render();
         return;
       }
