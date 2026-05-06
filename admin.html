@@ -4,6 +4,26 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="theme-color" content="#6d4bff">
+  <script>
+    (() => {
+      function goToNormalLogin() {
+        const loginUrl = new URL("login.html", window.location.href);
+        loginUrl.searchParams.set("mode", "login");
+        loginUrl.searchParams.set("return", "admin.html");
+        window.location.replace(loginUrl.href);
+      }
+
+      try {
+        const hasLocalToken = Boolean(localStorage.getItem("mlm_api_token"));
+        const hasCookieToken = String(document.cookie || "")
+          .split("; ")
+          .some((item) => item.startsWith("mlm_auth_token="));
+        if (!hasLocalToken && !hasCookieToken) goToNormalLogin();
+      } catch (_) {
+        goToNormalLogin();
+      }
+    })();
+  </script>
   <title>Orlixor | لوحة الأدمن</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -13,28 +33,6 @@
 </head>
 <body class="admin-console-body">
   <main class="orlixor-admin-console">
-    <section class="admin-secure-login" data-admin-login-view hidden>
-      <div class="admin-login-shell">
-        <div class="admin-login-brand">
-          <span class="orlixor-admin-logo-mark">O</span>
-          <strong>Orlixor</strong>
-        </div>
-        <h1>دخول لوحة الأدمن</h1>
-        <p>الدخول محمي من السيرفر. لا يتم فتح اللوحة إلا بحساب يحمل صلاحية admin أو super_admin.</p>
-        <form class="admin-secure-form" data-admin-login-form>
-          <label>
-            البريد الإلكتروني
-            <input class="field" type="email" data-admin-email autocomplete="username" placeholder="super.admin.orlixor.2026@orlixor.ai" required>
-          </label>
-          <label>
-            كلمة المرور
-            <input class="field" type="password" data-admin-password autocomplete="current-password" placeholder="كلمة مرور الأدمن" required>
-          </label>
-          <button class="primary-btn" type="submit">دخول لوحة التحكم</button>
-          <div class="admin-login-hint" data-admin-login-state>استخدم بيانات الأدمن الصعبة التي تم ضبطها على السيرفر.</div>
-        </form>
-      </div>
-    </section>
 
     <section class="admin-dashboard-shell" data-admin-app hidden>
       <aside class="admin-right-sidebar">
@@ -264,7 +262,7 @@
   </main>
 
   <script src="mullem-config.js?v=20260409-5"></script>
-  <script src="api-client.js?v=20260506-unified-login"></script>
-  <script src="admin-dashboard.js?v=20260506-unified-login"></script>
+  <script src="api-client.js?v=20260506-natural-login"></script>
+  <script src="admin-dashboard.js?v=20260506-natural-login"></script>
 </body>
 </html>
