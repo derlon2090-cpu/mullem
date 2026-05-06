@@ -178,7 +178,30 @@
   }
 
   function getPlanName(user) {
-    return user.package || user.packageName || user.package_name || user.planType || user.plan_type || "المجانية";
+    return user.package || user.packageName || user.package_name || user.packageKey || user.planType || user.plan_type || "المجانية";
+  }
+
+  function getUserPlanId(user) {
+    const userPackageId = user.packageId ?? user.package_id;
+    if (userPackageId != null && userPackageId !== "") return String(userPackageId);
+
+    const userPlanKey = String(user.packageKey || user.package_key || user.planType || user.plan_type || "").trim().toLowerCase();
+    const userPlanName = String(getPlanName(user)).trim().toLowerCase();
+    const match = state.plans.find((plan) => {
+      const planKey = String(plan.key || plan.package_key || "").trim().toLowerCase();
+      const planName = String(plan.name || plan.display_name || "").trim().toLowerCase();
+      return (userPlanKey && planKey === userPlanKey) || (userPlanName && planName === userPlanName);
+    });
+    return match ? String(match.id) : "";
+  }
+
+  function renderUserPlanOptions(user) {
+    const selectedPlanId = getUserPlanId(user);
+    return state.plans.map((plan) => {
+      const planId = String(plan.id);
+      const selected = planId === selectedPlanId ? " selected" : "";
+      return `<option value="${escapeHtml(planId)}"${selected}>${escapeHtml(plan.name)} · ${formatNumber(plan.daily_xp)} XP</option>`;
+    }).join("");
   }
 
   function renderDistribution() {
@@ -223,6 +246,16 @@
       <svg viewBox="0 0 380 210" role="img" aria-label="استهلاك XP">
         <defs><linearGradient id="xpFill" x1="0" x2="0" y1="0" y2="1"><stop stop-color="#6d4bff" stop-opacity=".34"/><stop offset="1" stop-color="#6d4bff" stop-opacity="0"/></linearGradient></defs>
         <g class="grid">${[40, 80, 120, 160].map((y) => `<line x1="20" x2="360" y1="${y}" y2="${y}"></line>`).join("")}</g>
+        <g class="axis-labels">
+          <text x="20" y="192">0</text>
+          <text x="20" y="164">25K</text>
+          <text x="20" y="124">50K</text>
+          <text x="20" y="84">75K</text>
+          <text x="20" y="44">100K</text>
+          <text x="22" y="206">أبريل 18</text>
+          <text x="168" y="206">مايو 09</text>
+          <text x="320" y="206">مايو 18</text>
+        </g>
         <polyline class="area" points="20,190 ${points} 360,190"></polyline>
         <polyline class="line" points="${points}"></polyline>
         ${points.split(" ").map((point) => {
@@ -274,12 +307,20 @@
     const users = filteredUsers();
     nodes.usersTable.innerHTML = `
       <table class="admin-data-table">
-        <thead><tr><th>المستخدم</th><th>الباقة</th><th>XP</th><th>الحالة</th><th>إجراءات</th></tr></thead>
+        <thead><tr><th>المستخدم</th><th>الباقة</th><th>تعديل الباقة</th><th>XP</th><th>الحالة</th><th>إجراءات</th></tr></thead>
         <tbody>
           ${users.map((user) => `
             <tr>
               <td><strong>${escapeHtml(user.name)}</strong><span>${escapeHtml(user.email)}</span></td>
               <td>${escapeHtml(getPlanName(user))}</td>
+              <td>
+                <div class="admin-user-plan-edit">
+                  <select class="field admin-user-plan-select" data-user-plan-select="${escapeHtml(user.id)}">
+                    ${renderUserPlanOptions(user)}
+                  </select>
+                  <button type="button" data-save-user-plan="${escapeHtml(user.id)}">حفظ</button>
+                </div>
+              </td>
               <td>${formatNumber(user.xp)}</td>
               <td><mark class="admin-state">${escapeHtml(user.status || "active")}</mark></td>
               <td class="admin-row-actions">
@@ -441,6 +482,26 @@
     await loadAdminData();
   }
 
+  async function saveUserPlan(userId) {
+    const select = $$("[data-user-plan-select]").find((node) => node.dataset.userPlanSelect === String(userId));
+    const packageId = select?.value;
+    const plan = state.plans.find((item) => String(item.id) === String(packageId));
+    if (!packageId || !plan) {
+      window.alert("اختر باقة صحيحة قبل الحفظ.");
+      return;
+    }
+
+    const result = await api.updateAdminUser(userId, {
+      package_id: packageId,
+      activity: `تم تعديل الباقة إلى ${plan.name} من لوحة الأدمن`
+    });
+    if (!result.ok) {
+      window.alert(result.message || "تعذر تعديل باقة المستخدم.");
+      return;
+    }
+    await loadAdminData();
+  }
+
   async function quickXp(userId, action) {
     const amount = Number(window.prompt("كمية XP؟", "50") || 0);
     if (!amount) return;
@@ -497,6 +558,11 @@
     const saveButton = event.target.closest("[data-save-plan]");
     if (saveButton) {
       await savePlan(saveButton);
+      return;
+    }
+    const saveUserPlanButton = event.target.closest("[data-save-user-plan]");
+    if (saveUserPlanButton) {
+      await saveUserPlan(saveUserPlanButton.dataset.saveUserPlan);
       return;
     }
     const toggleButton = event.target.closest("[data-toggle-user]");
