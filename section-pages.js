@@ -1169,6 +1169,67 @@
     return isAuthenticated() ? Math.max(0, Number(state.currentUser.xp || 0)) : 2450;
   }
 
+  function estimateTokens(text) {
+    const value = String(text || "").trim();
+    if (!value) return 0;
+    return Math.ceil(value.length / 4);
+  }
+
+  function estimateXpCost(tokens) {
+    let cost = 3;
+    cost += Math.ceil(Math.max(0, Number(tokens) || 0) / 1000) * 1;
+    return Math.min(cost, 15);
+  }
+
+  function getUserMaxInputTokens(user = state.currentUser) {
+    const planText = [
+      user?.packageKey,
+      user?.planType,
+      user?.plan_type,
+      user?.package,
+      user?.package_name,
+      user?.packageName
+    ].map((item) => String(item || "").toLowerCase()).join(" ");
+    const dailyXp = Number(user?.packageDailyXp || user?.package_daily_xp || 0);
+
+    if (/enterprise|business|elite|ultra|600|نخبة|مؤسسة|مؤسسات/.test(planText) || dailyXp >= 600) return 6000;
+    if (/pro_plus|tuwaiq|tuwaiq_plus|250|طويق/.test(planText) || dailyXp >= 250) return 5000;
+    if (/pro|spark|80|شرارة/.test(planText) || dailyXp >= 80) return 3000;
+    return 1500;
+  }
+
+  function showXpWarning({ tokens, xp, maxAllowed }) {
+    const safeTokens = Math.max(0, Number(tokens) || 0);
+    const safeXp = Math.max(1, Number(xp) || 1);
+    const safeMax = Math.max(0, Number(maxAllowed) || 0);
+    const message = [
+      "⚠️ هذا الطلب كبير",
+      "",
+      `عدد التوكن المتوقع: ${safeTokens.toLocaleString("ar-SA")}`,
+      safeMax ? `حد خطتك التقريبي: ${safeMax.toLocaleString("ar-SA")} توكن` : "",
+      `التكلفة المتوقعة: ${safeXp} XP`,
+      "",
+      "قد يتم استهلاك رصيد أعلى من المعتاد.",
+      "التكلفة تقديرية، والخصم الفعلي يتم بعد الرد.",
+      "",
+      "هل ترغب بالمتابعة؟"
+    ].filter(Boolean).join("\n");
+
+    return Promise.resolve(typeof window.confirm === "function" ? window.confirm(message) : true);
+  }
+
+  async function confirmLargeChatRequest(message) {
+    const estimatedTokens = estimateTokens(message);
+    const maxAllowed = getUserMaxInputTokens(state.currentUser);
+    if (estimatedTokens <= maxAllowed) return true;
+
+    return showXpWarning({
+      tokens: estimatedTokens,
+      xp: estimateXpCost(estimatedTokens),
+      maxAllowed
+    });
+  }
+
   function getUserPackageLabel(user = state.currentUser) {
     if (!user) return "الباقة المجانية";
     const values = [
@@ -4102,6 +4163,14 @@
       return;
     }
 
+    const outgoingFiles = [...state.selectedFiles];
+    const outboundMessage = input || "حلل المرفقات المرسلة.";
+    const canSendLargeRequest = await confirmLargeChatRequest(outboundMessage);
+    if (!canSendLargeRequest) {
+      showToast("تم إلغاء الإرسال قبل استهلاك XP.");
+      return;
+    }
+
     ensureThreadState();
     let threadEntry = getActiveThread();
     const hasOutgoingDraftFiles = state.selectedFiles.length > 0;
@@ -4114,8 +4183,6 @@
       threadEntry = getActiveThread();
     }
 
-    const outgoingFiles = [...state.selectedFiles];
-    const outboundMessage = input || "حلل المرفقات المرسلة.";
     const displayUserMessage = input || `أرسلت ${outgoingFiles.length} مرفق للتحليل.`;
     const newUserMessage = { role: "user", body: displayUserMessage };
     const pendingAssistant = {

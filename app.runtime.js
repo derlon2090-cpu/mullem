@@ -4627,6 +4627,67 @@
     return typeof getActiveUser === "function" ? getActiveUser() : null;
   }
 
+  function estimateRuntimeTokens(text) {
+    const value = String(text || "").trim();
+    if (!value) return 0;
+    return Math.ceil(value.length / 4);
+  }
+
+  function estimateRuntimeXpCost(tokens) {
+    let cost = 3;
+    cost += Math.ceil(Math.max(0, Number(tokens) || 0) / 1000) * 1;
+    return Math.min(cost, 15);
+  }
+
+  function getRuntimeMaxInputTokens(user = getRuntimeActiveUser()) {
+    const planText = [
+      user?.packageKey,
+      user?.planType,
+      user?.plan_type,
+      user?.package,
+      user?.package_name,
+      user?.packageName
+    ].map((item) => String(item || "").toLowerCase()).join(" ");
+    const dailyXp = Number(user?.packageDailyXp || user?.package_daily_xp || 0);
+
+    if (/enterprise|business|elite|ultra|600|نخبة|مؤسسة|مؤسسات/.test(planText) || dailyXp >= 600) return 6000;
+    if (/pro_plus|tuwaiq|tuwaiq_plus|250|طويق/.test(planText) || dailyXp >= 250) return 5000;
+    if (/pro|spark|80|شرارة/.test(planText) || dailyXp >= 80) return 3000;
+    return 1500;
+  }
+
+  function showRuntimeXpWarning({ tokens, xp, maxAllowed }) {
+    const safeTokens = Math.max(0, Number(tokens) || 0);
+    const safeXp = Math.max(1, Number(xp) || 1);
+    const safeMax = Math.max(0, Number(maxAllowed) || 0);
+    const message = [
+      "⚠️ هذا الطلب كبير",
+      "",
+      `عدد التوكن المتوقع: ${safeTokens.toLocaleString("ar-SA")}`,
+      safeMax ? `حد خطتك التقريبي: ${safeMax.toLocaleString("ar-SA")} توكن` : "",
+      `التكلفة المتوقعة: ${safeXp} XP`,
+      "",
+      "قد يتم استهلاك رصيد أعلى من المعتاد.",
+      "التكلفة تقديرية، والخصم الفعلي يتم بعد الرد.",
+      "",
+      "هل ترغب بالمتابعة؟"
+    ].filter(Boolean).join("\n");
+
+    return Promise.resolve(typeof window.confirm === "function" ? window.confirm(message) : true);
+  }
+
+  async function confirmRuntimeLargeChatRequest(message) {
+    const estimatedTokens = estimateRuntimeTokens(message);
+    const maxAllowed = getRuntimeMaxInputTokens();
+    if (estimatedTokens <= maxAllowed) return true;
+
+    return showRuntimeXpWarning({
+      tokens: estimatedTokens,
+      xp: estimateRuntimeXpCost(estimatedTokens),
+      maxAllowed
+    });
+  }
+
   function getRuntimeLoginRequiredCopy() {
     return `الشات متاح بعد تسجيل الدخول فقط. بعد الدخول يتجدد لك ${LOGIN_REQUIRED_DAILY_XP} XP يوميًا على الخطة المجانية.`;
   }
@@ -6540,6 +6601,10 @@
       clearRuntimeAttachments();
       return;
     }
+
+    const warningMessage = question || "أرفقت ملفًا أو صورة. ساعدني في فهمها حسب الوصف والاسم المرفق.";
+    const canSendLargeRequest = await confirmRuntimeLargeChatRequest(warningMessage);
+    if (!canSendLargeRequest) return;
 
     const route = detectRoute(question, attachments);
     const renderedQuestion = hasAttachments
