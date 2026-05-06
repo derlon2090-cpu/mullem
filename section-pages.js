@@ -464,6 +464,23 @@
       error: "",
       result: null
     },
+    imageEnhancer: {
+      fileName: "",
+      fileSize: 0,
+      width: 0,
+      height: 0,
+      scale: "2",
+      quality: "medium",
+      originalUrl: "",
+      resultUrl: "",
+      resultSize: 0,
+      resultWidth: 0,
+      resultHeight: 0,
+      loading: false,
+      progress: 0,
+      error: "",
+      status: ""
+    },
     upgradeModalOpen: false,
     balancePanelOpen: false,
     openThreadMenuId: "",
@@ -1240,15 +1257,236 @@
   function hasSubscriberToolsAccess(user = state.currentUser) {
     if (!user || !isAuthenticated()) return false;
     const planText = [
+      user?.plan,
+      user?.plan_key,
+      user?.planKey,
       user?.packageKey,
       user?.planType,
       user?.plan_type,
       user?.package,
       user?.package_name,
-      user?.packageName
+      user?.packageName,
+      user?.subscriptionPlan
     ].map((item) => String(item || "").trim().toLowerCase()).join(" ");
     const dailyXp = Number(user?.packageDailyXp || user?.package_daily_xp || 0);
-    return dailyXp >= 80 || /(^|\s|_)(pro|spark|pro_plus|tuwaiq|pro_max|pioneer|elite|ultra)(\s|_|$)|شرارة|طويق|الرائد/.test(planText);
+    return dailyXp >= 80 || /(^|\s|_)(pro|spark|pro_plus|tuwaiq|pro_max|pioneer|business|elite|ultra)(\s|_|$)|شرارة|طويق|الرائد|الأعمال/.test(planText);
+  }
+
+  const imageEnhancerAllowedTypes = ["image/jpeg", "image/png", "image/webp"];
+  const imageEnhancerMaxFileSize = 20 * 1024 * 1024;
+  const imageEnhancerMaxOutputPixels = 36000000;
+
+  function formatImageEnhancerFileSize(bytes) {
+    const value = Number(bytes || 0);
+    if (!value) return "0 KB";
+    if (value >= 1024 * 1024) {
+      return `${(value / (1024 * 1024)).toLocaleString("ar-SA", { maximumFractionDigits: 1 })} MB`;
+    }
+    return `${Math.max(1, Math.round(value / 1024)).toLocaleString("ar-SA")} KB`;
+  }
+
+  function revokeImageEnhancerUrl(url) {
+    if (!url) return;
+    try {
+      URL.revokeObjectURL(url);
+    } catch (_) {
+      // Ignore URLs already released by the browser.
+    }
+  }
+
+  function clearImageEnhancerResult(status = "") {
+    revokeImageEnhancerUrl(state.imageEnhancer.resultUrl);
+    state.imageEnhancer = {
+      ...state.imageEnhancer,
+      resultUrl: "",
+      resultSize: 0,
+      resultWidth: 0,
+      resultHeight: 0,
+      progress: 0,
+      status
+    };
+  }
+
+  function resetImageEnhancerState() {
+    revokeImageEnhancerUrl(state.imageEnhancer.originalUrl);
+    revokeImageEnhancerUrl(state.imageEnhancer.resultUrl);
+    if (state.imageEnhancer.bitmap?.close) {
+      state.imageEnhancer.bitmap.close();
+    }
+    state.imageEnhancer = {
+      fileName: "",
+      fileSize: 0,
+      width: 0,
+      height: 0,
+      scale: "2",
+      quality: "medium",
+      originalUrl: "",
+      resultUrl: "",
+      resultSize: 0,
+      resultWidth: 0,
+      resultHeight: 0,
+      loading: false,
+      progress: 0,
+      error: "",
+      status: "",
+      bitmap: null
+    };
+  }
+
+  function clampImageValue(value) {
+    return Math.max(0, Math.min(255, Math.round(value)));
+  }
+
+  function applyBasicImageEnhancement(ctx, width, height, quality) {
+    const imageData = ctx.getImageData(0, 0, width, height);
+    const data = imageData.data;
+    const settings = {
+      light: { contrast: 1.03, brightness: 1, saturation: 1.02 },
+      medium: { contrast: 1.07, brightness: 2, saturation: 1.05 },
+      strong: { contrast: 1.12, brightness: 4, saturation: 1.08 }
+    }[quality] || { contrast: 1.07, brightness: 2, saturation: 1.05 };
+
+    for (let index = 0; index < data.length; index += 4) {
+      let red = (data[index] - 128) * settings.contrast + 128 + settings.brightness;
+      let green = (data[index + 1] - 128) * settings.contrast + 128 + settings.brightness;
+      let blue = (data[index + 2] - 128) * settings.contrast + 128 + settings.brightness;
+      const gray = red * 0.299 + green * 0.587 + blue * 0.114;
+      red = gray + (red - gray) * settings.saturation;
+      green = gray + (green - gray) * settings.saturation;
+      blue = gray + (blue - gray) * settings.saturation;
+      data[index] = clampImageValue(red);
+      data[index + 1] = clampImageValue(green);
+      data[index + 2] = clampImageValue(blue);
+    }
+
+    ctx.putImageData(imageData, 0, 0);
+  }
+
+  async function handleImageEnhancerFile(file) {
+    if (!hasSubscriberToolsAccess()) {
+      state.upgradeModalOpen = true;
+      render();
+      return;
+    }
+
+    if (!file) return;
+    if (!imageEnhancerAllowedTypes.includes(file.type)) {
+      state.imageEnhancer.error = "صيغة الصورة غير مدعومة. استخدم JPG أو PNG أو WEBP.";
+      render();
+      return;
+    }
+    if (Number(file.size || 0) > imageEnhancerMaxFileSize) {
+      state.imageEnhancer.error = "حجم الصورة كبير جدًا. الحد الأقصى 20MB.";
+      render();
+      return;
+    }
+
+    const originalUrl = URL.createObjectURL(file);
+    try {
+      const bitmap = await createImageBitmap(file);
+      revokeImageEnhancerUrl(state.imageEnhancer.originalUrl);
+      revokeImageEnhancerUrl(state.imageEnhancer.resultUrl);
+      if (state.imageEnhancer.bitmap?.close) {
+        state.imageEnhancer.bitmap.close();
+      }
+      state.imageEnhancer = {
+        ...state.imageEnhancer,
+        fileName: file.name || "image",
+        fileSize: file.size || 0,
+        width: bitmap.width,
+        height: bitmap.height,
+        originalUrl,
+        resultUrl: "",
+        resultSize: 0,
+        resultWidth: 0,
+        resultHeight: 0,
+        bitmap,
+        loading: false,
+        progress: 0,
+        error: "",
+        status: "تم تحميل الصورة. اختر مستوى التحسين ثم اضغط رفع الجودة."
+      };
+      render();
+    } catch (_) {
+      revokeImageEnhancerUrl(originalUrl);
+      state.imageEnhancer.error = "تعذر قراءة الصورة. جرّب ملفًا آخر.";
+      render();
+    }
+  }
+
+  async function runImageEnhancer() {
+    if (!hasSubscriberToolsAccess()) {
+      state.upgradeModalOpen = true;
+      render();
+      return;
+    }
+
+    const enhancer = state.imageEnhancer;
+    if (!enhancer.bitmap) {
+      state.imageEnhancer.error = "اختر صورة أولًا.";
+      render();
+      return;
+    }
+
+    const scale = Number(enhancer.scale || 2);
+    const quality = String(enhancer.quality || "medium");
+    const outputWidth = Math.round(enhancer.bitmap.width * scale);
+    const outputHeight = Math.round(enhancer.bitmap.height * scale);
+
+    if (outputWidth * outputHeight > imageEnhancerMaxOutputPixels) {
+      state.imageEnhancer.error = "أبعاد النتيجة كبيرة جدًا للمتصفح. جرّب تكبير 2x أو صورة أصغر.";
+      render();
+      return;
+    }
+
+    state.imageEnhancer = {
+      ...state.imageEnhancer,
+      loading: true,
+      progress: 35,
+      error: "",
+      status: "جاري رفع الجودة داخل المتصفح..."
+    };
+    render();
+
+    try {
+      const outputCanvas = document.createElement("canvas");
+      const outputCtx = outputCanvas.getContext("2d", { willReadFrequently: true });
+      outputCanvas.width = outputWidth;
+      outputCanvas.height = outputHeight;
+      outputCtx.imageSmoothingEnabled = true;
+      outputCtx.imageSmoothingQuality = "high";
+      outputCtx.drawImage(enhancer.bitmap, 0, 0, outputWidth, outputHeight);
+      applyBasicImageEnhancement(outputCtx, outputWidth, outputHeight, quality);
+
+      const blob = await new Promise((resolve) => {
+        outputCanvas.toBlob((item) => resolve(item), "image/png", 0.95);
+      });
+      if (!blob) throw new Error("canvas_export_failed");
+
+      const resultUrl = URL.createObjectURL(blob);
+      revokeImageEnhancerUrl(state.imageEnhancer.resultUrl);
+      state.imageEnhancer = {
+        ...state.imageEnhancer,
+        resultUrl,
+        resultSize: blob.size,
+        resultWidth: outputWidth,
+        resultHeight: outputHeight,
+        loading: false,
+        progress: 100,
+        error: "",
+        status: "تم تحسين الصورة بنجاح. يمكنك تحميل النتيجة الآن."
+      };
+      render();
+    } catch (_) {
+      state.imageEnhancer = {
+        ...state.imageEnhancer,
+        loading: false,
+        progress: 0,
+        error: "تعذر رفع جودة الصورة داخل المتصفح. جرّب صورة أصغر.",
+        status: ""
+      };
+      render();
+    }
   }
 
   function showXpWarning({ tokens, xp, maxAllowed }) {
@@ -2366,7 +2604,7 @@
     };
 
     const tools = [
-      { title: "رفع جودة الصورة", description: "رفع جودة الصورة وتكبيرها مع الحفاظ على التفاصيل", icon: toolIcons.hd },
+      { key: "image-enhancer", title: "رفع جودة الصورة", description: "رفع جودة الصورة وتكبيرها مع الحفاظ على التفاصيل", icon: toolIcons.hd },
       { title: "توضيح الصورة", description: "تحسين وضوح الصورة وإزالة الضبابية", icon: toolIcons.imagePlus },
       { title: "تحويل PNG إلى PDF", description: "حول صور PNG إلى ملف PDF بسهولة", icon: toolIcons.pngPdf },
       { title: "تحويل PDF إلى PNG", description: "حول صفحات PDF إلى صور PNG عالية الجودة", icon: toolIcons.pdfPng },
@@ -2422,8 +2660,12 @@
           </header>
 
           <section class="free-tools-grid" aria-label="قائمة الأدوات المجانية للمشتركين">
-            ${tools.map((tool) => `
-              <button class="free-tool-card ${hasSubscriberAccess ? "is-unlocked" : "requires-auth"}" type="button" ${hasSubscriberAccess ? `data-card="${escapeHtml(tool.title)}" data-subscriber-tool-card` : `data-open-upgrade data-card="${escapeHtml(tool.title)}"`} aria-label="${escapeHtml(`${tool.title} - ${hasSubscriberAccess ? "متاح في باقتك" : "للمشتركين فقط"}`)}">
+            ${tools.map((tool) => {
+              const unlockedAttrs = tool.key
+                ? `data-tool-key="${escapeHtml(tool.key)}" data-card="${escapeHtml(tool.title)}"`
+                : `data-card="${escapeHtml(tool.title)}" data-subscriber-tool-card`;
+              return `
+              <button class="free-tool-card ${hasSubscriberAccess ? "is-unlocked" : "requires-auth"}" type="button" ${hasSubscriberAccess ? unlockedAttrs : `data-open-upgrade data-card="${escapeHtml(tool.title)}"`} aria-label="${escapeHtml(`${tool.title} - ${hasSubscriberAccess ? "متاح في باقتك" : "للمشتركين فقط"}`)}">
                 <span class="free-tool-body">
                   <span class="free-tool-icon" aria-hidden="true">${tool.icon}</span>
                   <span class="free-tool-copy">
@@ -2436,7 +2678,8 @@
                   ${hasSubscriberAccess ? icons.sparkle : icons.lock}
                 </span>
               </button>
-            `).join("")}
+            `;
+            }).join("")}
           </section>
 
           <footer class="free-tools-benefits" aria-label="مزايا الأدوات">
@@ -2461,6 +2704,189 @@
               </button>
             `}
           </footer>
+        </div>
+      </section>
+    `;
+  }
+
+  function renderImageEnhancerMain() {
+    const enhancer = state.imageEnhancer || {};
+    const hasAccess = hasSubscriberToolsAccess();
+    const scale = String(enhancer.scale || "2");
+    const quality = String(enhancer.quality || "medium");
+    const hasImage = Boolean(enhancer.originalUrl);
+    const hasResult = Boolean(enhancer.resultUrl);
+    const canEnhance = hasAccess && hasImage && !enhancer.loading;
+    const hdIcon = '<svg viewBox="0 0 24 24"><rect x="4" y="5" width="16" height="14" rx="3"/><path d="M8 15V9M8 12h3M11 15V9M14 9h2.2A2.8 2.8 0 0 1 19 11.8v.4A2.8 2.8 0 0 1 16.2 15H14Z"/></svg>';
+    const uploadIcon = '<svg viewBox="0 0 24 24"><path d="M12 16V7"/><path d="m8.5 10.5 3.5-3.5 3.5 3.5"/><path d="M20 16.5a4.5 4.5 0 0 1-4.5 4.5h-7A5.5 5.5 0 0 1 8 10.02 6 6 0 0 1 19.74 12"/></svg>';
+    const magicIcon = '<svg viewBox="0 0 24 24"><path d="m5 19 9-9"/><path d="m13 5 6 6"/><path d="m14 4 6 6"/><path d="M7 4l.8 2.2L10 7l-2.2.8L7 10l-.8-2.2L4 7l2.2-.8Z"/><path d="M18 14l.7 1.8 1.8.7-1.8.7L18 19l-.7-1.8-1.8-.7 1.8-.7Z"/></svg>';
+    const downloadIcon = '<svg viewBox="0 0 24 24"><path d="M12 3v12"/><path d="m7.5 10.5 4.5 4.5 4.5-4.5"/><path d="M5 21h14"/></svg>';
+    const steps = [
+      { number: "1", title: "ارفع صورتك", description: "اختر الصورة التي تريد تحسينها", icon: uploadIcon },
+      { number: "2", title: "معالجة ذكية", description: "تتم المعالجة داخل المتصفح", icon: magicIcon },
+      { number: "3", title: "تحميل الصورة", description: "احصل على صورتك بجودة أعلى", icon: downloadIcon }
+    ];
+    const features = [
+      "رفع الجودة حتى 4x بدون فقدان التفاصيل",
+      "تحسين الألوان والإضاءة تلقائيًا",
+      "تقليل التشويش وتنعيم الصورة",
+      "مناسبة للصور الشخصية والمنتجات والمشاهد الطبيعية",
+      "نتائج سريعة واحترافية"
+    ];
+
+    if (!hasAccess) {
+      return `
+        <section class="guest-main tools-main image-enhancer-main" aria-label="رفع جودة الصورة">
+          <div class="image-enhancer-page">
+            <button class="image-enhancer-back" type="button" data-open-free-tools>
+              <span aria-hidden="true">←</span>
+              <b>العودة للأدوات</b>
+            </button>
+            <section class="image-enhancer-locked">
+              <span aria-hidden="true">${icons.lock}</span>
+              <h1>هذه الأداة متاحة للمشتركين فقط</h1>
+              <p>فعّل باقة شرارة أو طويق أو الرائد لاستخدام رفع جودة الصورة بدون API وبدون XP.</p>
+              <button type="button" data-open-upgrade>عرض الباقات</button>
+            </section>
+          </div>
+        </section>
+      `;
+    }
+
+    return `
+      <section class="guest-main tools-main image-enhancer-main" aria-label="رفع جودة الصورة">
+        <div class="image-enhancer-page">
+          <button class="image-enhancer-back" type="button" data-open-free-tools>
+            <span aria-hidden="true">←</span>
+            <b>العودة للأدوات</b>
+          </button>
+
+          <header class="image-enhancer-hero">
+            <span class="image-enhancer-hd" aria-hidden="true">${hdIcon}</span>
+            <div>
+              <span class="image-enhancer-sparkle" aria-hidden="true">${icons.sparkle}</span>
+              <h1>رفع جودة الصورة</h1>
+              <p>ارفع جودة صورك مع الحفاظ على التفاصيل والوضوح الطبيعي</p>
+            </div>
+          </header>
+
+          <section class="image-enhancer-grid">
+            <div class="image-enhancer-upload-card">
+              <input data-image-enhancer-input type="file" accept="image/png,image/jpeg,image/webp" hidden>
+              <div class="image-enhancer-dropzone ${hasImage ? "has-image" : ""}" data-image-enhancer-dropzone>
+                <span class="image-enhancer-upload-icon" aria-hidden="true">${uploadIcon}</span>
+                <h2>${hasImage ? escapeHtml(enhancer.fileName || "تم اختيار الصورة") : "اسحب وأفلت صورتك هنا"}</h2>
+                <p>${hasImage ? `${escapeHtml(formatImageEnhancerFileSize(enhancer.fileSize))} · ${escapeHtml(`${enhancer.width || 0} × ${enhancer.height || 0}`)} px` : "أو انقر لاختيار صورة من جهازك"}</p>
+                <button class="image-enhancer-primary" type="button" data-image-enhancer-choose>
+                  <span>اختيار صورة</span>
+                  ${icons.attach}
+                </button>
+                <small>يدعم: JPG, PNG, WEBP<br>الحد الأقصى لحجم الملف 20MB</small>
+              </div>
+            </div>
+
+            <aside class="image-enhancer-info">
+              <article class="image-enhancer-card">
+                <span class="image-enhancer-card-icon" aria-hidden="true">${icons.sparkle}</span>
+                <h2>ماذا تقدم هذه الأداة؟</h2>
+                <ul>
+                  ${features.map((item) => `<li>${icons.sparkle}<span>${escapeHtml(item)}</span></li>`).join("")}
+                </ul>
+              </article>
+              <article class="image-enhancer-tip">
+                <span aria-hidden="true">${icons.bolt}</span>
+                <div>
+                  <h2>نصيحة للحصول على أفضل نتيجة</h2>
+                  <p>يفضل استخدام صورة واضحة قدر الإمكان للحصول على أفضل تحسين للجودة</p>
+                </div>
+              </article>
+            </aside>
+          </section>
+
+          ${hasImage ? `
+            <section class="image-enhancer-settings">
+              <label>
+                <span>حجم التكبير</span>
+                <select data-image-enhancer-scale>
+                  <option value="2" ${scale === "2" ? "selected" : ""}>تكبير 2x</option>
+                  <option value="4" ${scale === "4" ? "selected" : ""}>تكبير 4x</option>
+                </select>
+              </label>
+              <label>
+                <span>مستوى التحسين</span>
+                <select data-image-enhancer-quality>
+                  <option value="light" ${quality === "light" ? "selected" : ""}>تحسين خفيف</option>
+                  <option value="medium" ${quality === "medium" ? "selected" : ""}>تحسين متوسط</option>
+                  <option value="strong" ${quality === "strong" ? "selected" : ""}>تحسين قوي</option>
+                </select>
+              </label>
+              <button class="image-enhancer-run" type="button" data-image-enhancer-run ${canEnhance ? "" : "disabled"}>
+                ${enhancer.loading ? "جاري المعالجة..." : "رفع جودة الصورة"}
+                ${magicIcon}
+              </button>
+              <button class="image-enhancer-reset" type="button" data-image-enhancer-reset>إعادة تعيين</button>
+            </section>
+          ` : ""}
+
+          ${enhancer.loading || enhancer.status || enhancer.error ? `
+            <section class="image-enhancer-status ${enhancer.error ? "is-error" : ""}">
+              <p>${escapeHtml(enhancer.error || enhancer.status || "")}</p>
+              ${enhancer.loading ? `<span><i style="width:${Math.max(8, Math.min(100, Number(enhancer.progress || 0)))}%"></i></span>` : ""}
+            </section>
+          ` : ""}
+
+          ${hasImage ? `
+            <section class="image-enhancer-preview">
+              <article>
+                <header>
+                  <h2>قبل المعالجة</h2>
+                  <span>${escapeHtml(`${enhancer.width || 0} × ${enhancer.height || 0}`)} px</span>
+                </header>
+                <div><img src="${escapeHtml(enhancer.originalUrl)}" alt="معاينة الصورة الأصلية"></div>
+              </article>
+              <article class="${hasResult ? "" : "is-empty"}">
+                <header>
+                  <h2>بعد المعالجة</h2>
+                  <span>${hasResult ? escapeHtml(`${enhancer.resultWidth || 0} × ${enhancer.resultHeight || 0}`) : "بانتظار التحسين"}${hasResult ? " px" : ""}</span>
+                </header>
+                <div>
+                  ${hasResult ? `<img src="${escapeHtml(enhancer.resultUrl)}" alt="معاينة الصورة المحسنة">` : `<span>${magicIcon}</span>`}
+                </div>
+              </article>
+            </section>
+          ` : ""}
+
+          ${hasResult ? `
+            <div class="image-enhancer-download-row">
+              <span>حجم النتيجة: ${escapeHtml(formatImageEnhancerFileSize(enhancer.resultSize))}</span>
+              <a class="image-enhancer-download" href="${escapeHtml(enhancer.resultUrl)}" download="orlixor-enhanced.png">
+                <span>تحميل الصورة</span>
+                ${downloadIcon}
+              </a>
+            </div>
+          ` : ""}
+
+          <section class="image-enhancer-steps">
+            <h2>كيف تعمل الأداة؟</h2>
+            <div>
+              ${steps.map((step) => `
+                <article>
+                  <span class="image-enhancer-step-number">${escapeHtml(step.number)}</span>
+                  <i aria-hidden="true">${step.icon}</i>
+                  <strong>${escapeHtml(step.title)}</strong>
+                  <small>${escapeHtml(step.description)}</small>
+                </article>
+              `).join("")}
+            </div>
+          </section>
+
+          <section class="image-enhancer-privacy">
+            <span aria-hidden="true">${icons.lock}</span>
+            <div>
+              <h2>خصوصيتك تهمنا</h2>
+              <p>صورك تُعالج داخل متصفحك ولا يتم رفعها إلى خوادمنا.</p>
+            </div>
+          </section>
         </div>
       </section>
     `;
@@ -3680,6 +4106,9 @@
       if (state.toolView === "subscriber-tools") {
         return renderSubscriberToolsMain(profile);
       }
+      if (state.toolView === "image-enhancer") {
+        return renderImageEnhancerMain(profile);
+      }
       return renderToolsMain(profile);
     }
     if (isHomeWorkspace) {
@@ -3967,7 +4396,7 @@
   function renderShell() {
     const profile = getProfile();
     const isToolsWorkspace = state.section === "ai-tools";
-    const isSubscriberTools = isToolsWorkspace && state.toolView === "subscriber-tools";
+    const isSubscriberTools = isToolsWorkspace && ["subscriber-tools", "image-enhancer"].includes(state.toolView);
     app.innerHTML = `
       <div class="guest-shell ${state.theme === "dark" ? "theme-dark" : ""} ${isHomeWorkspace ? "is-home-workspace" : ""} ${isToolsWorkspace ? "is-tools-workspace" : ""} ${isSubscriberTools ? "is-subscriber-tools" : ""} ${state.sidebarCollapsed ? "is-sidebar-collapsed" : ""}">
         ${renderSidebar()}
@@ -5328,6 +5757,27 @@
         return;
       }
 
+      if (event.target.closest("[data-image-enhancer-choose]")) {
+        if (!hasSubscriberToolsAccess()) {
+          state.upgradeModalOpen = true;
+          render();
+          return;
+        }
+        app.querySelector("[data-image-enhancer-input]")?.click();
+        return;
+      }
+
+      if (event.target.closest("[data-image-enhancer-run]")) {
+        await runImageEnhancer();
+        return;
+      }
+
+      if (event.target.closest("[data-image-enhancer-reset]")) {
+        resetImageEnhancerState();
+        render();
+        return;
+      }
+
       const removeFile = event.target.closest("[data-remove-file]");
       if (removeFile) {
         removeSelectedFile(Number(removeFile.getAttribute("data-remove-file")));
@@ -5362,6 +5812,18 @@
         }
         if (toolKey === "writing-assistant") {
           state.toolView = "writing-assistant";
+          state.openThreadMenuId = "";
+          state.modelMenuOpen = false;
+          render();
+          return;
+        }
+        if (toolKey === "image-enhancer") {
+          if (!hasSubscriberToolsAccess()) {
+            state.upgradeModalOpen = true;
+            render();
+            return;
+          }
+          state.toolView = "image-enhancer";
           state.openThreadMenuId = "";
           state.modelMenuOpen = false;
           render();
@@ -5855,7 +6317,32 @@
       }
     });
 
-    app.addEventListener("change", (event) => {
+    app.addEventListener("change", async (event) => {
+      const imageEnhancerInput = event.target.closest("[data-image-enhancer-input]");
+      if (imageEnhancerInput) {
+        await handleImageEnhancerFile(imageEnhancerInput.files?.[0]);
+        imageEnhancerInput.value = "";
+        return;
+      }
+
+      const imageEnhancerScale = event.target.closest("[data-image-enhancer-scale]");
+      if (imageEnhancerScale) {
+        state.imageEnhancer.scale = imageEnhancerScale.value === "4" ? "4" : "2";
+        clearImageEnhancerResult("الإعدادات تغيّرت. شغّل التحسين من جديد.");
+        render();
+        return;
+      }
+
+      const imageEnhancerQuality = event.target.closest("[data-image-enhancer-quality]");
+      if (imageEnhancerQuality) {
+        state.imageEnhancer.quality = ["light", "medium", "strong"].includes(imageEnhancerQuality.value)
+          ? imageEnhancerQuality.value
+          : "medium";
+        clearImageEnhancerResult("الإعدادات تغيّرت. شغّل التحسين من جديد.");
+        render();
+        return;
+      }
+
       const smartSource = event.target.closest("[data-smart-search-source]");
       if (smartSource) {
         state.smartSearch.sourceType = smartSource.value;
@@ -6020,6 +6507,27 @@
         return;
       }
       state.settings[state.section][select.getAttribute("data-setting")] = select.value;
+    });
+
+    app.addEventListener("dragover", (event) => {
+      const dropZone = event.target.closest?.("[data-image-enhancer-dropzone]");
+      if (!dropZone) return;
+      event.preventDefault();
+      dropZone.classList.add("is-drag-over");
+    });
+
+    app.addEventListener("dragleave", (event) => {
+      const dropZone = event.target.closest?.("[data-image-enhancer-dropzone]");
+      if (!dropZone) return;
+      dropZone.classList.remove("is-drag-over");
+    });
+
+    app.addEventListener("drop", async (event) => {
+      const dropZone = event.target.closest?.("[data-image-enhancer-dropzone]");
+      if (!dropZone) return;
+      event.preventDefault();
+      dropZone.classList.remove("is-drag-over");
+      await handleImageEnhancerFile(event.dataTransfer?.files?.[0]);
     });
 
     app.addEventListener("focusin", (event) => {
