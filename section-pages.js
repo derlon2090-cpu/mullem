@@ -467,6 +467,7 @@
     imageEnhancer: {
       fileName: "",
       fileSize: 0,
+      fileType: "",
       width: 0,
       height: 0,
       scale: "2",
@@ -476,6 +477,22 @@
       resultSize: 0,
       resultWidth: 0,
       resultHeight: 0,
+      loading: false,
+      progress: 0,
+      error: "",
+      status: ""
+    },
+    imageClarifier: {
+      fileName: "",
+      fileSize: 0,
+      fileType: "",
+      width: 0,
+      height: 0,
+      quality: "medium",
+      noise: "medium",
+      originalUrl: "",
+      resultUrl: "",
+      resultSize: 0,
       loading: false,
       progress: 0,
       error: "",
@@ -1316,6 +1333,7 @@
     state.imageEnhancer = {
       fileName: "",
       fileSize: 0,
+      fileType: "",
       width: 0,
       height: 0,
       scale: "2",
@@ -1393,6 +1411,7 @@
         ...state.imageEnhancer,
         fileName: file.name || "image",
         fileSize: file.size || 0,
+        fileType: file.type || "",
         width: bitmap.width,
         height: bitmap.height,
         originalUrl,
@@ -1483,6 +1502,218 @@
         loading: false,
         progress: 0,
         error: "تعذر رفع جودة الصورة داخل المتصفح. جرّب صورة أصغر.",
+        status: ""
+      };
+      render();
+    }
+  }
+
+  function clearImageClarifierResult(status = "") {
+    revokeImageEnhancerUrl(state.imageClarifier.resultUrl);
+    state.imageClarifier = {
+      ...state.imageClarifier,
+      resultUrl: "",
+      resultSize: 0,
+      progress: 0,
+      status
+    };
+  }
+
+  function resetImageClarifierState() {
+    revokeImageEnhancerUrl(state.imageClarifier.originalUrl);
+    revokeImageEnhancerUrl(state.imageClarifier.resultUrl);
+    if (state.imageClarifier.bitmap?.close) {
+      state.imageClarifier.bitmap.close();
+    }
+    state.imageClarifier = {
+      fileName: "",
+      fileSize: 0,
+      fileType: "",
+      width: 0,
+      height: 0,
+      quality: "medium",
+      noise: "medium",
+      originalUrl: "",
+      resultUrl: "",
+      resultSize: 0,
+      loading: false,
+      progress: 0,
+      error: "",
+      status: "",
+      bitmap: null
+    };
+  }
+
+  function applyImageClarifierFilter(ctx, width, height, quality, noise) {
+    const imageData = ctx.getImageData(0, 0, width, height);
+    const data = imageData.data;
+    const noiseMix = ({ light: 0.07, medium: 0.13, strong: 0.2 }[noise] || 0.13);
+    const sharpAmount = ({ light: 0.38, medium: 0.62, strong: 0.88 }[quality] || 0.62);
+    const contrast = ({ light: 1.035, medium: 1.06, strong: 1.09 }[quality] || 1.06);
+    const brightness = ({ light: 1, medium: 2, strong: 3 }[quality] || 2);
+    const original = new Uint8ClampedArray(data);
+
+    if (width > 2 && height > 2) {
+      for (let y = 1; y < height - 1; y += 1) {
+        for (let x = 1; x < width - 1; x += 1) {
+          const index = (y * width + x) * 4;
+          for (let channel = 0; channel < 3; channel += 1) {
+            let sum = 0;
+            for (let oy = -1; oy <= 1; oy += 1) {
+              for (let ox = -1; ox <= 1; ox += 1) {
+                sum += original[((y + oy) * width + (x + ox)) * 4 + channel];
+              }
+            }
+            const average = sum / 9;
+            data[index + channel] = clampImageValue(original[index + channel] * (1 - noiseMix) + average * noiseMix);
+          }
+        }
+      }
+    }
+
+    const denoised = new Uint8ClampedArray(data);
+    if (width > 2 && height > 2) {
+      for (let y = 1; y < height - 1; y += 1) {
+        for (let x = 1; x < width - 1; x += 1) {
+          const index = (y * width + x) * 4;
+          for (let channel = 0; channel < 3; channel += 1) {
+            const center = denoised[index + channel];
+            const average = (
+              denoised[((y - 1) * width + x) * 4 + channel] +
+              denoised[((y + 1) * width + x) * 4 + channel] +
+              denoised[(y * width + (x - 1)) * 4 + channel] +
+              denoised[(y * width + (x + 1)) * 4 + channel]
+            ) / 4;
+            const sharpened = center + (center - average) * sharpAmount;
+            data[index + channel] = clampImageValue((sharpened - 128) * contrast + 128 + brightness);
+          }
+        }
+      }
+    }
+
+    ctx.putImageData(imageData, 0, 0);
+  }
+
+  async function handleImageClarifierFile(file) {
+    if (!hasSubscriberToolsAccess()) {
+      state.upgradeModalOpen = true;
+      render();
+      return;
+    }
+
+    if (!file) return;
+    if (!imageEnhancerAllowedTypes.includes(file.type)) {
+      state.imageClarifier.error = "صيغة الصورة غير مدعومة. استخدم JPG أو PNG أو WEBP.";
+      render();
+      return;
+    }
+    if (Number(file.size || 0) > imageEnhancerMaxFileSize) {
+      state.imageClarifier.error = "حجم الصورة كبير جدًا. الحد الأقصى 20MB.";
+      render();
+      return;
+    }
+
+    const originalUrl = URL.createObjectURL(file);
+    try {
+      const bitmap = await createImageBitmap(file);
+      if (bitmap.width * bitmap.height > imageEnhancerMaxOutputPixels) {
+        bitmap.close?.();
+        revokeImageEnhancerUrl(originalUrl);
+        state.imageClarifier.error = "أبعاد الصورة كبيرة جدًا للمعالجة داخل المتصفح. جرّب صورة أصغر.";
+        render();
+        return;
+      }
+      revokeImageEnhancerUrl(state.imageClarifier.originalUrl);
+      revokeImageEnhancerUrl(state.imageClarifier.resultUrl);
+      if (state.imageClarifier.bitmap?.close) {
+        state.imageClarifier.bitmap.close();
+      }
+      state.imageClarifier = {
+        ...state.imageClarifier,
+        fileName: file.name || "image",
+        fileSize: file.size || 0,
+        fileType: file.type || "",
+        width: bitmap.width,
+        height: bitmap.height,
+        originalUrl,
+        resultUrl: "",
+        resultSize: 0,
+        bitmap,
+        loading: false,
+        progress: 0,
+        error: "",
+        status: "تم تحميل الصورة. اختر مستوى التوضيح ثم اضغط تحسين الصورة."
+      };
+      render();
+    } catch (_) {
+      revokeImageEnhancerUrl(originalUrl);
+      state.imageClarifier.error = "تعذر قراءة الصورة. جرّب ملفًا آخر.";
+      render();
+    }
+  }
+
+  async function runImageClarifier() {
+    if (!hasSubscriberToolsAccess()) {
+      state.upgradeModalOpen = true;
+      render();
+      return;
+    }
+
+    const clarifier = state.imageClarifier;
+    if (!clarifier.bitmap) {
+      state.imageClarifier.error = "اختر صورة أولًا.";
+      render();
+      return;
+    }
+
+    state.imageClarifier = {
+      ...state.imageClarifier,
+      loading: true,
+      progress: 45,
+      error: "",
+      status: "جاري توضيح الصورة داخل المتصفح..."
+    };
+    render();
+
+    try {
+      const outputCanvas = document.createElement("canvas");
+      const outputCtx = outputCanvas.getContext("2d", { willReadFrequently: true });
+      outputCanvas.width = clarifier.bitmap.width;
+      outputCanvas.height = clarifier.bitmap.height;
+      outputCtx.imageSmoothingEnabled = true;
+      outputCtx.imageSmoothingQuality = "high";
+      outputCtx.drawImage(clarifier.bitmap, 0, 0);
+      applyImageClarifierFilter(
+        outputCtx,
+        outputCanvas.width,
+        outputCanvas.height,
+        String(clarifier.quality || "medium"),
+        String(clarifier.noise || "medium")
+      );
+
+      const blob = await new Promise((resolve) => {
+        outputCanvas.toBlob((item) => resolve(item), "image/png", 0.96);
+      });
+      if (!blob) throw new Error("canvas_export_failed");
+
+      const resultUrl = URL.createObjectURL(blob);
+      revokeImageEnhancerUrl(state.imageClarifier.resultUrl);
+      state.imageClarifier = {
+        ...state.imageClarifier,
+        resultUrl,
+        resultSize: blob.size,
+        loading: false,
+        progress: 100,
+        error: "",
+        status: "تم توضيح الصورة بنجاح. يمكنك تحميل النتيجة الآن."
+      };
+      render();
+    } catch (_) {
+      state.imageClarifier = {
+        ...state.imageClarifier,
+        loading: false,
+        progress: 0,
+        error: "تعذر توضيح الصورة داخل المتصفح. جرّب صورة أصغر.",
         status: ""
       };
       render();
@@ -2605,7 +2836,7 @@
 
     const tools = [
       { key: "image-enhancer", title: "رفع جودة الصورة", description: "رفع جودة الصورة وتكبيرها مع الحفاظ على التفاصيل", icon: toolIcons.hd },
-      { title: "توضيح الصورة", description: "تحسين وضوح الصورة وإزالة الضبابية", icon: toolIcons.imagePlus },
+      { key: "image-clarifier", title: "توضيح الصورة", description: "تحسين وضوح الصورة وإزالة الضبابية", icon: toolIcons.imagePlus },
       { title: "تحويل PNG إلى PDF", description: "حول صور PNG إلى ملف PDF بسهولة", icon: toolIcons.pngPdf },
       { title: "تحويل PDF إلى PNG", description: "حول صفحات PDF إلى صور PNG عالية الجودة", icon: toolIcons.pdfPng },
       { title: "تحويل صيغة الصورة", description: "تحويل الصور بين مختلف الصيغ (JPG, PNG, WebP)", icon: toolIcons.image },
@@ -2886,6 +3117,184 @@
               <h2>خصوصيتك تهمنا</h2>
               <p>صورك تُعالج داخل متصفحك ولا يتم رفعها إلى خوادمنا.</p>
             </div>
+          </section>
+        </div>
+      </section>
+    `;
+  }
+
+  function renderImageClarifierMain() {
+    const clarifier = state.imageClarifier || {};
+    const hasAccess = hasSubscriberToolsAccess();
+    const quality = String(clarifier.quality || "medium");
+    const noise = String(clarifier.noise || "medium");
+    const hasImage = Boolean(clarifier.originalUrl);
+    const hasResult = Boolean(clarifier.resultUrl);
+    const canRun = hasAccess && hasImage && !clarifier.loading;
+    const imageIcon = '<svg viewBox="0 0 24 24"><rect x="4" y="5" width="16" height="14" rx="2.5"/><path d="m7 16 3.2-3.2 2.7 2.7 2.3-2.3L19 17"/><circle cx="9" cy="10" r="1.4"/><path d="M18 3v6M15 6h6"/></svg>';
+    const uploadIcon = '<svg viewBox="0 0 24 24"><path d="M12 16V7"/><path d="m8.5 10.5 3.5-3.5 3.5 3.5"/><path d="M20 16.5a4.5 4.5 0 0 1-4.5 4.5h-7A5.5 5.5 0 0 1 8 10.02 6 6 0 0 1 19.74 12"/></svg>';
+    const tuneIcon = '<svg viewBox="0 0 24 24"><path d="M4 7h10"/><path d="M18 7h2"/><circle cx="16" cy="7" r="2"/><path d="M4 17h2"/><path d="M10 17h10"/><circle cx="8" cy="17" r="2"/></svg>';
+    const waveIcon = '<svg viewBox="0 0 24 24"><path d="M4 8c2.5-3 5.5-3 8 0s5.5 3 8 0"/><path d="M4 16c2.5-3 5.5-3 8 0s5.5 3 8 0"/></svg>';
+    const downloadIcon = '<svg viewBox="0 0 24 24"><path d="M12 3v12"/><path d="m7.5 10.5 4.5 4.5 4.5-4.5"/><path d="M5 21h14"/></svg>';
+    const qualityLabels = { light: "خفيف", medium: "متوسط", strong: "قوي" };
+    const typeLabel = String(clarifier.fileType || "").replace("image/", "").toUpperCase() || "-";
+    const features = [
+      "تحسين ملامح ووضوح تفاصيل الصورة",
+      "تقليل التشويش والضبابية",
+      "إبراز التفاصيل الدقيقة",
+      "إزالة التشويش الناتج عن الاهتزاز",
+      "نتائج طبيعية واحترافية"
+    ];
+
+    if (!hasAccess) {
+      return `
+        <section class="guest-main tools-main image-clarifier-main" aria-label="توضيح الصورة">
+          <div class="image-clarifier-page">
+            <button class="image-clarifier-back" type="button" data-open-free-tools>
+              <span aria-hidden="true">←</span>
+              <b>العودة للأدوات</b>
+            </button>
+            <section class="image-clarifier-locked">
+              <span aria-hidden="true">${icons.lock}</span>
+              <h1>هذه الأداة متاحة للمشتركين فقط</h1>
+              <p>فعّل باقة شرارة أو طويق أو الرائد لاستخدام توضيح الصورة داخل المتصفح بدون XP.</p>
+              <button type="button" data-open-upgrade>عرض الباقات</button>
+            </section>
+          </div>
+        </section>
+      `;
+    }
+
+    return `
+      <section class="guest-main tools-main image-clarifier-main" aria-label="توضيح الصورة">
+        <div class="image-clarifier-page">
+          <button class="image-clarifier-back" type="button" data-open-free-tools>
+            <span aria-hidden="true">←</span>
+            <b>العودة للأدوات</b>
+          </button>
+
+          <header class="image-clarifier-hero">
+            <span class="image-clarifier-icon" aria-hidden="true">${imageIcon}</span>
+            <div>
+              <span class="image-clarifier-sparkles" aria-hidden="true">${icons.sparkle}</span>
+              <h1>توضيح الصورة</h1>
+              <p>حسّن وضوح صورتك وإزالة الضبابية للحصول على صورة أكثر نقاءً وتفاصيل أدق.</p>
+            </div>
+          </header>
+
+          <section class="image-clarifier-top-grid">
+            <div class="image-clarifier-upload-card">
+              <input data-image-clarifier-input type="file" accept="image/png,image/jpeg,image/webp" hidden>
+              <div class="image-clarifier-dropzone ${hasImage ? "has-image" : ""}" data-image-clarifier-dropzone>
+                <span class="image-clarifier-upload-icon" aria-hidden="true">${uploadIcon}</span>
+                <h2>${hasImage ? escapeHtml(clarifier.fileName || "تم اختيار الصورة") : "اسحب وأفلت صورتك هنا"}</h2>
+                <p>${hasImage ? `${escapeHtml(formatImageEnhancerFileSize(clarifier.fileSize))} · ${escapeHtml(`${clarifier.width || 0} × ${clarifier.height || 0}`)} px` : "أو انقر لاختيار صورة من جهازك"}</p>
+                <button class="image-clarifier-primary" type="button" data-image-clarifier-choose>
+                  <span>اختيار صورة</span>
+                  ${icons.attach}
+                </button>
+                <small>يدعم: JPG, PNG, WEBP<br>الحد الأقصى لحجم الملف 20MB</small>
+              </div>
+            </div>
+
+            <aside class="image-clarifier-info-stack">
+              <article class="image-clarifier-card">
+                <span class="image-clarifier-card-icon" aria-hidden="true">${icons.star}</span>
+                <h2>ماذا تقدم هذه الأداة؟</h2>
+                <ul>
+                  ${features.map((item) => `<li>${icons.sparkle}<span>${escapeHtml(item)}</span></li>`).join("")}
+                </ul>
+              </article>
+              <article class="image-clarifier-tip">
+                <span aria-hidden="true">${icons.bolt}</span>
+                <div>
+                  <h2>نصيحة للحصول على أفضل نتيجة</h2>
+                  <p>استخدم صور بإضاءة جيدة قدر الإمكان للحصول على أفضل تحسين.</p>
+                </div>
+              </article>
+            </aside>
+          </section>
+
+          <section class="image-clarifier-controls">
+            <button class="image-clarifier-run" type="button" data-image-clarifier-run ${canRun ? "" : "disabled"}>
+              ${clarifier.loading ? "جاري التحسين..." : "تحسين الصورة"}
+              ${icons.sparkle}
+            </button>
+            <label>
+              <span>مستوى التحسين</span>
+              <select data-image-clarifier-quality>
+                <option value="light" ${quality === "light" ? "selected" : ""}>خفيف</option>
+                <option value="medium" ${quality === "medium" ? "selected" : ""}>متوسط</option>
+                <option value="strong" ${quality === "strong" ? "selected" : ""}>قوي</option>
+              </select>
+              ${tuneIcon}
+            </label>
+            <label>
+              <span>معالجة الضوضاء</span>
+              <select data-image-clarifier-noise>
+                <option value="light" ${noise === "light" ? "selected" : ""}>خفيفة</option>
+                <option value="medium" ${noise === "medium" ? "selected" : ""}>متوسطة</option>
+                <option value="strong" ${noise === "strong" ? "selected" : ""}>قوية</option>
+              </select>
+              ${waveIcon}
+            </label>
+          </section>
+
+          ${clarifier.loading || clarifier.status || clarifier.error ? `
+            <section class="image-clarifier-status ${clarifier.error ? "is-error" : ""}">
+              <p>${escapeHtml(clarifier.error || clarifier.status || "")}</p>
+              ${clarifier.loading ? `<span><i style="width:${Math.max(8, Math.min(100, Number(clarifier.progress || 0)))}%"></i></span>` : ""}
+            </section>
+          ` : ""}
+
+          <section class="image-clarifier-workspace">
+            <article class="image-clarifier-comparison ${hasResult ? "has-result" : ""} ${hasImage ? "" : "is-empty"}">
+              ${hasImage ? `
+                <div class="image-clarifier-stage">
+                  <img class="image-clarifier-before-img" src="${escapeHtml(clarifier.originalUrl)}" alt="الصورة قبل التوضيح">
+                  ${hasResult ? `<div class="image-clarifier-after-layer"><img src="${escapeHtml(clarifier.resultUrl)}" alt="الصورة بعد التوضيح"></div>` : ""}
+                  <span class="image-clarifier-label is-before">قبل</span>
+                  <span class="image-clarifier-label is-after">بعد</span>
+                  ${hasResult ? `<span class="image-clarifier-divider"><i>‹ ›</i></span>` : `<span class="image-clarifier-empty-mark">${imageIcon}</span>`}
+                </div>
+              ` : `
+                <div class="image-clarifier-stage">
+                  <span class="image-clarifier-empty-mark">${imageIcon}</span>
+                  <p>ارفع صورة لعرض المقارنة هنا</p>
+                </div>
+              `}
+              <footer>
+                <span>${icons.lock}</span>
+                <p>صورك تُعالج داخل متصفحك ولا يتم رفعها إلى خوادمنا.</p>
+              </footer>
+            </article>
+
+            <aside class="image-clarifier-meta">
+              <h2>معلومات الصورة</h2>
+              <dl>
+                <div><dt>اسم الملف</dt><dd>${hasImage ? escapeHtml(clarifier.fileName || "-") : "-"}</dd></div>
+                <div><dt>الحجم</dt><dd>${hasImage ? escapeHtml(formatImageEnhancerFileSize(clarifier.fileSize)) : "-"}</dd></div>
+                <div><dt>الأبعاد</dt><dd>${hasImage ? escapeHtml(`${clarifier.width || 0} × ${clarifier.height || 0}`) : "-"}</dd></div>
+                <div><dt>النوع</dt><dd>${hasImage ? escapeHtml(typeLabel) : "-"}</dd></div>
+                <div><dt>التحسين</dt><dd>${escapeHtml(qualityLabels[quality] || "متوسط")}</dd></div>
+              </dl>
+              ${hasResult ? `
+                <a class="image-clarifier-download" href="${escapeHtml(clarifier.resultUrl)}" download="orlixor-clarified.png">
+                  <span>تحميل الصورة المحسنة</span>
+                  ${downloadIcon}
+                </a>
+              ` : `
+                <button class="image-clarifier-download is-disabled" type="button" disabled>
+                  <span>تحميل الصورة المحسنة</span>
+                  ${downloadIcon}
+                </button>
+                <small>سيظهر الزر بعد المعالجة</small>
+              `}
+              <button class="image-clarifier-reset" type="button" data-image-clarifier-reset>
+                <span>إعادة تعيين</span>
+                ${icons.refresh}
+              </button>
+            </aside>
           </section>
         </div>
       </section>
@@ -4109,6 +4518,9 @@
       if (state.toolView === "image-enhancer") {
         return renderImageEnhancerMain(profile);
       }
+      if (state.toolView === "image-clarifier") {
+        return renderImageClarifierMain(profile);
+      }
       return renderToolsMain(profile);
     }
     if (isHomeWorkspace) {
@@ -4396,7 +4808,7 @@
   function renderShell() {
     const profile = getProfile();
     const isToolsWorkspace = state.section === "ai-tools";
-    const isSubscriberTools = isToolsWorkspace && ["subscriber-tools", "image-enhancer"].includes(state.toolView);
+    const isSubscriberTools = isToolsWorkspace && ["subscriber-tools", "image-enhancer", "image-clarifier"].includes(state.toolView);
     app.innerHTML = `
       <div class="guest-shell ${state.theme === "dark" ? "theme-dark" : ""} ${isHomeWorkspace ? "is-home-workspace" : ""} ${isToolsWorkspace ? "is-tools-workspace" : ""} ${isSubscriberTools ? "is-subscriber-tools" : ""} ${state.sidebarCollapsed ? "is-sidebar-collapsed" : ""}">
         ${renderSidebar()}
@@ -5778,6 +6190,27 @@
         return;
       }
 
+      if (event.target.closest("[data-image-clarifier-choose]")) {
+        if (!hasSubscriberToolsAccess()) {
+          state.upgradeModalOpen = true;
+          render();
+          return;
+        }
+        app.querySelector("[data-image-clarifier-input]")?.click();
+        return;
+      }
+
+      if (event.target.closest("[data-image-clarifier-run]")) {
+        await runImageClarifier();
+        return;
+      }
+
+      if (event.target.closest("[data-image-clarifier-reset]")) {
+        resetImageClarifierState();
+        render();
+        return;
+      }
+
       const removeFile = event.target.closest("[data-remove-file]");
       if (removeFile) {
         removeSelectedFile(Number(removeFile.getAttribute("data-remove-file")));
@@ -5824,6 +6257,18 @@
             return;
           }
           state.toolView = "image-enhancer";
+          state.openThreadMenuId = "";
+          state.modelMenuOpen = false;
+          render();
+          return;
+        }
+        if (toolKey === "image-clarifier") {
+          if (!hasSubscriberToolsAccess()) {
+            state.upgradeModalOpen = true;
+            render();
+            return;
+          }
+          state.toolView = "image-clarifier";
           state.openThreadMenuId = "";
           state.modelMenuOpen = false;
           render();
@@ -6343,6 +6788,33 @@
         return;
       }
 
+      const imageClarifierInput = event.target.closest("[data-image-clarifier-input]");
+      if (imageClarifierInput) {
+        await handleImageClarifierFile(imageClarifierInput.files?.[0]);
+        imageClarifierInput.value = "";
+        return;
+      }
+
+      const imageClarifierQuality = event.target.closest("[data-image-clarifier-quality]");
+      if (imageClarifierQuality) {
+        state.imageClarifier.quality = ["light", "medium", "strong"].includes(imageClarifierQuality.value)
+          ? imageClarifierQuality.value
+          : "medium";
+        clearImageClarifierResult("الإعدادات تغيّرت. شغّل التحسين من جديد.");
+        render();
+        return;
+      }
+
+      const imageClarifierNoise = event.target.closest("[data-image-clarifier-noise]");
+      if (imageClarifierNoise) {
+        state.imageClarifier.noise = ["light", "medium", "strong"].includes(imageClarifierNoise.value)
+          ? imageClarifierNoise.value
+          : "medium";
+        clearImageClarifierResult("الإعدادات تغيّرت. شغّل التحسين من جديد.");
+        render();
+        return;
+      }
+
       const smartSource = event.target.closest("[data-smart-search-source]");
       if (smartSource) {
         state.smartSearch.sourceType = smartSource.value;
@@ -6510,24 +6982,28 @@
     });
 
     app.addEventListener("dragover", (event) => {
-      const dropZone = event.target.closest?.("[data-image-enhancer-dropzone]");
+      const dropZone = event.target.closest?.("[data-image-enhancer-dropzone], [data-image-clarifier-dropzone]");
       if (!dropZone) return;
       event.preventDefault();
       dropZone.classList.add("is-drag-over");
     });
 
     app.addEventListener("dragleave", (event) => {
-      const dropZone = event.target.closest?.("[data-image-enhancer-dropzone]");
+      const dropZone = event.target.closest?.("[data-image-enhancer-dropzone], [data-image-clarifier-dropzone]");
       if (!dropZone) return;
       dropZone.classList.remove("is-drag-over");
     });
 
     app.addEventListener("drop", async (event) => {
-      const dropZone = event.target.closest?.("[data-image-enhancer-dropzone]");
+      const dropZone = event.target.closest?.("[data-image-enhancer-dropzone], [data-image-clarifier-dropzone]");
       if (!dropZone) return;
       event.preventDefault();
       dropZone.classList.remove("is-drag-over");
-      await handleImageEnhancerFile(event.dataTransfer?.files?.[0]);
+      if (dropZone.matches("[data-image-clarifier-dropzone]")) {
+        await handleImageClarifierFile(event.dataTransfer?.files?.[0]);
+      } else {
+        await handleImageEnhancerFile(event.dataTransfer?.files?.[0]);
+      }
     });
 
     app.addEventListener("focusin", (event) => {
