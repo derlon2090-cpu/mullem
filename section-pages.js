@@ -499,6 +499,20 @@
       error: "",
       status: ""
     },
+    pngToPdf: {
+      images: [],
+      pageSize: "A4",
+      orientation: "portrait",
+      margin: "20",
+      fillPage: true,
+      resultUrl: "",
+      resultSize: 0,
+      loading: false,
+      progress: 0,
+      error: "",
+      status: "",
+      draggedId: ""
+    },
     upgradeModalOpen: false,
     balancePanelOpen: false,
     openThreadMenuId: "",
@@ -1293,6 +1307,12 @@
   const imageEnhancerAllowedTypes = ["image/jpeg", "image/png", "image/webp"];
   const imageEnhancerMaxFileSize = 20 * 1024 * 1024;
   const imageEnhancerMaxOutputPixels = 36000000;
+  const pngToPdfAllowedTypes = ["image/png"];
+  const pngToPdfMaxFileSize = 20 * 1024 * 1024;
+  const pngToPdfPageSizes = {
+    A4: [595.28, 841.89],
+    letter: [612, 792]
+  };
 
   function formatImageEnhancerFileSize(bytes) {
     const value = Number(bytes || 0);
@@ -1767,6 +1787,296 @@
         loading: false,
         progress: 0,
         error: "تعذر توضيح الصورة داخل المتصفح. جرّب صورة أصغر.",
+        status: ""
+      };
+      render();
+    }
+  }
+
+  function createPngToPdfImageId() {
+    if (window.crypto?.randomUUID) return window.crypto.randomUUID();
+    return `png-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+  }
+
+  function clearPngToPdfResult(status = "") {
+    revokeImageEnhancerUrl(state.pngToPdf.resultUrl);
+    state.pngToPdf = {
+      ...state.pngToPdf,
+      resultUrl: "",
+      resultSize: 0,
+      progress: 0,
+      error: "",
+      status
+    };
+  }
+
+  function resetPngToPdfState() {
+    (state.pngToPdf.images || []).forEach((image) => revokeImageEnhancerUrl(image.previewUrl));
+    revokeImageEnhancerUrl(state.pngToPdf.resultUrl);
+    state.pngToPdf = {
+      images: [],
+      pageSize: "A4",
+      orientation: "portrait",
+      margin: "20",
+      fillPage: true,
+      resultUrl: "",
+      resultSize: 0,
+      loading: false,
+      progress: 0,
+      error: "",
+      status: "",
+      draggedId: ""
+    };
+  }
+
+  async function addPngToPdfFiles(files) {
+    if (!hasSubscriberToolsAccess()) {
+      state.upgradeModalOpen = true;
+      render();
+      return;
+    }
+
+    const incoming = Array.from(files || []);
+    if (!incoming.length) return;
+
+    const added = [];
+    const rejected = [];
+    for (const file of incoming) {
+      const isPng = pngToPdfAllowedTypes.includes(file.type) || /\.png$/i.test(file.name || "");
+      if (!isPng) {
+        rejected.push(file.name || "file");
+        continue;
+      }
+      if (Number(file.size || 0) > pngToPdfMaxFileSize) {
+        rejected.push(file.name || "file");
+        continue;
+      }
+      try {
+        const bitmap = await createImageBitmap(file);
+        const previewUrl = URL.createObjectURL(file);
+        added.push({
+          id: createPngToPdfImageId(),
+          file,
+          previewUrl,
+          name: file.name || "image.png",
+          size: file.size || 0,
+          width: bitmap.width,
+          height: bitmap.height
+        });
+        bitmap.close?.();
+      } catch (_) {
+        rejected.push(file.name || "file");
+      }
+    }
+
+    if (added.length) {
+      clearPngToPdfResult("تمت إضافة الصور. يمكنك ترتيبها ثم تحويلها إلى PDF.");
+      state.pngToPdf.images = [...(state.pngToPdf.images || []), ...added];
+      state.pngToPdf.error = "";
+    }
+    if (rejected.length && !added.length) {
+      state.pngToPdf.error = "اختر صور PNG فقط، وبحجم لا يتجاوز 20MB لكل صورة.";
+    } else if (rejected.length) {
+      state.pngToPdf.status = "تم تجاهل بعض الملفات غير المدعومة أو الكبيرة.";
+    }
+    render();
+  }
+
+  function removePngToPdfImage(id) {
+    const images = state.pngToPdf.images || [];
+    const target = images.find((image) => image.id === id);
+    if (target) revokeImageEnhancerUrl(target.previewUrl);
+    state.pngToPdf.images = images.filter((image) => image.id !== id);
+    clearPngToPdfResult(state.pngToPdf.images.length ? "تم حذف الصورة من القائمة." : "");
+    render();
+  }
+
+  function movePngToPdfImage(id, direction) {
+    const images = [...(state.pngToPdf.images || [])];
+    const index = images.findIndex((image) => image.id === id);
+    if (index < 0) return;
+    const nextIndex = direction === "up" ? index - 1 : index + 1;
+    if (nextIndex < 0 || nextIndex >= images.length) return;
+    const [item] = images.splice(index, 1);
+    images.splice(nextIndex, 0, item);
+    state.pngToPdf.images = images;
+    clearPngToPdfResult("تم تحديث ترتيب الصور.");
+    render();
+  }
+
+  function reorderPngToPdfImage(draggedId, targetId) {
+    if (!draggedId || !targetId || draggedId === targetId) return;
+    const images = [...(state.pngToPdf.images || [])];
+    const draggedIndex = images.findIndex((image) => image.id === draggedId);
+    const targetIndex = images.findIndex((image) => image.id === targetId);
+    if (draggedIndex < 0 || targetIndex < 0) return;
+    const [draggedItem] = images.splice(draggedIndex, 1);
+    images.splice(targetIndex, 0, draggedItem);
+    state.pngToPdf.images = images;
+    state.pngToPdf.draggedId = "";
+    clearPngToPdfResult("تم تحديث ترتيب الصور.");
+    render();
+  }
+
+  function loadPdfLib() {
+    if (window.PDFLib?.PDFDocument) {
+      return Promise.resolve(window.PDFLib);
+    }
+    if (window.__orlixorPdfLibPromise) {
+      return window.__orlixorPdfLibPromise;
+    }
+    window.__orlixorPdfLibPromise = new Promise((resolve, reject) => {
+      const existingScript = document.getElementById("pdfLibScript");
+      if (existingScript) {
+        existingScript.addEventListener("load", () => resolve(window.PDFLib));
+        existingScript.addEventListener("error", reject);
+        return;
+      }
+      const script = document.createElement("script");
+      script.id = "pdfLibScript";
+      script.src = "https://unpkg.com/pdf-lib/dist/pdf-lib.min.js";
+      script.async = true;
+      script.onload = () => {
+        if (window.PDFLib?.PDFDocument) {
+          resolve(window.PDFLib);
+        } else {
+          reject(new Error("pdf-lib unavailable"));
+        }
+      };
+      script.onerror = () => reject(new Error("pdf-lib failed to load"));
+      document.head.appendChild(script);
+    });
+    return window.__orlixorPdfLibPromise;
+  }
+
+  function getPngToPdfPageDimensions({ pageSize, orientation, imageWidth, imageHeight }) {
+    if (pageSize === "fit") {
+      return {
+        pageWidth: imageWidth,
+        pageHeight: imageHeight
+      };
+    }
+    let [width, height] = pngToPdfPageSizes[pageSize] || pngToPdfPageSizes.A4;
+    if (orientation === "landscape") {
+      [width, height] = [height, width];
+    }
+    return {
+      pageWidth: width,
+      pageHeight: height
+    };
+  }
+
+  function fitPngImageIntoPage({ imageWidth, imageHeight, pageWidth, pageHeight, margin, fillPage }) {
+    const availableWidth = Math.max(1, pageWidth - margin * 2);
+    const availableHeight = Math.max(1, pageHeight - margin * 2);
+    const imageRatio = imageWidth / imageHeight;
+    const pageRatio = availableWidth / availableHeight;
+    let width;
+    let height;
+
+    if (fillPage) {
+      if (imageRatio > pageRatio) {
+        height = availableHeight;
+        width = height * imageRatio;
+      } else {
+        width = availableWidth;
+        height = width / imageRatio;
+      }
+    } else if (imageRatio > pageRatio) {
+      width = availableWidth;
+      height = width / imageRatio;
+    } else {
+      height = availableHeight;
+      width = height * imageRatio;
+    }
+
+    return {
+      width,
+      height,
+      x: (pageWidth - width) / 2,
+      y: (pageHeight - height) / 2
+    };
+  }
+
+  async function convertPngImagesToPdfBytes(images, options) {
+    const { PDFDocument } = await loadPdfLib();
+    const pdfDoc = await PDFDocument.create();
+    for (const image of images) {
+      const imageBytes = await image.file.arrayBuffer();
+      const pngImage = await pdfDoc.embedPng(imageBytes);
+      const { pageWidth, pageHeight } = getPngToPdfPageDimensions({
+        pageSize: options.pageSize,
+        orientation: options.orientation,
+        imageWidth: pngImage.width,
+        imageHeight: pngImage.height
+      });
+      const page = pdfDoc.addPage([pageWidth, pageHeight]);
+      const fit = fitPngImageIntoPage({
+        imageWidth: pngImage.width,
+        imageHeight: pngImage.height,
+        pageWidth,
+        pageHeight,
+        margin: options.margin,
+        fillPage: options.fillPage
+      });
+      page.drawImage(pngImage, {
+        x: fit.x,
+        y: fit.y,
+        width: fit.width,
+        height: fit.height
+      });
+    }
+    return pdfDoc.save();
+  }
+
+  async function runPngToPdfConversion() {
+    if (!hasSubscriberToolsAccess()) {
+      state.upgradeModalOpen = true;
+      render();
+      return;
+    }
+    const images = state.pngToPdf.images || [];
+    if (!images.length) {
+      state.pngToPdf.error = "أضف صورة PNG واحدة على الأقل.";
+      render();
+      return;
+    }
+
+    state.pngToPdf = {
+      ...state.pngToPdf,
+      loading: true,
+      progress: 35,
+      error: "",
+      status: "جاري تجهيز ملف PDF داخل المتصفح..."
+    };
+    render();
+
+    try {
+      const pdfBytes = await convertPngImagesToPdfBytes(images, {
+        pageSize: state.pngToPdf.pageSize || "A4",
+        orientation: state.pngToPdf.orientation || "portrait",
+        margin: Number(state.pngToPdf.margin || 20),
+        fillPage: state.pngToPdf.fillPage !== false
+      });
+      const blob = new Blob([pdfBytes], { type: "application/pdf" });
+      const resultUrl = URL.createObjectURL(blob);
+      revokeImageEnhancerUrl(state.pngToPdf.resultUrl);
+      state.pngToPdf = {
+        ...state.pngToPdf,
+        resultUrl,
+        resultSize: blob.size,
+        loading: false,
+        progress: 100,
+        error: "",
+        status: "تم تحويل الصور إلى PDF بنجاح. يمكنك تحميل الملف الآن."
+      };
+      render();
+    } catch (_) {
+      state.pngToPdf = {
+        ...state.pngToPdf,
+        loading: false,
+        progress: 0,
+        error: "تعذر تحويل الصور إلى PDF. تحقق من الاتصال لتحميل مكتبة pdf-lib ثم حاول مجددًا.",
         status: ""
       };
       render();
@@ -2890,7 +3200,7 @@
     const tools = [
       { key: "image-enhancer", title: "رفع جودة الصورة", description: "رفع جودة الصورة وتكبيرها مع الحفاظ على التفاصيل", icon: toolIcons.hd },
       { key: "image-clarifier", title: "توضيح الصورة", description: "تحسين وضوح الصورة وإزالة الضبابية", icon: toolIcons.imagePlus },
-      { title: "تحويل PNG إلى PDF", description: "حول صور PNG إلى ملف PDF بسهولة", icon: toolIcons.pngPdf },
+      { key: "png-to-pdf", title: "تحويل PNG إلى PDF", description: "حول صور PNG إلى ملف PDF بسهولة", icon: toolIcons.pngPdf },
       { title: "تحويل PDF إلى PNG", description: "حول صفحات PDF إلى صور PNG عالية الجودة", icon: toolIcons.pdfPng },
       { title: "تحويل صيغة الصورة", description: "تحويل الصور بين مختلف الصيغ (JPG, PNG, WebP)", icon: toolIcons.image },
       { title: "تدوير الصورة", description: "تدوير الصور إلى أي اتجاه بسهولة", icon: icons.refresh },
@@ -3359,6 +3669,202 @@
                 <span>إعادة تعيين</span>
                 ${icons.refresh}
               </button>
+            </aside>
+          </section>
+        </div>
+      </section>
+    `;
+  }
+
+  function renderPngToPdfMain() {
+    const png = state.pngToPdf || {};
+    const hasAccess = hasSubscriberToolsAccess();
+    const images = Array.isArray(png.images) ? png.images : [];
+    const hasImages = images.length > 0;
+    const hasResult = Boolean(png.resultUrl);
+    const canConvert = hasAccess && hasImages && !png.loading;
+    const pageSize = String(png.pageSize || "A4");
+    const orientation = String(png.orientation || "portrait");
+    const margin = String(png.margin || "20");
+    const fillPage = png.fillPage !== false;
+    const totalSize = images.reduce((sum, image) => sum + Number(image.size || 0), 0);
+    const pdfIcon = '<svg viewBox="0 0 24 24"><path d="M5 4h9l4 4v8H5Z"/><path d="M14 4v5h5"/><path d="M8 12h5M8 15h3"/><rect x="12" y="11" width="8" height="9" rx="1.4"/><path d="M14 16h4M14 18h2"/></svg>';
+    const uploadIcon = '<svg viewBox="0 0 24 24"><path d="M12 16V7"/><path d="m8.5 10.5 3.5-3.5 3.5 3.5"/><path d="M20 16.5a4.5 4.5 0 0 1-4.5 4.5h-7A5.5 5.5 0 0 1 8 10.02 6 6 0 0 1 19.74 12"/></svg>';
+    const downloadIcon = '<svg viewBox="0 0 24 24"><path d="M12 3v12"/><path d="m7.5 10.5 4.5 4.5 4.5-4.5"/><path d="M5 21h14"/></svg>';
+    const features = [
+      "تحويل PNG إلى PDF بدون فقدان الجودة",
+      "دعم تحويل عدة صور دفعة واحدة",
+      "ترتيب الصور قبل التحويل",
+      "حجم واتجاه وهوامش مرنة",
+      "الصور لا تغادر متصفحك"
+    ];
+    const tips = [
+      "استخدم صور عالية الدقة للحصول على أفضل جودة PDF",
+      "تأكد من ترتيب الصور قبل التحويل النهائي",
+      "يفضل استخدام نفس مقاس الصور للحصول على تنسيق متناسق"
+    ];
+
+    if (!hasAccess) {
+      return `
+        <section class="guest-main tools-main png-pdf-main" aria-label="تحويل PNG إلى PDF">
+          <div class="png-pdf-page">
+            <button class="png-pdf-back" type="button" data-open-free-tools>
+              <span aria-hidden="true">←</span>
+              <b>العودة للأدوات</b>
+            </button>
+            <section class="png-pdf-locked">
+              <span aria-hidden="true">${icons.lock}</span>
+              <h1>هذه الأداة متاحة للمشتركين فقط</h1>
+              <p>فعّل باقة شرارة أو طويق أو الرائد لتحويل صور PNG إلى PDF داخل المتصفح بدون XP.</p>
+              <button type="button" data-open-upgrade>عرض الباقات</button>
+            </section>
+          </div>
+        </section>
+      `;
+    }
+
+    return `
+      <section class="guest-main tools-main png-pdf-main" aria-label="تحويل PNG إلى PDF">
+        <div class="png-pdf-page">
+          <button class="png-pdf-back" type="button" data-open-free-tools>
+            <span aria-hidden="true">←</span>
+            <b>العودة للأدوات</b>
+          </button>
+
+          <header class="png-pdf-hero">
+            <span class="png-pdf-hero-icon" aria-hidden="true">${pdfIcon}</span>
+            <div>
+              <span class="png-pdf-sparkles" aria-hidden="true">${icons.sparkle}</span>
+              <h1>تحويل PNG إلى PDF</h1>
+              <p>حوّل صور PNG إلى ملف PDF عالي الجودة بسرعة وخصوصية داخل متصفحك.</p>
+            </div>
+          </header>
+
+          <section class="png-pdf-top-grid">
+            <div class="png-pdf-upload-card">
+              <input data-png-pdf-input type="file" accept="image/png" multiple hidden>
+              <div class="png-pdf-dropzone ${hasImages ? "has-images" : ""}" data-png-pdf-dropzone>
+                <span class="png-pdf-upload-icon" aria-hidden="true">${uploadIcon}</span>
+                <h2>${hasImages ? `${images.length.toLocaleString("ar-SA")} صور PNG جاهزة` : "اسحب وأفلت ملفات PNG هنا"}</h2>
+                <p>${hasImages ? `الحجم الإجمالي: ${escapeHtml(formatImageEnhancerFileSize(totalSize))}` : "أو انقر لاختيار الصور من جهازك"}</p>
+                <button class="png-pdf-primary" type="button" data-png-pdf-choose>
+                  <span>اختيار صور PNG</span>
+                  ${icons.attach}
+                </button>
+                <small>PNG فقط · الحد الأقصى 20MB لكل صورة</small>
+              </div>
+            </div>
+
+            <aside class="png-pdf-info-stack">
+              <article class="png-pdf-card">
+                <span class="png-pdf-card-icon" aria-hidden="true">${icons.star}</span>
+                <h2>ميزات الأداة</h2>
+                <ul>
+                  ${features.map((item) => `<li>${icons.sparkle}<span>${escapeHtml(item)}</span></li>`).join("")}
+                </ul>
+              </article>
+              <article class="png-pdf-privacy">
+                <span aria-hidden="true">${icons.lock}</span>
+                <div>
+                  <h2>خصوصيتك تهمنا</h2>
+                  <p>جميع الملفات تتم معالجتها داخل متصفحك ولا يتم رفعها إلى خوادمنا.</p>
+                </div>
+              </article>
+            </aside>
+          </section>
+
+          <section class="png-pdf-workspace">
+            <article class="png-pdf-images-panel">
+              <header>
+                <h2>الصور المضافة (${images.length.toLocaleString("ar-SA")})</h2>
+                <div>
+                  <button type="button" data-png-pdf-choose>${icons.plus}<span>إضافة المزيد</span></button>
+                  <button type="button" data-png-pdf-reset ${hasImages ? "" : "disabled"}>${icons.delete}<span>حذف الكل</span></button>
+                </div>
+              </header>
+              <div class="png-pdf-images-list ${hasImages ? "" : "is-empty"}">
+                ${hasImages ? images.map((image, index) => `
+                  <article class="png-pdf-image-item" draggable="true" data-png-pdf-item="${escapeHtml(image.id)}">
+                    <img src="${escapeHtml(image.previewUrl)}" alt="${escapeHtml(image.name)}">
+                    <div class="png-pdf-image-copy">
+                      <strong>${escapeHtml(image.name)}</strong>
+                      <small>${escapeHtml(formatImageEnhancerFileSize(image.size))} · ${escapeHtml(`${image.width} × ${image.height}`)}</small>
+                    </div>
+                    <div class="png-pdf-image-actions">
+                      <button type="button" data-png-pdf-move="${escapeHtml(image.id)}" data-direction="up" ${index === 0 ? "disabled" : ""} aria-label="رفع الصورة">↑</button>
+                      <button type="button" data-png-pdf-move="${escapeHtml(image.id)}" data-direction="down" ${index === images.length - 1 ? "disabled" : ""} aria-label="إنزال الصورة">↓</button>
+                      <button type="button" data-png-pdf-remove="${escapeHtml(image.id)}" aria-label="حذف الصورة">${icons.delete}</button>
+                    </div>
+                    <span class="png-pdf-drag-handle" aria-hidden="true">⋮⋮</span>
+                  </article>
+                `).join("") : `
+                  <div>
+                    <span aria-hidden="true">${pdfIcon}</span>
+                    <p>أضف صور PNG لعرضها وترتيبها هنا قبل التحويل.</p>
+                  </div>
+                `}
+              </div>
+            </article>
+
+            <aside class="png-pdf-settings">
+              <article class="png-pdf-options">
+                <h2>خيارات التحويل</h2>
+                <label>
+                  <span>حجم الصفحة</span>
+                  <select data-png-pdf-setting="pageSize">
+                    <option value="A4" ${pageSize === "A4" ? "selected" : ""}>A4 (210 × 297 mm)</option>
+                    <option value="letter" ${pageSize === "letter" ? "selected" : ""}>Letter</option>
+                    <option value="fit" ${pageSize === "fit" ? "selected" : ""}>حسب مقاس الصورة</option>
+                  </select>
+                </label>
+                <label>
+                  <span>اتجاه الصفحة</span>
+                  <select data-png-pdf-setting="orientation">
+                    <option value="portrait" ${orientation === "portrait" ? "selected" : ""}>عمودي</option>
+                    <option value="landscape" ${orientation === "landscape" ? "selected" : ""}>أفقي</option>
+                  </select>
+                </label>
+                <label>
+                  <span>الهوامش</span>
+                  <select data-png-pdf-setting="margin">
+                    <option value="0" ${margin === "0" ? "selected" : ""}>بدون هامش</option>
+                    <option value="20" ${margin === "20" ? "selected" : ""}>هامش خفيف</option>
+                    <option value="40" ${margin === "40" ? "selected" : ""}>هامش متوسط</option>
+                  </select>
+                </label>
+                <label class="png-pdf-toggle">
+                  <input type="checkbox" data-png-pdf-fill ${fillPage ? "checked" : ""}>
+                  <span>ضبط الصور لملء الصفحة</span>
+                </label>
+              </article>
+
+              <article class="png-pdf-tips">
+                <h2>نصائح للحصول على أفضل نتيجة</h2>
+                <ul>
+                  ${tips.map((item) => `<li>${icons.sparkle}<span>${escapeHtml(item)}</span></li>`).join("")}
+                </ul>
+              </article>
+
+              ${png.loading || png.status || png.error ? `
+                <section class="png-pdf-status ${png.error ? "is-error" : ""}">
+                  <p>${escapeHtml(png.error || png.status || "")}</p>
+                  ${png.loading ? `<span><i style="width:${Math.max(8, Math.min(100, Number(png.progress || 0)))}%"></i></span>` : ""}
+                </section>
+              ` : ""}
+
+              <button class="png-pdf-convert" type="button" data-png-pdf-convert ${canConvert ? "" : "disabled"}>
+                ${png.loading ? "جاري التحويل..." : "تحويل إلى PDF"}
+                ${pdfIcon}
+              </button>
+              ${hasResult ? `
+                <a class="png-pdf-download" href="${escapeHtml(png.resultUrl)}" download="orlixor-images.pdf">
+                  <span>تحميل ملف PDF</span>
+                  ${downloadIcon}
+                </a>
+                <small class="png-pdf-result-size">حجم الملف: ${escapeHtml(formatImageEnhancerFileSize(png.resultSize))}</small>
+              ` : `
+                <small class="png-pdf-result-size">سيظهر زر التحميل بعد التحويل</small>
+              `}
             </aside>
           </section>
         </div>
@@ -4586,6 +5092,9 @@
       if (state.toolView === "image-clarifier") {
         return renderImageClarifierMain(profile);
       }
+      if (state.toolView === "png-to-pdf") {
+        return renderPngToPdfMain(profile);
+      }
       return renderToolsMain(profile);
     }
     if (isHomeWorkspace) {
@@ -4873,7 +5382,7 @@
   function renderShell() {
     const profile = getProfile();
     const isToolsWorkspace = state.section === "ai-tools";
-    const isSubscriberTools = isToolsWorkspace && ["subscriber-tools", "image-enhancer", "image-clarifier"].includes(state.toolView);
+    const isSubscriberTools = isToolsWorkspace && ["subscriber-tools", "image-enhancer", "image-clarifier", "png-to-pdf"].includes(state.toolView);
     app.innerHTML = `
       <div class="guest-shell ${state.theme === "dark" ? "theme-dark" : ""} ${isHomeWorkspace ? "is-home-workspace" : ""} ${isToolsWorkspace ? "is-tools-workspace" : ""} ${isSubscriberTools ? "is-subscriber-tools" : ""} ${state.sidebarCollapsed ? "is-sidebar-collapsed" : ""}">
         ${renderSidebar()}
@@ -6276,6 +6785,42 @@
         return;
       }
 
+      if (event.target.closest("[data-png-pdf-choose]")) {
+        if (!hasSubscriberToolsAccess()) {
+          state.upgradeModalOpen = true;
+          render();
+          return;
+        }
+        app.querySelector("[data-png-pdf-input]")?.click();
+        return;
+      }
+
+      if (event.target.closest("[data-png-pdf-convert]")) {
+        await runPngToPdfConversion();
+        return;
+      }
+
+      if (event.target.closest("[data-png-pdf-reset]")) {
+        resetPngToPdfState();
+        render();
+        return;
+      }
+
+      const pngPdfRemove = event.target.closest("[data-png-pdf-remove]");
+      if (pngPdfRemove) {
+        removePngToPdfImage(pngPdfRemove.getAttribute("data-png-pdf-remove") || "");
+        return;
+      }
+
+      const pngPdfMove = event.target.closest("[data-png-pdf-move]");
+      if (pngPdfMove) {
+        movePngToPdfImage(
+          pngPdfMove.getAttribute("data-png-pdf-move") || "",
+          pngPdfMove.getAttribute("data-direction") || "down"
+        );
+        return;
+      }
+
       const removeFile = event.target.closest("[data-remove-file]");
       if (removeFile) {
         removeSelectedFile(Number(removeFile.getAttribute("data-remove-file")));
@@ -6334,6 +6879,18 @@
             return;
           }
           state.toolView = "image-clarifier";
+          state.openThreadMenuId = "";
+          state.modelMenuOpen = false;
+          render();
+          return;
+        }
+        if (toolKey === "png-to-pdf") {
+          if (!hasSubscriberToolsAccess()) {
+            state.upgradeModalOpen = true;
+            render();
+            return;
+          }
+          state.toolView = "png-to-pdf";
           state.openThreadMenuId = "";
           state.modelMenuOpen = false;
           render();
@@ -6888,6 +7445,39 @@
         return;
       }
 
+      const pngPdfInput = event.target.closest("[data-png-pdf-input]");
+      if (pngPdfInput) {
+        await addPngToPdfFiles(pngPdfInput.files);
+        pngPdfInput.value = "";
+        return;
+      }
+
+      const pngPdfSetting = event.target.closest("[data-png-pdf-setting]");
+      if (pngPdfSetting) {
+        const key = pngPdfSetting.getAttribute("data-png-pdf-setting");
+        const value = pngPdfSetting.value;
+        if (key === "pageSize") {
+          state.pngToPdf.pageSize = ["A4", "letter", "fit"].includes(value) ? value : "A4";
+        }
+        if (key === "orientation") {
+          state.pngToPdf.orientation = value === "landscape" ? "landscape" : "portrait";
+        }
+        if (key === "margin") {
+          state.pngToPdf.margin = ["0", "20", "40"].includes(value) ? value : "20";
+        }
+        clearPngToPdfResult("الإعدادات تغيّرت. شغّل التحويل من جديد.");
+        render();
+        return;
+      }
+
+      const pngPdfFill = event.target.closest("[data-png-pdf-fill]");
+      if (pngPdfFill) {
+        state.pngToPdf.fillPage = Boolean(pngPdfFill.checked);
+        clearPngToPdfResult("الإعدادات تغيّرت. شغّل التحويل من جديد.");
+        render();
+        return;
+      }
+
       const smartSource = event.target.closest("[data-smart-search-source]");
       if (smartSource) {
         state.smartSearch.sourceType = smartSource.value;
@@ -7054,25 +7644,57 @@
       state.settings[state.section][select.getAttribute("data-setting")] = select.value;
     });
 
+    app.addEventListener("dragstart", (event) => {
+      const item = event.target.closest?.("[data-png-pdf-item]");
+      if (!item) return;
+      const id = item.getAttribute("data-png-pdf-item") || "";
+      state.pngToPdf.draggedId = id;
+      event.dataTransfer?.setData("text/plain", id);
+      item.classList.add("is-dragging");
+    });
+
+    app.addEventListener("dragend", (event) => {
+      const item = event.target.closest?.("[data-png-pdf-item]");
+      if (!item) return;
+      item.classList.remove("is-dragging");
+      state.pngToPdf.draggedId = "";
+    });
+
     app.addEventListener("dragover", (event) => {
-      const dropZone = event.target.closest?.("[data-image-enhancer-dropzone], [data-image-clarifier-dropzone]");
+      const sortItem = event.target.closest?.("[data-png-pdf-item]");
+      if (sortItem) {
+        event.preventDefault();
+        return;
+      }
+      const dropZone = event.target.closest?.("[data-image-enhancer-dropzone], [data-image-clarifier-dropzone], [data-png-pdf-dropzone]");
       if (!dropZone) return;
       event.preventDefault();
       dropZone.classList.add("is-drag-over");
     });
 
     app.addEventListener("dragleave", (event) => {
-      const dropZone = event.target.closest?.("[data-image-enhancer-dropzone], [data-image-clarifier-dropzone]");
+      const dropZone = event.target.closest?.("[data-image-enhancer-dropzone], [data-image-clarifier-dropzone], [data-png-pdf-dropzone]");
       if (!dropZone) return;
       dropZone.classList.remove("is-drag-over");
     });
 
     app.addEventListener("drop", async (event) => {
-      const dropZone = event.target.closest?.("[data-image-enhancer-dropzone], [data-image-clarifier-dropzone]");
+      const sortItem = event.target.closest?.("[data-png-pdf-item]");
+      if (sortItem) {
+        event.preventDefault();
+        reorderPngToPdfImage(
+          state.pngToPdf.draggedId || event.dataTransfer?.getData("text/plain") || "",
+          sortItem.getAttribute("data-png-pdf-item") || ""
+        );
+        return;
+      }
+      const dropZone = event.target.closest?.("[data-image-enhancer-dropzone], [data-image-clarifier-dropzone], [data-png-pdf-dropzone]");
       if (!dropZone) return;
       event.preventDefault();
       dropZone.classList.remove("is-drag-over");
-      if (dropZone.matches("[data-image-clarifier-dropzone]")) {
+      if (dropZone.matches("[data-png-pdf-dropzone]")) {
+        await addPngToPdfFiles(event.dataTransfer?.files);
+      } else if (dropZone.matches("[data-image-clarifier-dropzone]")) {
         await handleImageClarifierFile(event.dataTransfer?.files?.[0]);
       } else {
         await handleImageEnhancerFile(event.dataTransfer?.files?.[0]);
