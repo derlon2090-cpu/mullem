@@ -1606,9 +1606,12 @@ function createPostgresDatabaseClient(rawConfig = {}) {
       : await findPackageByKeyOrName(payload.package_key || payload.planKey || payload.package || "");
     if (!userId || !selectedPackage) return null;
 
-    const durationDays = Math.max(1, Math.round(Number(payload.duration_days || payload.durationDays || selectedPackage.duration_days || 30) || 30));
     const startDate = new Date();
-    const expiresAt = new Date(startDate.getTime() + (durationDays * 86400000));
+    const explicitExpiresAt = payload.expires_at || payload.expiresAt ? new Date(payload.expires_at || payload.expiresAt) : null;
+    const expiresAt = explicitExpiresAt && !Number.isNaN(explicitExpiresAt.getTime())
+      ? explicitExpiresAt
+      : new Date(startDate.getTime() + (Math.max(1, Math.round(Number(payload.duration_days || payload.durationDays || selectedPackage.duration_days || 30) || 30)) * 86400000));
+    const durationDays = Math.max(1, Math.ceil((expiresAt.getTime() - startDate.getTime()) / 86400000));
 
     const client = await pool.connect();
     try {

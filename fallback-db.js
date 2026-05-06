@@ -819,9 +819,11 @@ function createFallbackDatabaseClient() {
       ? findPackageByIdSync(payload.package_id)
       : findPackageByKeyOrNameSync(payload.package_key || payload.planKey || payload.package || "");
     if (index === -1 || !selectedPackage) return null;
-    const durationDays = Math.max(1, Math.round(Number(payload.duration_days || payload.durationDays || selectedPackage.duration_days || 30) || 30));
     const startDate = new Date();
-    const expiresAt = addDays(startDate, durationDays);
+    const explicitExpiresAt = payload.expires_at || payload.expiresAt ? new Date(payload.expires_at || payload.expiresAt) : null;
+    const expiresAt = explicitExpiresAt && !Number.isNaN(explicitExpiresAt.getTime())
+      ? explicitExpiresAt
+      : addDays(startDate, Math.max(1, Math.round(Number(payload.duration_days || payload.durationDays || selectedPackage.duration_days || 30) || 30)));
     data.users[index] = {
       ...mergePackageIntoUser(data.users[index], selectedPackage),
       package_started_at: startDate.toISOString(),

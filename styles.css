@@ -744,6 +744,25 @@ body.theme-dark .chat-trust-note {
   align-items: end;
 }
 
+.admin-package-send-form {
+  grid-template-columns: minmax(160px, 1fr) minmax(150px, 1fr) 130px 210px auto auto;
+}
+
+.admin-remove-package-form {
+  grid-template-columns: minmax(220px, 1fr) minmax(220px, 1fr) auto;
+  align-items: end;
+  padding: 14px;
+  border: 1px solid #f1d8e0;
+  border-radius: 8px;
+  background: rgba(255, 247, 250, .78);
+}
+
+.admin-danger-btn {
+  color: #ff416d !important;
+  border-color: #ffd4df !important;
+  background: #fff !important;
+}
+
 .admin-check {
   min-height: 44px;
   display: flex;

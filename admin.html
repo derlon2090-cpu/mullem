@@ -29,7 +29,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800;900&display=swap" rel="stylesheet">
   <link rel="icon" type="image/svg+xml" href="favicon.svg">
-  <link rel="stylesheet" href="styles.css?v=20260506-admin-match">
+  <link rel="stylesheet" href="styles.css?v=20260506-package-expiry">
 </head>
 <body class="admin-console-body">
   <main class="orlixor-admin-console">
@@ -163,12 +163,18 @@
               <h1>إرسال باقة لمستخدم</h1>
               <p>اختر المستخدم والباقة والمدة، وسيتم تسجيل العملية في سجلات الأدمن.</p>
             </div>
-            <form class="admin-action-form" data-assign-plan-form>
+            <form class="admin-action-form admin-package-send-form" data-assign-plan-form>
               <select class="field" data-assign-user required></select>
               <select class="field" data-assign-plan required></select>
               <input class="field" type="number" min="1" value="30" data-assign-days placeholder="مدة الاشتراك بالأيام">
+              <input class="field" type="datetime-local" data-assign-expires-at aria-label="وقت انتهاء الباقة">
               <label class="admin-check"><input type="checkbox" data-assign-email> إرسال إيميل للمستخدم</label>
               <button class="primary-btn" type="submit">إرسال الباقة</button>
+            </form>
+            <form class="admin-action-form admin-remove-package-form" data-remove-plan-form>
+              <select class="field" data-remove-plan-user required></select>
+              <input class="field" type="text" data-remove-plan-reason placeholder="سبب حذف الباقة">
+              <button class="secondary-btn admin-danger-btn" type="submit">حذف الباقة من المستخدم</button>
             </form>
             <div class="admin-table-wrap" data-subscriptions-table></div>
           </section>
@@ -262,7 +268,7 @@
   </main>
 
   <script src="mullem-config.js?v=20260409-5"></script>
-  <script src="api-client.js?v=20260506-admin-match"></script>
-  <script src="admin-dashboard.js?v=20260506-admin-match"></script>
+  <script src="api-client.js?v=20260506-package-expiry"></script>
+  <script src="admin-dashboard.js?v=20260506-package-expiry"></script>
 </body>
 </html>

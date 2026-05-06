@@ -3532,7 +3532,17 @@ async function handleAdminAssignPlan(req, res) {
   const userId = Number(payload.user_id || payload.userId);
   const planKey = sanitizeOptionalText(payload.plan_key || payload.planKey || payload.package_key || payload.packageKey, 80);
   const packageId = payload.package_id || payload.packageId;
-  const durationDays = Math.max(1, Math.round(Number(payload.duration_days || payload.durationDays || 30) || 30));
+  const expiresAtText = sanitizeOptionalText(payload.expires_at || payload.expiresAt || payload.package_expires_at || payload.packageExpiresAt, 80);
+  let expiresAt = null;
+  if (expiresAtText) {
+    expiresAt = new Date(expiresAtText);
+    if (Number.isNaN(expiresAt.getTime()) || expiresAt.getTime() <= Date.now()) {
+      throw createHttpError(422, "expires_at must be a future date.");
+    }
+  }
+  const durationDays = expiresAt
+    ? Math.max(1, Math.ceil((expiresAt.getTime() - Date.now()) / 86400000))
+    : Math.max(1, Math.round(Number(payload.duration_days || payload.durationDays || 30) || 30));
   if (!userId || (!planKey && !packageId)) {
     throw createHttpError(422, "user_id and plan_key are required.");
   }
@@ -3541,7 +3551,8 @@ async function handleAdminAssignPlan(req, res) {
     user_id: userId,
     package_id: packageId,
     package_key: planKey,
-    duration_days: durationDays
+    duration_days: durationDays,
+    expires_at: expiresAt ? expiresAt.toISOString() : null
   });
   if (!updated) {
     throw createHttpError(404, "User or plan not found.");
@@ -3551,6 +3562,7 @@ async function handleAdminAssignPlan(req, res) {
     planKey,
     packageId,
     durationDays,
+    expiresAt: expiresAt ? expiresAt.toISOString() : null,
     sendEmail: Boolean(payload.send_email || payload.sendEmail)
   });
 

@@ -31,7 +31,11 @@
     assignUser: $("[data-assign-user]"),
     assignPlan: $("[data-assign-plan]"),
     assignDays: $("[data-assign-days]"),
+    assignExpiresAt: $("[data-assign-expires-at]"),
     assignEmail: $("[data-assign-email]"),
+    removePlanForm: $("[data-remove-plan-form]"),
+    removePlanUser: $("[data-remove-plan-user]"),
+    removePlanReason: $("[data-remove-plan-reason]"),
     subscriptionsTable: $("[data-subscriptions-table]"),
     paymentsTable: $("[data-payments-table]"),
     transactionsTable: $("[data-transactions-table]"),
@@ -61,12 +65,39 @@
 
   const formatNumber = (value) => Number(value || 0).toLocaleString("en-US");
   const formatMoney = (value) => `$${Number(value || 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  const millisecondsPerDay = 24 * 60 * 60 * 1000;
   const escapeHtml = (value) => String(value ?? "")
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;")
     .replace(/"/g, "&quot;")
     .replace(/'/g, "&#039;");
+
+  function getExpiryPayload() {
+    const explicitValue = String(nodes.assignExpiresAt?.value || "").trim();
+    if (!explicitValue) {
+      return {
+        duration_days: Number(nodes.assignDays?.value || 30)
+      };
+    }
+
+    const expiresAt = new Date(explicitValue);
+    if (Number.isNaN(expiresAt.getTime()) || expiresAt.getTime() <= Date.now()) {
+      return { error: "اختر وقت انتهاء صحيح في المستقبل." };
+    }
+
+    return {
+      expires_at: expiresAt.toISOString(),
+      duration_days: Math.max(1, Math.ceil((expiresAt.getTime() - Date.now()) / millisecondsPerDay))
+    };
+  }
+
+  function setAssignExpiryMin() {
+    if (!nodes.assignExpiresAt) return;
+    const date = new Date(Date.now() + 60 * 60 * 1000);
+    const local = new Date(date.getTime() - (date.getTimezoneOffset() * 60000)).toISOString().slice(0, 16);
+    nodes.assignExpiresAt.min = local;
+  }
 
   function buildLoginUrl() {
     const loginUrl = new URL("login.html", window.location.href);
@@ -325,6 +356,7 @@
               <td><mark class="admin-state">${escapeHtml(user.status || "active")}</mark></td>
               <td class="admin-row-actions">
                 <button type="button" data-toggle-user="${escapeHtml(user.id)}">${String(user.status || "").toLowerCase() === "active" ? "تعطيل" : "تفعيل"}</button>
+                <button type="button" data-user-remove-plan="${escapeHtml(user.id)}">حذف الباقة</button>
                 <button type="button" data-user-add-xp="${escapeHtml(user.id)}">+ XP</button>
                 <button type="button" data-user-remove-xp="${escapeHtml(user.id)}">- XP</button>
               </td>
@@ -403,7 +435,7 @@
 
   function renderUserSelects() {
     const options = state.users.map((user) => `<option value="${escapeHtml(user.id)}">${escapeHtml(user.name)} · ${escapeHtml(user.email)}</option>`).join("");
-    [nodes.assignUser, nodes.xpUser].forEach((node) => {
+    [nodes.assignUser, nodes.removePlanUser, nodes.xpUser].forEach((node) => {
       if (node) node.innerHTML = options;
     });
     if (nodes.assignPlan) {
@@ -502,6 +534,24 @@
     await loadAdminData();
   }
 
+  async function removeUserPlan(userId, reason = "") {
+    if (!userId) return;
+    const user = state.users.find((item) => String(item.id) === String(userId));
+    const confirmed = window.confirm(`حذف الباقة الحالية من ${user?.name || "المستخدم"}؟`);
+    if (!confirmed) return;
+
+    const result = await api.updateAdminUser(userId, {
+      package_id: null,
+      package_name: "مجاني محدود",
+      activity: reason || "تم حذف الباقة من لوحة الأدمن"
+    });
+    if (!result.ok) {
+      window.alert(result.message || "تعذر حذف باقة المستخدم.");
+      return;
+    }
+    await loadAdminData();
+  }
+
   async function quickXp(userId, action) {
     const amount = Number(window.prompt("كمية XP؟", "50") || 0);
     if (!amount) return;
@@ -578,6 +628,11 @@
     const removeXp = event.target.closest("[data-user-remove-xp]");
     if (removeXp) {
       await quickXp(removeXp.dataset.userRemoveXp, "remove");
+      return;
+    }
+    const removePlan = event.target.closest("[data-user-remove-plan]");
+    if (removePlan) {
+      await removeUserPlan(removePlan.dataset.userRemovePlan);
     }
   });
 
@@ -586,10 +641,15 @@
 
   nodes.assignForm?.addEventListener("submit", async (event) => {
     event.preventDefault();
+    const expiryPayload = getExpiryPayload();
+    if (expiryPayload.error) {
+      window.alert(expiryPayload.error);
+      return;
+    }
     const result = await api.assignAdminPlan({
       user_id: nodes.assignUser?.value,
       plan_key: nodes.assignPlan?.value,
-      duration_days: Number(nodes.assignDays?.value || 30),
+      ...expiryPayload,
       send_email: Boolean(nodes.assignEmail?.checked)
     });
     if (!result.ok) {
@@ -597,6 +657,12 @@
       return;
     }
     await loadAdminData();
+  });
+
+  nodes.removePlanForm?.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    await removeUserPlan(nodes.removePlanUser?.value, nodes.removePlanReason?.value || "");
+    if (nodes.removePlanReason) nodes.removePlanReason.value = "";
   });
 
   nodes.xpForm?.addEventListener("submit", async (event) => {
@@ -619,6 +685,7 @@
   });
 
   (async function boot() {
+    setAssignExpiryMin();
     setTab("dashboard");
     if (await ensureAdminSession()) {
       await loadAdminData();
