@@ -5166,10 +5166,10 @@
         </header>
 
         <div class="tools-page writing-tools-page">
-          <button class="tools-back-chat" type="button" data-return-chat>
+          <button class="tools-back-chat" type="button" data-open-tools>
             <span aria-hidden="true">←</span>
-            <b>العودة إلى الشات</b>
-            <i aria-hidden="true">${icons.chat}</i>
+            <b>العودة إلى الأدوات</b>
+            <i aria-hidden="true">${icons.settings}</i>
           </button>
 
           <header class="tools-hero writing-tools-hero">
@@ -5266,15 +5266,6 @@
 
     return `
       <section class="guest-main tools-main" aria-label="أدوات الذكاء الاصطناعي">
-        <header class="guest-main-topbar tools-main-topbar is-tools-index">
-          <button class="tools-back-chat tools-back-chat-inline" type="button" data-return-chat>
-            <span aria-hidden="true">←</span>
-            <b>العودة إلى الشات</b>
-            <i aria-hidden="true">${icons.chat}</i>
-          </button>
-          ${renderHomeTopActions()}
-        </header>
-
         <div class="tools-page">
           <header class="tools-hero">
             <div class="tools-title-row">
@@ -5284,13 +5275,17 @@
             <p>مجموعة من الأدوات الذكية لمساعدتك في العمل والإبداع</p>
           </header>
 
-          <div class="tools-filters" aria-label="تصنيفات الأدوات">
+          <nav class="tools-unified-bar" aria-label="تصنيفات الأدوات">
             ${categories.map((category, index) => `
-              <button class="tools-filter ${index === 0 ? "is-active" : ""}" type="button" ${category.freeTools ? "data-open-free-tools" : ""}>
+              <button class="tools-unified-filter ${index === 0 ? "is-active" : ""}" type="button" ${category.freeTools ? "data-open-free-tools" : "data-open-tools"}>
                 ${escapeHtml(category.title)}
               </button>
             `).join("")}
-          </div>
+            <button class="tools-unified-return" type="button" data-return-chat>
+              <span aria-hidden="true">←</span>
+              <b>العودة إلى الشات</b>
+            </button>
+          </nav>
 
           <section class="tools-grid">
             ${tools.map((tool) => `
@@ -5352,19 +5347,18 @@
       { key: "image-rotator", title: "تدوير الصورة", description: "تدوير الصور إلى أي اتجاه بسهولة", icon: icons.refresh }
     ];
 
-    const categories = ["الأكثر استخداماً", "كتابة وتحرير", "تلخيص وتنظيم", "تحليل بيانات", "إنتاجية", "تعليم وتعلم", "أدوات مجانية"];
+    const categories = [
+      { title: "الأكثر استخداماً" },
+      { title: "كتابة وتحرير" },
+      { title: "تلخيص وتنظيم" },
+      { title: "تحليل بيانات" },
+      { title: "إنتاجية" },
+      { title: "تعليم وتعلم" },
+      { title: "أدوات مجانية", freeTools: true }
+    ];
 
     return `
       <section class="guest-main tools-main free-tools-main" aria-label="أدوات مجانية للمشتركين">
-        <header class="guest-main-topbar tools-main-topbar is-tools-index">
-          <button class="tools-back-chat tools-back-chat-inline" type="button" data-return-chat>
-            <span aria-hidden="true">←</span>
-            <b>العودة إلى الشات</b>
-            <i aria-hidden="true">${icons.chat}</i>
-          </button>
-          ${renderHomeTopActions()}
-        </header>
-
         <div class="tools-page free-tools-page">
           <header class="free-tools-hero">
             <div class="free-tools-title">
@@ -5379,13 +5373,13 @@
             </span>
           </header>
 
-          <nav class="free-tools-filters" aria-label="تصنيفات أدوات المشتركين">
+          <nav class="tools-unified-bar" aria-label="تصنيفات أدوات المشتركين">
             ${categories.map((category) => `
-              <button class="free-tools-filter ${category === "أدوات مجانية" ? "is-active" : ""}" type="button">
-                ${escapeHtml(category)}
+              <button class="tools-unified-filter ${category.freeTools ? "is-active" : ""}" type="button" ${category.freeTools ? "data-open-free-tools" : "data-open-tools"}>
+                ${escapeHtml(category.title)}
               </button>
             `).join("")}
-            <button class="free-tools-chat-return" type="button" data-return-chat>
+            <button class="tools-unified-return" type="button" data-return-chat>
               <span aria-hidden="true">←</span>
               <b>العودة إلى الشات</b>
             </button>
