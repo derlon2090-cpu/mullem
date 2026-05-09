@@ -546,6 +546,28 @@
       error: "",
       status: ""
     },
+    imageCompressor: {
+      images: [],
+      compressionLevel: "70",
+      outputFormat: "original",
+      resizeEnabled: false,
+      maxWidth: "",
+      maxHeight: "",
+      enhance: false,
+      zoom: 1,
+      resultUrl: "",
+      resultFileName: "",
+      resultSize: 0,
+      comparisonUrl: "",
+      comparison: null,
+      compressedTotal: 0,
+      savedBytes: 0,
+      savedPercent: 0,
+      loading: false,
+      progress: 0,
+      error: "",
+      status: ""
+    },
     imageRotator: {
       fileName: "",
       fileSize: 0,
@@ -1403,6 +1425,15 @@
     "image/jpeg": { label: "JPG", extension: "jpg" },
     "image/png": { label: "PNG", extension: "png" },
     "image/webp": { label: "WebP", extension: "webp" }
+  };
+  const imageCompressorAllowedTypes = ["image/jpeg", "image/png", "image/webp"];
+  const imageCompressorMaxFileSize = 20 * 1024 * 1024;
+  const imageCompressorMaxFiles = 20;
+  const imageCompressorFormats = {
+    original: { label: "الصيغة الأصلية", extension: "" },
+    "image/jpeg": { label: "JPG", extension: "jpg" },
+    "image/webp": { label: "WebP", extension: "webp" },
+    "image/png": { label: "PNG", extension: "png" }
   };
   const imageRotatorAllowedTypes = ["image/jpeg", "image/png", "image/webp"];
   const imageRotatorMaxFileSize = 20 * 1024 * 1024;
@@ -2461,6 +2492,345 @@
         error: String(error?.message || "").includes("webp")
           ? "متصفحك لا يدعم تصدير WebP حاليًا. جرّب PNG أو JPG."
           : "تعذر تحويل الصور داخل المتصفح. جرّب صورًا أصغر أو صيغة مختلفة.",
+        status: ""
+      };
+      render();
+    }
+  }
+
+  function createImageCompressorImageId() {
+    if (window.crypto?.randomUUID) return window.crypto.randomUUID();
+    return `compressor-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+  }
+
+  function clearImageCompressorResult(status = "") {
+    revokeImageEnhancerUrl(state.imageCompressor.resultUrl);
+    revokeImageEnhancerUrl(state.imageCompressor.comparisonUrl);
+    state.imageCompressor = {
+      ...state.imageCompressor,
+      resultUrl: "",
+      resultFileName: "",
+      resultSize: 0,
+      comparisonUrl: "",
+      comparison: null,
+      compressedTotal: 0,
+      savedBytes: 0,
+      savedPercent: 0,
+      progress: 0,
+      error: "",
+      status
+    };
+  }
+
+  function resetImageCompressorState() {
+    (state.imageCompressor.images || []).forEach((image) => revokeImageEnhancerUrl(image.previewUrl));
+    revokeImageEnhancerUrl(state.imageCompressor.resultUrl);
+    revokeImageEnhancerUrl(state.imageCompressor.comparisonUrl);
+    state.imageCompressor = {
+      images: [],
+      compressionLevel: "70",
+      outputFormat: "original",
+      resizeEnabled: false,
+      maxWidth: "",
+      maxHeight: "",
+      enhance: false,
+      zoom: 1,
+      resultUrl: "",
+      resultFileName: "",
+      resultSize: 0,
+      comparisonUrl: "",
+      comparison: null,
+      compressedTotal: 0,
+      savedBytes: 0,
+      savedPercent: 0,
+      loading: false,
+      progress: 0,
+      error: "",
+      status: ""
+    };
+  }
+
+  function isImageCompressorFileAllowed(file) {
+    const name = String(file?.name || "");
+    return imageCompressorAllowedTypes.includes(file?.type) || /\.(jpe?g|png|webp)$/i.test(name);
+  }
+
+  async function addImageCompressorFiles(files) {
+    if (!hasSubscriberToolsAccess()) {
+      state.upgradeModalOpen = true;
+      render();
+      return;
+    }
+
+    const incoming = Array.from(files || []);
+    if (!incoming.length) return;
+    const availableSlots = Math.max(0, imageCompressorMaxFiles - (state.imageCompressor.images || []).length);
+    if (!availableSlots) {
+      state.imageCompressor.error = `الحد الأقصى ${imageCompressorMaxFiles.toLocaleString("ar-SA")} صورة.`;
+      render();
+      return;
+    }
+
+    const added = [];
+    const rejected = [];
+    const limited = incoming.slice(0, availableSlots);
+    for (const file of limited) {
+      if (!isImageCompressorFileAllowed(file) || Number(file.size || 0) > imageCompressorMaxFileSize) {
+        rejected.push(file.name || "file");
+        continue;
+      }
+      try {
+        const bitmap = await createImageBitmap(file);
+        const previewUrl = URL.createObjectURL(file);
+        added.push({
+          id: createImageCompressorImageId(),
+          file,
+          previewUrl,
+          name: file.name || "image",
+          size: file.size || 0,
+          type: file.type || "image",
+          width: bitmap.width,
+          height: bitmap.height
+        });
+        bitmap.close?.();
+      } catch (_) {
+        rejected.push(file.name || "file");
+      }
+    }
+
+    if (added.length) {
+      clearImageCompressorResult("تمت إضافة الصور. اختر مستوى الضغط ثم ابدأ الضغط.");
+      state.imageCompressor.images = [...(state.imageCompressor.images || []), ...added];
+      state.imageCompressor.error = "";
+    }
+    if (incoming.length > availableSlots) {
+      state.imageCompressor.status = `تمت إضافة الحد المتاح فقط. الحد الأقصى ${imageCompressorMaxFiles.toLocaleString("ar-SA")} صورة.`;
+    }
+    if (rejected.length && !added.length) {
+      state.imageCompressor.error = "اختر صور JPG أو PNG أو WebP فقط، وبحجم لا يتجاوز 20MB لكل صورة.";
+    } else if (rejected.length) {
+      state.imageCompressor.status = "تم تجاهل بعض الملفات غير المدعومة أو الكبيرة.";
+    }
+    render();
+  }
+
+  function removeImageCompressorImage(id) {
+    const images = state.imageCompressor.images || [];
+    const target = images.find((image) => image.id === id);
+    if (target) revokeImageEnhancerUrl(target.previewUrl);
+    state.imageCompressor.images = images.filter((image) => image.id !== id);
+    clearImageCompressorResult(state.imageCompressor.images.length ? "تم حذف الصورة من القائمة." : "");
+    render();
+  }
+
+  function getImageCompressorQuality() {
+    const value = Number(state.imageCompressor.compressionLevel || 70);
+    return Math.max(0.4, Math.min(0.95, value / 100));
+  }
+
+  function getImageCompressorOutputFormat(originalType) {
+    const selected = state.imageCompressor.outputFormat || "original";
+    if (imageConverterFormats[selected]) return selected;
+    if (selected === "original" && originalType === "image/png") return "image/webp";
+    if (selected === "original" && imageConverterFormats[originalType]) return originalType;
+    return "image/jpeg";
+  }
+
+  function getImageCompressorOutputSize(originalWidth, originalHeight) {
+    let width = Math.max(1, Number(originalWidth || 1));
+    let height = Math.max(1, Number(originalHeight || 1));
+
+    if (state.imageCompressor.resizeEnabled) {
+      const maxWidth = Math.max(0, Math.round(Number(state.imageCompressor.maxWidth || 0))) || width;
+      const maxHeight = Math.max(0, Math.round(Number(state.imageCompressor.maxHeight || 0))) || height;
+      const ratio = Math.min(maxWidth / width, maxHeight / height, 1);
+      width = Math.max(1, Math.round(width * ratio));
+      height = Math.max(1, Math.round(height * ratio));
+    }
+
+    width = Math.min(12000, Math.max(1, width));
+    height = Math.min(12000, Math.max(1, height));
+    if (width * height > imageEnhancerMaxOutputPixels) {
+      const ratio = Math.sqrt(imageEnhancerMaxOutputPixels / (width * height));
+      width = Math.max(1, Math.floor(width * ratio));
+      height = Math.max(1, Math.floor(height * ratio));
+    }
+
+    return { width, height };
+  }
+
+  function buildImageCompressorFileName(originalName, outputFormat) {
+    const extension = imageConverterFormats[outputFormat]?.extension || "jpg";
+    const base = String(originalName || "orlixor-image")
+      .replace(/\.[^/.]+$/, "")
+      .replace(/[\\/:*?"<>|]+/g, "-")
+      .trim() || "orlixor-image";
+    return `${base}-compressed.${extension}`;
+  }
+
+  function imageCompressorCanvasToBlob(canvas, type, quality) {
+    return new Promise((resolve) => {
+      canvas.toBlob((blob) => resolve(blob), type, quality);
+    });
+  }
+
+  async function compressImageCompressorImage(image) {
+    const bitmap = await createImageBitmap(image.file);
+    const outputFormat = getImageCompressorOutputFormat(image.type);
+    const quality = getImageCompressorQuality();
+    const { width, height } = getImageCompressorOutputSize(bitmap.width, bitmap.height);
+    const canvas = document.createElement("canvas");
+    const ctx = canvas.getContext("2d", { willReadFrequently: Boolean(state.imageCompressor.enhance) });
+    canvas.width = width;
+    canvas.height = height;
+
+    if (outputFormat === "image/jpeg") {
+      ctx.fillStyle = "#ffffff";
+      ctx.fillRect(0, 0, width, height);
+    }
+
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = "high";
+    ctx.drawImage(bitmap, 0, 0, width, height);
+    bitmap.close?.();
+
+    if (state.imageCompressor.enhance) {
+      applyBasicImageEnhancement(ctx, width, height, "light");
+    }
+
+    const blob = await imageCompressorCanvasToBlob(canvas, outputFormat, quality);
+    if (!blob) throw new Error("image_compress_failed");
+    if (outputFormat === "image/webp" && blob.type && blob.type !== "image/webp") {
+      throw new Error("webp_export_unsupported");
+    }
+
+    const originalSize = Number(image.size || image.file?.size || 0);
+    const compressedSize = Number(blob.size || 0);
+    const savedBytes = Math.max(0, originalSize - compressedSize);
+    const savedPercent = originalSize ? Math.max(0, Math.round((savedBytes / originalSize) * 100)) : 0;
+
+    return {
+      blob,
+      fileName: buildImageCompressorFileName(image.name, outputFormat),
+      outputFormat,
+      outputWidth: width,
+      outputHeight: height,
+      originalSize,
+      compressedSize,
+      savedBytes,
+      savedPercent,
+      isLarger: compressedSize > originalSize
+    };
+  }
+
+  async function compressImageCompressorImagesToZip(images) {
+    const JSZip = await loadJsZip();
+    const zip = new JSZip();
+    const results = [];
+    for (let index = 0; index < images.length; index += 1) {
+      state.imageCompressor.progress = Math.max(8, Math.round(((index + 1) / images.length) * 88));
+      state.imageCompressor.status = `جاري ضغط الصورة ${index + 1} من ${images.length}...`;
+      render();
+      await new Promise((resolve) => window.requestAnimationFrame(resolve));
+      const result = await compressImageCompressorImage(images[index]);
+      results.push(result);
+      zip.file(`${String(index + 1).padStart(2, "0")}-${result.fileName}`, result.blob);
+    }
+    state.imageCompressor.progress = 95;
+    state.imageCompressor.status = "جاري تجميع الصور المضغوطة داخل ملف ZIP...";
+    render();
+    const blob = await zip.generateAsync({ type: "blob", compression: "DEFLATE" });
+    return { blob, results };
+  }
+
+  async function runImageCompressorCompression() {
+    if (!hasSubscriberToolsAccess()) {
+      state.upgradeModalOpen = true;
+      render();
+      return;
+    }
+    const images = state.imageCompressor.images || [];
+    if (!images.length) {
+      state.imageCompressor.error = "أضف صورة واحدة على الأقل.";
+      render();
+      return;
+    }
+
+    state.imageCompressor = {
+      ...state.imageCompressor,
+      loading: true,
+      progress: 5,
+      error: "",
+      status: "جاري ضغط الصور داخل المتصفح..."
+    };
+    render();
+
+    try {
+      let blob;
+      let fileName;
+      let results = [];
+      if (images.length === 1) {
+        const result = await compressImageCompressorImage(images[0]);
+        results = [result];
+        blob = result.blob;
+        fileName = result.fileName;
+      } else {
+        const zipResult = await compressImageCompressorImagesToZip(images);
+        results = zipResult.results;
+        blob = zipResult.blob;
+        fileName = "orlixor-compressed-images.zip";
+      }
+
+      const firstImage = images[0];
+      const firstResult = results[0];
+      const resultUrl = URL.createObjectURL(blob);
+      const comparisonUrl = firstResult ? URL.createObjectURL(firstResult.blob) : "";
+      const originalTotal = images.reduce((sum, image) => sum + Number(image.size || 0), 0);
+      const compressedTotal = results.reduce((sum, result) => sum + Number(result.compressedSize || 0), 0);
+      const savedBytes = Math.max(0, originalTotal - compressedTotal);
+      const savedPercent = originalTotal ? Math.max(0, Math.round((savedBytes / originalTotal) * 100)) : 0;
+      const hasLargerOutput = results.some((result) => result.isLarger);
+
+      revokeImageEnhancerUrl(state.imageCompressor.resultUrl);
+      revokeImageEnhancerUrl(state.imageCompressor.comparisonUrl);
+      state.imageCompressor = {
+        ...state.imageCompressor,
+        resultUrl,
+        resultFileName: fileName,
+        resultSize: blob.size,
+        comparisonUrl,
+        comparison: firstResult ? {
+          fileName: firstImage?.name || "",
+          originalUrl: firstImage?.previewUrl || "",
+          originalSize: firstResult.originalSize,
+          compressedSize: firstResult.compressedSize,
+          savedBytes: firstResult.savedBytes,
+          savedPercent: firstResult.savedPercent,
+          outputWidth: firstResult.outputWidth,
+          outputHeight: firstResult.outputHeight,
+          isLarger: firstResult.isLarger
+        } : null,
+        compressedTotal,
+        savedBytes,
+        savedPercent,
+        loading: false,
+        progress: 100,
+        error: "",
+        status: hasLargerOutput
+          ? "تم الضغط، لكن بعض الملفات الناتجة أكبر من الأصل. جرّب WebP أو مستوى ضغط أعلى."
+          : images.length === 1
+            ? "تم ضغط الصورة بنجاح. يمكنك تحميل النتيجة الآن."
+            : "تم ضغط الصور وتجهيز ملف ZIP بنجاح."
+      };
+      render();
+    } catch (error) {
+      state.imageCompressor = {
+        ...state.imageCompressor,
+        loading: false,
+        progress: 0,
+        error: String(error?.message || "").includes("webp")
+          ? "متصفحك لا يدعم تصدير WebP حاليًا. جرّب JPG أو PNG."
+          : "تعذر ضغط الصور داخل المتصفح. جرّب صورًا أصغر أو صيغة مختلفة.",
         status: ""
       };
       render();
@@ -4711,7 +5081,7 @@
       { key: "image-converter", title: "تحويل صيغة الصورة", description: "تحويل الصور بين مختلف الصيغ (JPG, PNG, WebP)", icon: toolIcons.image },
       { key: "image-rotator", title: "تدوير الصورة", description: "تدوير الصور إلى أي اتجاه بسهولة", icon: icons.refresh },
       { key: "image-cropper", title: "قص الصورة", description: "قص وتحديد الجزء المطلوب من الصورة", icon: toolIcons.crop },
-      { title: "ضغط الصور", description: "تقليل حجم الصور مع الحفاظ على الجودة", icon: toolIcons.compress },
+      { key: "image-compressor", title: "ضغط الصور", description: "تقليل حجم الصور مع الحفاظ على الجودة", icon: toolIcons.compress },
       { title: "إزالة حماية PDF", description: "إزالة كلمة المرور من ملفات PDF", icon: toolIcons.unlock },
       { title: "حماية PDF", description: "إضافة كلمة مرور لحماية ملفات PDF", icon: icons.lock },
       { title: "تقسيم PDF", description: "تقسيم ملف PDF إلى صفحات منفصلة", icon: toolIcons.split },
@@ -5781,6 +6151,228 @@
               ` : `
                 <small class="png-pdf-result-size">سيتم تحويل الصور وتحميلها كاملة عند الضغط على التحويل</small>
               `}
+            </aside>
+          </section>
+        </div>
+      </section>
+    `;
+  }
+
+  function renderImageCompressorMain() {
+    const compressor = state.imageCompressor || {};
+    const hasAccess = hasSubscriberToolsAccess();
+    const images = Array.isArray(compressor.images) ? compressor.images : [];
+    const hasImages = images.length > 0;
+    const hasResult = Boolean(compressor.resultUrl);
+    const canCompress = hasAccess && hasImages && !compressor.loading;
+    const totalSize = images.reduce((sum, image) => sum + Number(image.size || 0), 0);
+    const compressionLevel = Math.max(40, Math.min(95, Number(compressor.compressionLevel || 70)));
+    const outputFormat = imageCompressorFormats[compressor.outputFormat] ? compressor.outputFormat : "original";
+    const comparison = compressor.comparison || null;
+    const previewImage = images[0] || null;
+    const beforeSize = comparison ? comparison.originalSize : totalSize;
+    const afterSize = comparison ? comparison.compressedSize : compressor.compressedTotal;
+    const savedBytes = comparison ? comparison.savedBytes : compressor.savedBytes;
+    const savedPercent = comparison ? comparison.savedPercent : compressor.savedPercent;
+    const zoom = Math.round(Number(compressor.zoom || 1) * 100);
+    const compressIcon = '<svg viewBox="0 0 24 24"><path d="M9 3v6H3M15 3v6h6M9 21v-6H3M15 21v-6h6"/><path d="M3 9l6-6M21 9l-6-6M3 15l6 6M21 15l-6 6"/></svg>';
+    const uploadIcon = '<svg viewBox="0 0 24 24"><path d="M12 16V7"/><path d="m8.5 10.5 3.5-3.5 3.5 3.5"/><path d="M20 16.5a4.5 4.5 0 0 1-4.5 4.5h-7A5.5 5.5 0 0 1 8 10.02 6 6 0 0 1 19.74 12"/></svg>';
+    const downloadIcon = '<svg viewBox="0 0 24 24"><path d="M12 3v12"/><path d="m7.5 10.5 4.5 4.5 4.5-4.5"/><path d="M5 21h14"/></svg>';
+    const expandIcon = '<svg viewBox="0 0 24 24"><path d="M8 3H3v5M16 3h5v5M21 16v5h-5M3 16v5h5"/></svg>';
+    const features = [
+      "تقليل حجم الصور مع الحفاظ على الجودة قدر الإمكان",
+      "دعم جميع الصيغ الشائعة JPG و PNG و WebP",
+      "ضغط عدة صور وتحميلها في ملف ZIP",
+      "معالجة سريعة وآمنة داخل المتصفح",
+      "مقارنة مباشرة قبل وبعد الضغط"
+    ];
+
+    if (!hasAccess) {
+      return `
+        <section class="guest-main tools-main png-pdf-main image-compressor-main" aria-label="ضغط الصور">
+          <div class="png-pdf-page">
+            <button class="png-pdf-back" type="button" data-open-free-tools>
+              <span aria-hidden="true">←</span>
+              <b>العودة للأدوات</b>
+            </button>
+            <section class="png-pdf-locked">
+              <span aria-hidden="true">${icons.lock}</span>
+              <h1>هذه الأداة متاحة للمشتركين فقط</h1>
+              <p>فعّل باقة شرارة أو طويق أو الرائد لضغط الصور داخل المتصفح بدون XP.</p>
+              <button type="button" data-open-upgrade>عرض الباقات</button>
+            </section>
+          </div>
+        </section>
+      `;
+    }
+
+    return `
+      <section class="guest-main tools-main png-pdf-main image-compressor-main" aria-label="ضغط الصور">
+        <div class="png-pdf-page">
+          <button class="png-pdf-back" type="button" data-open-free-tools>
+            <span aria-hidden="true">←</span>
+            <b>العودة للأدوات</b>
+          </button>
+
+          <header class="png-pdf-hero image-compressor-hero">
+            <span class="png-pdf-hero-icon" aria-hidden="true">${compressIcon}</span>
+            <div>
+              <h1>ضغط الصور</h1>
+              <p>تقليل حجم الصور مع الحفاظ على الجودة قدر الإمكان.</p>
+            </div>
+          </header>
+
+          <section class="image-compressor-layout">
+            <aside class="image-compressor-left">
+              <article class="png-pdf-upload-card">
+                <input data-image-compressor-input type="file" accept="image/png,image/jpeg,image/webp" multiple hidden>
+                <div class="png-pdf-dropzone ${hasImages ? "has-images" : ""}" data-image-compressor-dropzone>
+                  <span class="png-pdf-upload-icon" aria-hidden="true">${uploadIcon}</span>
+                  <h2>${hasImages ? `${images.length.toLocaleString("ar-SA")} صور جاهزة` : "اسحب وأفلت صورك هنا"}</h2>
+                  <p>${hasImages ? `الحجم الإجمالي: ${escapeHtml(formatImageEnhancerFileSize(totalSize))}` : "أو انقر لاختيار الصور من جهازك"}</p>
+                  <button class="png-pdf-primary" type="button" data-image-compressor-choose>
+                    <span>اختيار الصور</span>
+                    ${icons.attach}
+                  </button>
+                  <small>JPG, PNG, WebP · الحد الأقصى 20MB لكل صورة</small>
+                </div>
+              </article>
+
+              <article class="png-pdf-options image-compressor-options">
+                <h2>خيارات الضغط ${icons.settings}</h2>
+                <label class="image-compressor-range">
+                  <span>مستوى الضغط</span>
+                  <b>${compressionLevel.toLocaleString("ar-SA")}%</b>
+                  <input data-image-compressor-level type="range" min="40" max="95" value="${compressionLevel}">
+                  <small><span>أقل حجم</span><span>أفضل جودة</span></small>
+                </label>
+                <label>
+                  <span>نوع الملف</span>
+                  <select data-image-compressor-format>
+                    ${Object.entries(imageCompressorFormats).map(([format, item]) => `
+                      <option value="${escapeHtml(format)}" ${format === outputFormat ? "selected" : ""}>${escapeHtml(item.label)}</option>
+                    `).join("")}
+                  </select>
+                </label>
+                <label class="png-pdf-toggle">
+                  <input type="checkbox" data-image-compressor-resize ${compressor.resizeEnabled ? "checked" : ""}>
+                  <span>تقليل أبعاد الصورة</span>
+                </label>
+                <div class="image-compressor-custom-size ${compressor.resizeEnabled ? "" : "is-disabled"}">
+                  <input data-image-compressor-size="width" type="number" min="1" max="12000" value="${escapeHtml(compressor.maxWidth || "")}" placeholder="العرض">
+                  <span>px</span>
+                  <input data-image-compressor-size="height" type="number" min="1" max="12000" value="${escapeHtml(compressor.maxHeight || "")}" placeholder="الارتفاع">
+                  <span>px</span>
+                </div>
+                <label class="png-pdf-toggle">
+                  <input type="checkbox" data-image-compressor-enhance ${compressor.enhance ? "checked" : ""}>
+                  <span>تحسين بسيط بعد الضغط</span>
+                </label>
+              </article>
+            </aside>
+
+            <main class="image-compressor-center">
+              <article class="image-rotator-preview-card image-compressor-preview-card">
+                <header>
+                  <h2>معاينة المقارنة</h2>
+                  <div class="image-rotator-zoom">
+                    <button type="button" data-image-compressor-zoom="-0.1" aria-label="تصغير">${icons.minus || "−"}</button>
+                    <b>${zoom.toLocaleString("ar-SA")}%</b>
+                    <button type="button" data-image-compressor-zoom="0.1" aria-label="تكبير">${icons.plus}</button>
+                    <span aria-hidden="true">${expandIcon}</span>
+                  </div>
+                </header>
+                <div class="image-compressor-compare-frame ${previewImage ? "" : "is-empty"}">
+                  ${comparison && compressor.comparisonUrl ? `
+                    <div class="image-compressor-compare" style="transform: scale(${Number(compressor.zoom || 1).toFixed(2)});">
+                      <img src="${escapeHtml(comparison.originalUrl)}" alt="قبل الضغط">
+                      <img src="${escapeHtml(compressor.comparisonUrl)}" alt="بعد الضغط">
+                      <span class="is-before">قبل الضغط<br>${escapeHtml(formatImageEnhancerFileSize(comparison.originalSize))}</span>
+                      <span class="is-after">بعد الضغط<br>${escapeHtml(formatImageEnhancerFileSize(comparison.compressedSize))}</span>
+                      <i aria-hidden="true">↔</i>
+                    </div>
+                  ` : previewImage ? `
+                    <div class="image-compressor-single-preview" style="transform: scale(${Number(compressor.zoom || 1).toFixed(2)});">
+                      <img src="${escapeHtml(previewImage.previewUrl)}" alt="${escapeHtml(previewImage.name)}">
+                      <span>قبل الضغط<br>${escapeHtml(formatImageEnhancerFileSize(previewImage.size))}</span>
+                    </div>
+                  ` : `
+                    <div>
+                      <span aria-hidden="true">${compressIcon}</span>
+                      <p>أضف صورة لعرض المقارنة قبل وبعد الضغط هنا.</p>
+                    </div>
+                  `}
+                </div>
+                <dl class="image-compressor-stats">
+                  <div><dt>الملف الأصلي</dt><dd>${beforeSize ? escapeHtml(formatImageEnhancerFileSize(beforeSize)) : "-"}</dd></div>
+                  <div><dt>بعد الضغط</dt><dd>${afterSize ? escapeHtml(formatImageEnhancerFileSize(afterSize)) : "-"}</dd></div>
+                  <div><dt>التوفير</dt><dd>${savedBytes ? `${escapeHtml(formatImageEnhancerFileSize(savedBytes))} (${savedPercent.toLocaleString("ar-SA")}%)` : "-"}</dd></div>
+                </dl>
+                <article class="png-pdf-tips image-compressor-note">
+                  <h2>نصيحة</h2>
+                  <p>كلما زاد مستوى الضغط قل حجم الملف. قد تظهر تغيّرات بسيطة في تفاصيل الجودة.</p>
+                </article>
+              </article>
+
+              ${compressor.loading || compressor.status || compressor.error ? `
+                <section class="png-pdf-status image-compressor-status ${compressor.error ? "is-error" : ""}">
+                  <p>${escapeHtml(compressor.error || compressor.status || "")}</p>
+                  ${compressor.loading ? `<span><i style="width:${Math.max(8, Math.min(100, Number(compressor.progress || 0)))}%"></i></span>` : ""}
+                </section>
+              ` : ""}
+
+              <footer class="image-rotator-actions image-compressor-actions">
+                <button class="image-rotator-reset" type="button" data-image-compressor-reset ${hasImages ? "" : "disabled"}>
+                  ${icons.refresh}
+                  <span>إعادة تعيين</span>
+                </button>
+                <button class="png-pdf-convert" type="button" data-image-compressor-run ${canCompress ? "" : "disabled"}>
+                  <span>${compressor.loading ? "جاري الضغط..." : `ضغط الصور (${images.length.toLocaleString("ar-SA")})`}</span>
+                  ${compressIcon}
+                </button>
+                ${hasResult ? `
+                  <a class="png-pdf-download" href="${escapeHtml(compressor.resultUrl)}" download="${escapeHtml(compressor.resultFileName || "orlixor-compressed-image.jpg")}">
+                    <span>${images.length > 1 ? "تحميل ZIP" : "تحميل الصورة"}</span>
+                    ${downloadIcon}
+                  </a>
+                ` : ""}
+              </footer>
+              <small class="image-rotator-privacy">${icons.lock} صورك تُعالج داخل متصفحك ولا يتم رفعها إلى خوادمنا.</small>
+            </main>
+
+            <aside class="image-compressor-right">
+              <article class="png-pdf-images-panel image-compressor-list-panel">
+                <header>
+                  <h2>الصور المضافة (${images.length.toLocaleString("ar-SA")})</h2>
+                  <button type="button" data-image-compressor-reset ${hasImages ? "" : "disabled"}>${icons.delete}<span>حذف الكل</span></button>
+                </header>
+                <div class="image-compressor-list ${hasImages ? "" : "is-empty"}">
+                  ${hasImages ? images.map((image) => `
+                    <article class="image-compressor-item">
+                      <img src="${escapeHtml(image.previewUrl)}" alt="${escapeHtml(image.name)}">
+                      <div>
+                        <strong>${escapeHtml(image.name)}</strong>
+                        <small>${escapeHtml(formatImageEnhancerFileSize(image.size))}</small>
+                        <small>${escapeHtml(`${image.width} × ${image.height}`)}</small>
+                      </div>
+                      <button type="button" data-image-compressor-remove="${escapeHtml(image.id)}" aria-label="حذف الصورة">×</button>
+                    </article>
+                  `).join("") : `
+                    <div>
+                      <span aria-hidden="true">${compressIcon}</span>
+                      <p>ستظهر الصور المختارة هنا.</p>
+                    </div>
+                  `}
+                </div>
+              </article>
+
+              <article class="png-pdf-card image-compressor-features">
+                <span class="png-pdf-card-icon" aria-hidden="true">${icons.lock}</span>
+                <h2>مميزات الأداة</h2>
+                <ul>
+                  ${features.map((item) => `<li>${icons.sparkle}<span>${escapeHtml(item)}</span></li>`).join("")}
+                </ul>
+              </article>
             </aside>
           </section>
         </div>
@@ -7383,6 +7975,9 @@
       if (state.toolView === "image-converter") {
         return renderImageConverterMain(profile);
       }
+      if (state.toolView === "image-compressor") {
+        return renderImageCompressorMain(profile);
+      }
       if (state.toolView === "image-rotator") {
         return renderImageRotatorMain(profile);
       }
@@ -7676,7 +8271,7 @@
   function renderShell() {
     const profile = getProfile();
     const isToolsWorkspace = state.section === "ai-tools";
-    const isSubscriberTools = isToolsWorkspace && ["subscriber-tools", "image-enhancer", "image-clarifier", "png-to-pdf", "pdf-to-png", "image-converter", "image-rotator", "image-cropper"].includes(state.toolView);
+    const isSubscriberTools = isToolsWorkspace && ["subscriber-tools", "image-enhancer", "image-clarifier", "png-to-pdf", "pdf-to-png", "image-converter", "image-compressor", "image-rotator", "image-cropper"].includes(state.toolView);
     app.innerHTML = `
       <div class="guest-shell ${state.theme === "dark" ? "theme-dark" : ""} ${isHomeWorkspace ? "is-home-workspace" : ""} ${isToolsWorkspace ? "is-tools-workspace" : ""} ${isSubscriberTools ? "is-subscriber-tools" : ""} ${state.sidebarCollapsed ? "is-sidebar-collapsed" : ""}">
         ${renderSidebar()}
@@ -9142,6 +9737,36 @@
         return;
       }
 
+      if (event.target.closest("[data-image-compressor-choose]")) {
+        if (!hasSubscriberToolsAccess()) {
+          state.upgradeModalOpen = true;
+          render();
+          return;
+        }
+        app.querySelector("[data-image-compressor-input]")?.click();
+        return;
+      }
+
+      if (event.target.closest("[data-image-compressor-run]")) {
+        await runImageCompressorCompression();
+        return;
+      }
+
+      if (event.target.closest("[data-image-compressor-reset]")) {
+        resetImageCompressorState();
+        render();
+        return;
+      }
+
+      const imageCompressorZoom = event.target.closest("[data-image-compressor-zoom]");
+      if (imageCompressorZoom) {
+        const current = Number(state.imageCompressor.zoom || 1);
+        const delta = Number(imageCompressorZoom.getAttribute("data-image-compressor-zoom") || 0);
+        state.imageCompressor.zoom = Math.max(0.65, Math.min(1.45, Number((current + delta).toFixed(2))));
+        render();
+        return;
+      }
+
       if (event.target.closest("[data-image-rotator-choose]")) {
         if (!hasSubscriberToolsAccess()) {
           state.upgradeModalOpen = true;
@@ -9245,6 +9870,12 @@
       const imageConverterRemove = event.target.closest("[data-image-converter-remove]");
       if (imageConverterRemove) {
         removeImageConverterImage(imageConverterRemove.getAttribute("data-image-converter-remove") || "");
+        return;
+      }
+
+      const imageCompressorRemove = event.target.closest("[data-image-compressor-remove]");
+      if (imageCompressorRemove) {
+        removeImageCompressorImage(imageCompressorRemove.getAttribute("data-image-compressor-remove") || "");
         return;
       }
 
@@ -9366,6 +9997,18 @@
             return;
           }
           state.toolView = "image-converter";
+          state.openThreadMenuId = "";
+          state.modelMenuOpen = false;
+          render();
+          return;
+        }
+        if (toolKey === "image-compressor") {
+          if (!hasSubscriberToolsAccess()) {
+            state.upgradeModalOpen = true;
+            render();
+            return;
+          }
+          state.toolView = "image-compressor";
           state.openThreadMenuId = "";
           state.modelMenuOpen = false;
           render();
@@ -9900,6 +10543,26 @@
         clearImageConverterResult("الإعدادات تغيّرت. شغّل التحويل من جديد.");
       }
 
+      const imageCompressorLevel = event.target.closest("[data-image-compressor-level]");
+      if (imageCompressorLevel) {
+        state.imageCompressor.compressionLevel = imageCompressorLevel.value;
+        clearImageCompressorResult("الإعدادات تغيّرت. اضغط الصور من جديد.");
+        render();
+        return;
+      }
+
+      const imageCompressorSize = event.target.closest("[data-image-compressor-size]");
+      if (imageCompressorSize) {
+        const key = imageCompressorSize.getAttribute("data-image-compressor-size");
+        if (key === "width") {
+          state.imageCompressor.maxWidth = imageCompressorSize.value;
+        }
+        if (key === "height") {
+          state.imageCompressor.maxHeight = imageCompressorSize.value;
+        }
+        clearImageCompressorResult("الإعدادات تغيّرت. اضغط الصور من جديد.");
+      }
+
       const imageRotatorCustomAngle = event.target.closest("[data-image-rotator-custom-angle]");
       if (imageRotatorCustomAngle) {
         state.imageRotator.customAngle = imageRotatorCustomAngle.value;
@@ -10073,6 +10736,39 @@
       if (imageConverterEnhance) {
         state.imageConverter.enhance = Boolean(imageConverterEnhance.checked);
         clearImageConverterResult("الإعدادات تغيّرت. شغّل التحويل من جديد.");
+        render();
+        return;
+      }
+
+      const imageCompressorInput = event.target.closest("[data-image-compressor-input]");
+      if (imageCompressorInput) {
+        await addImageCompressorFiles(imageCompressorInput.files);
+        imageCompressorInput.value = "";
+        return;
+      }
+
+      const imageCompressorFormat = event.target.closest("[data-image-compressor-format]");
+      if (imageCompressorFormat) {
+        state.imageCompressor.outputFormat = imageCompressorFormats[imageCompressorFormat.value]
+          ? imageCompressorFormat.value
+          : "original";
+        clearImageCompressorResult("الإعدادات تغيّرت. اضغط الصور من جديد.");
+        render();
+        return;
+      }
+
+      const imageCompressorResize = event.target.closest("[data-image-compressor-resize]");
+      if (imageCompressorResize) {
+        state.imageCompressor.resizeEnabled = Boolean(imageCompressorResize.checked);
+        clearImageCompressorResult("الإعدادات تغيّرت. اضغط الصور من جديد.");
+        render();
+        return;
+      }
+
+      const imageCompressorEnhance = event.target.closest("[data-image-compressor-enhance]");
+      if (imageCompressorEnhance) {
+        state.imageCompressor.enhance = Boolean(imageCompressorEnhance.checked);
+        clearImageCompressorResult("الإعدادات تغيّرت. اضغط الصور من جديد.");
         render();
         return;
       }
@@ -10347,14 +11043,14 @@
         event.preventDefault();
         return;
       }
-      const dropZone = event.target.closest?.("[data-image-enhancer-dropzone], [data-image-clarifier-dropzone], [data-png-pdf-dropzone], [data-pdf-png-dropzone], [data-image-converter-dropzone], [data-image-rotator-dropzone], [data-image-cropper-dropzone]");
+      const dropZone = event.target.closest?.("[data-image-enhancer-dropzone], [data-image-clarifier-dropzone], [data-png-pdf-dropzone], [data-pdf-png-dropzone], [data-image-converter-dropzone], [data-image-compressor-dropzone], [data-image-rotator-dropzone], [data-image-cropper-dropzone]");
       if (!dropZone) return;
       event.preventDefault();
       dropZone.classList.add("is-drag-over");
     });
 
     app.addEventListener("dragleave", (event) => {
-      const dropZone = event.target.closest?.("[data-image-enhancer-dropzone], [data-image-clarifier-dropzone], [data-png-pdf-dropzone], [data-pdf-png-dropzone], [data-image-converter-dropzone], [data-image-rotator-dropzone], [data-image-cropper-dropzone]");
+      const dropZone = event.target.closest?.("[data-image-enhancer-dropzone], [data-image-clarifier-dropzone], [data-png-pdf-dropzone], [data-pdf-png-dropzone], [data-image-converter-dropzone], [data-image-compressor-dropzone], [data-image-rotator-dropzone], [data-image-cropper-dropzone]");
       if (!dropZone) return;
       dropZone.classList.remove("is-drag-over");
     });
@@ -10369,7 +11065,7 @@
         );
         return;
       }
-      const dropZone = event.target.closest?.("[data-image-enhancer-dropzone], [data-image-clarifier-dropzone], [data-png-pdf-dropzone], [data-pdf-png-dropzone], [data-image-converter-dropzone], [data-image-rotator-dropzone], [data-image-cropper-dropzone]");
+      const dropZone = event.target.closest?.("[data-image-enhancer-dropzone], [data-image-clarifier-dropzone], [data-png-pdf-dropzone], [data-pdf-png-dropzone], [data-image-converter-dropzone], [data-image-compressor-dropzone], [data-image-rotator-dropzone], [data-image-cropper-dropzone]");
       if (!dropZone) return;
       event.preventDefault();
       dropZone.classList.remove("is-drag-over");
@@ -10379,6 +11075,8 @@
         await handlePdfToPngFile(event.dataTransfer?.files?.[0]);
       } else if (dropZone.matches("[data-image-converter-dropzone]")) {
         await addImageConverterFiles(event.dataTransfer?.files);
+      } else if (dropZone.matches("[data-image-compressor-dropzone]")) {
+        await addImageCompressorFiles(event.dataTransfer?.files);
       } else if (dropZone.matches("[data-image-rotator-dropzone]")) {
         await handleImageRotatorFile(event.dataTransfer?.files?.[0]);
       } else if (dropZone.matches("[data-image-cropper-dropzone]")) {
