@@ -530,6 +530,22 @@
       error: "",
       status: ""
     },
+    imageConverter: {
+      images: [],
+      targetFormat: "image/jpeg",
+      quality: "0.85",
+      resizeMode: "original",
+      customWidth: "",
+      customHeight: "",
+      enhance: false,
+      resultUrl: "",
+      resultFileName: "",
+      resultSize: 0,
+      loading: false,
+      progress: 0,
+      error: "",
+      status: ""
+    },
     upgradeModalOpen: false,
     balancePanelOpen: false,
     openThreadMenuId: "",
@@ -1331,6 +1347,14 @@
     letter: [612, 792]
   };
   const pdfToPngMaxFileSize = 50 * 1024 * 1024;
+  const imageConverterAllowedTypes = ["image/jpeg", "image/png", "image/webp"];
+  const imageConverterMaxFileSize = 20 * 1024 * 1024;
+  const imageConverterMaxFiles = 20;
+  const imageConverterFormats = {
+    "image/jpeg": { label: "JPG", extension: "jpg" },
+    "image/png": { label: "PNG", extension: "png" },
+    "image/webp": { label: "WebP", extension: "webp" }
+  };
 
   function formatImageEnhancerFileSize(bytes) {
     const value = Number(bytes || 0);
@@ -2095,6 +2119,288 @@
         loading: false,
         progress: 0,
         error: "تعذر تحويل الصور إلى PDF. تحقق من الاتصال لتحميل مكتبة pdf-lib ثم حاول مجددًا.",
+        status: ""
+      };
+      render();
+    }
+  }
+
+  function createImageConverterImageId() {
+    if (window.crypto?.randomUUID) return window.crypto.randomUUID();
+    return `converter-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+  }
+
+  function clearImageConverterResult(status = "") {
+    revokeImageEnhancerUrl(state.imageConverter.resultUrl);
+    state.imageConverter = {
+      ...state.imageConverter,
+      resultUrl: "",
+      resultFileName: "",
+      resultSize: 0,
+      progress: 0,
+      error: "",
+      status
+    };
+  }
+
+  function resetImageConverterState() {
+    (state.imageConverter.images || []).forEach((image) => revokeImageEnhancerUrl(image.previewUrl));
+    revokeImageEnhancerUrl(state.imageConverter.resultUrl);
+    state.imageConverter = {
+      images: [],
+      targetFormat: "image/jpeg",
+      quality: "0.85",
+      resizeMode: "original",
+      customWidth: "",
+      customHeight: "",
+      enhance: false,
+      resultUrl: "",
+      resultFileName: "",
+      resultSize: 0,
+      loading: false,
+      progress: 0,
+      error: "",
+      status: ""
+    };
+  }
+
+  function isImageConverterFileAllowed(file) {
+    const name = String(file?.name || "");
+    return imageConverterAllowedTypes.includes(file?.type) || /\.(jpe?g|png|webp)$/i.test(name);
+  }
+
+  async function addImageConverterFiles(files) {
+    if (!hasSubscriberToolsAccess()) {
+      state.upgradeModalOpen = true;
+      render();
+      return;
+    }
+
+    const incoming = Array.from(files || []);
+    if (!incoming.length) return;
+    const availableSlots = Math.max(0, imageConverterMaxFiles - (state.imageConverter.images || []).length);
+    if (!availableSlots) {
+      state.imageConverter.error = `الحد الأقصى ${imageConverterMaxFiles.toLocaleString("ar-SA")} صورة.`;
+      render();
+      return;
+    }
+
+    const added = [];
+    const rejected = [];
+    const limited = incoming.slice(0, availableSlots);
+    for (const file of limited) {
+      if (!isImageConverterFileAllowed(file)) {
+        rejected.push(file.name || "file");
+        continue;
+      }
+      if (Number(file.size || 0) > imageConverterMaxFileSize) {
+        rejected.push(file.name || "file");
+        continue;
+      }
+      try {
+        const bitmap = await createImageBitmap(file);
+        const previewUrl = URL.createObjectURL(file);
+        added.push({
+          id: createImageConverterImageId(),
+          file,
+          previewUrl,
+          name: file.name || "image",
+          size: file.size || 0,
+          type: file.type || "image",
+          width: bitmap.width,
+          height: bitmap.height
+        });
+        bitmap.close?.();
+      } catch (_) {
+        rejected.push(file.name || "file");
+      }
+    }
+
+    if (added.length) {
+      clearImageConverterResult("تمت إضافة الصور. اختر الصيغة والجودة ثم ابدأ التحويل.");
+      state.imageConverter.images = [...(state.imageConverter.images || []), ...added];
+      state.imageConverter.error = "";
+    }
+    if (incoming.length > availableSlots) {
+      state.imageConverter.status = `تمت إضافة الحد المتاح فقط. الحد الأقصى ${imageConverterMaxFiles.toLocaleString("ar-SA")} صورة.`;
+    }
+    if (rejected.length && !added.length) {
+      state.imageConverter.error = "اختر صور JPG أو PNG أو WebP فقط، وبحجم لا يتجاوز 20MB لكل صورة.";
+    } else if (rejected.length) {
+      state.imageConverter.status = "تم تجاهل بعض الملفات غير المدعومة أو الكبيرة.";
+    }
+    render();
+  }
+
+  function removeImageConverterImage(id) {
+    const images = state.imageConverter.images || [];
+    const target = images.find((image) => image.id === id);
+    if (target) revokeImageEnhancerUrl(target.previewUrl);
+    state.imageConverter.images = images.filter((image) => image.id !== id);
+    clearImageConverterResult(state.imageConverter.images.length ? "تم حذف الصورة من القائمة." : "");
+    render();
+  }
+
+  function getImageConverterOutputSize(originalWidth, originalHeight) {
+    const resizeMode = state.imageConverter.resizeMode || "original";
+    let width = Number(originalWidth || 1);
+    let height = Number(originalHeight || 1);
+
+    if (resizeMode === "small") {
+      width = Math.max(1, Math.round(width * 0.5));
+      height = Math.max(1, Math.round(height * 0.5));
+    } else if (resizeMode === "custom") {
+      const customWidth = Math.max(0, Math.round(Number(state.imageConverter.customWidth || 0)));
+      const customHeight = Math.max(0, Math.round(Number(state.imageConverter.customHeight || 0)));
+      if (customWidth && customHeight) {
+        width = customWidth;
+        height = customHeight;
+      } else if (customWidth) {
+        width = customWidth;
+        height = Math.max(1, Math.round(originalHeight * (customWidth / originalWidth)));
+      } else if (customHeight) {
+        height = customHeight;
+        width = Math.max(1, Math.round(originalWidth * (customHeight / originalHeight)));
+      }
+    }
+
+    width = Math.min(12000, Math.max(1, width));
+    height = Math.min(12000, Math.max(1, height));
+    if (width * height > imageEnhancerMaxOutputPixels) {
+      const ratio = Math.sqrt(imageEnhancerMaxOutputPixels / (width * height));
+      width = Math.max(1, Math.floor(width * ratio));
+      height = Math.max(1, Math.floor(height * ratio));
+    }
+    return { width, height };
+  }
+
+  function buildImageConverterFileName(originalName, targetFormat) {
+    const extension = imageConverterFormats[targetFormat]?.extension || "jpg";
+    const base = String(originalName || "orlixor-image")
+      .replace(/\.[^/.]+$/, "")
+      .replace(/[\\/:*?"<>|]+/g, "-")
+      .trim() || "orlixor-image";
+    return `${base}.${extension}`;
+  }
+
+  function imageConverterCanvasToBlob(canvas, type, quality) {
+    return new Promise((resolve) => {
+      canvas.toBlob((blob) => resolve(blob), type, quality);
+    });
+  }
+
+  async function convertImageConverterImage(image) {
+    const targetFormat = imageConverterFormats[state.imageConverter.targetFormat]
+      ? state.imageConverter.targetFormat
+      : "image/jpeg";
+    const quality = Math.max(0.1, Math.min(1, Number(state.imageConverter.quality || 0.85)));
+    const bitmap = await createImageBitmap(image.file);
+    const { width, height } = getImageConverterOutputSize(bitmap.width, bitmap.height);
+    const canvas = document.createElement("canvas");
+    const ctx = canvas.getContext("2d", { willReadFrequently: Boolean(state.imageConverter.enhance) });
+    canvas.width = width;
+    canvas.height = height;
+
+    if (targetFormat === "image/jpeg") {
+      ctx.fillStyle = "#ffffff";
+      ctx.fillRect(0, 0, width, height);
+    }
+
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = "high";
+    ctx.drawImage(bitmap, 0, 0, width, height);
+    bitmap.close?.();
+
+    if (state.imageConverter.enhance) {
+      applyBasicImageEnhancement(ctx, width, height, "light");
+    }
+
+    const blob = await imageConverterCanvasToBlob(canvas, targetFormat, quality);
+    if (!blob) throw new Error("image_export_failed");
+    if (targetFormat === "image/webp" && blob.type && blob.type !== "image/webp") {
+      throw new Error("webp_export_unsupported");
+    }
+
+    return {
+      blob,
+      fileName: buildImageConverterFileName(image.name, targetFormat)
+    };
+  }
+
+  async function convertImageConverterImagesToZip(images) {
+    const JSZip = await loadJsZip();
+    const zip = new JSZip();
+    for (let index = 0; index < images.length; index += 1) {
+      state.imageConverter.progress = Math.max(8, Math.round(((index + 1) / images.length) * 88));
+      state.imageConverter.status = `جاري تحويل الصورة ${index + 1} من ${images.length}...`;
+      render();
+      await new Promise((resolve) => window.requestAnimationFrame(resolve));
+      const result = await convertImageConverterImage(images[index]);
+      zip.file(`${String(index + 1).padStart(2, "0")}-${result.fileName}`, result.blob);
+    }
+    state.imageConverter.progress = 95;
+    state.imageConverter.status = "جاري ضغط الصور داخل ملف ZIP...";
+    render();
+    return zip.generateAsync({ type: "blob", compression: "DEFLATE" });
+  }
+
+  async function runImageConverterConversion() {
+    if (!hasSubscriberToolsAccess()) {
+      state.upgradeModalOpen = true;
+      render();
+      return;
+    }
+    const images = state.imageConverter.images || [];
+    if (!images.length) {
+      state.imageConverter.error = "أضف صورة واحدة على الأقل.";
+      render();
+      return;
+    }
+
+    state.imageConverter = {
+      ...state.imageConverter,
+      loading: true,
+      progress: 5,
+      error: "",
+      status: "جاري تجهيز التحويل داخل المتصفح..."
+    };
+    render();
+
+    try {
+      let blob;
+      let fileName;
+      if (images.length === 1) {
+        const result = await convertImageConverterImage(images[0]);
+        blob = result.blob;
+        fileName = result.fileName;
+      } else {
+        blob = await convertImageConverterImagesToZip(images);
+        fileName = "orlixor-converted-images.zip";
+      }
+
+      const resultUrl = URL.createObjectURL(blob);
+      revokeImageEnhancerUrl(state.imageConverter.resultUrl);
+      state.imageConverter = {
+        ...state.imageConverter,
+        resultUrl,
+        resultFileName: fileName,
+        resultSize: blob.size,
+        loading: false,
+        progress: 100,
+        error: "",
+        status: images.length === 1
+          ? "تم تحويل الصورة بنجاح. يمكنك تحميل النتيجة الآن."
+          : "تم تحويل الصور وتجهيز ملف ZIP بنجاح."
+      };
+      render();
+    } catch (error) {
+      state.imageConverter = {
+        ...state.imageConverter,
+        loading: false,
+        progress: 0,
+        error: String(error?.message || "").includes("webp")
+          ? "متصفحك لا يدعم تصدير WebP حاليًا. جرّب PNG أو JPG."
+          : "تعذر تحويل الصور داخل المتصفح. جرّب صورًا أصغر أو صيغة مختلفة.",
         status: ""
       };
       render();
@@ -3552,7 +3858,7 @@
       { key: "image-clarifier", title: "توضيح الصورة", description: "تحسين وضوح الصورة وإزالة الضبابية", icon: toolIcons.imagePlus },
       { key: "png-to-pdf", title: "تحويل PNG إلى PDF", description: "حول صور PNG إلى ملف PDF بسهولة", icon: toolIcons.pngPdf },
       { key: "pdf-to-png", title: "تحويل PDF إلى PNG", description: "حول صفحات PDF إلى صور PNG عالية الجودة", icon: toolIcons.pdfPng },
-      { title: "تحويل صيغة الصورة", description: "تحويل الصور بين مختلف الصيغ (JPG, PNG, WebP)", icon: toolIcons.image },
+      { key: "image-converter", title: "تحويل صيغة الصورة", description: "تحويل الصور بين مختلف الصيغ (JPG, PNG, WebP)", icon: toolIcons.image },
       { title: "تدوير الصورة", description: "تدوير الصور إلى أي اتجاه بسهولة", icon: icons.refresh },
       { title: "قص الصورة", description: "قص وتحديد الجزء المطلوب من الصورة", icon: toolIcons.crop },
       { title: "ضغط الصور", description: "تقليل حجم الصور مع الحفاظ على الجودة", icon: toolIcons.compress },
@@ -4423,6 +4729,207 @@
                 <small class="png-pdf-result-size">حجم الملف: ${escapeHtml(formatImageEnhancerFileSize(pdfPng.resultSize))}</small>
               ` : `
                 <small class="png-pdf-result-size">سيظهر زر التحميل بعد التحويل</small>
+              `}
+            </aside>
+          </section>
+        </div>
+      </section>
+    `;
+  }
+
+  function renderImageConverterMain() {
+    const converter = state.imageConverter || {};
+    const hasAccess = hasSubscriberToolsAccess();
+    const images = Array.isArray(converter.images) ? converter.images : [];
+    const hasImages = images.length > 0;
+    const hasResult = Boolean(converter.resultUrl);
+    const canConvert = hasAccess && hasImages && !converter.loading;
+    const targetFormat = imageConverterFormats[converter.targetFormat] ? converter.targetFormat : "image/jpeg";
+    const quality = String(converter.quality || "0.85");
+    const resizeMode = String(converter.resizeMode || "original");
+    const totalSize = images.reduce((sum, image) => sum + Number(image.size || 0), 0);
+    const convertedLabel = imageConverterFormats[targetFormat]?.label || "JPG";
+    const imageIcon = '<svg viewBox="0 0 24 24"><rect x="4" y="5" width="16" height="14" rx="2.5"/><path d="m7 16 3.2-3.2 2.7 2.7 2.3-2.3L19 17"/><circle cx="9" cy="10" r="1.4"/></svg>';
+    const uploadIcon = '<svg viewBox="0 0 24 24"><path d="M12 16V7"/><path d="m8.5 10.5 3.5-3.5 3.5 3.5"/><path d="M20 16.5a4.5 4.5 0 0 1-4.5 4.5h-7A5.5 5.5 0 0 1 8 10.02 6 6 0 0 1 19.74 12"/></svg>';
+    const downloadIcon = '<svg viewBox="0 0 24 24"><path d="M12 3v12"/><path d="m7.5 10.5 4.5 4.5 4.5-4.5"/><path d="M5 21h14"/></svg>';
+    const features = [
+      "دعم الصيغ الشائعة JPG و PNG و WebP",
+      "تحويل عدة صور في وقت واحد",
+      "الحفاظ على الجودة الأصلية",
+      "سرعة عالية ومعالجة آمنة",
+      "معاينة قبل التحويل"
+    ];
+
+    if (!hasAccess) {
+      return `
+        <section class="guest-main tools-main png-pdf-main image-converter-main" aria-label="تحويل صيغة الصورة">
+          <div class="png-pdf-page">
+            <button class="png-pdf-back" type="button" data-open-free-tools>
+              <span aria-hidden="true">←</span>
+              <b>العودة للأدوات</b>
+            </button>
+            <section class="png-pdf-locked">
+              <span aria-hidden="true">${icons.lock}</span>
+              <h1>هذه الأداة متاحة للمشتركين فقط</h1>
+              <p>فعّل باقة شرارة أو طويق أو الرائد لتحويل صيغ الصور داخل المتصفح بدون XP.</p>
+              <button type="button" data-open-upgrade>عرض الباقات</button>
+            </section>
+          </div>
+        </section>
+      `;
+    }
+
+    return `
+      <section class="guest-main tools-main png-pdf-main image-converter-main" aria-label="تحويل صيغة الصورة">
+        <div class="png-pdf-page">
+          <button class="png-pdf-back" type="button" data-open-free-tools>
+            <span aria-hidden="true">←</span>
+            <b>العودة للأدوات</b>
+          </button>
+
+          <header class="png-pdf-hero">
+            <span class="png-pdf-hero-icon" aria-hidden="true">${imageIcon}</span>
+            <div>
+              <span class="png-pdf-sparkles" aria-hidden="true">${icons.sparkle}</span>
+              <h1>تحويل صيغة الصورة</h1>
+              <p>حوّل صورك بين صيغ مختلفة بسهولة وسرعة مع الحفاظ على الجودة.</p>
+            </div>
+          </header>
+
+          <section class="png-pdf-top-grid">
+            <div class="png-pdf-upload-card">
+              <input data-image-converter-input type="file" accept="image/png,image/jpeg,image/webp" multiple hidden>
+              <div class="png-pdf-dropzone ${hasImages ? "has-images" : ""}" data-image-converter-dropzone>
+                <span class="png-pdf-upload-icon" aria-hidden="true">${uploadIcon}</span>
+                <h2>${hasImages ? `${images.length.toLocaleString("ar-SA")} صور جاهزة` : "اسحب وأفلت صورك هنا"}</h2>
+                <p>${hasImages ? `الحجم الإجمالي: ${escapeHtml(formatImageEnhancerFileSize(totalSize))}` : "أو انقر لاختيار الصور من جهازك"}</p>
+                <button class="png-pdf-primary" type="button" data-image-converter-choose>
+                  <span>اختيار الصور</span>
+                  ${icons.attach}
+                </button>
+                <small>JPG, PNG, WebP · الحد الأقصى 20MB لكل صورة</small>
+              </div>
+            </div>
+
+            <aside class="png-pdf-info-stack">
+              <article class="png-pdf-card">
+                <span class="png-pdf-card-icon" aria-hidden="true">${icons.star}</span>
+                <h2>ميزات الأداة</h2>
+                <ul>
+                  ${features.map((item) => `<li>${icons.sparkle}<span>${escapeHtml(item)}</span></li>`).join("")}
+                </ul>
+              </article>
+              <article class="png-pdf-privacy">
+                <span aria-hidden="true">${icons.lock}</span>
+                <div>
+                  <h2>خصوصيتك تهمنا</h2>
+                  <p>جميع صورك تتم معالجتها داخل متصفحك ولا يتم رفعها إلى خوادمنا.</p>
+                </div>
+              </article>
+            </aside>
+          </section>
+
+          <section class="png-pdf-workspace image-converter-workspace">
+            <article class="png-pdf-images-panel">
+              <header>
+                <h2>الصور المضافة (${images.length.toLocaleString("ar-SA")})</h2>
+                <div>
+                  <button type="button" data-image-converter-choose>${icons.plus}<span>إضافة المزيد</span></button>
+                  <button type="button" data-image-converter-reset ${hasImages ? "" : "disabled"}>${icons.delete}<span>حذف الكل</span></button>
+                </div>
+              </header>
+              <div class="png-pdf-images-list image-converter-images-list ${hasImages ? "" : "is-empty"}">
+                ${hasImages ? images.map((image) => `
+                  <article class="png-pdf-image-item image-converter-image-item">
+                    <button class="image-converter-remove" type="button" data-image-converter-remove="${escapeHtml(image.id)}" aria-label="حذف الصورة">×</button>
+                    <img src="${escapeHtml(image.previewUrl)}" alt="${escapeHtml(image.name)}">
+                    <div class="png-pdf-image-copy">
+                      <strong>${escapeHtml(image.name)}</strong>
+                      <small>${escapeHtml(formatImageEnhancerFileSize(image.size))}</small>
+                      <small>${escapeHtml(`${image.width} × ${image.height}`)}</small>
+                    </div>
+                    <span class="png-pdf-drag-handle" aria-hidden="true">⋮</span>
+                  </article>
+                `).join("") : `
+                  <div>
+                    <span aria-hidden="true">${imageIcon}</span>
+                    <p>أضف صور JPG أو PNG أو WebP لمعاينتها هنا قبل التحويل.</p>
+                  </div>
+                `}
+              </div>
+              <footer class="image-converter-panel-footer">
+                <span>${icons.sparkle}</span>
+                <b>${images.length.toLocaleString("ar-SA")} صور جاهزة للتحويل</b>
+              </footer>
+            </article>
+
+            <aside class="png-pdf-settings">
+              <article class="png-pdf-options image-converter-options">
+                <h2>خيارات التحويل</h2>
+                <label>
+                  <span>تحويل إلى</span>
+                  <div class="image-converter-format-tabs" role="group" aria-label="صيغة الإخراج">
+                    ${Object.entries(imageConverterFormats).map(([format, item]) => `
+                      <button class="${format === targetFormat ? "is-active" : ""}" type="button" data-image-converter-format="${escapeHtml(format)}">${escapeHtml(item.label)}</button>
+                    `).join("")}
+                  </div>
+                </label>
+                <label>
+                  <span>جودة الصورة</span>
+                  <select data-image-converter-quality>
+                    <option value="0.7" ${quality === "0.7" ? "selected" : ""}>متوسطة</option>
+                    <option value="0.85" ${quality === "0.85" ? "selected" : ""}>عالية</option>
+                    <option value="0.95" ${quality === "0.95" ? "selected" : ""}>عالية جدًا</option>
+                  </select>
+                </label>
+                <label>
+                  <span>الحجم</span>
+                  <select data-image-converter-resize>
+                    <option value="original" ${resizeMode === "original" ? "selected" : ""}>نفس الحجم الأصلي</option>
+                    <option value="small" ${resizeMode === "small" ? "selected" : ""}>تصغير 50%</option>
+                    <option value="custom" ${resizeMode === "custom" ? "selected" : ""}>مقاس مخصص</option>
+                  </select>
+                </label>
+                <div class="image-converter-custom-size ${resizeMode === "custom" ? "" : "is-hidden"}">
+                  <label>
+                    <span>العرض</span>
+                    <input data-image-converter-custom="width" type="number" min="1" max="12000" value="${escapeHtml(converter.customWidth || "")}" placeholder="العرض">
+                  </label>
+                  <label>
+                    <span>الارتفاع</span>
+                    <input data-image-converter-custom="height" type="number" min="1" max="12000" value="${escapeHtml(converter.customHeight || "")}" placeholder="الارتفاع">
+                  </label>
+                </div>
+                <label class="png-pdf-toggle">
+                  <input type="checkbox" data-image-converter-enhance ${converter.enhance ? "checked" : ""}>
+                  <span>تحسين بسيط قبل التحويل</span>
+                </label>
+              </article>
+
+              <article class="png-pdf-tips image-converter-tip">
+                <h2>نصيحة</h2>
+                <p>للحصول على أفضل جودة، اختر JPG بجودة عالية للصور العادية، وPNG عند الحاجة للشفافية.</p>
+              </article>
+
+              ${converter.loading || converter.status || converter.error ? `
+                <section class="png-pdf-status ${converter.error ? "is-error" : ""}">
+                  <p>${escapeHtml(converter.error || converter.status || "")}</p>
+                  ${converter.loading ? `<span><i style="width:${Math.max(8, Math.min(100, Number(converter.progress || 0)))}%"></i></span>` : ""}
+                </section>
+              ` : ""}
+
+              <button class="png-pdf-convert" type="button" data-image-converter-convert ${canConvert ? "" : "disabled"}>
+                ${converter.loading ? "جاري التحويل..." : `تحويل الصور (${images.length.toLocaleString("ar-SA")})`}
+                ${icons.sparkle}
+              </button>
+              ${hasResult ? `
+                <a class="png-pdf-download" href="${escapeHtml(converter.resultUrl)}" download="${escapeHtml(converter.resultFileName || "orlixor-converted-image.jpg")}">
+                  <span>${images.length > 1 ? "تحميل ZIP" : `تحميل ${escapeHtml(convertedLabel)}`}</span>
+                  ${downloadIcon}
+                </a>
+                <small class="png-pdf-result-size">حجم الملف: ${escapeHtml(formatImageEnhancerFileSize(converter.resultSize))}</small>
+              ` : `
+                <small class="png-pdf-result-size">سيتم تحويل الصور وتحميلها كاملة عند الضغط على التحويل</small>
               `}
             </aside>
           </section>
@@ -5657,6 +6164,9 @@
       if (state.toolView === "pdf-to-png") {
         return renderPdfToPngMain(profile);
       }
+      if (state.toolView === "image-converter") {
+        return renderImageConverterMain(profile);
+      }
       return renderToolsMain(profile);
     }
     if (isHomeWorkspace) {
@@ -5944,7 +6454,7 @@
   function renderShell() {
     const profile = getProfile();
     const isToolsWorkspace = state.section === "ai-tools";
-    const isSubscriberTools = isToolsWorkspace && ["subscriber-tools", "image-enhancer", "image-clarifier", "png-to-pdf", "pdf-to-png"].includes(state.toolView);
+    const isSubscriberTools = isToolsWorkspace && ["subscriber-tools", "image-enhancer", "image-clarifier", "png-to-pdf", "pdf-to-png", "image-converter"].includes(state.toolView);
     app.innerHTML = `
       <div class="guest-shell ${state.theme === "dark" ? "theme-dark" : ""} ${isHomeWorkspace ? "is-home-workspace" : ""} ${isToolsWorkspace ? "is-tools-workspace" : ""} ${isSubscriberTools ? "is-subscriber-tools" : ""} ${state.sidebarCollapsed ? "is-sidebar-collapsed" : ""}">
         ${renderSidebar()}
@@ -7389,6 +7899,42 @@
         return;
       }
 
+      if (event.target.closest("[data-image-converter-choose]")) {
+        if (!hasSubscriberToolsAccess()) {
+          state.upgradeModalOpen = true;
+          render();
+          return;
+        }
+        app.querySelector("[data-image-converter-input]")?.click();
+        return;
+      }
+
+      if (event.target.closest("[data-image-converter-convert]")) {
+        await runImageConverterConversion();
+        return;
+      }
+
+      if (event.target.closest("[data-image-converter-reset]")) {
+        resetImageConverterState();
+        render();
+        return;
+      }
+
+      const imageConverterRemove = event.target.closest("[data-image-converter-remove]");
+      if (imageConverterRemove) {
+        removeImageConverterImage(imageConverterRemove.getAttribute("data-image-converter-remove") || "");
+        return;
+      }
+
+      const imageConverterFormat = event.target.closest("[data-image-converter-format]");
+      if (imageConverterFormat) {
+        const nextFormat = imageConverterFormat.getAttribute("data-image-converter-format") || "image/jpeg";
+        state.imageConverter.targetFormat = imageConverterFormats[nextFormat] ? nextFormat : "image/jpeg";
+        clearImageConverterResult("الإعدادات تغيّرت. شغّل التحويل من جديد.");
+        render();
+        return;
+      }
+
       const pngPdfRemove = event.target.closest("[data-png-pdf-remove]");
       if (pngPdfRemove) {
         removePngToPdfImage(pngPdfRemove.getAttribute("data-png-pdf-remove") || "");
@@ -7486,6 +8032,18 @@
             return;
           }
           state.toolView = "pdf-to-png";
+          state.openThreadMenuId = "";
+          state.modelMenuOpen = false;
+          render();
+          return;
+        }
+        if (toolKey === "image-converter") {
+          if (!hasSubscriberToolsAccess()) {
+            state.upgradeModalOpen = true;
+            render();
+            return;
+          }
+          state.toolView = "image-converter";
           state.openThreadMenuId = "";
           state.modelMenuOpen = false;
           render();
@@ -7983,6 +8541,18 @@
         state.pdfToPng.customPages = pdfPngCustomPages.value;
         clearPdfToPngResult("الإعدادات تغيّرت. شغّل التحويل من جديد.");
       }
+
+      const imageConverterCustom = event.target.closest("[data-image-converter-custom]");
+      if (imageConverterCustom) {
+        const key = imageConverterCustom.getAttribute("data-image-converter-custom");
+        if (key === "width") {
+          state.imageConverter.customWidth = imageConverterCustom.value;
+        }
+        if (key === "height") {
+          state.imageConverter.customHeight = imageConverterCustom.value;
+        }
+        clearImageConverterResult("الإعدادات تغيّرت. شغّل التحويل من جديد.");
+      }
     });
 
     app.addEventListener("change", async (event) => {
@@ -8098,6 +8668,41 @@
       if (pdfPngPageMode) {
         state.pdfToPng.pageMode = pdfPngPageMode.value === "custom" ? "custom" : "all";
         clearPdfToPngResult("الإعدادات تغيّرت. شغّل التحويل من جديد.");
+        render();
+        return;
+      }
+
+      const imageConverterInput = event.target.closest("[data-image-converter-input]");
+      if (imageConverterInput) {
+        await addImageConverterFiles(imageConverterInput.files);
+        imageConverterInput.value = "";
+        return;
+      }
+
+      const imageConverterQuality = event.target.closest("[data-image-converter-quality]");
+      if (imageConverterQuality) {
+        state.imageConverter.quality = ["0.7", "0.85", "0.95"].includes(imageConverterQuality.value)
+          ? imageConverterQuality.value
+          : "0.85";
+        clearImageConverterResult("الإعدادات تغيّرت. شغّل التحويل من جديد.");
+        render();
+        return;
+      }
+
+      const imageConverterResize = event.target.closest("[data-image-converter-resize]");
+      if (imageConverterResize) {
+        state.imageConverter.resizeMode = ["original", "small", "custom"].includes(imageConverterResize.value)
+          ? imageConverterResize.value
+          : "original";
+        clearImageConverterResult("الإعدادات تغيّرت. شغّل التحويل من جديد.");
+        render();
+        return;
+      }
+
+      const imageConverterEnhance = event.target.closest("[data-image-converter-enhance]");
+      if (imageConverterEnhance) {
+        state.imageConverter.enhance = Boolean(imageConverterEnhance.checked);
+        clearImageConverterResult("الإعدادات تغيّرت. شغّل التحويل من جديد.");
         render();
         return;
       }
@@ -8290,14 +8895,14 @@
         event.preventDefault();
         return;
       }
-      const dropZone = event.target.closest?.("[data-image-enhancer-dropzone], [data-image-clarifier-dropzone], [data-png-pdf-dropzone], [data-pdf-png-dropzone]");
+      const dropZone = event.target.closest?.("[data-image-enhancer-dropzone], [data-image-clarifier-dropzone], [data-png-pdf-dropzone], [data-pdf-png-dropzone], [data-image-converter-dropzone]");
       if (!dropZone) return;
       event.preventDefault();
       dropZone.classList.add("is-drag-over");
     });
 
     app.addEventListener("dragleave", (event) => {
-      const dropZone = event.target.closest?.("[data-image-enhancer-dropzone], [data-image-clarifier-dropzone], [data-png-pdf-dropzone], [data-pdf-png-dropzone]");
+      const dropZone = event.target.closest?.("[data-image-enhancer-dropzone], [data-image-clarifier-dropzone], [data-png-pdf-dropzone], [data-pdf-png-dropzone], [data-image-converter-dropzone]");
       if (!dropZone) return;
       dropZone.classList.remove("is-drag-over");
     });
@@ -8312,7 +8917,7 @@
         );
         return;
       }
-      const dropZone = event.target.closest?.("[data-image-enhancer-dropzone], [data-image-clarifier-dropzone], [data-png-pdf-dropzone], [data-pdf-png-dropzone]");
+      const dropZone = event.target.closest?.("[data-image-enhancer-dropzone], [data-image-clarifier-dropzone], [data-png-pdf-dropzone], [data-pdf-png-dropzone], [data-image-converter-dropzone]");
       if (!dropZone) return;
       event.preventDefault();
       dropZone.classList.remove("is-drag-over");
@@ -8320,6 +8925,8 @@
         await addPngToPdfFiles(event.dataTransfer?.files);
       } else if (dropZone.matches("[data-pdf-png-dropzone]")) {
         await handlePdfToPngFile(event.dataTransfer?.files?.[0]);
+      } else if (dropZone.matches("[data-image-converter-dropzone]")) {
+        await addImageConverterFiles(event.dataTransfer?.files);
       } else if (dropZone.matches("[data-image-clarifier-dropzone]")) {
         await handleImageClarifierFile(event.dataTransfer?.files?.[0]);
       } else {
