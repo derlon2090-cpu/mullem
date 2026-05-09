@@ -568,6 +568,33 @@
       status: "",
       bitmap: null
     },
+    imageCropper: {
+      fileName: "",
+      fileSize: 0,
+      fileType: "",
+      width: 0,
+      height: 0,
+      cropX: 0,
+      cropY: 0,
+      cropWidth: 0,
+      cropHeight: 0,
+      aspectRatio: "free",
+      customWidth: "",
+      customHeight: "",
+      zoom: 1,
+      enhance: false,
+      resultUrl: "",
+      resultFileName: "",
+      resultSize: 0,
+      loading: false,
+      progress: 0,
+      error: "",
+      status: "",
+      dragging: false,
+      dragOffsetX: 0,
+      dragOffsetY: 0,
+      bitmap: null
+    },
     upgradeModalOpen: false,
     balancePanelOpen: false,
     openThreadMenuId: "",
@@ -1379,6 +1406,15 @@
   };
   const imageRotatorAllowedTypes = ["image/jpeg", "image/png", "image/webp"];
   const imageRotatorMaxFileSize = 20 * 1024 * 1024;
+  const imageCropperAllowedTypes = ["image/jpeg", "image/png", "image/webp"];
+  const imageCropperMaxFileSize = 20 * 1024 * 1024;
+  const imageCropperAspectRatios = {
+    free: null,
+    "1:1": 1,
+    "4:3": 4 / 3,
+    "16:9": 16 / 9,
+    "3:2": 3 / 2
+  };
 
   function formatImageEnhancerFileSize(bytes) {
     const value = Number(bytes || 0);
@@ -2769,6 +2805,452 @@
         loading: false,
         progress: 0,
         error: "تعذر تجهيز الصورة للتحميل. جرّب صورة أصغر.",
+        status: ""
+      };
+      render();
+    }
+  }
+
+  function getImageCropperFileType(file) {
+    if (imageCropperAllowedTypes.includes(file?.type)) return file.type;
+    const name = String(file?.name || "").toLowerCase();
+    if (name.endsWith(".jpg") || name.endsWith(".jpeg")) return "image/jpeg";
+    if (name.endsWith(".png")) return "image/png";
+    if (name.endsWith(".webp")) return "image/webp";
+    return "";
+  }
+
+  function getImageCropperExtension(type, fileName = "") {
+    const fromType = imageConverterFormats[type]?.extension;
+    if (fromType) return fromType;
+    const match = String(fileName || "").match(/\.([a-z0-9]+)$/i);
+    return (match?.[1] || "png").toLowerCase();
+  }
+
+  function buildImageCropperFileName(fileName, type) {
+    const base = String(fileName || "orlixor-image")
+      .replace(/\.[^/.]+$/, "")
+      .replace(/[\\/:*?"<>|]+/g, "-")
+      .trim() || "orlixor-image";
+    return `${base}-cropped.${getImageCropperExtension(type, fileName)}`;
+  }
+
+  function clearImageCropperResult(status = "") {
+    revokeImageEnhancerUrl(state.imageCropper.resultUrl);
+    state.imageCropper = {
+      ...state.imageCropper,
+      resultUrl: "",
+      resultFileName: "",
+      resultSize: 0,
+      progress: 0,
+      error: "",
+      status
+    };
+  }
+
+  function resetImageCropperState() {
+    revokeImageEnhancerUrl(state.imageCropper.resultUrl);
+    try {
+      state.imageCropper.bitmap?.close?.();
+    } catch (_) {
+      // Ignore bitmap cleanup errors.
+    }
+    state.imageCropper = {
+      fileName: "",
+      fileSize: 0,
+      fileType: "",
+      width: 0,
+      height: 0,
+      cropX: 0,
+      cropY: 0,
+      cropWidth: 0,
+      cropHeight: 0,
+      aspectRatio: "free",
+      customWidth: "",
+      customHeight: "",
+      zoom: 1,
+      enhance: false,
+      resultUrl: "",
+      resultFileName: "",
+      resultSize: 0,
+      loading: false,
+      progress: 0,
+      error: "",
+      status: "",
+      dragging: false,
+      dragOffsetX: 0,
+      dragOffsetY: 0,
+      bitmap: null
+    };
+  }
+
+  function getInitialImageCropperCrop(width, height) {
+    return {
+      cropX: Math.round(width * 0.15),
+      cropY: Math.round(height * 0.15),
+      cropWidth: Math.max(1, Math.round(width * 0.7)),
+      cropHeight: Math.max(1, Math.round(height * 0.7))
+    };
+  }
+
+  function normalizeImageCropperCrop(partial = {}) {
+    const cropper = state.imageCropper;
+    const imageWidth = Math.max(1, Number(cropper.width || cropper.bitmap?.width || 1));
+    const imageHeight = Math.max(1, Number(cropper.height || cropper.bitmap?.height || 1));
+    let cropWidth = Math.round(Number(partial.cropWidth ?? cropper.cropWidth) || Math.round(imageWidth * 0.7));
+    let cropHeight = Math.round(Number(partial.cropHeight ?? cropper.cropHeight) || Math.round(imageHeight * 0.7));
+    let cropX = Math.round(Number(partial.cropX ?? cropper.cropX) || 0);
+    let cropY = Math.round(Number(partial.cropY ?? cropper.cropY) || 0);
+
+    cropWidth = Math.max(1, Math.min(cropWidth, imageWidth));
+    cropHeight = Math.max(1, Math.min(cropHeight, imageHeight));
+    cropX = Math.max(0, Math.min(cropX, imageWidth - cropWidth));
+    cropY = Math.max(0, Math.min(cropY, imageHeight - cropHeight));
+
+    return { cropX, cropY, cropWidth, cropHeight };
+  }
+
+  function setImageCropperCrop(partial = {}, status = "") {
+    const crop = normalizeImageCropperCrop(partial);
+    state.imageCropper = {
+      ...state.imageCropper,
+      ...crop
+    };
+    clearImageCropperResult(status);
+  }
+
+  function applyImageCropperAspectRatio(ratioKey) {
+    if (!state.imageCropper.bitmap) {
+      state.imageCropper.aspectRatio = ratioKey;
+      render();
+      return;
+    }
+    const ratio = imageCropperAspectRatios[ratioKey] || null;
+    state.imageCropper.aspectRatio = ratioKey;
+    if (!ratio) {
+      clearImageCropperResult("تم اختيار القص الحر.");
+      render();
+      return;
+    }
+    const current = normalizeImageCropperCrop();
+    let cropWidth = current.cropWidth;
+    let cropHeight = Math.round(cropWidth / ratio);
+    if (current.cropY + cropHeight > state.imageCropper.height) {
+      cropHeight = Math.max(1, state.imageCropper.height - current.cropY);
+      cropWidth = Math.round(cropHeight * ratio);
+    }
+    setImageCropperCrop({ cropWidth, cropHeight }, "تم تحديث نسبة القص.");
+    render();
+  }
+
+  function moveImageCropperCrop(dx, dy) {
+    if (!state.imageCropper.bitmap) return;
+    const stepX = Math.max(8, Math.round(state.imageCropper.width * 0.035));
+    const stepY = Math.max(8, Math.round(state.imageCropper.height * 0.035));
+    setImageCropperCrop({
+      cropX: state.imageCropper.cropX + dx * stepX,
+      cropY: state.imageCropper.cropY + dy * stepY
+    }, "تم تحريك منطقة القص.");
+    render();
+  }
+
+  function updateImageCropperZoom(delta) {
+    const current = Number(state.imageCropper.zoom || 1);
+    state.imageCropper.zoom = Math.max(0.65, Math.min(1.45, Number((current + delta).toFixed(2))));
+    render();
+  }
+
+  function getImageCropperCanvasPoint(event, canvas) {
+    const rect = canvas.getBoundingClientRect();
+    if (!rect.width || !rect.height) return { x: 0, y: 0 };
+    return {
+      x: Math.round((event.clientX - rect.left) * (canvas.width / rect.width)),
+      y: Math.round((event.clientY - rect.top) * (canvas.height / rect.height))
+    };
+  }
+
+  function isPointInsideImageCropperCrop(point) {
+    const crop = normalizeImageCropperCrop();
+    return point.x >= crop.cropX
+      && point.x <= crop.cropX + crop.cropWidth
+      && point.y >= crop.cropY
+      && point.y <= crop.cropY + crop.cropHeight;
+  }
+
+  function drawImageCropperPreview() {
+    const cropper = state.imageCropper;
+    const canvas = app.querySelector("[data-image-cropper-canvas]");
+    if (!canvas || !cropper.bitmap) return;
+    const ctx = canvas.getContext("2d");
+    const crop = normalizeImageCropperCrop();
+    canvas.width = cropper.bitmap.width;
+    canvas.height = cropper.bitmap.height;
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = "high";
+    ctx.drawImage(cropper.bitmap, 0, 0);
+    ctx.save();
+    ctx.fillStyle = "rgba(7, 12, 30, 0.58)";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.drawImage(
+      cropper.bitmap,
+      crop.cropX,
+      crop.cropY,
+      crop.cropWidth,
+      crop.cropHeight,
+      crop.cropX,
+      crop.cropY,
+      crop.cropWidth,
+      crop.cropHeight
+    );
+    ctx.strokeStyle = "#ffffff";
+    ctx.lineWidth = Math.max(2, Math.round(canvas.width / 450));
+    ctx.strokeRect(crop.cropX, crop.cropY, crop.cropWidth, crop.cropHeight);
+    ctx.strokeStyle = "rgba(255, 255, 255, 0.72)";
+    ctx.lineWidth = Math.max(1, Math.round(canvas.width / 1200));
+    for (let index = 1; index < 3; index += 1) {
+      const gridX = crop.cropX + (crop.cropWidth / 3) * index;
+      const gridY = crop.cropY + (crop.cropHeight / 3) * index;
+      ctx.beginPath();
+      ctx.moveTo(gridX, crop.cropY);
+      ctx.lineTo(gridX, crop.cropY + crop.cropHeight);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(crop.cropX, gridY);
+      ctx.lineTo(crop.cropX + crop.cropWidth, gridY);
+      ctx.stroke();
+    }
+    const handle = Math.max(10, Math.round(canvas.width / 120));
+    const points = [
+      [crop.cropX, crop.cropY],
+      [crop.cropX + crop.cropWidth, crop.cropY],
+      [crop.cropX, crop.cropY + crop.cropHeight],
+      [crop.cropX + crop.cropWidth, crop.cropY + crop.cropHeight]
+    ];
+    ctx.fillStyle = "#ffffff";
+    points.forEach(([x, y]) => {
+      ctx.fillRect(x - handle / 2, y - handle / 2, handle, handle);
+    });
+    ctx.restore();
+    canvas.style.cursor = cropper.dragging ? "grabbing" : "grab";
+  }
+
+  async function handleImageCropperFile(file) {
+    if (!hasSubscriberToolsAccess()) {
+      state.upgradeModalOpen = true;
+      render();
+      return;
+    }
+    if (!file) return;
+    const fileType = getImageCropperFileType(file);
+    if (!fileType) {
+      state.imageCropper.error = "صيغة الصورة غير مدعومة. استخدم JPG أو PNG أو WebP.";
+      render();
+      return;
+    }
+    if (Number(file.size || 0) > imageCropperMaxFileSize) {
+      state.imageCropper.error = "حجم الصورة كبير جدًا. الحد الأقصى 20MB.";
+      render();
+      return;
+    }
+
+    revokeImageEnhancerUrl(state.imageCropper.resultUrl);
+    try {
+      state.imageCropper.bitmap?.close?.();
+    } catch (_) {
+      // Ignore bitmap cleanup errors.
+    }
+
+    state.imageCropper = {
+      ...state.imageCropper,
+      fileName: file.name || "image",
+      fileSize: file.size || 0,
+      fileType,
+      width: 0,
+      height: 0,
+      resultUrl: "",
+      resultFileName: "",
+      resultSize: 0,
+      loading: true,
+      progress: 35,
+      error: "",
+      status: "جاري قراءة الصورة داخل المتصفح...",
+      dragging: false,
+      bitmap: null
+    };
+    render();
+
+    try {
+      const bitmap = await createImageBitmap(file);
+      const crop = getInitialImageCropperCrop(bitmap.width, bitmap.height);
+      state.imageCropper = {
+        ...state.imageCropper,
+        bitmap,
+        width: bitmap.width,
+        height: bitmap.height,
+        ...crop,
+        aspectRatio: "free",
+        customWidth: String(crop.cropWidth),
+        customHeight: String(crop.cropHeight),
+        zoom: 1,
+        loading: false,
+        progress: 0,
+        error: "",
+        status: "تم تحميل الصورة. حرّك مربع القص أو اختر نسبة جاهزة."
+      };
+      render();
+    } catch (_) {
+      state.imageCropper = {
+        ...state.imageCropper,
+        bitmap: null,
+        loading: false,
+        progress: 0,
+        error: "تعذر قراءة الصورة داخل المتصفح. جرّب صورة أخرى.",
+        status: ""
+      };
+      render();
+    }
+  }
+
+  function imageCropperCanvasToBlob(canvas, type) {
+    return new Promise((resolve) => {
+      canvas.toBlob((blob) => resolve(blob), type || "image/png", 0.95);
+    });
+  }
+
+  async function runImageCropperExport() {
+    if (!hasSubscriberToolsAccess()) {
+      state.upgradeModalOpen = true;
+      render();
+      return;
+    }
+    const cropper = state.imageCropper;
+    if (!cropper.bitmap) {
+      state.imageCropper.error = "اختر صورة أولًا.";
+      render();
+      return;
+    }
+    const crop = normalizeImageCropperCrop();
+    state.imageCropper = {
+      ...state.imageCropper,
+      loading: true,
+      progress: 65,
+      error: "",
+      status: "جاري قص الصورة داخل المتصفح..."
+    };
+    render();
+    try {
+      const type = state.imageCropper.fileType || "image/png";
+      const outputCanvas = document.createElement("canvas");
+      const outputCtx = outputCanvas.getContext("2d", { willReadFrequently: Boolean(state.imageCropper.enhance) });
+      outputCanvas.width = crop.cropWidth;
+      outputCanvas.height = crop.cropHeight;
+      if (type === "image/jpeg") {
+        outputCtx.fillStyle = "#ffffff";
+        outputCtx.fillRect(0, 0, outputCanvas.width, outputCanvas.height);
+      }
+      outputCtx.imageSmoothingEnabled = true;
+      outputCtx.imageSmoothingQuality = "high";
+      outputCtx.drawImage(
+        state.imageCropper.bitmap,
+        crop.cropX,
+        crop.cropY,
+        crop.cropWidth,
+        crop.cropHeight,
+        0,
+        0,
+        crop.cropWidth,
+        crop.cropHeight
+      );
+      if (state.imageCropper.enhance) {
+        applyBasicImageEnhancement(outputCtx, outputCanvas.width, outputCanvas.height, "light");
+      }
+      const blob = await imageCropperCanvasToBlob(outputCanvas, type);
+      if (!blob) throw new Error("crop_export_failed");
+      const resultUrl = URL.createObjectURL(blob);
+      revokeImageEnhancerUrl(state.imageCropper.resultUrl);
+      state.imageCropper = {
+        ...state.imageCropper,
+        resultUrl,
+        resultFileName: buildImageCropperFileName(state.imageCropper.fileName, type),
+        resultSize: blob.size,
+        loading: false,
+        progress: 100,
+        error: "",
+        status: "تم قص الصورة بنجاح. يمكنك تحميل النتيجة الآن."
+      };
+      render();
+    } catch (_) {
+      state.imageCropper = {
+        ...state.imageCropper,
+        loading: false,
+        progress: 0,
+        error: "تعذر قص الصورة. جرّب تحديد مساحة أصغر.",
+        status: ""
+      };
+      render();
+    }
+  }
+
+  async function rotateImageCropperSource(degrees) {
+    if (!state.imageCropper.bitmap) {
+      state.imageCropper.error = "اختر صورة أولًا.";
+      render();
+      return;
+    }
+    const angle = Number(degrees || 0);
+    if (!angle) return;
+    state.imageCropper = {
+      ...state.imageCropper,
+      loading: true,
+      progress: 45,
+      error: "",
+      status: "جاري تدوير الصورة قبل القص..."
+    };
+    render();
+    try {
+      const type = state.imageCropper.fileType || "image/png";
+      const canvas = createImageRotatorCanvas({
+        bitmap: state.imageCropper.bitmap,
+        angle,
+        keepSize: false,
+        enhance: false,
+        type
+      });
+      const blob = await imageRotatorCanvasToBlob(canvas, type);
+      if (!blob) throw new Error("cropper_rotate_failed");
+      const bitmap = await createImageBitmap(blob);
+      try {
+        state.imageCropper.bitmap?.close?.();
+      } catch (_) {
+        // Ignore bitmap cleanup errors.
+      }
+      revokeImageEnhancerUrl(state.imageCropper.resultUrl);
+      const crop = getInitialImageCropperCrop(bitmap.width, bitmap.height);
+      state.imageCropper = {
+        ...state.imageCropper,
+        bitmap,
+        width: bitmap.width,
+        height: bitmap.height,
+        ...crop,
+        aspectRatio: "free",
+        customWidth: String(crop.cropWidth),
+        customHeight: String(crop.cropHeight),
+        resultUrl: "",
+        resultFileName: "",
+        resultSize: 0,
+        loading: false,
+        progress: 0,
+        error: "",
+        status: "تم تدوير الصورة. حدّد منطقة القص من جديد."
+      };
+      render();
+    } catch (_) {
+      state.imageCropper = {
+        ...state.imageCropper,
+        loading: false,
+        progress: 0,
+        error: "تعذر تدوير الصورة قبل القص. جرّب صورة أخرى.",
         status: ""
       };
       render();
@@ -4228,7 +4710,7 @@
       { key: "pdf-to-png", title: "تحويل PDF إلى PNG", description: "حول صفحات PDF إلى صور PNG عالية الجودة", icon: toolIcons.pdfPng },
       { key: "image-converter", title: "تحويل صيغة الصورة", description: "تحويل الصور بين مختلف الصيغ (JPG, PNG, WebP)", icon: toolIcons.image },
       { key: "image-rotator", title: "تدوير الصورة", description: "تدوير الصور إلى أي اتجاه بسهولة", icon: icons.refresh },
-      { title: "قص الصورة", description: "قص وتحديد الجزء المطلوب من الصورة", icon: toolIcons.crop },
+      { key: "image-cropper", title: "قص الصورة", description: "قص وتحديد الجزء المطلوب من الصورة", icon: toolIcons.crop },
       { title: "ضغط الصور", description: "تقليل حجم الصور مع الحفاظ على الجودة", icon: toolIcons.compress },
       { title: "إزالة حماية PDF", description: "إزالة كلمة المرور من ملفات PDF", icon: toolIcons.unlock },
       { title: "حماية PDF", description: "إضافة كلمة مرور لحماية ملفات PDF", icon: icons.lock },
@@ -5471,6 +5953,207 @@
     `;
   }
 
+  function renderImageCropperMain() {
+    const cropper = state.imageCropper || {};
+    const hasAccess = hasSubscriberToolsAccess();
+    const hasImage = Boolean(cropper.bitmap);
+    const hasResult = Boolean(cropper.resultUrl);
+    const canExport = hasAccess && hasImage && !cropper.loading;
+    const crop = hasImage ? normalizeImageCropperCrop() : { cropX: 0, cropY: 0, cropWidth: 0, cropHeight: 0 };
+    const zoom = Math.round(Number(cropper.zoom || 1) * 100);
+    const fileTypeLabel = imageConverterFormats[cropper.fileType]?.label || (cropper.fileType ? cropper.fileType.replace("image/", "").toUpperCase() : "-");
+    const cropIcon = '<svg viewBox="0 0 24 24"><path d="M6 3v13a2 2 0 0 0 2 2h13"/><path d="M3 6h13a2 2 0 0 1 2 2v13"/><path d="M9 9h6v6H9z"/></svg>';
+    const uploadIcon = '<svg viewBox="0 0 24 24"><path d="M12 16V7"/><path d="m8.5 10.5 3.5-3.5 3.5 3.5"/><path d="M20 16.5a4.5 4.5 0 0 1-4.5 4.5h-7A5.5 5.5 0 0 1 8 10.02 6 6 0 0 1 19.74 12"/></svg>';
+    const downloadIcon = '<svg viewBox="0 0 24 24"><path d="M12 3v12"/><path d="m7.5 10.5 4.5 4.5 4.5-4.5"/><path d="M5 21h14"/></svg>';
+    const expandIcon = '<svg viewBox="0 0 24 24"><path d="M8 3H3v5M16 3h5v5M21 16v5h-5M3 16v5h5"/></svg>';
+    const tips = [
+      "اسحب مربع القص أو استخدم أزرار التحريك",
+      "اختر نسبة جاهزة للحصول على مقاس مضبوط",
+      "يمكن إدخال عرض وارتفاع مخصصين",
+      "صورك لا تغادر متصفحك"
+    ];
+    const ratios = [
+      ["free", "حرة"],
+      ["1:1", "1:1"],
+      ["4:3", "4:3"],
+      ["16:9", "16:9"],
+      ["3:2", "3:2"]
+    ];
+    const moveButtons = [
+      ["-1,-1", "↖"], ["0,-1", "↑"], ["1,-1", "↗"],
+      ["-1,0", "←"], ["0,0", "⌾"], ["1,0", "→"],
+      ["-1,1", "↙"], ["0,1", "↓"], ["1,1", "↘"]
+    ];
+
+    if (!hasAccess) {
+      return `
+        <section class="guest-main tools-main png-pdf-main image-cropper-main" aria-label="قص الصورة">
+          <div class="png-pdf-page">
+            <button class="png-pdf-back" type="button" data-open-free-tools>
+              <span aria-hidden="true">←</span>
+              <b>العودة للأدوات</b>
+            </button>
+            <section class="png-pdf-locked">
+              <span aria-hidden="true">${icons.lock}</span>
+              <h1>هذه الأداة متاحة للمشتركين فقط</h1>
+              <p>فعّل باقة شرارة أو طويق أو الرائد لقص الصور داخل المتصفح بدون XP.</p>
+              <button type="button" data-open-upgrade>عرض الباقات</button>
+            </section>
+          </div>
+        </section>
+      `;
+    }
+
+    return `
+      <section class="guest-main tools-main png-pdf-main image-cropper-main" aria-label="قص الصورة">
+        <div class="png-pdf-page">
+          <button class="png-pdf-back" type="button" data-open-free-tools>
+            <span aria-hidden="true">←</span>
+            <b>العودة للأدوات</b>
+          </button>
+
+          <header class="png-pdf-hero image-rotator-hero">
+            <span class="png-pdf-hero-icon" aria-hidden="true">${cropIcon}</span>
+            <div>
+              <h1>قص الصورة</h1>
+              <p>قص وتحديد الجزء المطلوب من الصورة بسهولة.</p>
+            </div>
+          </header>
+
+          <section class="image-rotator-layout image-cropper-layout">
+            <aside class="image-rotator-left">
+              <article class="png-pdf-upload-card">
+                <input data-image-cropper-input type="file" accept="image/png,image/jpeg,image/webp" hidden>
+                <div class="png-pdf-dropzone ${hasImage ? "has-images" : ""}" data-image-cropper-dropzone>
+                  <span class="png-pdf-upload-icon" aria-hidden="true">${uploadIcon}</span>
+                  <h2>${hasImage ? "صورتك جاهزة للقص" : "اسحب وأفلت صورتك هنا"}</h2>
+                  <p>${hasImage ? escapeHtml(cropper.fileName || "image") : "أو انقر لاختيار صورة من جهازك"}</p>
+                  <button class="png-pdf-primary" type="button" data-image-cropper-choose>
+                    <span>اختيار صورة</span>
+                    ${icons.attach}
+                  </button>
+                  <small>JPG, PNG, WebP · الحد الأقصى 20MB لكل صورة</small>
+                </div>
+              </article>
+
+              <article class="png-pdf-card image-cropper-info">
+                <span class="png-pdf-card-icon" aria-hidden="true">${icons.document}</span>
+                <h2>معلومات الصورة</h2>
+                <dl>
+                  <div><dt>اسم الملف</dt><dd>${hasImage ? escapeHtml(cropper.fileName || "-") : "-"}</dd></div>
+                  <div><dt>النوع</dt><dd>${escapeHtml(fileTypeLabel)}</dd></div>
+                  <div><dt>الحجم</dt><dd>${hasImage ? escapeHtml(formatImageEnhancerFileSize(cropper.fileSize)) : "-"}</dd></div>
+                  <div><dt>الأبعاد</dt><dd>${hasImage ? escapeHtml(`${cropper.width} × ${cropper.height}`) : "-"}</dd></div>
+                </dl>
+              </article>
+
+              <article class="png-pdf-card image-rotator-tips image-cropper-tip-card">
+                <span class="png-pdf-card-icon" aria-hidden="true">${icons.sparkle}</span>
+                <h2>نصيحة</h2>
+                <ul>
+                  ${tips.map((item) => `<li>${icons.sparkle}<span>${escapeHtml(item)}</span></li>`).join("")}
+                </ul>
+              </article>
+            </aside>
+
+            <article class="image-rotator-preview-card image-cropper-preview-card">
+              <header>
+                <h2>معاينة الصورة</h2>
+                <div class="image-rotator-zoom">
+                  <button type="button" data-image-cropper-zoom="-0.1" aria-label="تصغير">${icons.search}</button>
+                  <b>${zoom.toLocaleString("ar-SA")}%</b>
+                  <button type="button" data-image-cropper-zoom="0.1" aria-label="تكبير">${icons.plus}</button>
+                  <span aria-hidden="true">${expandIcon}</span>
+                </div>
+              </header>
+              <div class="image-cropper-canvas-frame ${hasImage ? "" : "is-empty"}">
+                ${hasImage ? `
+                  <canvas data-image-cropper-canvas style="transform: scale(${Number(cropper.zoom || 1).toFixed(2)});"></canvas>
+                ` : `
+                  <div>
+                    <span aria-hidden="true">${cropIcon}</span>
+                    <p>ارفع صورة لعرض منطقة القص هنا.</p>
+                  </div>
+                `}
+              </div>
+              <dl class="image-rotator-info-row image-cropper-output-row">
+                <div><dt>أبعاد الجزء المحدد</dt><dd>${hasImage ? escapeHtml(`${crop.cropWidth} × ${crop.cropHeight}`) : "-"}</dd></div>
+                <div><dt>العرض</dt><dd>${hasImage ? crop.cropWidth.toLocaleString("ar-SA") : "-"}</dd></div>
+                <div><dt>الارتفاع</dt><dd>${hasImage ? crop.cropHeight.toLocaleString("ar-SA") : "-"}</dd></div>
+                <div><dt>النسبة</dt><dd>${escapeHtml(cropper.aspectRatio === "free" ? "حرة" : cropper.aspectRatio || "حرة")}</dd></div>
+              </dl>
+            </article>
+
+            <aside class="image-rotator-options image-cropper-options">
+              <article class="png-pdf-options">
+                <h2>خيارات القص ${icons.settings}</h2>
+                <label>
+                  <span>نسبة الأبعاد</span>
+                  <div class="image-cropper-ratio-grid">
+                    ${ratios.map(([value, label]) => `
+                      <button class="${(cropper.aspectRatio || "free") === value ? "is-active" : ""}" type="button" data-image-cropper-ratio="${escapeHtml(value)}">
+                        <span>${escapeHtml(label)}</span>
+                      </button>
+                    `).join("")}
+                  </div>
+                </label>
+                <label>
+                  <span>أبعاد مخصصة</span>
+                  <div class="image-cropper-custom-size">
+                    <input data-image-cropper-size="width" type="number" min="1" max="${hasImage ? cropper.width : 12000}" value="${escapeHtml(cropper.customWidth || "")}" placeholder="العرض (px)">
+                    <input data-image-cropper-size="height" type="number" min="1" max="${hasImage ? cropper.height : 12000}" value="${escapeHtml(cropper.customHeight || "")}" placeholder="الارتفاع (px)">
+                  </div>
+                </label>
+                <label>
+                  <span>موقع القص</span>
+                  <div class="image-cropper-move-grid">
+                    ${moveButtons.map(([value, label]) => `<button type="button" data-image-cropper-move="${escapeHtml(value)}">${escapeHtml(label)}</button>`).join("")}
+                  </div>
+                </label>
+                <label>
+                  <span>تدوير الصورة</span>
+                  <div class="image-cropper-rotate-row">
+                    <button type="button" data-image-cropper-rotate="-90">90°</button>
+                    <button type="button" data-image-cropper-rotate="90">90°</button>
+                  </div>
+                </label>
+                <label class="png-pdf-toggle">
+                  <input type="checkbox" data-image-cropper-enhance ${cropper.enhance ? "checked" : ""}>
+                  <span>تحسين بسيط بعد القص</span>
+                </label>
+              </article>
+            </aside>
+          </section>
+
+          ${cropper.loading || cropper.status || cropper.error ? `
+            <section class="png-pdf-status image-rotator-status ${cropper.error ? "is-error" : ""}">
+              <p>${escapeHtml(cropper.error || cropper.status || "")}</p>
+              ${cropper.loading ? `<span><i style="width:${Math.max(8, Math.min(100, Number(cropper.progress || 0)))}%"></i></span>` : ""}
+            </section>
+          ` : ""}
+
+          <footer class="image-rotator-actions image-cropper-actions">
+            <button class="image-rotator-reset" type="button" data-image-cropper-reset ${hasImage ? "" : "disabled"}>
+              ${icons.refresh}
+              <span>إعادة تعيين</span>
+            </button>
+            <button class="png-pdf-convert" type="button" data-image-cropper-export ${canExport ? "" : "disabled"}>
+              <span>قص الصورة وحفظها</span>
+              ${downloadIcon}
+            </button>
+            ${hasResult ? `
+              <a class="png-pdf-download" href="${escapeHtml(cropper.resultUrl)}" download="${escapeHtml(cropper.resultFileName || "orlixor-cropped.png")}">
+                <span>تحميل الصورة</span>
+                ${downloadIcon}
+              </a>
+            ` : ""}
+          </footer>
+          <small class="image-rotator-privacy">${icons.lock} صورك تتم معالجتها داخل متصفحك ولا يتم رفعها إلى خوادمنا.</small>
+        </div>
+      </section>
+    `;
+  }
+
   function renderSmartSearchMain(profile) {
     const smart = state.smartSearch || {};
     const result = smart.result || null;
@@ -6703,6 +7386,9 @@
       if (state.toolView === "image-rotator") {
         return renderImageRotatorMain(profile);
       }
+      if (state.toolView === "image-cropper") {
+        return renderImageCropperMain(profile);
+      }
       return renderToolsMain(profile);
     }
     if (isHomeWorkspace) {
@@ -6990,7 +7676,7 @@
   function renderShell() {
     const profile = getProfile();
     const isToolsWorkspace = state.section === "ai-tools";
-    const isSubscriberTools = isToolsWorkspace && ["subscriber-tools", "image-enhancer", "image-clarifier", "png-to-pdf", "pdf-to-png", "image-converter", "image-rotator"].includes(state.toolView);
+    const isSubscriberTools = isToolsWorkspace && ["subscriber-tools", "image-enhancer", "image-clarifier", "png-to-pdf", "pdf-to-png", "image-converter", "image-rotator", "image-cropper"].includes(state.toolView);
     app.innerHTML = `
       <div class="guest-shell ${state.theme === "dark" ? "theme-dark" : ""} ${isHomeWorkspace ? "is-home-workspace" : ""} ${isToolsWorkspace ? "is-tools-workspace" : ""} ${isSubscriberTools ? "is-subscriber-tools" : ""} ${state.sidebarCollapsed ? "is-sidebar-collapsed" : ""}">
         ${renderSidebar()}
@@ -8492,6 +9178,70 @@
         return;
       }
 
+      if (event.target.closest("[data-image-cropper-choose]")) {
+        if (!hasSubscriberToolsAccess()) {
+          state.upgradeModalOpen = true;
+          render();
+          return;
+        }
+        app.querySelector("[data-image-cropper-input]")?.click();
+        return;
+      }
+
+      const imageCropperRatio = event.target.closest("[data-image-cropper-ratio]");
+      if (imageCropperRatio) {
+        applyImageCropperAspectRatio(imageCropperRatio.getAttribute("data-image-cropper-ratio") || "free");
+        return;
+      }
+
+      const imageCropperMove = event.target.closest("[data-image-cropper-move]");
+      if (imageCropperMove) {
+        const [dx, dy] = String(imageCropperMove.getAttribute("data-image-cropper-move") || "0,0")
+          .split(",")
+          .map(Number);
+        if (dx === 0 && dy === 0) {
+          const crop = getInitialImageCropperCrop(state.imageCropper.width || 1, state.imageCropper.height || 1);
+          state.imageCropper.customWidth = String(crop.cropWidth);
+          state.imageCropper.customHeight = String(crop.cropHeight);
+          setImageCropperCrop(crop, "تم توسيط منطقة القص.");
+          render();
+        } else {
+          moveImageCropperCrop(dx || 0, dy || 0);
+        }
+        return;
+      }
+
+      const imageCropperZoom = event.target.closest("[data-image-cropper-zoom]");
+      if (imageCropperZoom) {
+        updateImageCropperZoom(Number(imageCropperZoom.getAttribute("data-image-cropper-zoom") || 0));
+        return;
+      }
+
+      const imageCropperRotate = event.target.closest("[data-image-cropper-rotate]");
+      if (imageCropperRotate) {
+        await rotateImageCropperSource(Number(imageCropperRotate.getAttribute("data-image-cropper-rotate") || 0));
+        return;
+      }
+
+      if (event.target.closest("[data-image-cropper-export]")) {
+        await runImageCropperExport();
+        return;
+      }
+
+      if (event.target.closest("[data-image-cropper-reset]")) {
+        if (state.imageCropper.bitmap) {
+          const crop = getInitialImageCropperCrop(state.imageCropper.width || 1, state.imageCropper.height || 1);
+          state.imageCropper.aspectRatio = "free";
+          state.imageCropper.customWidth = String(crop.cropWidth);
+          state.imageCropper.customHeight = String(crop.cropHeight);
+          setImageCropperCrop(crop, "تمت إعادة تعيين منطقة القص.");
+        } else {
+          resetImageCropperState();
+        }
+        render();
+        return;
+      }
+
       const imageConverterRemove = event.target.closest("[data-image-converter-remove]");
       if (imageConverterRemove) {
         removeImageConverterImage(imageConverterRemove.getAttribute("data-image-converter-remove") || "");
@@ -8628,6 +9378,18 @@
             return;
           }
           state.toolView = "image-rotator";
+          state.openThreadMenuId = "";
+          state.modelMenuOpen = false;
+          render();
+          return;
+        }
+        if (toolKey === "image-cropper") {
+          if (!hasSubscriberToolsAccess()) {
+            state.upgradeModalOpen = true;
+            render();
+            return;
+          }
+          state.toolView = "image-cropper";
           state.openThreadMenuId = "";
           state.modelMenuOpen = false;
           render();
@@ -9143,6 +9905,24 @@
         state.imageRotator.customAngle = imageRotatorCustomAngle.value;
         clearImageRotatorResult("اختر تطبيق الزاوية المخصصة لتحديث المعاينة.");
       }
+      const imageCropperSize = event.target.closest("[data-image-cropper-size]");
+      if (imageCropperSize) {
+        const key = imageCropperSize.getAttribute("data-image-cropper-size");
+        const value = Math.round(Number(imageCropperSize.value || 0));
+        if (key === "width") {
+          state.imageCropper.customWidth = imageCropperSize.value;
+        }
+        if (key === "height") {
+          state.imageCropper.customHeight = imageCropperSize.value;
+        }
+        if (state.imageCropper.bitmap && value > 0) {
+          const nextCrop = {};
+          if (key === "width") nextCrop.cropWidth = value;
+          if (key === "height") nextCrop.cropHeight = value;
+          setImageCropperCrop(nextCrop, "تم تحديث أبعاد القص.");
+          render();
+        }
+      }
     });
 
     app.addEventListener("change", async (event) => {
@@ -9315,6 +10095,21 @@
       if (imageRotatorEnhance) {
         state.imageRotator.enhance = Boolean(imageRotatorEnhance.checked);
         await rerenderImageRotatorPreviewAfterSetting("تم تحديث إعداد التحسين البسيط.");
+        return;
+      }
+
+      const imageCropperInput = event.target.closest("[data-image-cropper-input]");
+      if (imageCropperInput) {
+        await handleImageCropperFile(imageCropperInput.files?.[0]);
+        imageCropperInput.value = "";
+        return;
+      }
+
+      const imageCropperEnhance = event.target.closest("[data-image-cropper-enhance]");
+      if (imageCropperEnhance) {
+        state.imageCropper.enhance = Boolean(imageCropperEnhance.checked);
+        clearImageCropperResult("الإعدادات تغيّرت. قص الصورة من جديد.");
+        render();
         return;
       }
 
@@ -9500,20 +10295,66 @@
       state.pngToPdf.draggedId = "";
     });
 
+    app.addEventListener("pointerdown", (event) => {
+      const canvas = event.target.closest?.("[data-image-cropper-canvas]");
+      if (!canvas || !state.imageCropper.bitmap) return;
+      const point = getImageCropperCanvasPoint(event, canvas);
+      if (!isPointInsideImageCropperCrop(point)) return;
+      event.preventDefault();
+      state.imageCropper.dragging = true;
+      state.imageCropper.dragOffsetX = point.x - state.imageCropper.cropX;
+      state.imageCropper.dragOffsetY = point.y - state.imageCropper.cropY;
+      canvas.setPointerCapture?.(event.pointerId);
+      drawImageCropperPreview();
+    });
+
+    app.addEventListener("pointermove", (event) => {
+      if (!state.imageCropper.dragging) return;
+      const canvas = app.querySelector("[data-image-cropper-canvas]");
+      if (!canvas) return;
+      event.preventDefault();
+      const point = getImageCropperCanvasPoint(event, canvas);
+      const crop = normalizeImageCropperCrop({
+        cropX: point.x - state.imageCropper.dragOffsetX,
+        cropY: point.y - state.imageCropper.dragOffsetY
+      });
+      revokeImageEnhancerUrl(state.imageCropper.resultUrl);
+      state.imageCropper = {
+        ...state.imageCropper,
+        ...crop,
+        resultUrl: "",
+        resultFileName: "",
+        resultSize: 0,
+        progress: 0,
+        error: "",
+        status: "تم تحريك منطقة القص."
+      };
+      drawImageCropperPreview();
+    });
+
+    function stopImageCropperDrag() {
+      if (!state.imageCropper.dragging) return;
+      state.imageCropper.dragging = false;
+      render();
+    }
+
+    app.addEventListener("pointerup", stopImageCropperDrag);
+    app.addEventListener("pointercancel", stopImageCropperDrag);
+
     app.addEventListener("dragover", (event) => {
       const sortItem = event.target.closest?.("[data-png-pdf-item]");
       if (sortItem) {
         event.preventDefault();
         return;
       }
-      const dropZone = event.target.closest?.("[data-image-enhancer-dropzone], [data-image-clarifier-dropzone], [data-png-pdf-dropzone], [data-pdf-png-dropzone], [data-image-converter-dropzone], [data-image-rotator-dropzone]");
+      const dropZone = event.target.closest?.("[data-image-enhancer-dropzone], [data-image-clarifier-dropzone], [data-png-pdf-dropzone], [data-pdf-png-dropzone], [data-image-converter-dropzone], [data-image-rotator-dropzone], [data-image-cropper-dropzone]");
       if (!dropZone) return;
       event.preventDefault();
       dropZone.classList.add("is-drag-over");
     });
 
     app.addEventListener("dragleave", (event) => {
-      const dropZone = event.target.closest?.("[data-image-enhancer-dropzone], [data-image-clarifier-dropzone], [data-png-pdf-dropzone], [data-pdf-png-dropzone], [data-image-converter-dropzone], [data-image-rotator-dropzone]");
+      const dropZone = event.target.closest?.("[data-image-enhancer-dropzone], [data-image-clarifier-dropzone], [data-png-pdf-dropzone], [data-pdf-png-dropzone], [data-image-converter-dropzone], [data-image-rotator-dropzone], [data-image-cropper-dropzone]");
       if (!dropZone) return;
       dropZone.classList.remove("is-drag-over");
     });
@@ -9528,7 +10369,7 @@
         );
         return;
       }
-      const dropZone = event.target.closest?.("[data-image-enhancer-dropzone], [data-image-clarifier-dropzone], [data-png-pdf-dropzone], [data-pdf-png-dropzone], [data-image-converter-dropzone], [data-image-rotator-dropzone]");
+      const dropZone = event.target.closest?.("[data-image-enhancer-dropzone], [data-image-clarifier-dropzone], [data-png-pdf-dropzone], [data-pdf-png-dropzone], [data-image-converter-dropzone], [data-image-rotator-dropzone], [data-image-cropper-dropzone]");
       if (!dropZone) return;
       event.preventDefault();
       dropZone.classList.remove("is-drag-over");
@@ -9540,6 +10381,8 @@
         await addImageConverterFiles(event.dataTransfer?.files);
       } else if (dropZone.matches("[data-image-rotator-dropzone]")) {
         await handleImageRotatorFile(event.dataTransfer?.files?.[0]);
+      } else if (dropZone.matches("[data-image-cropper-dropzone]")) {
+        await handleImageCropperFile(event.dataTransfer?.files?.[0]);
       } else if (dropZone.matches("[data-image-clarifier-dropzone]")) {
         await handleImageClarifierFile(event.dataTransfer?.files?.[0]);
       } else {
@@ -9640,6 +10483,7 @@
     ensureAccountConversationState();
     ensureThreadState();
     renderShell();
+    drawImageCropperPreview();
     scheduleSavedConversationSync();
   }
 
