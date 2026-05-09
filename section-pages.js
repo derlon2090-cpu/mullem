@@ -26,7 +26,7 @@
   let sessionRefreshPromise = null;
 
   const icons = {
-    logo: '<img src="orlixor-mark.png" alt="" aria-hidden="true">',
+    logo: '<img src="orlixor-mark-flat.png" alt="" aria-hidden="true">',
     plus: '<svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>',
     home: '<svg viewBox="0 0 24 24"><path d="M4 10.5 12 4l8 6.5V20a1 1 0 0 1-1 1h-4.5v-5.5h-5V21H5a1 1 0 0 1-1-1z"/></svg>',
     user: '<svg viewBox="0 0 24 24"><path d="M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8Z"/><path d="M4.5 21a7.5 7.5 0 0 1 15 0"/></svg>',
@@ -8704,7 +8704,7 @@
         <div class="guest-sidebar-head">
           <a class="guest-brand" href="${shellBaseUrl}" aria-label="Orlixor">
             <img class="guest-brand-full" src="orlixor-brand.png" alt="Orlixor">
-            <img class="guest-brand-mark" src="orlixor-mark.png" alt="" aria-hidden="true">
+            <img class="guest-brand-mark" src="orlixor-mark-flat.png" alt="" aria-hidden="true">
           </a>
           <button class="guest-sidebar-toggle" type="button" data-toggle-sidebar aria-label="${state.sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}" aria-expanded="${state.sidebarCollapsed ? "false" : "true"}">
             <span class="toggle-expanded" aria-hidden="true">&lsaquo;&lsaquo;</span>
