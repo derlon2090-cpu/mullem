@@ -546,6 +546,28 @@
       error: "",
       status: ""
     },
+    imageRotator: {
+      fileName: "",
+      fileSize: 0,
+      fileType: "",
+      width: 0,
+      height: 0,
+      outputWidth: 0,
+      outputHeight: 0,
+      angle: 0,
+      customAngle: "0",
+      keepSize: true,
+      enhance: false,
+      previewUrl: "",
+      resultUrl: "",
+      resultFileName: "",
+      resultSize: 0,
+      loading: false,
+      progress: 0,
+      error: "",
+      status: "",
+      bitmap: null
+    },
     upgradeModalOpen: false,
     balancePanelOpen: false,
     openThreadMenuId: "",
@@ -1355,6 +1377,8 @@
     "image/png": { label: "PNG", extension: "png" },
     "image/webp": { label: "WebP", extension: "webp" }
   };
+  const imageRotatorAllowedTypes = ["image/jpeg", "image/png", "image/webp"];
+  const imageRotatorMaxFileSize = 20 * 1024 * 1024;
 
   function formatImageEnhancerFileSize(bytes) {
     const value = Number(bytes || 0);
@@ -2401,6 +2425,350 @@
         error: String(error?.message || "").includes("webp")
           ? "متصفحك لا يدعم تصدير WebP حاليًا. جرّب PNG أو JPG."
           : "تعذر تحويل الصور داخل المتصفح. جرّب صورًا أصغر أو صيغة مختلفة.",
+        status: ""
+      };
+      render();
+    }
+  }
+
+  function getImageRotatorFileType(file) {
+    if (imageRotatorAllowedTypes.includes(file?.type)) return file.type;
+    const name = String(file?.name || "").toLowerCase();
+    if (name.endsWith(".jpg") || name.endsWith(".jpeg")) return "image/jpeg";
+    if (name.endsWith(".png")) return "image/png";
+    if (name.endsWith(".webp")) return "image/webp";
+    return "";
+  }
+
+  function normalizeImageRotatorAngle(angle) {
+    const value = Number(angle || 0);
+    return ((Math.round(value) % 360) + 360) % 360;
+  }
+
+  function getImageRotatorExtension(type, fileName = "") {
+    const fromType = imageConverterFormats[type]?.extension;
+    if (fromType) return fromType;
+    const match = String(fileName || "").match(/\.([a-z0-9]+)$/i);
+    return (match?.[1] || "png").toLowerCase();
+  }
+
+  function buildImageRotatorFileName(fileName, type) {
+    const base = String(fileName || "orlixor-image")
+      .replace(/\.[^/.]+$/, "")
+      .replace(/[\\/:*?"<>|]+/g, "-")
+      .trim() || "orlixor-image";
+    return `${base}-rotated.${getImageRotatorExtension(type, fileName)}`;
+  }
+
+  function clearImageRotatorResult(status = "") {
+    revokeImageEnhancerUrl(state.imageRotator.resultUrl);
+    state.imageRotator = {
+      ...state.imageRotator,
+      resultUrl: "",
+      resultFileName: "",
+      resultSize: 0,
+      progress: 0,
+      error: "",
+      status
+    };
+  }
+
+  function resetImageRotatorState() {
+    revokeImageEnhancerUrl(state.imageRotator.previewUrl);
+    revokeImageEnhancerUrl(state.imageRotator.resultUrl);
+    try {
+      state.imageRotator.bitmap?.close?.();
+    } catch (_) {
+      // Ignore bitmap cleanup errors.
+    }
+    state.imageRotator = {
+      fileName: "",
+      fileSize: 0,
+      fileType: "",
+      width: 0,
+      height: 0,
+      outputWidth: 0,
+      outputHeight: 0,
+      angle: 0,
+      customAngle: "0",
+      keepSize: true,
+      enhance: false,
+      previewUrl: "",
+      resultUrl: "",
+      resultFileName: "",
+      resultSize: 0,
+      loading: false,
+      progress: 0,
+      error: "",
+      status: "",
+      bitmap: null
+    };
+  }
+
+  function createImageRotatorCanvas({ bitmap, angle, keepSize, enhance, type }) {
+    const radians = normalizeImageRotatorAngle(angle) * Math.PI / 180;
+    const originalWidth = bitmap.width;
+    const originalHeight = bitmap.height;
+    let outputWidth = originalWidth;
+    let outputHeight = originalHeight;
+
+    if (!keepSize) {
+      const sin = Math.abs(Math.sin(radians));
+      const cos = Math.abs(Math.cos(radians));
+      outputWidth = Math.ceil(originalWidth * cos + originalHeight * sin);
+      outputHeight = Math.ceil(originalWidth * sin + originalHeight * cos);
+    } else if (normalizeImageRotatorAngle(angle) % 180 !== 0) {
+      outputWidth = originalHeight;
+      outputHeight = originalWidth;
+    }
+
+    const canvas = document.createElement("canvas");
+    const ctx = canvas.getContext("2d", { willReadFrequently: Boolean(enhance) });
+    canvas.width = Math.max(1, outputWidth);
+    canvas.height = Math.max(1, outputHeight);
+
+    if (type === "image/jpeg") {
+      ctx.fillStyle = "#ffffff";
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+    } else {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+    }
+
+    ctx.save();
+    ctx.translate(canvas.width / 2, canvas.height / 2);
+    ctx.rotate(radians);
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = "high";
+    ctx.drawImage(bitmap, -originalWidth / 2, -originalHeight / 2, originalWidth, originalHeight);
+    ctx.restore();
+
+    if (enhance) {
+      applyBasicImageEnhancement(ctx, canvas.width, canvas.height, "light");
+    }
+
+    return canvas;
+  }
+
+  function imageRotatorCanvasToBlob(canvas, type) {
+    return new Promise((resolve) => {
+      canvas.toBlob((blob) => resolve(blob), type || "image/png", 0.95);
+    });
+  }
+
+  async function refreshImageRotatorPreview(status = "") {
+    const rotator = state.imageRotator;
+    if (!rotator.bitmap) return;
+    const type = rotator.fileType || "image/png";
+    const canvas = createImageRotatorCanvas({
+      bitmap: rotator.bitmap,
+      angle: rotator.angle,
+      keepSize: rotator.keepSize !== false,
+      enhance: Boolean(rotator.enhance),
+      type
+    });
+    const blob = await imageRotatorCanvasToBlob(canvas, type);
+    if (!blob) throw new Error("rotate_preview_failed");
+    const previewUrl = URL.createObjectURL(blob);
+    revokeImageEnhancerUrl(state.imageRotator.previewUrl);
+    revokeImageEnhancerUrl(state.imageRotator.resultUrl);
+    state.imageRotator = {
+      ...state.imageRotator,
+      previewUrl,
+      resultUrl: "",
+      resultFileName: "",
+      resultSize: 0,
+      outputWidth: canvas.width,
+      outputHeight: canvas.height,
+      progress: 0,
+      error: "",
+      status
+    };
+  }
+
+  async function handleImageRotatorFile(file) {
+    if (!hasSubscriberToolsAccess()) {
+      state.upgradeModalOpen = true;
+      render();
+      return;
+    }
+    if (!file) return;
+    const fileType = getImageRotatorFileType(file);
+    if (!fileType) {
+      state.imageRotator.error = "صيغة الصورة غير مدعومة. استخدم JPG أو PNG أو WebP.";
+      render();
+      return;
+    }
+    if (Number(file.size || 0) > imageRotatorMaxFileSize) {
+      state.imageRotator.error = "حجم الصورة كبير جدًا. الحد الأقصى 20MB.";
+      render();
+      return;
+    }
+
+    revokeImageEnhancerUrl(state.imageRotator.previewUrl);
+    revokeImageEnhancerUrl(state.imageRotator.resultUrl);
+    try {
+      state.imageRotator.bitmap?.close?.();
+    } catch (_) {
+      // Ignore bitmap cleanup errors.
+    }
+
+    state.imageRotator = {
+      ...state.imageRotator,
+      fileName: file.name || "image",
+      fileSize: file.size || 0,
+      fileType,
+      width: 0,
+      height: 0,
+      outputWidth: 0,
+      outputHeight: 0,
+      angle: 0,
+      customAngle: "0",
+      previewUrl: "",
+      resultUrl: "",
+      resultFileName: "",
+      resultSize: 0,
+      loading: true,
+      progress: 35,
+      error: "",
+      status: "جاري قراءة الصورة داخل المتصفح..."
+    };
+    render();
+
+    try {
+      const bitmap = await createImageBitmap(file);
+      state.imageRotator = {
+        ...state.imageRotator,
+        bitmap,
+        width: bitmap.width,
+        height: bitmap.height,
+        outputWidth: bitmap.width,
+        outputHeight: bitmap.height,
+        loading: true,
+        progress: 70,
+        status: "جاري تجهيز المعاينة..."
+      };
+      await refreshImageRotatorPreview("تم تحميل الصورة. اختر اتجاه التدوير ثم حمّل النتيجة.");
+      state.imageRotator.loading = false;
+      state.imageRotator.progress = 0;
+      render();
+    } catch (_) {
+      state.imageRotator = {
+        ...state.imageRotator,
+        bitmap: null,
+        loading: false,
+        progress: 0,
+        previewUrl: "",
+        error: "تعذر قراءة الصورة داخل المتصفح. جرّب صورة أخرى.",
+        status: ""
+      };
+      render();
+    }
+  }
+
+  async function updateImageRotatorAngle(angle, absolute = false) {
+    if (!state.imageRotator.bitmap) {
+      state.imageRotator.error = "اختر صورة أولًا.";
+      render();
+      return;
+    }
+    const nextAngle = absolute
+      ? normalizeImageRotatorAngle(angle)
+      : normalizeImageRotatorAngle(Number(state.imageRotator.angle || 0) + Number(angle || 0));
+    state.imageRotator.angle = nextAngle;
+    state.imageRotator.customAngle = String(nextAngle);
+    state.imageRotator.loading = true;
+    state.imageRotator.progress = 55;
+    state.imageRotator.error = "";
+    state.imageRotator.status = "جاري تدوير المعاينة...";
+    render();
+    try {
+      await refreshImageRotatorPreview("تم تحديث زاوية التدوير.");
+      state.imageRotator.loading = false;
+      state.imageRotator.progress = 0;
+    } catch (_) {
+      state.imageRotator.loading = false;
+      state.imageRotator.progress = 0;
+      state.imageRotator.error = "تعذر تدوير الصورة. جرّب زاوية أخرى.";
+      state.imageRotator.status = "";
+    }
+    render();
+  }
+
+  async function rerenderImageRotatorPreviewAfterSetting(status = "الإعدادات تغيّرت. شغّل التدوير من جديد.") {
+    if (!state.imageRotator.bitmap) {
+      render();
+      return;
+    }
+    state.imageRotator.loading = true;
+    state.imageRotator.progress = 45;
+    state.imageRotator.error = "";
+    state.imageRotator.status = "جاري تحديث المعاينة...";
+    render();
+    try {
+      await refreshImageRotatorPreview(status);
+      state.imageRotator.loading = false;
+      state.imageRotator.progress = 0;
+    } catch (_) {
+      state.imageRotator.loading = false;
+      state.imageRotator.progress = 0;
+      state.imageRotator.error = "تعذر تحديث المعاينة.";
+      state.imageRotator.status = "";
+    }
+    render();
+  }
+
+  async function runImageRotatorExport() {
+    if (!hasSubscriberToolsAccess()) {
+      state.upgradeModalOpen = true;
+      render();
+      return;
+    }
+    const rotator = state.imageRotator;
+    if (!rotator.bitmap) {
+      state.imageRotator.error = "اختر صورة أولًا.";
+      render();
+      return;
+    }
+    state.imageRotator = {
+      ...state.imageRotator,
+      loading: true,
+      progress: 65,
+      error: "",
+      status: "جاري تجهيز الصورة للتحميل..."
+    };
+    render();
+    try {
+      const type = state.imageRotator.fileType || "image/png";
+      const canvas = createImageRotatorCanvas({
+        bitmap: state.imageRotator.bitmap,
+        angle: state.imageRotator.angle,
+        keepSize: state.imageRotator.keepSize !== false,
+        enhance: Boolean(state.imageRotator.enhance),
+        type
+      });
+      const blob = await imageRotatorCanvasToBlob(canvas, type);
+      if (!blob) throw new Error("rotate_export_failed");
+      const resultUrl = URL.createObjectURL(blob);
+      revokeImageEnhancerUrl(state.imageRotator.resultUrl);
+      state.imageRotator = {
+        ...state.imageRotator,
+        resultUrl,
+        resultFileName: buildImageRotatorFileName(state.imageRotator.fileName, type),
+        resultSize: blob.size,
+        outputWidth: canvas.width,
+        outputHeight: canvas.height,
+        loading: false,
+        progress: 100,
+        error: "",
+        status: "تم تدوير الصورة بنجاح. يمكنك تحميل النتيجة الآن."
+      };
+      render();
+    } catch (_) {
+      state.imageRotator = {
+        ...state.imageRotator,
+        loading: false,
+        progress: 0,
+        error: "تعذر تجهيز الصورة للتحميل. جرّب صورة أصغر.",
         status: ""
       };
       render();
@@ -3859,7 +4227,7 @@
       { key: "png-to-pdf", title: "تحويل PNG إلى PDF", description: "حول صور PNG إلى ملف PDF بسهولة", icon: toolIcons.pngPdf },
       { key: "pdf-to-png", title: "تحويل PDF إلى PNG", description: "حول صفحات PDF إلى صور PNG عالية الجودة", icon: toolIcons.pdfPng },
       { key: "image-converter", title: "تحويل صيغة الصورة", description: "تحويل الصور بين مختلف الصيغ (JPG, PNG, WebP)", icon: toolIcons.image },
-      { title: "تدوير الصورة", description: "تدوير الصور إلى أي اتجاه بسهولة", icon: icons.refresh },
+      { key: "image-rotator", title: "تدوير الصورة", description: "تدوير الصور إلى أي اتجاه بسهولة", icon: icons.refresh },
       { title: "قص الصورة", description: "قص وتحديد الجزء المطلوب من الصورة", icon: toolIcons.crop },
       { title: "ضغط الصور", description: "تقليل حجم الصور مع الحفاظ على الجودة", icon: toolIcons.compress },
       { title: "إزالة حماية PDF", description: "إزالة كلمة المرور من ملفات PDF", icon: toolIcons.unlock },
@@ -4933,6 +5301,171 @@
               `}
             </aside>
           </section>
+        </div>
+      </section>
+    `;
+  }
+
+  function renderImageRotatorMain() {
+    const rotator = state.imageRotator || {};
+    const hasAccess = hasSubscriberToolsAccess();
+    const hasImage = Boolean(rotator.bitmap && rotator.previewUrl);
+    const hasResult = Boolean(rotator.resultUrl);
+    const canExport = hasAccess && hasImage && !rotator.loading;
+    const angle = normalizeImageRotatorAngle(rotator.angle || 0);
+    const customAngle = String(rotator.customAngle ?? angle);
+    const fileTypeLabel = imageConverterFormats[rotator.fileType]?.label || (rotator.fileType ? rotator.fileType.replace("image/", "").toUpperCase() : "-");
+    const uploadIcon = '<svg viewBox="0 0 24 24"><path d="M12 16V7"/><path d="m8.5 10.5 3.5-3.5 3.5 3.5"/><path d="M20 16.5a4.5 4.5 0 0 1-4.5 4.5h-7A5.5 5.5 0 0 1 8 10.02 6 6 0 0 1 19.74 12"/></svg>';
+    const rotateIcon = '<svg viewBox="0 0 24 24"><path d="M20 12a8 8 0 1 1-2.34-5.66"/><path d="M20 4v6h-6"/></svg>';
+    const downloadIcon = '<svg viewBox="0 0 24 24"><path d="M12 3v12"/><path d="m7.5 10.5 4.5 4.5 4.5-4.5"/><path d="M5 21h14"/></svg>';
+    const expandIcon = '<svg viewBox="0 0 24 24"><path d="M8 3H3v5M16 3h5v5M21 16v5h-5M3 16v5h5"/></svg>';
+    const tips = [
+      "يمكنك تدوير الصورة بزوايا جاهزة",
+      "تثبيت الأبعاد يحافظ على تنسيق مناسب",
+      "جميع العمليات تتم داخل متصفحك",
+      "مناسب لجميع أنواع الصور"
+    ];
+
+    if (!hasAccess) {
+      return `
+        <section class="guest-main tools-main png-pdf-main image-rotator-main" aria-label="تدوير الصورة">
+          <div class="png-pdf-page">
+            <button class="png-pdf-back" type="button" data-open-free-tools>
+              <span aria-hidden="true">←</span>
+              <b>العودة للأدوات</b>
+            </button>
+            <section class="png-pdf-locked">
+              <span aria-hidden="true">${icons.lock}</span>
+              <h1>هذه الأداة متاحة للمشتركين فقط</h1>
+              <p>فعّل باقة شرارة أو طويق أو الرائد لتدوير الصور داخل المتصفح بدون XP.</p>
+              <button type="button" data-open-upgrade>عرض الباقات</button>
+            </section>
+          </div>
+        </section>
+      `;
+    }
+
+    return `
+      <section class="guest-main tools-main png-pdf-main image-rotator-main" aria-label="تدوير الصورة">
+        <div class="png-pdf-page">
+          <button class="png-pdf-back" type="button" data-open-free-tools>
+            <span aria-hidden="true">←</span>
+            <b>العودة للأدوات</b>
+          </button>
+
+          <header class="png-pdf-hero image-rotator-hero">
+            <span class="png-pdf-hero-icon" aria-hidden="true">${rotateIcon}</span>
+            <div>
+              <h1>تدوير الصورة</h1>
+              <p>دوّر الصور إلى أي اتجاه بسهولة وسرعة مع حفظ الجودة الأصلية.</p>
+            </div>
+          </header>
+
+          <section class="image-rotator-layout">
+            <aside class="image-rotator-left">
+              <article class="png-pdf-upload-card">
+                <input data-image-rotator-input type="file" accept="image/png,image/jpeg,image/webp" hidden>
+                <div class="png-pdf-dropzone ${hasImage ? "has-images" : ""}" data-image-rotator-dropzone>
+                  <span class="png-pdf-upload-icon" aria-hidden="true">${uploadIcon}</span>
+                  <h2>${hasImage ? "صورتك جاهزة للتدوير" : "اسحب وأفلت صورتك هنا"}</h2>
+                  <p>${hasImage ? escapeHtml(rotator.fileName || "image") : "أو انقر لاختيار صورة من جهازك"}</p>
+                  <button class="png-pdf-primary" type="button" data-image-rotator-choose>
+                    <span>اختيار صورة</span>
+                    ${icons.attach}
+                  </button>
+                  <small>JPG, PNG, WebP · الحد الأقصى 20MB لكل صورة</small>
+                </div>
+              </article>
+
+              <article class="png-pdf-card image-rotator-tips">
+                <span class="png-pdf-card-icon" aria-hidden="true">${icons.sparkle}</span>
+                <h2>نصائح</h2>
+                <ul>
+                  ${tips.map((item) => `<li>${icons.sparkle}<span>${escapeHtml(item)}</span></li>`).join("")}
+                </ul>
+              </article>
+            </aside>
+
+            <article class="image-rotator-preview-card">
+              <header>
+                <h2>معاينة الصورة</h2>
+                <div class="image-rotator-zoom" aria-hidden="true">
+                  <span>${icons.search}</span>
+                  <b>100%</b>
+                  <span>${icons.search}</span>
+                  <span>${expandIcon}</span>
+                </div>
+              </header>
+              <div class="image-rotator-preview-frame ${hasImage ? "" : "is-empty"}">
+                ${hasImage ? `
+                  <img src="${escapeHtml(rotator.previewUrl)}" alt="${escapeHtml(rotator.fileName || "الصورة")}">
+                ` : `
+                  <div>
+                    <span aria-hidden="true">${rotateIcon}</span>
+                    <p>ارفع صورة لعرض المعاينة هنا.</p>
+                  </div>
+                `}
+              </div>
+              <dl class="image-rotator-info-row">
+                <div><dt>اسم الملف</dt><dd>${hasImage ? escapeHtml(rotator.fileName || "-") : "-"}</dd></div>
+                <div><dt>الحجم</dt><dd>${hasImage ? escapeHtml(formatImageEnhancerFileSize(rotator.fileSize)) : "-"}</dd></div>
+                <div><dt>الأبعاد</dt><dd>${hasImage ? escapeHtml(`${rotator.outputWidth || rotator.width} × ${rotator.outputHeight || rotator.height}`) : "-"}</dd></div>
+                <div><dt>النوع</dt><dd>${escapeHtml(fileTypeLabel)}</dd></div>
+              </dl>
+            </article>
+
+            <aside class="image-rotator-options">
+              <article class="png-pdf-options">
+                <h2>خيارات التدوير ${icons.settings}</h2>
+                <span class="image-rotator-angle-badge">الزاوية الحالية: ${angle.toLocaleString("ar-SA")}°</span>
+                <button type="button" data-image-rotator-rotate="90">${rotateIcon}<span>90° مع عقارب الساعة</span></button>
+                <button type="button" data-image-rotator-rotate="-90">${rotateIcon}<span>90° عكس عقارب الساعة</span></button>
+                <button type="button" data-image-rotator-rotate="180">${rotateIcon}<span>180° قلب الصورة</span></button>
+                <button type="button" data-image-rotator-rotate="270">${rotateIcon}<span>270° عكس عقارب الساعة</span></button>
+                <label class="image-rotator-custom-angle">
+                  <span>تدوير مخصص</span>
+                  <div>
+                    <input data-image-rotator-custom-angle type="number" min="0" max="359" value="${escapeHtml(customAngle)}" placeholder="0">
+                    <button type="button" data-image-rotator-apply-custom>تطبيق</button>
+                  </div>
+                  <small>أدخل قيمة بين 0 و 359</small>
+                </label>
+                <label class="png-pdf-toggle">
+                  <input type="checkbox" data-image-rotator-keep-size ${rotator.keepSize !== false ? "checked" : ""}>
+                  <span>تثبيت الأبعاد</span>
+                </label>
+                <label class="png-pdf-toggle">
+                  <input type="checkbox" data-image-rotator-enhance ${rotator.enhance ? "checked" : ""}>
+                  <span>تحسين بسيط بعد التدوير</span>
+                </label>
+              </article>
+            </aside>
+          </section>
+
+          ${rotator.loading || rotator.status || rotator.error ? `
+            <section class="png-pdf-status image-rotator-status ${rotator.error ? "is-error" : ""}">
+              <p>${escapeHtml(rotator.error || rotator.status || "")}</p>
+              ${rotator.loading ? `<span><i style="width:${Math.max(8, Math.min(100, Number(rotator.progress || 0)))}%"></i></span>` : ""}
+            </section>
+          ` : ""}
+
+          <footer class="image-rotator-actions">
+            <button class="image-rotator-reset" type="button" data-image-rotator-reset ${hasImage ? "" : "disabled"}>
+              ${icons.refresh}
+              <span>إعادة تعيين</span>
+            </button>
+            <button class="png-pdf-convert" type="button" data-image-rotator-export ${canExport ? "" : "disabled"}>
+              <span>تدوير الصورة</span>
+              ${rotateIcon}
+            </button>
+            ${hasResult ? `
+              <a class="png-pdf-download" href="${escapeHtml(rotator.resultUrl)}" download="${escapeHtml(rotator.resultFileName || "orlixor-rotated.png")}">
+                <span>تحميل الصورة</span>
+                ${downloadIcon}
+              </a>
+            ` : ""}
+          </footer>
+          <small class="image-rotator-privacy">${icons.lock} صورك تُعالج داخل متصفحك ولا يتم رفعها إلى خوادمنا.</small>
         </div>
       </section>
     `;
@@ -6167,6 +6700,9 @@
       if (state.toolView === "image-converter") {
         return renderImageConverterMain(profile);
       }
+      if (state.toolView === "image-rotator") {
+        return renderImageRotatorMain(profile);
+      }
       return renderToolsMain(profile);
     }
     if (isHomeWorkspace) {
@@ -6454,7 +6990,7 @@
   function renderShell() {
     const profile = getProfile();
     const isToolsWorkspace = state.section === "ai-tools";
-    const isSubscriberTools = isToolsWorkspace && ["subscriber-tools", "image-enhancer", "image-clarifier", "png-to-pdf", "pdf-to-png", "image-converter"].includes(state.toolView);
+    const isSubscriberTools = isToolsWorkspace && ["subscriber-tools", "image-enhancer", "image-clarifier", "png-to-pdf", "pdf-to-png", "image-converter", "image-rotator"].includes(state.toolView);
     app.innerHTML = `
       <div class="guest-shell ${state.theme === "dark" ? "theme-dark" : ""} ${isHomeWorkspace ? "is-home-workspace" : ""} ${isToolsWorkspace ? "is-tools-workspace" : ""} ${isSubscriberTools ? "is-subscriber-tools" : ""} ${state.sidebarCollapsed ? "is-sidebar-collapsed" : ""}">
         ${renderSidebar()}
@@ -7920,6 +8456,42 @@
         return;
       }
 
+      if (event.target.closest("[data-image-rotator-choose]")) {
+        if (!hasSubscriberToolsAccess()) {
+          state.upgradeModalOpen = true;
+          render();
+          return;
+        }
+        app.querySelector("[data-image-rotator-input]")?.click();
+        return;
+      }
+
+      const imageRotatorRotate = event.target.closest("[data-image-rotator-rotate]");
+      if (imageRotatorRotate) {
+        await updateImageRotatorAngle(Number(imageRotatorRotate.getAttribute("data-image-rotator-rotate") || 0), false);
+        return;
+      }
+
+      if (event.target.closest("[data-image-rotator-apply-custom]")) {
+        await updateImageRotatorAngle(Number(state.imageRotator.customAngle || 0), true);
+        return;
+      }
+
+      if (event.target.closest("[data-image-rotator-export]")) {
+        await runImageRotatorExport();
+        return;
+      }
+
+      if (event.target.closest("[data-image-rotator-reset]")) {
+        if (state.imageRotator.bitmap) {
+          await updateImageRotatorAngle(0, true);
+        } else {
+          resetImageRotatorState();
+          render();
+        }
+        return;
+      }
+
       const imageConverterRemove = event.target.closest("[data-image-converter-remove]");
       if (imageConverterRemove) {
         removeImageConverterImage(imageConverterRemove.getAttribute("data-image-converter-remove") || "");
@@ -8044,6 +8616,18 @@
             return;
           }
           state.toolView = "image-converter";
+          state.openThreadMenuId = "";
+          state.modelMenuOpen = false;
+          render();
+          return;
+        }
+        if (toolKey === "image-rotator") {
+          if (!hasSubscriberToolsAccess()) {
+            state.upgradeModalOpen = true;
+            render();
+            return;
+          }
+          state.toolView = "image-rotator";
           state.openThreadMenuId = "";
           state.modelMenuOpen = false;
           render();
@@ -8553,6 +9137,12 @@
         }
         clearImageConverterResult("الإعدادات تغيّرت. شغّل التحويل من جديد.");
       }
+
+      const imageRotatorCustomAngle = event.target.closest("[data-image-rotator-custom-angle]");
+      if (imageRotatorCustomAngle) {
+        state.imageRotator.customAngle = imageRotatorCustomAngle.value;
+        clearImageRotatorResult("اختر تطبيق الزاوية المخصصة لتحديث المعاينة.");
+      }
     });
 
     app.addEventListener("change", async (event) => {
@@ -8704,6 +9294,27 @@
         state.imageConverter.enhance = Boolean(imageConverterEnhance.checked);
         clearImageConverterResult("الإعدادات تغيّرت. شغّل التحويل من جديد.");
         render();
+        return;
+      }
+
+      const imageRotatorInput = event.target.closest("[data-image-rotator-input]");
+      if (imageRotatorInput) {
+        await handleImageRotatorFile(imageRotatorInput.files?.[0]);
+        imageRotatorInput.value = "";
+        return;
+      }
+
+      const imageRotatorKeepSize = event.target.closest("[data-image-rotator-keep-size]");
+      if (imageRotatorKeepSize) {
+        state.imageRotator.keepSize = Boolean(imageRotatorKeepSize.checked);
+        await rerenderImageRotatorPreviewAfterSetting("تم تحديث إعداد تثبيت الأبعاد.");
+        return;
+      }
+
+      const imageRotatorEnhance = event.target.closest("[data-image-rotator-enhance]");
+      if (imageRotatorEnhance) {
+        state.imageRotator.enhance = Boolean(imageRotatorEnhance.checked);
+        await rerenderImageRotatorPreviewAfterSetting("تم تحديث إعداد التحسين البسيط.");
         return;
       }
 
@@ -8895,14 +9506,14 @@
         event.preventDefault();
         return;
       }
-      const dropZone = event.target.closest?.("[data-image-enhancer-dropzone], [data-image-clarifier-dropzone], [data-png-pdf-dropzone], [data-pdf-png-dropzone], [data-image-converter-dropzone]");
+      const dropZone = event.target.closest?.("[data-image-enhancer-dropzone], [data-image-clarifier-dropzone], [data-png-pdf-dropzone], [data-pdf-png-dropzone], [data-image-converter-dropzone], [data-image-rotator-dropzone]");
       if (!dropZone) return;
       event.preventDefault();
       dropZone.classList.add("is-drag-over");
     });
 
     app.addEventListener("dragleave", (event) => {
-      const dropZone = event.target.closest?.("[data-image-enhancer-dropzone], [data-image-clarifier-dropzone], [data-png-pdf-dropzone], [data-pdf-png-dropzone], [data-image-converter-dropzone]");
+      const dropZone = event.target.closest?.("[data-image-enhancer-dropzone], [data-image-clarifier-dropzone], [data-png-pdf-dropzone], [data-pdf-png-dropzone], [data-image-converter-dropzone], [data-image-rotator-dropzone]");
       if (!dropZone) return;
       dropZone.classList.remove("is-drag-over");
     });
@@ -8917,7 +9528,7 @@
         );
         return;
       }
-      const dropZone = event.target.closest?.("[data-image-enhancer-dropzone], [data-image-clarifier-dropzone], [data-png-pdf-dropzone], [data-pdf-png-dropzone], [data-image-converter-dropzone]");
+      const dropZone = event.target.closest?.("[data-image-enhancer-dropzone], [data-image-clarifier-dropzone], [data-png-pdf-dropzone], [data-pdf-png-dropzone], [data-image-converter-dropzone], [data-image-rotator-dropzone]");
       if (!dropZone) return;
       event.preventDefault();
       dropZone.classList.remove("is-drag-over");
@@ -8927,6 +9538,8 @@
         await handlePdfToPngFile(event.dataTransfer?.files?.[0]);
       } else if (dropZone.matches("[data-image-converter-dropzone]")) {
         await addImageConverterFiles(event.dataTransfer?.files);
+      } else if (dropZone.matches("[data-image-rotator-dropzone]")) {
+        await handleImageRotatorFile(event.dataTransfer?.files?.[0]);
       } else if (dropZone.matches("[data-image-clarifier-dropzone]")) {
         await handleImageClarifierFile(event.dataTransfer?.files?.[0]);
       } else {
