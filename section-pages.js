@@ -5179,7 +5179,7 @@
     const categories = [
       { title: "الأكثر استخدامًا" },
       { title: "كتابة وتحرير", writingTools: true },
-      { title: "تلخيص وتنظيم" },
+      { title: "تلخيص وتنظيم", summaryTools: true },
       { title: "تحليل وبيانات" },
       { title: "إنتاجية" },
       { title: "تعليم وتعلم" },
@@ -5248,7 +5248,7 @@
 
           <nav class="tools-unified-bar" aria-label="تصنيفات الأدوات">
             ${categories.map((category, index) => `
-              <button class="tools-unified-filter ${category.writingTools ? "is-active" : ""}" type="button" ${category.freeTools ? "data-open-free-tools" : category.writingTools ? "data-open-writing-tools" : "data-open-tools"}>
+              <button class="tools-unified-filter ${category.writingTools ? "is-active" : ""}" type="button" ${category.freeTools ? "data-open-free-tools" : category.writingTools ? "data-open-writing-tools" : category.summaryTools ? "data-open-summary-tools" : "data-open-tools"}>
                 ${escapeHtml(category.title)}
               </button>
             `).join("")}
@@ -5277,6 +5277,133 @@
     `;
   }
 
+  function renderSummaryOrganizationToolsMain() {
+    const categories = [
+      { title: "الأكثر استخدامًا" },
+      { title: "كتابة وتحرير", writingTools: true },
+      { title: "تلخيص وتنظيم", summaryTools: true },
+      { title: "تحليل وبيانات" },
+      { title: "إنتاجية" },
+      { title: "تعليم وتعلم" },
+      { title: "أدوات مجانية", freeTools: true }
+    ];
+    const summaryToolIcons = {
+      stack: '<svg viewBox="0 0 24 24"><path d="M7 6h11a2 2 0 0 1 2 2v10"/><rect x="4" y="4" width="13" height="13" rx="2"/><path d="M8 8h5M8 11h5M8 14h3"/></svg>',
+      executive: '<svg viewBox="0 0 24 24"><path d="M6 3h9l3 3v15H6a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2Z"/><path d="M15 3v5h5M8 12h8M8 16h6"/></svg>',
+      bullets: '<svg viewBox="0 0 24 24"><path d="M9 6h10M9 12h10M9 18h10"/><circle cx="5" cy="6" r="1.2"/><circle cx="5" cy="12" r="1.2"/><circle cx="5" cy="18" r="1.2"/></svg>',
+      document: '<svg viewBox="0 0 24 24"><path d="M6 3h9l3 3v15H6a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2Z"/><path d="M15 3v5h5M8 11h8M8 15h8M8 18h5"/></svg>',
+      extract: '<svg viewBox="0 0 24 24"><path d="M5 5h14M5 19h14M7 8h10v8H7z"/><path d="M10 11h4M10 14h4"/></svg>',
+      tasks: '<svg viewBox="0 0 24 24"><path d="m5 7 1.5 1.5L10 5M12 7h7M5 13l1.5 1.5L10 11M12 13h7M5 19l1.5 1.5L10 17M12 19h7"/></svg>',
+      table: '<svg viewBox="0 0 24 24"><rect x="4" y="5" width="16" height="14" rx="2"/><path d="M4 10h16M4 15h16M10 5v14M16 5v14"/></svg>',
+      folder: '<svg viewBox="0 0 24 24"><path d="M4 7.5A2.5 2.5 0 0 1 6.5 5H10l2 2h5.5A2.5 2.5 0 0 1 20 9.5v7A2.5 2.5 0 0 1 17.5 19h-11A2.5 2.5 0 0 1 4 16.5z"/></svg>'
+    };
+    const groups = [
+      {
+        title: "ملخص سريع",
+        icon: icons.sparkle,
+        tools: [
+          {
+            title: "تجميع المعلومات",
+            description: "دمج عدة نصوص في ملخص موحد ومنظم",
+            icon: summaryToolIcons.stack
+          },
+          {
+            title: "خلاصة تنفيذية",
+            description: "إنشاء ملخص تنفيذي جاهز للعروض والاجتماعات",
+            icon: summaryToolIcons.executive
+          },
+          {
+            title: "تلخيص إلى نقاط",
+            description: "تحويل النص إلى نقاط رئيسية مرتبة وواضحة",
+            icon: summaryToolIcons.bullets
+          },
+          {
+            title: "تلخيص نص طويل",
+            description: "تلخيص المقالات والتقارير الطويلة في نقاط مختصرة",
+            icon: summaryToolIcons.document
+          }
+        ]
+      },
+      {
+        title: "تنظيم المحتوى",
+        icon: summaryToolIcons.table,
+        tools: [
+          {
+            title: "استخراج عناصر أساسية",
+            description: "استخراج الأسماء، التواريخ، الأرقام والحقائق المهمة",
+            icon: summaryToolIcons.extract
+          },
+          {
+            title: "قوائم مهام",
+            description: "تحويل النص إلى قائمة مهام مرتبة حسب الأولوية",
+            icon: summaryToolIcons.tasks
+          },
+          {
+            title: "إنشاء جداول منظمة",
+            description: "تحويل المعلومات إلى جداول مرتبة وسهلة",
+            icon: summaryToolIcons.table
+          },
+          {
+            title: "تنظيم وتقسيم المحتوى",
+            description: "تقسيم المحتوى إلى أقسام وعناوين فرعية",
+            icon: summaryToolIcons.folder
+          }
+        ]
+      }
+    ];
+
+    return `
+      <section class="guest-main tools-main tools-summary-main" aria-label="تلخيص وتنظيم">
+        <div class="tools-page summary-tools-page">
+          <header class="tools-hero summary-tools-hero">
+            <div class="tools-title-row">
+              <span class="tools-title-icon" aria-hidden="true">${icons.document}</span>
+              <h1>تلخيص وتنظيم</h1>
+            </div>
+            <p>أدوات ذكية تساعدك على تلخيص المعلومات وتنظيمها بذكاء</p>
+          </header>
+
+          <nav class="tools-unified-bar" aria-label="تصنيفات الأدوات">
+            ${categories.map((category) => `
+              <button class="tools-unified-filter ${category.summaryTools ? "is-active" : ""}" type="button" ${category.freeTools ? "data-open-free-tools" : category.writingTools ? "data-open-writing-tools" : category.summaryTools ? "data-open-summary-tools" : "data-open-tools"}>
+                ${escapeHtml(category.title)}
+              </button>
+            `).join("")}
+            <button class="tools-unified-return" type="button" data-return-chat>
+              <span aria-hidden="true">←</span>
+              <b>العودة إلى الشات</b>
+            </button>
+          </nav>
+
+          <div class="summary-tools-sections">
+            ${groups.map((group) => `
+              <section class="summary-tools-block" aria-label="${escapeHtml(group.title)}">
+                <h2>
+                  <span aria-hidden="true">${group.icon}</span>
+                  <b>${escapeHtml(group.title)}</b>
+                </h2>
+                <div class="tools-grid summary-tools-grid">
+                  ${group.tools.map((tool) => `
+                    <button class="tool-card summary-tool-card" type="button" data-tool-key="writing-assistant" data-card="${escapeHtml(tool.title)}">
+                      <span class="tool-card-star" aria-hidden="true">${icons.star}</span>
+                      <span class="tool-card-icon" aria-hidden="true">${tool.icon}</span>
+                      <strong>${escapeHtml(tool.title)}</strong>
+                      <span class="tool-card-copy">${escapeHtml(tool.description)}</span>
+                      <span class="summary-tool-action">
+                        <span>استخدم الأداة</span>
+                        <b aria-hidden="true">←</b>
+                      </span>
+                    </button>
+                  `).join("")}
+                </div>
+              </section>
+            `).join("")}
+          </div>
+        </div>
+      </section>
+    `;
+  }
+
   function renderToolsMain(profile) {
     const showingSubscriberTools = state.toolView === "subscriber-tools";
     const hasSubscriberAccess = hasSubscriberToolsAccess();
@@ -5294,7 +5421,7 @@
     const categories = [
       { title: "الأكثر استخدامًا" },
       { title: "كتابة وتحرير", writingTools: true },
-      { title: "تلخيص وتنظيم" },
+      { title: "تلخيص وتنظيم", summaryTools: true },
       { title: "تحليل وبيانات" },
       { title: "إنتاجية" },
       { title: "تعليم وتعلم" },
@@ -5389,7 +5516,7 @@
 
           <nav class="tools-unified-bar" aria-label="تصنيفات الأدوات">
             ${categories.map((category, index) => `
-              <button class="tools-unified-filter ${category.freeTools ? (showingSubscriberTools ? "is-active" : "") : (!showingSubscriberTools && index === 0 ? "is-active" : "")}" type="button" ${category.freeTools ? "data-open-free-tools" : category.writingTools ? "data-open-writing-tools" : "data-open-tools"}>
+              <button class="tools-unified-filter ${category.freeTools ? (showingSubscriberTools ? "is-active" : "") : (!showingSubscriberTools && index === 0 ? "is-active" : "")}" type="button" ${category.freeTools ? "data-open-free-tools" : category.writingTools ? "data-open-writing-tools" : category.summaryTools ? "data-open-summary-tools" : "data-open-tools"}>
                 ${escapeHtml(category.title)}
               </button>
             `).join("")}
@@ -8558,6 +8685,9 @@
       if (state.toolView === "writing-tools") {
         return renderWritingEditingToolsMain(profile);
       }
+      if (state.toolView === "summary-tools") {
+        return renderSummaryOrganizationToolsMain(profile);
+      }
       if (state.toolView === "image-enhancer") {
         return renderImageEnhancerMain(profile);
       }
@@ -10156,6 +10286,14 @@
         state.homeConversationOpen = false;
         state.openThreadMenuId = "";
         state.toolView = "writing-tools";
+        setSection("ai-tools");
+        return;
+      }
+
+      if (event.target.closest("[data-open-summary-tools]")) {
+        state.homeConversationOpen = false;
+        state.openThreadMenuId = "";
+        state.toolView = "summary-tools";
         setSection("ai-tools");
         return;
       }
