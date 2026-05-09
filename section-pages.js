@@ -5334,31 +5334,25 @@
     };
 
     const tools = [
-      { key: "image-enhancer", title: "رفع جودة الصورة", description: "رفع جودة الصورة وتكبيرها مع الحفاظ على التفاصيل", icon: toolIcons.hd },
-      { key: "image-clarifier", title: "توضيح الصورة", description: "تحسين وضوح الصورة وإزالة الضبابية", icon: toolIcons.imagePlus },
-      { key: "png-to-pdf", title: "تحويل PNG إلى PDF", description: "حول صور PNG إلى ملف PDF بسهولة", icon: toolIcons.pngPdf },
-      { key: "pdf-to-png", title: "تحويل PDF إلى PNG", description: "حول صفحات PDF إلى صور PNG عالية الجودة", icon: toolIcons.pdfPng },
-      { key: "image-converter", title: "تحويل صيغة الصورة", description: "تحويل الصور بين مختلف الصيغ (JPG, PNG, WebP)", icon: toolIcons.image },
-      { key: "image-rotator", title: "تدوير الصورة", description: "تدوير الصور إلى أي اتجاه بسهولة", icon: icons.refresh },
+      { title: "حذف صفحات", description: "حذف صفحات محددة من الملفات بسرعة ودقة", icon: icons.delete },
+      { title: "تعديل النصوص والروابط", description: "تعديل النصوص والروابط داخل الملفات", icon: icons.edit },
+      { title: "تغيير كلمة المرور", description: "تغيير كلمة مرور الملفات بخطوات بسيطة", icon: icons.lock },
+      { key: "pdf-unlock", title: "إزالة الحماية", description: "إزالة الحماية من ملفات PDF بكل سهولة وأمان", icon: toolIcons.unlock },
+      { title: "تعديل الصور", description: "تحسين الصور داخل الملفات أو استخراجها بجودة عالية", icon: toolIcons.image },
+      { key: "image-compressor", title: "ضغط الملفات", description: "تقليل حجم الملفات مع الحفاظ على الجودة", icon: toolIcons.compress },
+      { title: "تقسيم الملفات", description: "تقسيم الملفات إلى أجزاء حسب الحاجة", icon: toolIcons.split },
+      { title: "دمج ملفات", description: "دمج عدة ملفات في ملف واحد بترتيب اختياري", icon: toolIcons.merge },
       { key: "image-cropper", title: "قص الصورة", description: "قص وتحديد الجزء المطلوب من الصورة", icon: toolIcons.crop },
-      { key: "image-compressor", title: "ضغط الصور", description: "تقليل حجم الصور مع الحفاظ على الجودة", icon: toolIcons.compress },
-      { key: "pdf-unlock", title: "إزالة حماية PDF", description: "إزالة كلمة المرور من ملفات PDF", icon: toolIcons.unlock },
-      { title: "حماية PDF", description: "إضافة كلمة مرور لحماية ملفات PDF", icon: icons.lock },
-      { title: "تقسيم PDF", description: "تقسيم ملف PDF إلى صفحات منفصلة", icon: toolIcons.split },
-      { title: "دمج ملفات PDF", description: "دمج عدة ملفات PDF في ملف واحد", icon: toolIcons.merge },
-      { title: "استخراج النص من الصورة", description: "استخراج النصوص من الصور (OCR) بدقة عالية", icon: toolIcons.ocr },
-      { title: "حذف علامة مائية", description: "إزالة العلامات المائية من ملفات PDF", icon: toolIcons.watermark },
-      { title: "حذف صفحات PDF", description: "حذف صفحات محددة من ملف PDF", icon: icons.delete },
-      { title: "تعديل مستند PDF", description: "تعديل النصوص والروابط في ملفات PDF", icon: icons.edit }
+      { key: "image-converter", title: "تحويل صيغة الصورة", description: "تحويل الصور بين مختلف الصيغ JPG, PNG, WebP", icon: toolIcons.image },
+      { title: "استخراج النص من الصورة", description: "استخراج النصوص من الصور بدقة عالية OCR", icon: toolIcons.ocr },
+      { key: "image-clarifier", title: "توضيح الصورة", description: "تحسين وضوح الصورة وإزالة الضبابية", icon: toolIcons.hd },
+      { title: "استخراج النص من الصورة (OCR)", description: "استخراج النصوص من الصور بدقة عالية", icon: toolIcons.ocr },
+      { title: "حذف علامة مائية", description: "إزالة العلامات المائية من الملفات", icon: toolIcons.watermark },
+      { title: "قلب الصورة", description: "قلب الصورة أفقيًا أو عموديًا بسهولة", icon: '<svg viewBox="0 0 24 24"><path d="M7 5v14M17 5v14"/><path d="m10 8 4 4-4 4M14 8l-4 4 4 4"/></svg>' },
+      { key: "image-rotator", title: "تدوير الصورة", description: "تدوير الصور إلى أي اتجاه بسهولة", icon: icons.refresh }
     ];
 
-    const highlights = [
-      { title: "جودة احترافية", description: "نتائج عالية الجودة في كل مرة", icon: icons.gem },
-      { title: "أداء عالي", description: "معالجة سريعة داخل متصفحك", icon: icons.bolt },
-      { title: "بدون حدود", description: "استخدام غير محدود لكافة الأدوات", icon: '<svg viewBox="0 0 24 24"><path d="M7.5 15.5C4.5 15.5 3 13.6 3 12s1.5-3.5 4.5-3.5c4 0 5 7 9 7 3 0 4.5-1.9 4.5-3.5s-1.5-3.5-4.5-3.5c-4 0-5 7-9 7Z"/></svg>' },
-      { title: "خصوصية وأمان", description: "ملفاتك تُعالج محلياً ولا يتم رفعها للخادم", icon: '<svg viewBox="0 0 24 24"><path d="M12 3 20 6v5.8c0 4.6-3.1 7.6-8 9.2-4.9-1.6-8-4.6-8-9.2V6Z"/><path d="m8.8 12 2.1 2.1 4.6-4.8"/></svg>' },
-      { title: "أدوات حصرية", description: "أدوات متقدمة لا تتوفر في الخطة المجانية", icon: '<svg viewBox="0 0 24 24"><path d="M12 3 14.2 8l5.4.4-4.1 3.6 1.3 5.2L12 14.5 7.2 17.2 8.5 12 4.4 8.4 9.8 8Z"/><circle cx="12" cy="12" r="8.5"/></svg>' }
-    ];
+    const categories = ["الأكثر استخداماً", "كتابة وتحرير", "تلخيص وتنظيم", "تحليل بيانات", "إنتاجية", "تعليم وتعلم", "أدوات مجانية"];
 
     return `
       <section class="guest-main tools-main free-tools-main" aria-label="أدوات مجانية للمشتركين">
@@ -5372,10 +5366,6 @@
         </header>
 
         <div class="tools-page free-tools-page">
-          <button class="free-tools-back-link" type="button" data-open-tools>
-            <span aria-hidden="true">←</span>
-            <b>العودة إلى الأدوات</b>
-          </button>
           <header class="free-tools-hero">
             <div class="free-tools-title">
               <span class="free-tools-gift" aria-hidden="true">${icons.gift}</span>
@@ -5389,6 +5379,18 @@
             </span>
           </header>
 
+          <nav class="free-tools-filters" aria-label="تصنيفات أدوات المشتركين">
+            ${categories.map((category) => `
+              <button class="free-tools-filter ${category === "أدوات مجانية" ? "is-active" : ""}" type="button">
+                ${escapeHtml(category)}
+              </button>
+            `).join("")}
+            <button class="free-tools-chat-return" type="button" data-return-chat>
+              <span aria-hidden="true">←</span>
+              <b>العودة إلى الشات</b>
+            </button>
+          </nav>
+
           <section class="free-tools-grid" aria-label="قائمة الأدوات المجانية للمشتركين">
             ${tools.map((tool) => {
               const unlockedAttrs = tool.key
@@ -5396,6 +5398,7 @@
                 : `data-card="${escapeHtml(tool.title)}" data-subscriber-tool-card`;
               return `
               <button class="free-tool-card ${hasSubscriberAccess ? "is-unlocked" : "requires-auth"}" type="button" ${hasSubscriberAccess ? unlockedAttrs : `data-open-upgrade data-card="${escapeHtml(tool.title)}"`} aria-label="${escapeHtml(`${tool.title} - ${hasSubscriberAccess ? "متاح في باقتك" : "للمشتركين فقط"}`)}">
+                <span class="free-tool-favorite" aria-hidden="true">${icons.star}</span>
                 <span class="free-tool-body">
                   <span class="free-tool-icon" aria-hidden="true">${tool.icon}</span>
                   <span class="free-tool-copy">
@@ -5412,27 +5415,26 @@
             }).join("")}
           </section>
 
-          <footer class="free-tools-benefits" aria-label="مزايا الأدوات">
-            ${highlights.map((item) => `
-              <span class="free-tools-benefit">
-                <i aria-hidden="true">${item.icon}</i>
-                <span>
-                  <b>${escapeHtml(item.title)}</b>
-                  <small>${escapeHtml(item.description)}</small>
-                </span>
+          <footer class="free-tools-benefits" aria-label="مزايا أدوات المشتركين">
+            <article class="free-tools-footer-card">
+              <i aria-hidden="true">${icons.crown}</i>
+              <span>
+                <b>أدوات قوية للمشتركين</b>
+                <small>استمتع بإمكانيات متقدمة تساعدك على إنجاز مهامك بشكل أسرع.</small>
               </span>
-            `).join("")}
-            ${hasSubscriberAccess ? `
-              <span class="free-tools-plan-badge">
-                ${icons.crown}
-                <span>الأدوات والمزايا مفعلة لشرارة وطويق والرائد</span>
+            </article>
+            <div class="free-tools-suggest-center">
+              <span>هل لديك اقتراح لأداة جديدة؟</span>
+              <small>نحن نعمل باستمرار على إضافة أدوات ذكية بناءً على اقتراحاتك</small>
+              <button type="button" data-card="اقتراح أداة جديدة">اقترح أداة جديدة</button>
+            </div>
+            <article class="free-tools-footer-card">
+              <i aria-hidden="true">${icons.gift}</i>
+              <span>
+                <b>تحديثات مستمرة</b>
+                <small>نضيف أدوات ومميزات جديدة باستمرار للمشتركين.</small>
               </span>
-            ` : `
-              <button class="free-tools-pricing-btn" type="button" data-open-upgrade>
-                <span>عرض الباقات</span>
-                ${icons.crown}
-              </button>
-            `}
+            </article>
           </footer>
         </div>
       </section>
