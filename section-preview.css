@@ -4189,6 +4189,7 @@ body[data-workspace-mode="home"] .guest-root {
 
 .tools-title-row {
   display: inline-flex;
+  direction: rtl;
   align-items: center;
   justify-content: center;
   gap: 8px;
@@ -4379,6 +4380,34 @@ body[data-workspace-mode="home"] .guest-root {
   background: rgba(26, 214, 163, 0.12);
   font-size: 0.66rem;
   font-weight: 950;
+}
+
+.tool-card-meta b.is-available {
+  color: #6b4cff;
+  background: rgba(111, 76, 255, 0.09);
+}
+
+.tool-card-meta b.is-unavailable {
+  color: #7f87a8;
+  background: rgba(127, 135, 168, 0.1);
+}
+
+.tools-grid.is-subscriber-filter .tool-card {
+  min-height: 158px;
+}
+
+.tools-grid.is-subscriber-filter .tool-card strong {
+  min-height: 24px;
+  font-size: 0.94rem;
+  line-height: 1.28;
+}
+
+.tools-grid.is-subscriber-filter .tool-card-copy {
+  min-height: 38px;
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
 }
 
 .tool-card-meta small {

@@ -1254,8 +1254,7 @@
   }
 
   function getSavedConversationSections() {
-    const primary = isHomeWorkspace ? "messages" : state.section;
-    return Array.from(new Set([primary, "messages"].filter((key) => state.threadState[key])));
+    return Array.from(new Set([state.section, "dashboard", "messages"].filter((key) => state.threadState[key])));
   }
 
   function getSavedConversationGroup(sectionKey) {
@@ -5210,8 +5209,21 @@
   }
 
   function renderToolsMain(profile) {
+    const showingSubscriberTools = state.toolView === "subscriber-tools";
+    const hasSubscriberAccess = hasSubscriberToolsAccess();
+    const availabilityLabel = hasSubscriberAccess ? "متاحة في باقتك" : "غير متاحة في باقتك";
+    const subscriberToolIcons = {
+      image: '<svg viewBox="0 0 24 24"><rect x="4" y="5" width="16" height="14" rx="2.5"/><path d="m7 16 3.2-3.2 2.7 2.7 2.3-2.3L19 17"/><circle cx="9" cy="10" r="1.4"/></svg>',
+      crop: '<svg viewBox="0 0 24 24"><path d="M6 3v13a2 2 0 0 0 2 2h13"/><path d="M3 6h13a2 2 0 0 1 2 2v13"/><path d="M9 9h6v6H9z"/></svg>',
+      split: '<svg viewBox="0 0 24 24"><path d="M7 3h8l4 4v14H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2Z"/><path d="M15 3v5h5M9 8h2M9 12h6M9 16h6"/></svg>',
+      merge: '<svg viewBox="0 0 24 24"><path d="M6 4h8l3 3v9H6Z"/><path d="M14 4v4h4"/><path d="M9 19h9V9"/><path d="M9 11h5M9 14h5"/></svg>',
+      watermark: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="7"/><path d="m7 17 10-10M8.5 8.5l7 7M12 5v14M5 12h14"/></svg>',
+      ocr: '<svg viewBox="0 0 24 24"><path d="M4 8V5h3M17 5h3v3M20 16v3h-3M7 19H4v-3"/><path d="M8 9h8M12 9v7M9.5 16h5"/></svg>',
+      hd: '<svg viewBox="0 0 24 24"><rect x="4" y="5" width="16" height="14" rx="3"/><path d="M8 15V9M8 12h3M11 15V9M14 9h2.2A2.8 2.8 0 0 1 19 11.8v.4A2.8 2.8 0 0 1 16.2 15H14Z"/></svg>',
+      flip: '<svg viewBox="0 0 24 24"><path d="M7 5v14M17 5v14"/><path d="m10 8 4 4-4 4M14 8l-4 4 4 4"/></svg>'
+    };
     const categories = [
-      { title: "الكل" },
+      { title: "الأكثر استخدامًا" },
       { title: "كتابة وتحرير" },
       { title: "تلخيص وتنظيم" },
       { title: "تحليل وبيانات" },
@@ -5263,6 +5275,25 @@
         icon: icons.ai
       }
     ];
+    const subscriberTools = [
+      { title: "حذف صفحات", description: "حذف صفحات محددة من الملفات بسرعة ودقة", icon: icons.delete },
+      { title: "تعديل النصوص والروابط", description: "تعديل النصوص والروابط داخل الملفات", icon: icons.edit },
+      { title: "تغيير كلمة المرور", description: "تغيير كلمة مرور الملفات بخطوات بسيطة", icon: icons.lock },
+      { key: "pdf-unlock", title: "إزالة الحماية", description: "إزالة الحماية من ملفات PDF بكل سهولة وأمان", icon: icons.lock },
+      { title: "تعديل الصور", description: "تحسين الصور داخل الملفات أو استخراجها بجودة عالية", icon: subscriberToolIcons.image },
+      { key: "image-compressor", title: "ضغط الملفات", description: "تقليل حجم الملفات مع الحفاظ على الجودة", icon: subscriberToolIcons.split },
+      { title: "تقسيم الملفات", description: "تقسيم الملفات إلى أجزاء حسب الحاجة", icon: subscriberToolIcons.split },
+      { title: "دمج ملفات", description: "دمج عدة ملفات في ملف واحد بترتيب اختياري", icon: subscriberToolIcons.merge },
+      { key: "image-cropper", title: "قص الصورة", description: "قص وتحديد الجزء المطلوب من الصورة", icon: subscriberToolIcons.crop },
+      { key: "image-converter", title: "تحويل صيغة الصورة", description: "تحويل الصور بين مختلف الصيغ JPG, PNG, WebP", icon: subscriberToolIcons.image },
+      { title: "استخراج النص من الصورة", description: "استخراج النصوص من الصور بدقة عالية OCR", icon: subscriberToolIcons.ocr },
+      { key: "image-clarifier", title: "توضيح الصورة", description: "تحسين وضوح الصورة وإزالة الضبابية", icon: subscriberToolIcons.hd },
+      { title: "استخراج النص من الصورة (OCR)", description: "استخراج النصوص من الصور بدقة عالية", icon: subscriberToolIcons.ocr },
+      { title: "حذف علامة مائية", description: "إزالة العلامات المائية من الملفات", icon: subscriberToolIcons.watermark },
+      { title: "قلب الصورة", description: "قلب الصورة أفقيًا أو عموديًا بسهولة", icon: subscriberToolIcons.flip },
+      { key: "image-rotator", title: "تدوير الصورة", description: "تدوير الصور إلى أي اتجاه بسهولة", icon: icons.refresh }
+    ];
+    const visibleTools = showingSubscriberTools ? subscriberTools : tools;
 
     return `
       <section class="guest-main tools-main" aria-label="أدوات الذكاء الاصطناعي">
@@ -5275,15 +5306,15 @@
 
           <header class="tools-hero">
             <div class="tools-title-row">
-              <h1>أدوات الذكاء الاصطناعي</h1>
               <span class="tools-title-icon" aria-hidden="true">${icons.settings}</span>
+              <h1>أدوات الذكاء الاصطناعي</h1>
             </div>
             <p>مجموعة من الأدوات الذكية لمساعدتك في العمل والإبداع</p>
           </header>
 
           <nav class="tools-unified-bar" aria-label="تصنيفات الأدوات">
             ${categories.map((category, index) => `
-              <button class="tools-unified-filter ${index === 0 ? "is-active" : ""}" type="button" ${category.freeTools ? "data-open-free-tools" : "data-open-tools"}>
+              <button class="tools-unified-filter ${category.freeTools ? (showingSubscriberTools ? "is-active" : "") : (!showingSubscriberTools && index === 0 ? "is-active" : "")}" type="button" ${category.freeTools ? "data-open-free-tools" : "data-open-tools"}>
                 ${escapeHtml(category.title)}
               </button>
             `).join("")}
@@ -5293,19 +5324,25 @@
             </button>
           </nav>
 
-          <section class="tools-grid">
-            ${tools.map((tool) => `
-              <button class="tool-card ${isAuthenticated() ? "" : "requires-auth"}" type="button" data-tool-key="${escapeHtml(tool.key || "")}" data-card="${escapeHtml(tool.title)}">
+          <section class="tools-grid ${showingSubscriberTools ? "is-subscriber-filter" : ""}">
+            ${visibleTools.map((tool) => {
+              const lockedSubscriberTool = showingSubscriberTools && !hasSubscriberAccess;
+              const attrs = showingSubscriberTools
+                ? (lockedSubscriberTool ? `data-open-upgrade data-card="${escapeHtml(tool.title)}"` : `${tool.key ? `data-tool-key="${escapeHtml(tool.key)}"` : ""} data-card="${escapeHtml(tool.title)}"`)
+                : `data-tool-key="${escapeHtml(tool.key || "")}" data-card="${escapeHtml(tool.title)}"`;
+              return `
+              <button class="tool-card ${showingSubscriberTools ? "subscriber-tool-card" : ""} ${isAuthenticated() && (!showingSubscriberTools || hasSubscriberAccess) ? "" : "requires-auth"}" type="button" ${attrs}>
                 <span class="tool-card-star" aria-hidden="true">${icons.star}</span>
                 <span class="tool-card-icon" aria-hidden="true">${tool.icon}</span>
                 <strong>${escapeHtml(tool.title)}</strong>
                 <span class="tool-card-copy">${escapeHtml(tool.description)}</span>
                 <span class="tool-card-meta">
-                  <b>مجاني</b>
-                  <small>متاح في: طويق، برو</small>
+                  <b class="${showingSubscriberTools ? (hasSubscriberAccess ? "is-available" : "is-unavailable") : ""}">${escapeHtml(showingSubscriberTools ? availabilityLabel : "مجاني")}</b>
+                  <small>${escapeHtml(showingSubscriberTools ? "شرارة، طويق، الرائد" : "متاح في: طويق، برو")}</small>
                 </span>
               </button>
-            `).join("")}
+            `;
+            }).join("")}
           </section>
 
           <p class="tools-suggest">
@@ -8443,9 +8480,6 @@
       if (state.toolView === "writing-assistant") {
         return renderWritingAssistantMain(profile);
       }
-      if (state.toolView === "subscriber-tools") {
-        return renderSubscriberToolsMain(profile);
-      }
       if (state.toolView === "image-enhancer") {
         return renderImageEnhancerMain(profile);
       }
@@ -8760,7 +8794,7 @@
   function renderShell() {
     const profile = getProfile();
     const isToolsWorkspace = state.section === "ai-tools";
-    const isSubscriberTools = isToolsWorkspace && ["subscriber-tools", "image-enhancer", "image-clarifier", "png-to-pdf", "pdf-to-png", "pdf-unlock", "image-converter", "image-compressor", "image-rotator", "image-cropper"].includes(state.toolView);
+    const isSubscriberTools = isToolsWorkspace && ["image-enhancer", "image-clarifier", "png-to-pdf", "pdf-to-png", "pdf-unlock", "image-converter", "image-compressor", "image-rotator", "image-cropper"].includes(state.toolView);
     app.innerHTML = `
       <div class="guest-shell ${state.theme === "dark" ? "theme-dark" : ""} ${isHomeWorkspace ? "is-home-workspace" : ""} ${isToolsWorkspace ? "is-tools-workspace" : ""} ${isSubscriberTools ? "is-subscriber-tools" : ""} ${state.sidebarCollapsed ? "is-sidebar-collapsed" : ""}">
         ${renderSidebar()}
