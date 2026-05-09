@@ -2,7 +2,10 @@ const http = require("http");
 const fs = require("fs");
 const path = require("path");
 const crypto = require("crypto");
-const { execSync } = require("child_process");
+const { execFile, execSync } = require("child_process");
+const { promisify } = require("util");
+
+const execFileAsync = promisify(execFile);
 
 const ROOT_DIR = __dirname;
 loadEnvFile(path.join(ROOT_DIR, ".env"));
@@ -72,6 +75,9 @@ const RATE_LIMIT_WINDOW_MS = Math.max(1000, Number(process.env.RATE_LIMIT_WINDOW
 const RATE_LIMIT_CHAT_MAX = Math.max(1, Number(process.env.RATE_LIMIT_CHAT_MAX || 20));
 const RATE_LIMIT_SOLVE_MAX = Math.max(1, Number(process.env.RATE_LIMIT_SOLVE_MAX || 20));
 const RATE_LIMIT_GENERAL_MAX = Math.max(1, Number(process.env.RATE_LIMIT_GENERAL_MAX || 60));
+const PDF_PROTECTION_MAX_FILE_SIZE = Math.max(1024 * 1024, Number(process.env.PDF_PROTECTION_MAX_FILE_SIZE || 100 * 1024 * 1024));
+const PDF_TOOL_TMP_DIR = path.join(ROOT_DIR, ".tmp", "pdf-tools");
+const QPDF_BINARY = String(process.env.QPDF_BINARY || "qpdf").trim() || "qpdf";
 const SEARCH_XP_COST = Math.max(1, Number(process.env.SEARCH_XP_COST || 10));
 const SEARCH_DEEP_XP_COST = Math.max(SEARCH_XP_COST, Number(process.env.SEARCH_DEEP_XP_COST || 15));
 const TONE_XP_COST = Math.max(1, Number(process.env.TONE_XP_COST || 5));
@@ -419,6 +425,104 @@ function readRequestBody(req) {
     req.on("end", () => resolve(raw));
     req.on("error", reject);
   });
+}
+
+function readRequestBuffer(req, maxBytes) {
+  return new Promise((resolve, reject) => {
+    const chunks = [];
+    let total = 0;
+    req.on("data", (chunk) => {
+      total += chunk.length;
+      if (total > maxBytes) {
+        reject(createHttpError(413, "Payload too large"));
+        req.destroy();
+        return;
+      }
+      chunks.push(chunk);
+    });
+    req.on("end", () => resolve(Buffer.concat(chunks, total)));
+    req.on("error", reject);
+  });
+}
+
+function parseContentDisposition(value) {
+  const result = {};
+  String(value || "").split(";").forEach((part) => {
+    const [rawKey, ...rawValue] = part.trim().split("=");
+    const key = String(rawKey || "").trim().toLowerCase();
+    if (!key) return;
+    let nextValue = rawValue.join("=").trim();
+    if (nextValue.startsWith('"') && nextValue.endsWith('"')) {
+      nextValue = nextValue.slice(1, -1);
+    }
+    result[key] = nextValue;
+  });
+  return result;
+}
+
+async function parseMultipartFormData(req, options = {}) {
+  const contentType = String(req.headers["content-type"] || "");
+  const boundaryMatch = contentType.match(/boundary=(?:"([^"]+)"|([^;]+))/i);
+  if (!boundaryMatch) {
+    throw createHttpError(400, "multipart/form-data boundary is required.");
+  }
+
+  const boundary = String(boundaryMatch[1] || boundaryMatch[2] || "").trim();
+  if (!boundary) {
+    throw createHttpError(400, "multipart/form-data boundary is invalid.");
+  }
+
+  const maxBytes = Math.max(1024, Number(options.maxBytes || MAX_BODY_BYTES));
+  const maxFileBytes = Math.max(1024, Number(options.maxFileBytes || maxBytes));
+  const rawBuffer = await readRequestBuffer(req, maxBytes);
+  const raw = rawBuffer.toString("binary");
+  const marker = `--${boundary}`;
+  const fields = {};
+  const files = {};
+
+  for (const segment of raw.split(marker)) {
+    if (!segment || segment === "--\r\n" || segment === "--") continue;
+    let part = segment;
+    if (part.startsWith("\r\n")) part = part.slice(2);
+    if (part.endsWith("\r\n")) part = part.slice(0, -2);
+    if (part.endsWith("--")) part = part.slice(0, -2);
+
+    const headerEnd = part.indexOf("\r\n\r\n");
+    if (headerEnd < 0) continue;
+    const headerText = part.slice(0, headerEnd);
+    const bodyBinary = part.slice(headerEnd + 4);
+    const headers = {};
+    headerText.split("\r\n").forEach((line) => {
+      const separator = line.indexOf(":");
+      if (separator < 0) return;
+      const key = line.slice(0, separator).trim().toLowerCase();
+      const value = line.slice(separator + 1).trim();
+      if (key) headers[key] = value;
+    });
+
+    const disposition = parseContentDisposition(headers["content-disposition"]);
+    const fieldName = String(disposition.name || "").trim();
+    if (!fieldName) continue;
+
+    const filename = String(disposition.filename || "").trim();
+    if (filename) {
+      const content = Buffer.from(bodyBinary, "binary");
+      if (content.length > maxFileBytes) {
+        throw createHttpError(413, "Uploaded file is too large.");
+      }
+      files[fieldName] = {
+        fieldName,
+        filename,
+        mimetype: String(headers["content-type"] || "application/octet-stream").trim(),
+        buffer: content,
+        size: content.length
+      };
+    } else {
+      fields[fieldName] = Buffer.from(bodyBinary, "binary").toString("utf8");
+    }
+  }
+
+  return { fields, files };
 }
 
 async function parseJsonBody(req) {
@@ -979,6 +1083,34 @@ function isFreeUser(user) {
   return dailyXp <= 0 || planType === "starter" || planType === "free";
 }
 
+function hasSubscriberToolAccess(user) {
+  if (!user) return false;
+  const planText = [
+    user.plan_type,
+    user.planType,
+    user.package_key,
+    user.packageKey,
+    user.package_name,
+    user.packageName,
+    user.package
+  ].map((item) => String(item || "").trim().toLowerCase()).join(" ");
+  if (/(^|\s)(spark|tuwaiq|pioneer|business|pro|pro_plus|pro_max|elite|ultra)(\s|$)/.test(planText)) {
+    return true;
+  }
+  if (/(^|\s)(free|starter)(\s|$)/.test(planText)) {
+    return false;
+  }
+  return Number(user.package_daily_xp || user.daily_xp || user.packageDailyXp || 0) > 0;
+}
+
+async function requireSubscriberToolUser(req) {
+  const auth = await requireAuthenticatedUser(req);
+  if (!hasSubscriberToolAccess(auth.user)) {
+    throw createHttpError(403, "هذه الأداة متاحة للمشتركين فقط.");
+  }
+  return auth;
+}
+
 function applyUserModelLimits(profile, user) {
   const safeProfile = { ...(profile || modelProfiles.orlixor) };
   if (!isFreeUser(user)) return safeProfile;
@@ -1295,6 +1427,24 @@ async function recordAdminAction(req, auth, action, targetType = "", targetId = 
     });
   } catch (error) {
     console.warn("Admin log write failed:", error.message);
+  }
+}
+
+async function recordToolUsageEvent(req, auth, toolKey, taskType = "", metadata = {}) {
+  if (!databaseClient || typeof databaseClient.saveToolUsage !== "function") return;
+  try {
+    await databaseClient.saveToolUsage({
+      user_id: auth?.user?.id,
+      tool_key: toolKey,
+      task_type: taskType,
+      xp_cost: 0,
+      metadata: {
+        ...metadata,
+        ip: getRequestIp(req)
+      }
+    });
+  } catch (error) {
+    console.warn("Tool usage log write failed:", error.message);
   }
 }
 
@@ -2780,6 +2930,182 @@ async function handleLogout(req, res) {
     success: true,
     message: "Logged out successfully."
   });
+}
+
+function sanitizeDownloadFileName(value, fallback = "orlixor-file.pdf") {
+  const name = String(value || fallback)
+    .replace(/[\\/:*?"<>|\r\n]+/g, "-")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, 160);
+  return name || fallback;
+}
+
+function sendBinaryDownload(req, res, statusCode, buffer, fileName, contentType = "application/octet-stream") {
+  setCorsHeaders(req, res);
+  const safeName = sanitizeDownloadFileName(fileName);
+  res.writeHead(statusCode, {
+    "Content-Type": contentType,
+    "Content-Length": buffer.length,
+    "Content-Disposition": `attachment; filename="${safeName}"; filename*=UTF-8''${encodeURIComponent(safeName)}`
+  });
+  res.end(buffer);
+}
+
+async function safeDeleteFile(filePath) {
+  if (!filePath) return;
+  try {
+    await fs.promises.unlink(filePath);
+  } catch (_) {
+    // Temporary file already gone.
+  }
+}
+
+async function ensurePdfToolTmpDir() {
+  await fs.promises.mkdir(PDF_TOOL_TMP_DIR, { recursive: true });
+}
+
+function normalizePdfToolMode(value) {
+  const mode = String(value || "").trim();
+  if (["remove", "reset", "forgot_password_remove"].includes(mode)) return mode;
+  return "";
+}
+
+function normalizePdfToolReason(value) {
+  const reason = String(value || "").trim();
+  return ["forgot_password", "update_protection", "personal_file"].includes(reason) ? reason : "";
+}
+
+function getPdfOutputFileName(originalName, mode) {
+  const base = sanitizeDownloadFileName(String(originalName || "orlixor-document.pdf").replace(/\.pdf$/i, ""), "orlixor-document");
+  if (mode === "reset") return `${base}-protected.pdf`;
+  return `${base}-unlocked.pdf`;
+}
+
+async function runQpdf(args) {
+  try {
+    await execFileAsync(QPDF_BINARY, args, {
+      windowsHide: true,
+      timeout: 60_000,
+      maxBuffer: 1024 * 1024
+    });
+  } catch (error) {
+    if (error?.code === "ENOENT") {
+      throw createHttpError(503, "خدمة معالجة PDF غير مفعّلة على السيرفر. ثبّت qpdf ثم أعد المحاولة.");
+    }
+    const message = String(error?.stderr || error?.message || "");
+    if (/invalid password|password|encrypted|decrypt/i.test(message)) {
+      throw createHttpError(400, "تعذر إزالة الحماية. تأكد من كلمة المرور الحالية. هذه الأداة لا تكسر أو تخمّن كلمات المرور.");
+    }
+    throw createHttpError(400, "تعذر معالجة الملف. تأكد من صلاحية ملف PDF وحاول مرة أخرى.");
+  }
+}
+
+async function decryptPdfWithQpdf({ inputPath, outputPath, password }) {
+  const args = [];
+  if (password) args.push(`--password=${password}`);
+  args.push("--decrypt", inputPath, outputPath);
+  await runQpdf(args);
+}
+
+async function encryptPdfWithQpdf({ inputPath, outputPath, password }) {
+  await runQpdf([
+    "--encrypt",
+    password,
+    password,
+    "256",
+    "--",
+    inputPath,
+    outputPath
+  ]);
+}
+
+async function handlePdfRemoveProtection(req, res) {
+  const auth = await requireSubscriberToolUser(req);
+  const { fields, files } = await parseMultipartFormData(req, {
+    maxBytes: PDF_PROTECTION_MAX_FILE_SIZE + 1024 * 1024,
+    maxFileBytes: PDF_PROTECTION_MAX_FILE_SIZE
+  });
+
+  const uploadedFile = files.file;
+  const mode = normalizePdfToolMode(fields.mode);
+  const reason = normalizePdfToolReason(fields.reason);
+  const ownershipConfirmed = String(fields.ownershipConfirmed || "").trim() === "true";
+  const legalAgreement = String(fields.legalAgreement || fields.ownershipConfirmed || "").trim() === "true";
+  const currentPassword = String(fields.currentPassword || "");
+  const newPassword = String(fields.newPassword || "");
+
+  if (!uploadedFile) {
+    throw createHttpError(400, "لم يتم رفع ملف PDF.");
+  }
+  if (uploadedFile.mimetype && uploadedFile.mimetype !== "application/pdf" && !/\.pdf$/i.test(uploadedFile.filename)) {
+    throw createHttpError(400, "الملف يجب أن يكون PDF.");
+  }
+  if (!mode) {
+    throw createHttpError(400, "اختر طريقة إزالة الحماية.");
+  }
+  if (!ownershipConfirmed || !legalAgreement) {
+    throw createHttpError(400, "يجب تأكيد الملكية والموافقة على التعهد.");
+  }
+  if (!reason) {
+    throw createHttpError(400, "اختر سبب الاستخدام.");
+  }
+  if (mode === "forgot_password_remove" && reason !== "forgot_password") {
+    throw createHttpError(400, "خيار نسيان كلمة المرور يتطلب اختيار سبب: نسيت كلمة المرور.");
+  }
+  if ((mode === "remove" || mode === "reset") && !currentPassword) {
+    throw createHttpError(400, "أدخل كلمة المرور الحالية للملف.");
+  }
+  if (mode === "reset" && newPassword.length < 6) {
+    throw createHttpError(400, "كلمة المرور الجديدة يجب أن تكون 6 أحرف على الأقل.");
+  }
+
+  await ensurePdfToolTmpDir();
+  const requestId = crypto.randomUUID();
+  const inputPath = path.join(PDF_TOOL_TMP_DIR, `${requestId}-input.pdf`);
+  const outputPath = path.join(PDF_TOOL_TMP_DIR, `${requestId}-output.pdf`);
+  const tempUnlockedPath = path.join(PDF_TOOL_TMP_DIR, `${requestId}-unlocked.pdf`);
+
+  try {
+    await fs.promises.writeFile(inputPath, uploadedFile.buffer, { flag: "wx" });
+
+    if (mode === "reset") {
+      await decryptPdfWithQpdf({
+        inputPath,
+        outputPath: tempUnlockedPath,
+        password: currentPassword
+      });
+      await encryptPdfWithQpdf({
+        inputPath: tempUnlockedPath,
+        outputPath,
+        password: newPassword
+      });
+    } else {
+      await decryptPdfWithQpdf({
+        inputPath,
+        outputPath,
+        password: mode === "forgot_password_remove" ? "" : currentPassword
+      });
+    }
+
+    const outputBuffer = await fs.promises.readFile(outputPath);
+    await recordToolUsageEvent(req, auth, "pdf_remove_protection", mode, {
+      mode,
+      reason,
+      fileSize: uploadedFile.size,
+      outputSize: outputBuffer.length,
+      ownershipConfirmed: true
+    });
+
+    sendBinaryDownload(req, res, 200, outputBuffer, getPdfOutputFileName(uploadedFile.filename, mode), "application/pdf");
+  } catch (error) {
+    if (error?.statusCode) throw error;
+    throw createHttpError(400, "تعذر حذف كلمة المرور بدون كلمة المرور الحالية. هذه الأداة لا تقوم بكسر أو تخمين كلمات المرور.");
+  } finally {
+    await safeDeleteFile(inputPath);
+    await safeDeleteFile(outputPath);
+    await safeDeleteFile(tempUnlockedPath);
+  }
 }
 
 async function handleStudentDashboard(req, res) {
@@ -4684,6 +5010,11 @@ async function routeRequest(req, res) {
 
   if (req.method === "POST" && requestPath === "/api/tools/improve-style") {
     await handleImproveStyleTool(req, res);
+    return;
+  }
+
+  if (req.method === "POST" && requestPath === "/api/tools/pdf/remove-protection") {
+    await handlePdfRemoveProtection(req, res);
     return;
   }
 

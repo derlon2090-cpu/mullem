@@ -530,6 +530,24 @@
       error: "",
       status: ""
     },
+    pdfUnlock: {
+      file: null,
+      fileName: "",
+      fileSize: 0,
+      mode: "remove",
+      currentPassword: "",
+      newPassword: "",
+      ownership: "",
+      reason: "",
+      legalConfirm: false,
+      resultUrl: "",
+      resultFileName: "",
+      resultSize: 0,
+      loading: false,
+      progress: 0,
+      error: "",
+      status: ""
+    },
     imageConverter: {
       images: [],
       targetFormat: "image/jpeg",
@@ -1418,6 +1436,17 @@
     letter: [612, 792]
   };
   const pdfToPngMaxFileSize = 50 * 1024 * 1024;
+  const pdfUnlockMaxFileSize = 100 * 1024 * 1024;
+  const pdfUnlockModes = {
+    remove: "حذف كلمة المرور الحالية",
+    reset: "إعادة تعيين كلمة مرور",
+    forgot_password_remove: "حذف كلمة المرور عند نسيانها"
+  };
+  const pdfUnlockReasons = {
+    forgot_password: "نسيت كلمة المرور",
+    update_protection: "لدي نسخة قديمة وأحتاج تحديث الحماية",
+    personal_file: "ملفي الشخصي وأريد إزالة القفل"
+  };
   const imageConverterAllowedTypes = ["image/jpeg", "image/png", "image/webp"];
   const imageConverterMaxFileSize = 20 * 1024 * 1024;
   const imageConverterMaxFiles = 20;
@@ -3959,6 +3988,237 @@
     }
   }
 
+  function clearPdfUnlockResult(status = "") {
+    revokeImageEnhancerUrl(state.pdfUnlock.resultUrl);
+    state.pdfUnlock = {
+      ...state.pdfUnlock,
+      resultUrl: "",
+      resultFileName: "",
+      resultSize: 0,
+      progress: 0,
+      error: "",
+      status
+    };
+  }
+
+  function resetPdfUnlockState() {
+    revokeImageEnhancerUrl(state.pdfUnlock.resultUrl);
+    state.pdfUnlock = {
+      file: null,
+      fileName: "",
+      fileSize: 0,
+      mode: "remove",
+      currentPassword: "",
+      newPassword: "",
+      ownership: "",
+      reason: "",
+      legalConfirm: false,
+      resultUrl: "",
+      resultFileName: "",
+      resultSize: 0,
+      loading: false,
+      progress: 0,
+      error: "",
+      status: ""
+    };
+  }
+
+  async function handlePdfUnlockFile(file) {
+    if (!hasSubscriberToolsAccess()) {
+      state.upgradeModalOpen = true;
+      render();
+      return;
+    }
+    if (!file) return;
+    const isPdf = file.type === "application/pdf" || /\.pdf$/i.test(file.name || "");
+    if (!isPdf) {
+      state.pdfUnlock.error = "الملف يجب أن يكون PDF.";
+      render();
+      return;
+    }
+    if (Number(file.size || 0) > pdfUnlockMaxFileSize) {
+      state.pdfUnlock.error = "حجم ملف PDF كبير جدًا. الحد الأقصى 100MB.";
+      render();
+      return;
+    }
+    revokeImageEnhancerUrl(state.pdfUnlock.resultUrl);
+    state.pdfUnlock = {
+      ...state.pdfUnlock,
+      file,
+      fileName: file.name || "protected.pdf",
+      fileSize: file.size || 0,
+      resultUrl: "",
+      resultFileName: "",
+      resultSize: 0,
+      error: "",
+      status: "تم اختيار الملف. أدخل البيانات المطلوبة ثم نفّذ العملية."
+    };
+    render();
+  }
+
+  function canRunPdfUnlock() {
+    const pdfUnlock = state.pdfUnlock || {};
+    if (!pdfUnlock.file || pdfUnlock.loading) return false;
+    if (pdfUnlock.ownership !== "yes" || !pdfUnlock.legalConfirm || !pdfUnlock.reason) return false;
+    if (pdfUnlock.mode === "reset") {
+      return Boolean(pdfUnlock.currentPassword) && String(pdfUnlock.newPassword || "").length >= 6;
+    }
+    if (pdfUnlock.mode === "remove") {
+      return Boolean(pdfUnlock.currentPassword);
+    }
+    if (pdfUnlock.mode === "forgot_password_remove") {
+      return pdfUnlock.reason === "forgot_password";
+    }
+    return false;
+  }
+
+  function getPdfUnlockAuthToken() {
+    try {
+      const key = window.mullemApiClient?.storageKeys?.token || "mlm_api_token";
+      const stored = localStorage.getItem(key);
+      if (stored) return stored;
+      const cookieMatch = String(document.cookie || "")
+        .split("; ")
+        .find((item) => item.startsWith("mlm_auth_token="));
+      return cookieMatch ? decodeURIComponent(cookieMatch.slice("mlm_auth_token=".length)) : "";
+    } catch (_) {
+      return "";
+    }
+  }
+
+  async function postPdfUnlockFormData(formData) {
+    const candidates = typeof window.mullemApiClient?.buildApiCandidates === "function"
+      ? window.mullemApiClient.buildApiCandidates("/tools/pdf/remove-protection")
+      : ["/api/tools/pdf/remove-protection"];
+    const token = getPdfUnlockAuthToken();
+    let lastError = "تعذر معالجة الملف.";
+
+    for (const url of candidates) {
+      try {
+        const response = await fetch(url, {
+          method: "POST",
+          credentials: "include",
+          headers: token ? { Authorization: `Bearer ${token}` } : {},
+          body: formData
+        });
+        if (response.ok) {
+          return response.blob();
+        }
+        const contentType = response.headers.get("content-type") || "";
+        if (contentType.includes("application/json")) {
+          const payload = await response.json().catch(() => null);
+          lastError = payload?.message || payload?.error || lastError;
+        } else {
+          lastError = await response.text().catch(() => lastError) || lastError;
+        }
+      } catch (error) {
+        lastError = error?.message || lastError;
+      }
+    }
+
+    throw new Error(lastError);
+  }
+
+  function buildPdfUnlockDownloadName(fileName, mode) {
+    const base = String(fileName || "orlixor-document.pdf")
+      .replace(/\.pdf$/i, "")
+      .replace(/[\\/:*?"<>|]+/g, "-")
+      .trim() || "orlixor-document";
+    return mode === "reset" ? `${base}-protected.pdf` : `${base}-unlocked.pdf`;
+  }
+
+  async function runPdfUnlockProcessing() {
+    if (!hasSubscriberToolsAccess()) {
+      state.upgradeModalOpen = true;
+      render();
+      return;
+    }
+    const pdfUnlock = state.pdfUnlock || {};
+    if (!pdfUnlock.file) {
+      state.pdfUnlock.error = "اختر ملف PDF أولًا.";
+      render();
+      return;
+    }
+    if (pdfUnlock.ownership !== "yes") {
+      state.pdfUnlock.error = "يجب تأكيد أنك المالك أو لديك تصريح قانوني.";
+      render();
+      return;
+    }
+    if (!pdfUnlock.reason) {
+      state.pdfUnlock.error = "اختر سبب الاستخدام.";
+      render();
+      return;
+    }
+    if (!pdfUnlock.legalConfirm) {
+      state.pdfUnlock.error = "يجب الموافقة على التعهد قبل التنفيذ.";
+      render();
+      return;
+    }
+    if ((pdfUnlock.mode === "remove" || pdfUnlock.mode === "reset") && !pdfUnlock.currentPassword) {
+      state.pdfUnlock.error = "أدخل كلمة المرور الحالية للملف.";
+      render();
+      return;
+    }
+    if (pdfUnlock.mode === "reset" && String(pdfUnlock.newPassword || "").length < 6) {
+      state.pdfUnlock.error = "كلمة المرور الجديدة يجب أن تكون 6 أحرف على الأقل.";
+      render();
+      return;
+    }
+    if (pdfUnlock.mode === "forgot_password_remove" && pdfUnlock.reason !== "forgot_password") {
+      state.pdfUnlock.error = "خيار نسيان كلمة المرور يتطلب اختيار سبب: نسيت كلمة المرور.";
+      render();
+      return;
+    }
+
+    state.pdfUnlock = {
+      ...state.pdfUnlock,
+      loading: true,
+      progress: 18,
+      error: "",
+      status: "جاري إرسال الملف إلى السيرفر الآمن..."
+    };
+    render();
+
+    try {
+      const formData = new FormData();
+      formData.append("file", pdfUnlock.file);
+      formData.append("currentPassword", pdfUnlock.mode === "forgot_password_remove" ? "" : pdfUnlock.currentPassword);
+      formData.append("mode", pdfUnlock.mode);
+      formData.append("newPassword", pdfUnlock.mode === "reset" ? pdfUnlock.newPassword : "");
+      formData.append("ownershipConfirmed", String(pdfUnlock.ownership === "yes"));
+      formData.append("legalAgreement", String(Boolean(pdfUnlock.legalConfirm)));
+      formData.append("reason", pdfUnlock.reason);
+
+      state.pdfUnlock.progress = 62;
+      state.pdfUnlock.status = "جاري معالجة الملف بدون حفظ كلمات المرور...";
+      render();
+
+      const blob = await postPdfUnlockFormData(formData);
+      const resultUrl = URL.createObjectURL(blob);
+      revokeImageEnhancerUrl(state.pdfUnlock.resultUrl);
+      state.pdfUnlock = {
+        ...state.pdfUnlock,
+        resultUrl,
+        resultFileName: buildPdfUnlockDownloadName(pdfUnlock.fileName, pdfUnlock.mode),
+        resultSize: blob.size,
+        loading: false,
+        progress: 100,
+        error: "",
+        status: "تم تجهيز الملف. يمكنك تحميل النسخة الجديدة الآن."
+      };
+      render();
+    } catch (error) {
+      state.pdfUnlock = {
+        ...state.pdfUnlock,
+        loading: false,
+        progress: 0,
+        error: error?.message || "تعذر معالجة الملف. تأكد من كلمة المرور وصلاحية الملف.",
+        status: ""
+      };
+      render();
+    }
+  }
+
   function showXpWarning({ tokens, xp, maxAllowed }) {
     const safeTokens = Math.max(0, Number(tokens) || 0);
     const safeXp = Math.max(1, Number(xp) || 1);
@@ -5082,7 +5342,7 @@
       { key: "image-rotator", title: "تدوير الصورة", description: "تدوير الصور إلى أي اتجاه بسهولة", icon: icons.refresh },
       { key: "image-cropper", title: "قص الصورة", description: "قص وتحديد الجزء المطلوب من الصورة", icon: toolIcons.crop },
       { key: "image-compressor", title: "ضغط الصور", description: "تقليل حجم الصور مع الحفاظ على الجودة", icon: toolIcons.compress },
-      { title: "إزالة حماية PDF", description: "إزالة كلمة المرور من ملفات PDF", icon: toolIcons.unlock },
+      { key: "pdf-unlock", title: "إزالة حماية PDF", description: "إزالة كلمة المرور من ملفات PDF", icon: toolIcons.unlock },
       { title: "حماية PDF", description: "إضافة كلمة مرور لحماية ملفات PDF", icon: icons.lock },
       { title: "تقسيم PDF", description: "تقسيم ملف PDF إلى صفحات منفصلة", icon: toolIcons.split },
       { title: "دمج ملفات PDF", description: "دمج عدة ملفات PDF في ملف واحد", icon: toolIcons.merge },
@@ -5950,6 +6210,223 @@
               ` : `
                 <small class="png-pdf-result-size">سيظهر زر التحميل بعد التحويل</small>
               `}
+            </aside>
+          </section>
+        </div>
+      </section>
+    `;
+  }
+
+  function renderPdfUnlockMain() {
+    const unlock = state.pdfUnlock || {};
+    const hasAccess = hasSubscriberToolsAccess();
+    const hasFile = Boolean(unlock.file);
+    const hasResult = Boolean(unlock.resultUrl);
+    const canProcess = hasAccess && canRunPdfUnlock();
+    const mode = pdfUnlockModes[unlock.mode] ? unlock.mode : "remove";
+    const reason = pdfUnlockReasons[unlock.reason] ? unlock.reason : "";
+    const pdfIcon = '<svg viewBox="0 0 24 24"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/></svg>';
+    const lockIcon = '<svg viewBox="0 0 24 24"><rect x="5" y="10" width="14" height="10" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg>';
+    const uploadIcon = '<svg viewBox="0 0 24 24"><path d="M12 16V7"/><path d="m8.5 10.5 3.5-3.5 3.5 3.5"/><path d="M20 16.5a4.5 4.5 0 0 1-4.5 4.5h-7A5.5 5.5 0 0 1 8 10.02 6 6 0 0 1 19.74 12"/></svg>';
+    const downloadIcon = '<svg viewBox="0 0 24 24"><path d="M12 3v12"/><path d="m7.5 10.5 4.5 4.5 4.5-4.5"/><path d="M5 21h14"/></svg>';
+    const features = [
+      "إزالة حماية PDF بكلمة المرور الحالية",
+      "إعادة تعيين كلمة مرور جديدة",
+      "لا توجد محاولات تخمين أو كسر كلمات مرور",
+      "معالجة آمنة عبر qpdf على السيرفر",
+      "لا يتم حفظ كلمات المرور أو خصم XP"
+    ];
+    const steps = [
+      ["اختر ملف PDF محمي", "قم برفع الملف المحمي بكلمة مرور."],
+      ["اختر طريقة الإزالة", "استخدم كلمة المرور الحالية أو مسار نسيان كلمة المرور."],
+      ["تأكيد التعهد", "وافق فقط إذا كنت المالك أو لديك تصريح."],
+      ["إزالة الحماية", "سيتم إنشاء نسخة جديدة من الملف."],
+      ["تحميل الملف", "احصل على PDF غير محمي أو بكلمة مرور جديدة."]
+    ];
+
+    if (!hasAccess) {
+      return `
+        <section class="guest-main tools-main png-pdf-main pdf-unlock-main" aria-label="إزالة حماية PDF">
+          <div class="png-pdf-page">
+            <button class="png-pdf-back" type="button" data-open-free-tools>
+              <span aria-hidden="true">←</span>
+              <b>العودة للأدوات</b>
+            </button>
+            <section class="png-pdf-locked">
+              <span aria-hidden="true">${icons.lock}</span>
+              <h1>هذه الأداة متاحة للمشتركين فقط</h1>
+              <p>فعّل باقة شرارة أو طويق أو الرائد لإدارة حماية ملفات PDF بدون XP.</p>
+              <button type="button" data-open-upgrade>عرض الباقات</button>
+            </section>
+          </div>
+        </section>
+      `;
+    }
+
+    return `
+      <section class="guest-main tools-main png-pdf-main pdf-unlock-main" aria-label="إزالة حماية PDF">
+        <div class="png-pdf-page">
+          <button class="png-pdf-back" type="button" data-open-free-tools>
+            <span aria-hidden="true">←</span>
+            <b>العودة للأدوات</b>
+          </button>
+
+          <header class="png-pdf-hero pdf-unlock-hero">
+            <span class="png-pdf-hero-icon" aria-hidden="true">${lockIcon}</span>
+            <div>
+              <h1>إزالة حماية PDF</h1>
+              <p>إزالة كلمة المرور من ملفات PDF بسهولة وأمان.</p>
+            </div>
+          </header>
+
+          <section class="pdf-unlock-layout">
+            <aside class="pdf-unlock-left">
+              <article class="png-pdf-upload-card">
+                <input data-pdf-unlock-input type="file" accept="application/pdf,.pdf" hidden>
+                <div class="png-pdf-dropzone ${hasFile ? "has-images" : ""}" data-pdf-unlock-dropzone>
+                  <span class="png-pdf-upload-icon" aria-hidden="true">${uploadIcon}</span>
+                  <h2>${hasFile ? "ملف PDF جاهز" : "اسحب وأفلت ملف PDF هنا"}</h2>
+                  <p>${hasFile ? escapeHtml(unlock.fileName || "protected.pdf") : "أو انقر لاختيار الملف من جهازك"}</p>
+                  <button class="png-pdf-primary" type="button" data-pdf-unlock-choose>
+                    <span>اختيار ملف PDF</span>
+                    ${icons.attach}
+                  </button>
+                  <small>PDF فقط · الحد الأقصى 100MB للملف الواحد</small>
+                </div>
+              </article>
+
+              <article class="png-pdf-card pdf-unlock-feature-card">
+                <span class="png-pdf-card-icon" aria-hidden="true">${icons.lock}</span>
+                <h2>مميزات الأداة</h2>
+                <ul>
+                  ${features.map((item) => `<li>${icons.sparkle}<span>${escapeHtml(item)}</span></li>`).join("")}
+                </ul>
+              </article>
+
+              <article class="png-pdf-tips pdf-unlock-note">
+                <h2>نصيحة قانونية</h2>
+                <p>تأكد من أنك تملك الملف أو لديك تصريح قانوني قبل إزالة الحماية.</p>
+              </article>
+            </aside>
+
+            <main class="pdf-unlock-center">
+              <article class="pdf-unlock-file-card">
+                <header>
+                  <h2>الملف المحدد</h2>
+                  ${hasFile ? `<button type="button" data-pdf-unlock-reset aria-label="حذف الملف">${icons.delete}</button>` : ""}
+                </header>
+                <div class="pdf-unlock-file-row ${hasFile ? "" : "is-empty"}">
+                  <span aria-hidden="true">${pdfIcon}</span>
+                  <div>
+                    <strong>${hasFile ? escapeHtml(unlock.fileName || "-") : "لم يتم اختيار ملف بعد"}</strong>
+                    <small>${hasFile ? `${escapeHtml(formatImageEnhancerFileSize(unlock.fileSize))} · PDF` : "اختر ملف PDF محمي للبدء"}</small>
+                  </div>
+                  <b>${hasFile ? "محمي" : "-"}</b>
+                </div>
+                <p class="pdf-unlock-warning">${icons.warning || "!"} هذه الأداة لا تكسر كلمات المرور ولا تستعيدها. أغلب ملفات PDF المشفرة تحتاج كلمة المرور الحالية.</p>
+              </article>
+
+              <article class="pdf-unlock-form-card">
+                <h2>اختر طريقة الحماية</h2>
+                <div class="pdf-unlock-mode-grid">
+                  ${Object.entries(pdfUnlockModes).map(([value, label]) => `
+                    <label class="${mode === value ? "is-active" : ""}">
+                      <input type="radio" name="pdfUnlockMode" value="${escapeHtml(value)}" data-pdf-unlock-mode ${mode === value ? "checked" : ""}>
+                      <span>${escapeHtml(label)}</span>
+                      <small>${value === "remove"
+                        ? "احذف القفل باستخدام كلمة المرور الحالية."
+                        : value === "reset"
+                          ? "افتح الملف ثم عيّن كلمة مرور جديدة."
+                          : "لا يستخدم التخمين، وقد يفشل بدون كلمة المرور."}</small>
+                    </label>
+                  `).join("")}
+                </div>
+
+                <div class="pdf-unlock-fields">
+                  <label class="${mode === "forgot_password_remove" ? "is-muted" : ""}">
+                    <span>كلمة المرور الحالية</span>
+                    <input data-pdf-unlock-field="currentPassword" type="password" value="${escapeHtml(unlock.currentPassword || "")}" placeholder="أدخل كلمة المرور الحالية" ${mode === "forgot_password_remove" ? "disabled" : ""}>
+                  </label>
+                  ${mode === "reset" ? `
+                    <label>
+                      <span>كلمة المرور الجديدة</span>
+                      <input data-pdf-unlock-field="newPassword" type="password" value="${escapeHtml(unlock.newPassword || "")}" placeholder="6 أحرف على الأقل">
+                    </label>
+                  ` : ""}
+                </div>
+
+                <div class="pdf-unlock-legal">
+                  <h3>اختبار الملكية</h3>
+                  <p>هل أنت مالك هذا الملف أو لديك تصريح قانوني لمعالجته؟</p>
+                  <div class="pdf-unlock-ownership">
+                    <label class="${unlock.ownership === "yes" ? "is-active" : ""}">
+                      <input type="radio" name="pdfUnlockOwnership" value="yes" data-pdf-unlock-ownership ${unlock.ownership === "yes" ? "checked" : ""}>
+                      <span>نعم، أنا المالك أو لدي تصريح</span>
+                    </label>
+                    <label class="${unlock.ownership === "no" ? "is-active is-danger" : ""}">
+                      <input type="radio" name="pdfUnlockOwnership" value="no" data-pdf-unlock-ownership ${unlock.ownership === "no" ? "checked" : ""}>
+                      <span>لا</span>
+                    </label>
+                  </div>
+                  <label>
+                    <span>سبب حذف كلمة المرور</span>
+                    <select data-pdf-unlock-reason>
+                      <option value="">اختر السبب</option>
+                      ${Object.entries(pdfUnlockReasons).map(([value, label]) => `<option value="${escapeHtml(value)}" ${reason === value ? "selected" : ""}>${escapeHtml(label)}</option>`).join("")}
+                    </select>
+                  </label>
+                  <label class="png-pdf-toggle pdf-unlock-confirm">
+                    <input type="checkbox" data-pdf-unlock-legal ${unlock.legalConfirm ? "checked" : ""}>
+                    <span>أقر وأتعهد أنني المالك أو لدي تصريح قانوني لمعالجة هذا الملف، وأنني أستخدم الأداة فقط لإدارة ملف أملكه.</span>
+                  </label>
+                </div>
+
+                ${unlock.loading || unlock.status || unlock.error ? `
+                  <section class="png-pdf-status ${unlock.error ? "is-error" : ""}">
+                    <p>${escapeHtml(unlock.error || unlock.status || "")}</p>
+                    ${unlock.loading ? `<span><i style="width:${Math.max(8, Math.min(100, Number(unlock.progress || 0)))}%"></i></span>` : ""}
+                  </section>
+                ` : ""}
+              </article>
+
+              <footer class="image-rotator-actions pdf-unlock-actions">
+                <button class="image-rotator-reset" type="button" data-pdf-unlock-reset ${hasFile ? "" : "disabled"}>
+                  ${icons.refresh}
+                  <span>إعادة تعيين</span>
+                </button>
+                <button class="png-pdf-convert" type="button" data-pdf-unlock-run ${canProcess ? "" : "disabled"}>
+                  <span>${unlock.loading ? "جاري المعالجة..." : "إزالة الحماية وحفظ الملف"}</span>
+                  ${lockIcon}
+                </button>
+                ${hasResult ? `
+                  <a class="png-pdf-download" href="${escapeHtml(unlock.resultUrl)}" download="${escapeHtml(unlock.resultFileName || "orlixor-unlocked.pdf")}">
+                    <span>تحميل الملف</span>
+                    ${downloadIcon}
+                  </a>
+                ` : ""}
+              </footer>
+              <small class="image-rotator-privacy">${icons.lock} لا يتم حفظ كلمة المرور أو إرسالها لأي API خارجي.</small>
+            </main>
+
+            <aside class="pdf-unlock-right">
+              <article class="pdf-unlock-steps">
+                <h2>خطوات إزالة الحماية</h2>
+                ${steps.map(([title, copy], index) => `
+                  <div>
+                    <span aria-hidden="true">${icons.lock}</span>
+                    <b>${(index + 1).toLocaleString("ar-SA")}</b>
+                    <strong>${escapeHtml(title)}</strong>
+                    <p>${escapeHtml(copy)}</p>
+                  </div>
+                `).join("")}
+              </article>
+              <article class="png-pdf-privacy">
+                <span aria-hidden="true">${icons.lock}</span>
+                <div>
+                  <h2>خصوصيتك تهمنا</h2>
+                  <p>يتم حذف الملفات المؤقتة بعد المعالجة، ولا يتم تسجيل كلمات المرور.</p>
+                </div>
+              </article>
             </aside>
           </section>
         </div>
@@ -7972,6 +8449,9 @@
       if (state.toolView === "pdf-to-png") {
         return renderPdfToPngMain(profile);
       }
+      if (state.toolView === "pdf-unlock") {
+        return renderPdfUnlockMain(profile);
+      }
       if (state.toolView === "image-converter") {
         return renderImageConverterMain(profile);
       }
@@ -8271,7 +8751,7 @@
   function renderShell() {
     const profile = getProfile();
     const isToolsWorkspace = state.section === "ai-tools";
-    const isSubscriberTools = isToolsWorkspace && ["subscriber-tools", "image-enhancer", "image-clarifier", "png-to-pdf", "pdf-to-png", "image-converter", "image-compressor", "image-rotator", "image-cropper"].includes(state.toolView);
+    const isSubscriberTools = isToolsWorkspace && ["subscriber-tools", "image-enhancer", "image-clarifier", "png-to-pdf", "pdf-to-png", "pdf-unlock", "image-converter", "image-compressor", "image-rotator", "image-cropper"].includes(state.toolView);
     app.innerHTML = `
       <div class="guest-shell ${state.theme === "dark" ? "theme-dark" : ""} ${isHomeWorkspace ? "is-home-workspace" : ""} ${isToolsWorkspace ? "is-tools-workspace" : ""} ${isSubscriberTools ? "is-subscriber-tools" : ""} ${state.sidebarCollapsed ? "is-sidebar-collapsed" : ""}">
         ${renderSidebar()}
@@ -9716,6 +10196,27 @@
         return;
       }
 
+      if (event.target.closest("[data-pdf-unlock-choose]")) {
+        if (!hasSubscriberToolsAccess()) {
+          state.upgradeModalOpen = true;
+          render();
+          return;
+        }
+        app.querySelector("[data-pdf-unlock-input]")?.click();
+        return;
+      }
+
+      if (event.target.closest("[data-pdf-unlock-run]")) {
+        await runPdfUnlockProcessing();
+        return;
+      }
+
+      if (event.target.closest("[data-pdf-unlock-reset]")) {
+        resetPdfUnlockState();
+        render();
+        return;
+      }
+
       if (event.target.closest("[data-image-converter-choose]")) {
         if (!hasSubscriberToolsAccess()) {
           state.upgradeModalOpen = true;
@@ -9985,6 +10486,18 @@
             return;
           }
           state.toolView = "pdf-to-png";
+          state.openThreadMenuId = "";
+          state.modelMenuOpen = false;
+          render();
+          return;
+        }
+        if (toolKey === "pdf-unlock") {
+          if (!hasSubscriberToolsAccess()) {
+            state.upgradeModalOpen = true;
+            render();
+            return;
+          }
+          state.toolView = "pdf-unlock";
           state.openThreadMenuId = "";
           state.modelMenuOpen = false;
           render();
@@ -10525,6 +11038,21 @@
         state.writingAssistant.error = "";
       }
 
+      const pdfUnlockField = event.target.closest("[data-pdf-unlock-field]");
+      if (pdfUnlockField) {
+        const key = pdfUnlockField.getAttribute("data-pdf-unlock-field");
+        if (key === "currentPassword") {
+          state.pdfUnlock.currentPassword = pdfUnlockField.value;
+        }
+        if (key === "newPassword") {
+          state.pdfUnlock.newPassword = pdfUnlockField.value;
+        }
+        clearPdfUnlockResult("الإعدادات تغيّرت. نفّذ العملية من جديد.");
+        const runButton = app.querySelector("[data-pdf-unlock-run]");
+        if (runButton) runButton.disabled = !canRunPdfUnlock();
+        app.querySelector(".pdf-unlock-actions .png-pdf-download")?.remove();
+      }
+
       const pdfPngCustomPages = event.target.closest("[data-pdf-png-custom-pages]");
       if (pdfPngCustomPages) {
         state.pdfToPng.customPages = pdfPngCustomPages.value;
@@ -10678,6 +11206,50 @@
       if (pngPdfFill) {
         state.pngToPdf.fillPage = Boolean(pngPdfFill.checked);
         clearPngToPdfResult("الإعدادات تغيّرت. شغّل التحويل من جديد.");
+        render();
+        return;
+      }
+
+      const pdfUnlockInput = event.target.closest("[data-pdf-unlock-input]");
+      if (pdfUnlockInput) {
+        await handlePdfUnlockFile(pdfUnlockInput.files?.[0]);
+        pdfUnlockInput.value = "";
+        return;
+      }
+
+      const pdfUnlockMode = event.target.closest("[data-pdf-unlock-mode]");
+      if (pdfUnlockMode) {
+        state.pdfUnlock.mode = pdfUnlockModes[pdfUnlockMode.value] ? pdfUnlockMode.value : "remove";
+        if (state.pdfUnlock.mode === "forgot_password_remove") {
+          state.pdfUnlock.currentPassword = "";
+          state.pdfUnlock.newPassword = "";
+          state.pdfUnlock.reason = "forgot_password";
+        }
+        clearPdfUnlockResult("الإعدادات تغيّرت. نفّذ العملية من جديد.");
+        render();
+        return;
+      }
+
+      const pdfUnlockOwnership = event.target.closest("[data-pdf-unlock-ownership]");
+      if (pdfUnlockOwnership) {
+        state.pdfUnlock.ownership = pdfUnlockOwnership.value === "yes" ? "yes" : "no";
+        clearPdfUnlockResult(state.pdfUnlock.ownership === "yes" ? "تم تأكيد الملكية. أكمل التعهد قبل التنفيذ." : "لا يمكن المتابعة بدون تصريح قانوني.");
+        render();
+        return;
+      }
+
+      const pdfUnlockReason = event.target.closest("[data-pdf-unlock-reason]");
+      if (pdfUnlockReason) {
+        state.pdfUnlock.reason = pdfUnlockReasons[pdfUnlockReason.value] ? pdfUnlockReason.value : "";
+        clearPdfUnlockResult("الإعدادات تغيّرت. نفّذ العملية من جديد.");
+        render();
+        return;
+      }
+
+      const pdfUnlockLegal = event.target.closest("[data-pdf-unlock-legal]");
+      if (pdfUnlockLegal) {
+        state.pdfUnlock.legalConfirm = Boolean(pdfUnlockLegal.checked);
+        clearPdfUnlockResult(state.pdfUnlock.legalConfirm ? "تم تسجيل التعهد. يمكنك تنفيذ العملية عند اكتمال البيانات." : "يجب الموافقة على التعهد قبل التنفيذ.");
         render();
         return;
       }
@@ -11043,14 +11615,14 @@
         event.preventDefault();
         return;
       }
-      const dropZone = event.target.closest?.("[data-image-enhancer-dropzone], [data-image-clarifier-dropzone], [data-png-pdf-dropzone], [data-pdf-png-dropzone], [data-image-converter-dropzone], [data-image-compressor-dropzone], [data-image-rotator-dropzone], [data-image-cropper-dropzone]");
+      const dropZone = event.target.closest?.("[data-image-enhancer-dropzone], [data-image-clarifier-dropzone], [data-png-pdf-dropzone], [data-pdf-png-dropzone], [data-pdf-unlock-dropzone], [data-image-converter-dropzone], [data-image-compressor-dropzone], [data-image-rotator-dropzone], [data-image-cropper-dropzone]");
       if (!dropZone) return;
       event.preventDefault();
       dropZone.classList.add("is-drag-over");
     });
 
     app.addEventListener("dragleave", (event) => {
-      const dropZone = event.target.closest?.("[data-image-enhancer-dropzone], [data-image-clarifier-dropzone], [data-png-pdf-dropzone], [data-pdf-png-dropzone], [data-image-converter-dropzone], [data-image-compressor-dropzone], [data-image-rotator-dropzone], [data-image-cropper-dropzone]");
+      const dropZone = event.target.closest?.("[data-image-enhancer-dropzone], [data-image-clarifier-dropzone], [data-png-pdf-dropzone], [data-pdf-png-dropzone], [data-pdf-unlock-dropzone], [data-image-converter-dropzone], [data-image-compressor-dropzone], [data-image-rotator-dropzone], [data-image-cropper-dropzone]");
       if (!dropZone) return;
       dropZone.classList.remove("is-drag-over");
     });
@@ -11065,7 +11637,7 @@
         );
         return;
       }
-      const dropZone = event.target.closest?.("[data-image-enhancer-dropzone], [data-image-clarifier-dropzone], [data-png-pdf-dropzone], [data-pdf-png-dropzone], [data-image-converter-dropzone], [data-image-compressor-dropzone], [data-image-rotator-dropzone], [data-image-cropper-dropzone]");
+      const dropZone = event.target.closest?.("[data-image-enhancer-dropzone], [data-image-clarifier-dropzone], [data-png-pdf-dropzone], [data-pdf-png-dropzone], [data-pdf-unlock-dropzone], [data-image-converter-dropzone], [data-image-compressor-dropzone], [data-image-rotator-dropzone], [data-image-cropper-dropzone]");
       if (!dropZone) return;
       event.preventDefault();
       dropZone.classList.remove("is-drag-over");
@@ -11073,6 +11645,8 @@
         await addPngToPdfFiles(event.dataTransfer?.files);
       } else if (dropZone.matches("[data-pdf-png-dropzone]")) {
         await handlePdfToPngFile(event.dataTransfer?.files?.[0]);
+      } else if (dropZone.matches("[data-pdf-unlock-dropzone]")) {
+        await handlePdfUnlockFile(event.dataTransfer?.files?.[0]);
       } else if (dropZone.matches("[data-image-converter-dropzone]")) {
         await addImageConverterFiles(event.dataTransfer?.files);
       } else if (dropZone.matches("[data-image-compressor-dropzone]")) {
