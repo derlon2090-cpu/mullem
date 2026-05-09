@@ -513,6 +513,23 @@
       status: "",
       draggedId: ""
     },
+    pdfToPng: {
+      fileName: "",
+      fileSize: 0,
+      pagesCount: 0,
+      pdf: null,
+      previews: [],
+      quality: "1.5",
+      pageMode: "all",
+      customPages: "",
+      resultUrl: "",
+      resultSize: 0,
+      selectedPagesCount: 0,
+      loading: false,
+      progress: 0,
+      error: "",
+      status: ""
+    },
     upgradeModalOpen: false,
     balancePanelOpen: false,
     openThreadMenuId: "",
@@ -1313,6 +1330,7 @@
     A4: [595.28, 841.89],
     letter: [612, 792]
   };
+  const pdfToPngMaxFileSize = 50 * 1024 * 1024;
 
   function formatImageEnhancerFileSize(bytes) {
     const value = Number(bytes || 0);
@@ -2077,6 +2095,338 @@
         loading: false,
         progress: 0,
         error: "تعذر تحويل الصور إلى PDF. تحقق من الاتصال لتحميل مكتبة pdf-lib ثم حاول مجددًا.",
+        status: ""
+      };
+      render();
+    }
+  }
+
+  function clearPdfToPngResult(status = "") {
+    revokeImageEnhancerUrl(state.pdfToPng.resultUrl);
+    state.pdfToPng = {
+      ...state.pdfToPng,
+      resultUrl: "",
+      resultSize: 0,
+      selectedPagesCount: 0,
+      progress: 0,
+      error: "",
+      status
+    };
+  }
+
+  function resetPdfToPngState() {
+    (state.pdfToPng.previews || []).forEach((preview) => revokeImageEnhancerUrl(preview.url));
+    revokeImageEnhancerUrl(state.pdfToPng.resultUrl);
+    try {
+      state.pdfToPng.pdf?.destroy?.();
+    } catch (_) {
+      // Ignore pdf.js cleanup errors.
+    }
+    state.pdfToPng = {
+      fileName: "",
+      fileSize: 0,
+      pagesCount: 0,
+      pdf: null,
+      previews: [],
+      quality: "1.5",
+      pageMode: "all",
+      customPages: "",
+      resultUrl: "",
+      resultSize: 0,
+      selectedPagesCount: 0,
+      loading: false,
+      progress: 0,
+      error: "",
+      status: ""
+    };
+  }
+
+  async function loadPdfJs() {
+    if (window.pdfjsLib?.getDocument) {
+      return window.pdfjsLib;
+    }
+    if (!window.__orlixorPdfJsPromise) {
+      window.__orlixorPdfJsPromise = import("https://cdn.jsdelivr.net/npm/pdfjs-dist@4.10.38/legacy/build/pdf.mjs")
+        .then((pdfjsLib) => {
+          pdfjsLib.GlobalWorkerOptions.workerSrc = "https://cdn.jsdelivr.net/npm/pdfjs-dist@4.10.38/legacy/build/pdf.worker.mjs";
+          window.pdfjsLib = pdfjsLib;
+          return pdfjsLib;
+        });
+    }
+    return window.__orlixorPdfJsPromise;
+  }
+
+  function loadJsZip() {
+    if (window.JSZip) {
+      return Promise.resolve(window.JSZip);
+    }
+    if (window.__orlixorJsZipPromise) {
+      return window.__orlixorJsZipPromise;
+    }
+    window.__orlixorJsZipPromise = new Promise((resolve, reject) => {
+      const existingScript = document.getElementById("jsZipScript");
+      if (existingScript) {
+        existingScript.addEventListener("load", () => resolve(window.JSZip));
+        existingScript.addEventListener("error", reject);
+        return;
+      }
+      const script = document.createElement("script");
+      script.id = "jsZipScript";
+      script.src = "https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js";
+      script.async = true;
+      script.onload = () => {
+        if (window.JSZip) {
+          resolve(window.JSZip);
+        } else {
+          reject(new Error("JSZip unavailable"));
+        }
+      };
+      script.onerror = () => reject(new Error("JSZip failed to load"));
+      document.head.appendChild(script);
+    });
+    return window.__orlixorJsZipPromise;
+  }
+
+  function isPdfToPngPasswordError(error) {
+    const text = `${error?.name || ""} ${error?.message || ""}`.toLowerCase();
+    return text.includes("password") || text.includes("encrypted");
+  }
+
+  async function renderPdfPreviewImage(pdf, pageNumber) {
+    const page = await pdf.getPage(pageNumber);
+    const viewport = page.getViewport({ scale: 0.25 });
+    const canvas = document.createElement("canvas");
+    const ctx = canvas.getContext("2d");
+    canvas.width = Math.floor(viewport.width);
+    canvas.height = Math.floor(viewport.height);
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = "high";
+    await page.render({ canvasContext: ctx, viewport }).promise;
+    const blob = await new Promise((resolve) => canvas.toBlob((item) => resolve(item), "image/png", 0.9));
+    return blob ? URL.createObjectURL(blob) : "";
+  }
+
+  async function buildPdfToPngPreviews(pdf) {
+    const previewCount = Math.min(pdf.numPages, 6);
+    const previews = [];
+    for (let pageNumber = 1; pageNumber <= previewCount; pageNumber += 1) {
+      const url = await renderPdfPreviewImage(pdf, pageNumber);
+      if (url) {
+        previews.push({ pageNumber, url });
+      }
+    }
+    return previews;
+  }
+
+  async function handlePdfToPngFile(file) {
+    if (!hasSubscriberToolsAccess()) {
+      state.upgradeModalOpen = true;
+      render();
+      return;
+    }
+    if (!file) return;
+    const isPdf = file.type === "application/pdf" || /\.pdf$/i.test(file.name || "");
+    if (!isPdf) {
+      state.pdfToPng.error = "الملف يجب أن يكون PDF.";
+      render();
+      return;
+    }
+    if (Number(file.size || 0) > pdfToPngMaxFileSize) {
+      state.pdfToPng.error = "حجم ملف PDF كبير جدًا. الحد الأقصى 50MB.";
+      render();
+      return;
+    }
+
+    const previousPreviews = state.pdfToPng.previews || [];
+    previousPreviews.forEach((preview) => revokeImageEnhancerUrl(preview.url));
+    revokeImageEnhancerUrl(state.pdfToPng.resultUrl);
+    try {
+      state.pdfToPng.pdf?.destroy?.();
+    } catch (_) {
+      // Ignore cleanup errors.
+    }
+
+    state.pdfToPng = {
+      ...state.pdfToPng,
+      fileName: file.name || "document.pdf",
+      fileSize: file.size || 0,
+      pagesCount: 0,
+      pdf: null,
+      previews: [],
+      resultUrl: "",
+      resultSize: 0,
+      selectedPagesCount: 0,
+      loading: true,
+      progress: 20,
+      error: "",
+      status: "جاري قراءة ملف PDF داخل المتصفح..."
+    };
+    render();
+
+    try {
+      const pdfjsLib = await loadPdfJs();
+      const arrayBuffer = await file.arrayBuffer();
+      const pdf = await pdfjsLib.getDocument({ data: new Uint8Array(arrayBuffer) }).promise;
+      state.pdfToPng = {
+        ...state.pdfToPng,
+        pdf,
+        pagesCount: pdf.numPages,
+        loading: true,
+        progress: 55,
+        status: "جاري إنشاء معاينة الصفحات..."
+      };
+      render();
+      const previews = await buildPdfToPngPreviews(pdf);
+      state.pdfToPng = {
+        ...state.pdfToPng,
+        previews,
+        loading: false,
+        progress: 0,
+        error: "",
+        status: pdf.numPages > 24
+          ? "قد يستغرق التحويل وقتًا أطول حسب عدد الصفحات."
+          : "تم تحميل ملف PDF. اختر الصفحات والجودة ثم ابدأ التحويل."
+      };
+      render();
+    } catch (error) {
+      state.pdfToPng = {
+        ...state.pdfToPng,
+        pdf: null,
+        pagesCount: 0,
+        previews: [],
+        loading: false,
+        progress: 0,
+        error: isPdfToPngPasswordError(error)
+          ? "هذا الملف محمي بكلمة مرور ولا يمكن تحويله."
+          : "تعذر قراءة ملف PDF داخل المتصفح. جرّب ملفًا آخر.",
+        status: ""
+      };
+      render();
+    }
+  }
+
+  function parsePdfToPngPageRanges(input, totalPages) {
+    const pages = new Set();
+    String(input || "").split(",").forEach((rawPart) => {
+      const part = rawPart.trim();
+      if (!part) return;
+      if (part.includes("-")) {
+        const [startRaw, endRaw] = part.split("-");
+        const start = Number(startRaw);
+        const end = Number(endRaw);
+        if (!Number.isFinite(start) || !Number.isFinite(end)) return;
+        const low = Math.min(start, end);
+        const high = Math.max(start, end);
+        for (let page = low; page <= high; page += 1) {
+          if (page >= 1 && page <= totalPages) pages.add(page);
+        }
+      } else {
+        const page = Number(part);
+        if (Number.isFinite(page) && page >= 1 && page <= totalPages) {
+          pages.add(page);
+        }
+      }
+    });
+    return [...pages].sort((a, b) => a - b);
+  }
+
+  function getPdfToPngSelectedPages(totalPages) {
+    if (state.pdfToPng.pageMode !== "custom") {
+      return Array.from({ length: totalPages }, (_, index) => index + 1);
+    }
+    return parsePdfToPngPageRanges(state.pdfToPng.customPages, totalPages);
+  }
+
+  async function renderPdfPageToPngBlob({ pdf, pageNumber, scale }) {
+    const page = await pdf.getPage(pageNumber);
+    const viewport = page.getViewport({ scale });
+    const canvas = document.createElement("canvas");
+    const ctx = canvas.getContext("2d");
+    canvas.width = Math.floor(viewport.width);
+    canvas.height = Math.floor(viewport.height);
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = "high";
+    await page.render({ canvasContext: ctx, viewport }).promise;
+    return new Promise((resolve) => canvas.toBlob((blob) => resolve(blob), "image/png", 1));
+  }
+
+  async function convertPdfToPngZip({ pdf, pages, qualityScale }) {
+    const JSZip = await loadJsZip();
+    const zip = new JSZip();
+    for (let index = 0; index < pages.length; index += 1) {
+      const pageNumber = pages[index];
+      const percent = Math.max(8, Math.round(((index + 1) / pages.length) * 88));
+      state.pdfToPng.progress = percent;
+      state.pdfToPng.status = `جاري تحويل الصفحة ${index + 1} من ${pages.length}...`;
+      render();
+      await new Promise((resolve) => window.requestAnimationFrame(resolve));
+      const blob = await renderPdfPageToPngBlob({ pdf, pageNumber, scale: qualityScale });
+      if (!blob) throw new Error("png_render_failed");
+      zip.file(`page-${String(pageNumber).padStart(3, "0")}.png`, blob);
+    }
+    state.pdfToPng.progress = 95;
+    state.pdfToPng.status = "جاري ضغط الصور داخل ملف ZIP...";
+    render();
+    return zip.generateAsync({ type: "blob", compression: "DEFLATE" });
+  }
+
+  async function runPdfToPngConversion() {
+    if (!hasSubscriberToolsAccess()) {
+      state.upgradeModalOpen = true;
+      render();
+      return;
+    }
+    const pdf = state.pdfToPng.pdf;
+    if (!pdf) {
+      state.pdfToPng.error = "اختر ملف PDF أولًا.";
+      render();
+      return;
+    }
+    const pages = getPdfToPngSelectedPages(pdf.numPages);
+    if (!pages.length) {
+      state.pdfToPng.error = "اختر صفحات صحيحة للتحويل.";
+      render();
+      return;
+    }
+    if (pages.length > 24) {
+      state.pdfToPng.status = "قد يستغرق التحويل وقتًا أطول حسب عدد الصفحات.";
+    }
+    state.pdfToPng = {
+      ...state.pdfToPng,
+      loading: true,
+      progress: 5,
+      error: "",
+      selectedPagesCount: pages.length,
+      status: "جاري تجهيز التحويل..."
+    };
+    render();
+
+    try {
+      const zipBlob = await convertPdfToPngZip({
+        pdf,
+        pages,
+        qualityScale: Number(state.pdfToPng.quality || 1.5)
+      });
+      const resultUrl = URL.createObjectURL(zipBlob);
+      revokeImageEnhancerUrl(state.pdfToPng.resultUrl);
+      state.pdfToPng = {
+        ...state.pdfToPng,
+        resultUrl,
+        resultSize: zipBlob.size,
+        loading: false,
+        progress: 100,
+        error: "",
+        status: "تم تحويل الصفحات إلى PNG وتجهيز ملف ZIP."
+      };
+      render();
+    } catch (error) {
+      state.pdfToPng = {
+        ...state.pdfToPng,
+        loading: false,
+        progress: 0,
+        error: isPdfToPngPasswordError(error)
+          ? "هذا الملف محمي بكلمة مرور ولا يمكن تحويله."
+          : "تعذر تحويل PDF إلى PNG. تحقق من الاتصال لتحميل المكتبات ثم حاول مجددًا.",
         status: ""
       };
       render();
@@ -3201,7 +3551,7 @@
       { key: "image-enhancer", title: "رفع جودة الصورة", description: "رفع جودة الصورة وتكبيرها مع الحفاظ على التفاصيل", icon: toolIcons.hd },
       { key: "image-clarifier", title: "توضيح الصورة", description: "تحسين وضوح الصورة وإزالة الضبابية", icon: toolIcons.imagePlus },
       { key: "png-to-pdf", title: "تحويل PNG إلى PDF", description: "حول صور PNG إلى ملف PDF بسهولة", icon: toolIcons.pngPdf },
-      { title: "تحويل PDF إلى PNG", description: "حول صفحات PDF إلى صور PNG عالية الجودة", icon: toolIcons.pdfPng },
+      { key: "pdf-to-png", title: "تحويل PDF إلى PNG", description: "حول صفحات PDF إلى صور PNG عالية الجودة", icon: toolIcons.pdfPng },
       { title: "تحويل صيغة الصورة", description: "تحويل الصور بين مختلف الصيغ (JPG, PNG, WebP)", icon: toolIcons.image },
       { title: "تدوير الصورة", description: "تدوير الصور إلى أي اتجاه بسهولة", icon: icons.refresh },
       { title: "قص الصورة", description: "قص وتحديد الجزء المطلوب من الصورة", icon: toolIcons.crop },
@@ -3862,6 +4212,215 @@
                   ${downloadIcon}
                 </a>
                 <small class="png-pdf-result-size">حجم الملف: ${escapeHtml(formatImageEnhancerFileSize(png.resultSize))}</small>
+              ` : `
+                <small class="png-pdf-result-size">سيظهر زر التحميل بعد التحويل</small>
+              `}
+            </aside>
+          </section>
+        </div>
+      </section>
+    `;
+  }
+
+  function renderPdfToPngMain() {
+    const pdfPng = state.pdfToPng || {};
+    const hasAccess = hasSubscriberToolsAccess();
+    const previews = Array.isArray(pdfPng.previews) ? pdfPng.previews : [];
+    const hasPdf = Boolean(pdfPng.pdf);
+    const hasResult = Boolean(pdfPng.resultUrl);
+    const canConvert = hasAccess && hasPdf && !pdfPng.loading;
+    const quality = String(pdfPng.quality || "1.5");
+    const pageMode = String(pdfPng.pageMode || "all");
+    const pagesCount = Number(pdfPng.pagesCount || pdfPng.pdf?.numPages || 0);
+    const selectedPages = hasPdf ? getPdfToPngSelectedPages(pagesCount) : [];
+    const displayedSelectedPagesCount = pageMode === "custom" ? selectedPages.length : pagesCount;
+    const pdfIcon = '<svg viewBox="0 0 24 24"><path d="M5 4h9l4 4v8H5Z"/><path d="M14 4v5h5"/><path d="M8 13h5"/><rect x="11" y="10" width="9" height="10" rx="1.5"/><path d="m13 17 2-2 1.4 1.4 1.1-1.1 1.5 1.7"/><circle cx="14" cy="13" r=".9"/></svg>';
+    const uploadIcon = '<svg viewBox="0 0 24 24"><path d="M12 16V7"/><path d="m8.5 10.5 3.5-3.5 3.5 3.5"/><path d="M20 16.5a4.5 4.5 0 0 1-4.5 4.5h-7A5.5 5.5 0 0 1 8 10.02 6 6 0 0 1 19.74 12"/></svg>';
+    const downloadIcon = '<svg viewBox="0 0 24 24"><path d="M12 3v12"/><path d="m7.5 10.5 4.5 4.5 4.5-4.5"/><path d="M5 21h14"/></svg>';
+    const features = [
+      "تحويل سريع بجودة عالية",
+      "تحويل كل صفحة إلى صورة PNG منفصلة",
+      "دعم ملفات PDF متعددة الصفحات",
+      "حفظ الصور داخل ملف ZIP جاهز",
+      "المعالجة داخل متصفحك"
+    ];
+    const tips = [
+      "استخدم جودة عالية للحصول على صور أوضح عند التكبير",
+      "اختر صفحات محددة إذا كان الملف كبيرًا لتسريع التحويل",
+      "إذا كان الملف محميًا بكلمة مرور فلن يمكن تحويله داخل المتصفح"
+    ];
+
+    if (!hasAccess) {
+      return `
+        <section class="guest-main tools-main png-pdf-main pdf-png-main" aria-label="تحويل PDF إلى PNG">
+          <div class="png-pdf-page">
+            <button class="png-pdf-back" type="button" data-open-free-tools>
+              <span aria-hidden="true">←</span>
+              <b>العودة للأدوات</b>
+            </button>
+            <section class="png-pdf-locked">
+              <span aria-hidden="true">${icons.lock}</span>
+              <h1>هذه الأداة متاحة للمشتركين فقط</h1>
+              <p>فعّل باقة شرارة أو طويق أو الرائد لتحويل صفحات PDF إلى صور PNG داخل المتصفح بدون XP.</p>
+              <button type="button" data-open-upgrade>عرض الباقات</button>
+            </section>
+          </div>
+        </section>
+      `;
+    }
+
+    return `
+      <section class="guest-main tools-main png-pdf-main pdf-png-main" aria-label="تحويل PDF إلى PNG">
+        <div class="png-pdf-page">
+          <button class="png-pdf-back" type="button" data-open-free-tools>
+            <span aria-hidden="true">←</span>
+            <b>العودة للأدوات</b>
+          </button>
+
+          <header class="png-pdf-hero">
+            <span class="png-pdf-hero-icon" aria-hidden="true">${pdfIcon}</span>
+            <div>
+              <span class="png-pdf-sparkles" aria-hidden="true">${icons.sparkle}</span>
+              <h1>تحويل PDF إلى PNG</h1>
+              <p>حوّل صفحات ملف PDF إلى صور PNG عالية الجودة بسهولة وسرعة داخل متصفحك.</p>
+            </div>
+          </header>
+
+          <section class="png-pdf-top-grid">
+            <div class="png-pdf-upload-card">
+              <input data-pdf-png-input type="file" accept="application/pdf,.pdf" hidden>
+              <div class="png-pdf-dropzone ${hasPdf ? "has-images" : ""}" data-pdf-png-dropzone>
+                <span class="png-pdf-upload-icon" aria-hidden="true">${uploadIcon}</span>
+                <h2>${hasPdf ? "ملف PDF جاهز للتحويل" : "اسحب وأفلت ملف PDF هنا"}</h2>
+                <p>${hasPdf ? `${escapeHtml(pdfPng.fileName || "document.pdf")} · ${escapeHtml(formatImageEnhancerFileSize(pdfPng.fileSize))}` : "أو انقر لاختيار الملف من جهازك"}</p>
+                <button class="png-pdf-primary" type="button" data-pdf-png-choose>
+                  <span>اختيار ملف PDF</span>
+                  ${icons.attach}
+                </button>
+                <small>PDF فقط · الحد الأقصى 50MB</small>
+              </div>
+            </div>
+
+            <aside class="png-pdf-info-stack">
+              <article class="png-pdf-card">
+                <span class="png-pdf-card-icon" aria-hidden="true">${icons.star}</span>
+                <h2>ميزات الأداة</h2>
+                <ul>
+                  ${features.map((item) => `<li>${icons.sparkle}<span>${escapeHtml(item)}</span></li>`).join("")}
+                </ul>
+              </article>
+              <article class="png-pdf-privacy">
+                <span aria-hidden="true">${icons.lock}</span>
+                <div>
+                  <h2>خصوصيتك تهمنا</h2>
+                  <p>جميع الملفات تتم معالجتها داخل متصفحك ولا يتم رفعها إلى خوادمنا.</p>
+                </div>
+              </article>
+            </aside>
+          </section>
+
+          <section class="png-pdf-workspace pdf-png-workspace">
+            <article class="png-pdf-images-panel pdf-png-file-panel">
+              <header>
+                <h2>معلومات الملف</h2>
+                <div>
+                  <button type="button" data-pdf-png-choose>${icons.plus}<span>اختيار ملف آخر</span></button>
+                  <button type="button" data-pdf-png-reset ${hasPdf ? "" : "disabled"}>${icons.refresh}<span>إعادة تعيين</span></button>
+                </div>
+              </header>
+              <div class="pdf-png-file-info">
+                <span>
+                  <b>اسم الملف</b>
+                  <small>${hasPdf ? escapeHtml(pdfPng.fileName || "document.pdf") : "-"}</small>
+                </span>
+                <span>
+                  <b>عدد الصفحات</b>
+                  <small>${hasPdf ? pagesCount.toLocaleString("ar-SA") : "-"}</small>
+                </span>
+                <span>
+                  <b>الحجم</b>
+                  <small>${hasPdf ? escapeHtml(formatImageEnhancerFileSize(pdfPng.fileSize)) : "-"}</small>
+                </span>
+              </div>
+
+              <h2 class="pdf-png-preview-title">معاينة الصفحات</h2>
+              <div class="pdf-png-previews ${previews.length ? "" : "is-empty"}">
+                ${previews.length ? previews.map((preview) => `
+                  <article class="pdf-png-page-preview">
+                    <img src="${escapeHtml(preview.url)}" alt="${escapeHtml(`صفحة ${preview.pageNumber}`)}">
+                    <span>صفحة ${Number(preview.pageNumber || 0).toLocaleString("ar-SA")}</span>
+                  </article>
+                `).join("") : `
+                  <div>
+                    <span aria-hidden="true">${pdfIcon}</span>
+                    <p>ستظهر معاينة الصفحات هنا بعد رفع ملف PDF.</p>
+                  </div>
+                `}
+                ${hasPdf && pagesCount > previews.length ? `
+                  <article class="pdf-png-more-pages">
+                    <b>+ ${(pagesCount - previews.length).toLocaleString("ar-SA")}</b>
+                    <span>صفحات أخرى</span>
+                  </article>
+                ` : ""}
+              </div>
+            </article>
+
+            <aside class="png-pdf-settings">
+              <article class="png-pdf-options">
+                <h2>خيارات التحويل</h2>
+                <label>
+                  <span>جودة الصورة</span>
+                  <select data-pdf-png-quality>
+                    <option value="1" ${quality === "1" ? "selected" : ""}>جودة عادية</option>
+                    <option value="1.5" ${quality === "1.5" ? "selected" : ""}>جودة عالية</option>
+                    <option value="2" ${quality === "2" ? "selected" : ""}>جودة عالية جدًا</option>
+                  </select>
+                </label>
+                <label>
+                  <span>صيغة الصورة</span>
+                  <select disabled>
+                    <option>PNG</option>
+                  </select>
+                </label>
+                <label>
+                  <span>الصفحات</span>
+                  <select data-pdf-png-page-mode>
+                    <option value="all" ${pageMode === "all" ? "selected" : ""}>كل الصفحات</option>
+                    <option value="custom" ${pageMode === "custom" ? "selected" : ""}>صفحات محددة</option>
+                  </select>
+                </label>
+                <label class="pdf-png-custom-pages ${pageMode === "custom" ? "" : "is-hidden"}">
+                  <span>اكتب الصفحات المطلوبة</span>
+                  <input data-pdf-png-custom-pages value="${escapeHtml(pdfPng.customPages || "")}" placeholder="مثال: 1,3,5-8" ${pageMode === "custom" ? "" : "disabled"}>
+                </label>
+                <small>سيتم إنشاء ملف ZIP يحتوي على جميع الصور الناتجة.</small>
+              </article>
+
+              <article class="png-pdf-tips">
+                <h2>نصيحة</h2>
+                <ul>
+                  ${tips.map((item) => `<li>${icons.sparkle}<span>${escapeHtml(item)}</span></li>`).join("")}
+                </ul>
+              </article>
+
+              ${pdfPng.loading || pdfPng.status || pdfPng.error ? `
+                <section class="png-pdf-status ${pdfPng.error ? "is-error" : ""}">
+                  <p>${escapeHtml(pdfPng.error || pdfPng.status || "")}</p>
+                  ${pdfPng.loading ? `<span><i style="width:${Math.max(8, Math.min(100, Number(pdfPng.progress || 0)))}%"></i></span>` : ""}
+                </section>
+              ` : ""}
+
+              <button class="png-pdf-convert" type="button" data-pdf-png-convert ${canConvert ? "" : "disabled"}>
+                ${pdfPng.loading ? "جاري التحويل..." : "تحويل إلى PNG"}
+                ${pdfIcon}
+              </button>
+              ${hasPdf ? `<small class="png-pdf-result-size">الصفحات المحددة: ${displayedSelectedPagesCount.toLocaleString("ar-SA")}</small>` : ""}
+              ${hasResult ? `
+                <a class="png-pdf-download" href="${escapeHtml(pdfPng.resultUrl)}" download="orlixor-pdf-pages.zip">
+                  <span>تحميل الصور ZIP</span>
+                  ${downloadIcon}
+                </a>
+                <small class="png-pdf-result-size">حجم الملف: ${escapeHtml(formatImageEnhancerFileSize(pdfPng.resultSize))}</small>
               ` : `
                 <small class="png-pdf-result-size">سيظهر زر التحميل بعد التحويل</small>
               `}
@@ -5095,6 +5654,9 @@
       if (state.toolView === "png-to-pdf") {
         return renderPngToPdfMain(profile);
       }
+      if (state.toolView === "pdf-to-png") {
+        return renderPdfToPngMain(profile);
+      }
       return renderToolsMain(profile);
     }
     if (isHomeWorkspace) {
@@ -5382,7 +5944,7 @@
   function renderShell() {
     const profile = getProfile();
     const isToolsWorkspace = state.section === "ai-tools";
-    const isSubscriberTools = isToolsWorkspace && ["subscriber-tools", "image-enhancer", "image-clarifier", "png-to-pdf"].includes(state.toolView);
+    const isSubscriberTools = isToolsWorkspace && ["subscriber-tools", "image-enhancer", "image-clarifier", "png-to-pdf", "pdf-to-png"].includes(state.toolView);
     app.innerHTML = `
       <div class="guest-shell ${state.theme === "dark" ? "theme-dark" : ""} ${isHomeWorkspace ? "is-home-workspace" : ""} ${isToolsWorkspace ? "is-tools-workspace" : ""} ${isSubscriberTools ? "is-subscriber-tools" : ""} ${state.sidebarCollapsed ? "is-sidebar-collapsed" : ""}">
         ${renderSidebar()}
@@ -6806,6 +7368,27 @@
         return;
       }
 
+      if (event.target.closest("[data-pdf-png-choose]")) {
+        if (!hasSubscriberToolsAccess()) {
+          state.upgradeModalOpen = true;
+          render();
+          return;
+        }
+        app.querySelector("[data-pdf-png-input]")?.click();
+        return;
+      }
+
+      if (event.target.closest("[data-pdf-png-convert]")) {
+        await runPdfToPngConversion();
+        return;
+      }
+
+      if (event.target.closest("[data-pdf-png-reset]")) {
+        resetPdfToPngState();
+        render();
+        return;
+      }
+
       const pngPdfRemove = event.target.closest("[data-png-pdf-remove]");
       if (pngPdfRemove) {
         removePngToPdfImage(pngPdfRemove.getAttribute("data-png-pdf-remove") || "");
@@ -6891,6 +7474,18 @@
             return;
           }
           state.toolView = "png-to-pdf";
+          state.openThreadMenuId = "";
+          state.modelMenuOpen = false;
+          render();
+          return;
+        }
+        if (toolKey === "pdf-to-png") {
+          if (!hasSubscriberToolsAccess()) {
+            state.upgradeModalOpen = true;
+            render();
+            return;
+          }
+          state.toolView = "pdf-to-png";
           state.openThreadMenuId = "";
           state.modelMenuOpen = false;
           render();
@@ -7382,6 +7977,12 @@
         state.writingAssistant.styleText = styleField.value;
         state.writingAssistant.error = "";
       }
+
+      const pdfPngCustomPages = event.target.closest("[data-pdf-png-custom-pages]");
+      if (pdfPngCustomPages) {
+        state.pdfToPng.customPages = pdfPngCustomPages.value;
+        clearPdfToPngResult("الإعدادات تغيّرت. شغّل التحويل من جديد.");
+      }
     });
 
     app.addEventListener("change", async (event) => {
@@ -7474,6 +8075,29 @@
       if (pngPdfFill) {
         state.pngToPdf.fillPage = Boolean(pngPdfFill.checked);
         clearPngToPdfResult("الإعدادات تغيّرت. شغّل التحويل من جديد.");
+        render();
+        return;
+      }
+
+      const pdfPngInput = event.target.closest("[data-pdf-png-input]");
+      if (pdfPngInput) {
+        await handlePdfToPngFile(pdfPngInput.files?.[0]);
+        pdfPngInput.value = "";
+        return;
+      }
+
+      const pdfPngQuality = event.target.closest("[data-pdf-png-quality]");
+      if (pdfPngQuality) {
+        state.pdfToPng.quality = ["1", "1.5", "2"].includes(pdfPngQuality.value) ? pdfPngQuality.value : "1.5";
+        clearPdfToPngResult("الإعدادات تغيّرت. شغّل التحويل من جديد.");
+        render();
+        return;
+      }
+
+      const pdfPngPageMode = event.target.closest("[data-pdf-png-page-mode]");
+      if (pdfPngPageMode) {
+        state.pdfToPng.pageMode = pdfPngPageMode.value === "custom" ? "custom" : "all";
+        clearPdfToPngResult("الإعدادات تغيّرت. شغّل التحويل من جديد.");
         render();
         return;
       }
@@ -7666,14 +8290,14 @@
         event.preventDefault();
         return;
       }
-      const dropZone = event.target.closest?.("[data-image-enhancer-dropzone], [data-image-clarifier-dropzone], [data-png-pdf-dropzone]");
+      const dropZone = event.target.closest?.("[data-image-enhancer-dropzone], [data-image-clarifier-dropzone], [data-png-pdf-dropzone], [data-pdf-png-dropzone]");
       if (!dropZone) return;
       event.preventDefault();
       dropZone.classList.add("is-drag-over");
     });
 
     app.addEventListener("dragleave", (event) => {
-      const dropZone = event.target.closest?.("[data-image-enhancer-dropzone], [data-image-clarifier-dropzone], [data-png-pdf-dropzone]");
+      const dropZone = event.target.closest?.("[data-image-enhancer-dropzone], [data-image-clarifier-dropzone], [data-png-pdf-dropzone], [data-pdf-png-dropzone]");
       if (!dropZone) return;
       dropZone.classList.remove("is-drag-over");
     });
@@ -7688,12 +8312,14 @@
         );
         return;
       }
-      const dropZone = event.target.closest?.("[data-image-enhancer-dropzone], [data-image-clarifier-dropzone], [data-png-pdf-dropzone]");
+      const dropZone = event.target.closest?.("[data-image-enhancer-dropzone], [data-image-clarifier-dropzone], [data-png-pdf-dropzone], [data-pdf-png-dropzone]");
       if (!dropZone) return;
       event.preventDefault();
       dropZone.classList.remove("is-drag-over");
       if (dropZone.matches("[data-png-pdf-dropzone]")) {
         await addPngToPdfFiles(event.dataTransfer?.files);
+      } else if (dropZone.matches("[data-pdf-png-dropzone]")) {
+        await handlePdfToPngFile(event.dataTransfer?.files?.[0]);
       } else if (dropZone.matches("[data-image-clarifier-dropzone]")) {
         await handleImageClarifierFile(event.dataTransfer?.files?.[0]);
       } else {
