@@ -5294,9 +5294,15 @@
       { key: "image-rotator", title: "تدوير الصورة", description: "تدوير الصور إلى أي اتجاه بسهولة", icon: icons.refresh }
     ];
     const visibleTools = showingSubscriberTools ? subscriberTools : tools;
+    const heroTitle = showingSubscriberTools ? "أدوات مجانية للمشتركين" : "أدوات الذكاء الاصطناعي";
+    const heroTitleHtml = showingSubscriberTools ? 'أدوات مجانية <span class="tools-title-accent">للمشتركين</span>' : escapeHtml(heroTitle);
+    const heroDescription = showingSubscriberTools
+      ? "مجموعة من الأدوات الحصرية المتقدمة التي تعمل مباشرة في متصفحك"
+      : "مجموعة من الأدوات الذكية لمساعدتك في العمل والإبداع";
+    const heroIcon = showingSubscriberTools ? icons.gift : icons.settings;
 
     return `
-      <section class="guest-main tools-main" aria-label="أدوات الذكاء الاصطناعي">
+      <section class="guest-main tools-main" aria-label="${escapeHtml(heroTitle)}">
         <div class="tools-page">
           <button class="tools-xp-badge ${isAuthenticated() ? "" : "requires-auth"}" type="button" data-balance>
             <span aria-hidden="true">${icons.bolt}</span>
@@ -5304,12 +5310,12 @@
             <small>المتاح</small>
           </button>
 
-          <header class="tools-hero">
+          <header class="tools-hero ${showingSubscriberTools ? "is-subscriber-tools" : ""}">
             <div class="tools-title-row">
-              <span class="tools-title-icon" aria-hidden="true">${icons.settings}</span>
-              <h1>أدوات الذكاء الاصطناعي</h1>
+              <span class="tools-title-icon" aria-hidden="true">${heroIcon}</span>
+              <h1>${heroTitleHtml}</h1>
             </div>
-            <p>مجموعة من الأدوات الذكية لمساعدتك في العمل والإبداع</p>
+            <p>${escapeHtml(heroDescription)}</p>
           </header>
 
           <nav class="tools-unified-bar" aria-label="تصنيفات الأدوات">
