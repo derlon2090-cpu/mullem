@@ -15,6 +15,7 @@
   const themeKey = "orlixor_guest_theme";
   const modelStorageKey = "orlixor_selected_model";
   const sidebarStorageKey = "orlixor_sidebar_collapsed";
+  const recentToolsStorageKey = "orlixor_recent_tools";
   const avatarStoragePrefix = "orlixor_user_avatar_";
   const xpClaimStoragePrefix = "orlixor_xp_claimed_at_";
   const authBridgeKey = "mlm_auth_bridge";
@@ -417,6 +418,7 @@
     selectedModel: loadSelectedModel(),
     sidebarCollapsed: loadSidebarCollapsed(),
     toolView: "tools",
+    recentTools: loadRecentTools(),
     smartSearch: {
       query: "",
       language: "العربية",
@@ -764,6 +766,67 @@
     } catch (_) {
       // Ignore storage issues.
     }
+  }
+
+  function loadRecentTools() {
+    try {
+      const parsed = JSON.parse(localStorage.getItem(recentToolsStorageKey) || "[]");
+      return Array.isArray(parsed)
+        ? parsed
+            .filter((item) => item && typeof item.key === "string")
+            .slice(0, 4)
+        : [];
+    } catch (_) {
+      return [];
+    }
+  }
+
+  function saveRecentTools(items) {
+    state.recentTools = Array.isArray(items) ? items.slice(0, 4) : [];
+    try {
+      localStorage.setItem(recentToolsStorageKey, JSON.stringify(state.recentTools));
+    } catch (_) {
+      // Ignore storage issues.
+    }
+  }
+
+  function getToolSidebarMeta(key, fallbackTitle) {
+    const meta = {
+      "smart-search": { title: "البحث الذكي", subtitle: "بحث دقيق من مصادر موثوقة", icon: icons.search },
+      "writing-assistant": { title: "مساعد الكتابة", subtitle: "تحسين وكتابة النصوص", icon: icons.edit },
+      "image-enhancer": { title: "رفع جودة الصورة", subtitle: "تكبير وتحسين وضوح الصورة", icon: icons.image || icons.sparkle },
+      "image-clarifier": { title: "توضيح الصورة", subtitle: "إزالة الضبابية وتحسين التفاصيل", icon: icons.sparkle },
+      "png-to-pdf": { title: "تحويل PNG إلى PDF", subtitle: "تحويل الصور إلى ملف PDF", icon: icons.filePdf },
+      "pdf-to-png": { title: "تحويل PDF إلى PNG", subtitle: "استخراج الصفحات كصور PNG", icon: icons.filePdf },
+      "pdf-unlock": { title: "إزالة حماية PDF", subtitle: "إدارة كلمة مرور ملف PDF", icon: icons.lock },
+      "image-converter": { title: "تحويل صيغة الصورة", subtitle: "تحويل JPG إلى PNG", icon: icons.document },
+      "image-compressor": { title: "ضغط الصور", subtitle: "تقليل حجم الصور بجودة عالية", icon: icons.ai },
+      "image-rotator": { title: "تدوير الصورة", subtitle: "تدوير الصور لأي اتجاه", icon: icons.refresh },
+      "image-cropper": { title: "قص الصورة", subtitle: "تحديد الجزء المطلوب وحفظه", icon: icons.crop || icons.edit }
+    };
+    const selected = meta[key] || {};
+    return {
+      key,
+      title: selected.title || fallbackTitle || "أداة Orlixor",
+      subtitle: selected.subtitle || "متاحة من صفحة الأدوات",
+      icon: selected.icon || icons.sparkle
+    };
+  }
+
+  function recordRecentToolUse(key, fallbackTitle) {
+    if (!key) return;
+    const meta = getToolSidebarMeta(key, fallbackTitle);
+    const next = [
+      {
+        key,
+        title: meta.title,
+        subtitle: meta.subtitle,
+        progress: 80,
+        updatedAt: Date.now()
+      },
+      ...(state.recentTools || []).filter((item) => item.key !== key)
+    ];
+    saveRecentTools(next);
   }
 
   function getSelectedModelProfile() {
@@ -8557,8 +8620,58 @@
     `;
   }
 
+  function renderToolsSidebarPanel() {
+    const recent = (state.recentTools || [])[0] || null;
+    const recentMeta = recent ? getToolSidebarMeta(recent.key, recent.title) : null;
+    const progress = recent ? Math.max(0, Math.min(100, Number(recent.progress || 80))) : 0;
+
+    return `
+      <label class="guest-search-box tools-sidebar-search">
+        <input type="search" placeholder="ابحث في الأدوات" data-tools-sidebar-search>
+        <span>${icons.search}</span>
+      </label>
+
+      <div class="tools-sidebar-panel">
+        ${recent ? `
+          <section class="tools-sidebar-recent" aria-label="آخر أداة استخدمتها">
+            <h3>آخر أداة استخدمتها</h3>
+            <button class="tools-sidebar-last-card" type="button" data-tool-key="${escapeHtml(recent.key)}" data-card="${escapeHtml(recentMeta.title)}">
+              <span class="tools-sidebar-tool-icon" aria-hidden="true">${recentMeta.icon}</span>
+              <span class="tools-sidebar-tool-copy">
+                <strong>${escapeHtml(recentMeta.title)}</strong>
+                <small>${escapeHtml(recentMeta.subtitle)}</small>
+              </span>
+              <span class="tools-sidebar-arrow" aria-hidden="true">›</span>
+              <span class="tools-sidebar-progress">
+                <i style="width:${progress}%"></i>
+              </span>
+              <b>${progress}% مكتمل</b>
+            </button>
+            <button class="tools-sidebar-follow" type="button" data-tool-key="${escapeHtml(recent.key)}" data-card="${escapeHtml(recentMeta.title)}">
+              <span aria-hidden="true">${icons.refresh}</span>
+              متابعة التقدم
+            </button>
+          </section>
+        ` : `
+          <section class="tools-sidebar-empty" aria-label="الأدوات المستخدمة مؤخراً">
+            <span aria-hidden="true">${icons.sparkle}</span>
+            <strong>لا توجد أدوات مستخدمة مؤخراً</strong>
+            <p>عند استخدام أي أداة، ستظهر هنا لتتمكن من المتابعة بسهولة.</p>
+          </section>
+        `}
+      </div>
+
+      <button class="tools-sidebar-browse" type="button" data-open-tools>
+        <span aria-hidden="true">${icons.ai}</span>
+        تصفح جميع الأدوات
+      </button>
+    `;
+  }
+
   function renderSidebar() {
     const userCard = getUserCardMeta();
+    const isToolsWorkspace = state.section === "ai-tools";
+    const isChatSidebar = ["dashboard", "messages"].includes(state.section);
     const userAccountCard = userCard.guest
       ? `
         <button class="guest-user-card is-guest is-orlixor-guest" type="button" data-open-account>
@@ -8606,30 +8719,34 @@
           <button class="guest-rail-btn" type="button" data-open-account aria-label="المزيد">${icons.menu}</button>
         </div>
 
-        <label class="guest-search-box">
-          <input type="search" value="${escapeHtml(getSearchValue())}" placeholder="بحث في المحادثات" data-history-search>
-          <span>${icons.search}</span>
-        </label>
+        ${isToolsWorkspace ? renderToolsSidebarPanel() : `
+          <label class="guest-search-box">
+            <input type="search" value="${escapeHtml(getSearchValue())}" placeholder="بحث في المحادثات" data-history-search>
+            <span>${icons.search}</span>
+          </label>
 
-        ${isHomeWorkspace ? "" : `
-          <nav class="guest-nav" aria-label="أقسام المنصة">
-            ${renderNav()}
-          </nav>
+          ${isHomeWorkspace ? "" : `
+            <nav class="guest-nav" aria-label="أقسام المنصة">
+              ${renderNav()}
+            </nav>
+          `}
+
+          <div class="guest-history-wrap">
+            ${renderHistory()}
+          </div>
+
+          ${isChatSidebar ? `
+            <button class="guest-upgrade-card" type="button" data-open-upgrade>
+              <div class="upgrade-mark">${icons.crown}</div>
+              <div>
+                <strong>الترقية إلى Pro</strong>
+                <span>استمتع بمزايا إضافية وتجربة أفضل</span>
+              </div>
+            </button>
+          ` : ""}
         `}
 
-        <div class="guest-history-wrap">
-          ${renderHistory()}
-        </div>
-
-        <button class="guest-upgrade-card" type="button" data-open-upgrade>
-          <div class="upgrade-mark">${icons.crown}</div>
-          <div>
-            <strong>الترقية إلى Pro</strong>
-            <span>استمتع بمزايا إضافية وتجربة أفضل</span>
-          </div>
-        </button>
-
-        ${userAccountCard}
+        ${isToolsWorkspace ? "" : userAccountCard}
       </aside>
     `;
   }
@@ -10478,6 +10595,8 @@
       const toolButton = event.target.closest("[data-tool-key]");
       if (toolButton) {
         const toolKey = toolButton.getAttribute("data-tool-key") || "";
+        const toolTitle = toolButton.getAttribute("data-card") || "";
+        recordRecentToolUse(toolKey, toolTitle);
         if (toolKey === "smart-search") {
           state.toolView = "smart-search";
           state.openThreadMenuId = "";
