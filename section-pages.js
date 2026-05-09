@@ -5267,6 +5267,12 @@
     return `
       <section class="guest-main tools-main" aria-label="أدوات الذكاء الاصطناعي">
         <div class="tools-page">
+          <button class="tools-xp-badge ${isAuthenticated() ? "" : "requires-auth"}" type="button" data-balance>
+            <span aria-hidden="true">${icons.bolt}</span>
+            <b>${escapeHtml(formatNumber(getPreviewBalance()))} XP</b>
+            <small>المتاح</small>
+          </button>
+
           <header class="tools-hero">
             <div class="tools-title-row">
               <h1>أدوات الذكاء الاصطناعي</h1>
@@ -5348,18 +5354,25 @@
     ];
 
     const categories = [
-      { title: "الأكثر استخداماً" },
+      { title: "الكل" },
       { title: "كتابة وتحرير" },
       { title: "تلخيص وتنظيم" },
-      { title: "تحليل بيانات" },
+      { title: "تحليل وبيانات" },
       { title: "إنتاجية" },
       { title: "تعليم وتعلم" },
       { title: "أدوات مجانية", freeTools: true }
     ];
+    const availabilityLabel = hasSubscriberAccess ? "متاحة في باقتك" : "غير متاحة في باقتك";
 
     return `
       <section class="guest-main tools-main free-tools-main" aria-label="أدوات مجانية للمشتركين">
         <div class="tools-page free-tools-page">
+          <button class="tools-xp-badge ${isAuthenticated() ? "" : "requires-auth"}" type="button" data-balance>
+            <span aria-hidden="true">${icons.bolt}</span>
+            <b>${escapeHtml(formatNumber(getPreviewBalance()))} XP</b>
+            <small>المتاح</small>
+          </button>
+
           <header class="free-tools-hero">
             <div class="free-tools-title">
               <span class="free-tools-gift" aria-hidden="true">${icons.gift}</span>
@@ -5391,7 +5404,7 @@
                 ? `data-tool-key="${escapeHtml(tool.key)}" data-card="${escapeHtml(tool.title)}"`
                 : `data-card="${escapeHtml(tool.title)}" data-subscriber-tool-card`;
               return `
-              <button class="free-tool-card ${hasSubscriberAccess ? "is-unlocked" : "requires-auth"}" type="button" ${hasSubscriberAccess ? unlockedAttrs : `data-open-upgrade data-card="${escapeHtml(tool.title)}"`} aria-label="${escapeHtml(`${tool.title} - ${hasSubscriberAccess ? "متاح في باقتك" : "للمشتركين فقط"}`)}">
+              <button class="free-tool-card ${hasSubscriberAccess ? "is-unlocked" : "requires-auth"}" type="button" ${hasSubscriberAccess ? unlockedAttrs : `data-open-upgrade data-card="${escapeHtml(tool.title)}"`} aria-label="${escapeHtml(`${tool.title} - ${availabilityLabel}`)}">
                 <span class="free-tool-favorite" aria-hidden="true">${icons.star}</span>
                 <span class="free-tool-body">
                   <span class="free-tool-icon" aria-hidden="true">${tool.icon}</span>
@@ -5401,7 +5414,7 @@
                   </span>
                 </span>
                 <span class="free-tool-lock ${hasSubscriberAccess ? "is-open" : ""}">
-                  <b>${hasSubscriberAccess ? "متاح في باقتك" : "للمشتركين فقط"}</b>
+                  <b>${escapeHtml(availabilityLabel)}</b>
                   ${hasSubscriberAccess ? icons.sparkle : icons.lock}
                 </span>
               </button>
