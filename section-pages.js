@@ -5191,10 +5191,37 @@
     `;
   }
 
-  function renderToolAvailabilityBadge(subscriberOnly = false) {
+  function hasToolPage(tool) {
+    return Boolean(tool?.key);
+  }
+
+  function renderToolAvailabilityBadge(tool, subscriberOnly = false) {
+    if (!hasToolPage(tool)) {
+      return '<span class="tool-availability-badge is-development">قيد التطوير</span>';
+    }
     const available = subscriberOnly ? hasSubscriberToolsAccess() : isAuthenticated();
     const label = available ? "متاحة في باقتك" : (subscriberOnly ? "غير متاحة في باقتك" : "سجّل الدخول");
     return `<span class="tool-availability-badge ${available ? "is-available" : "is-unavailable"}">${escapeHtml(label)}</span>`;
+  }
+
+  function renderToolAction(tool, className) {
+    const ready = hasToolPage(tool);
+    return `
+      <span class="${className} ${ready ? "" : "is-development"}">
+        <span>${ready ? "استخدم الأداة" : "قيد التطوير"}</span>
+        ${ready ? '<b aria-hidden="true">←</b>' : ""}
+      </span>
+    `;
+  }
+
+  function getToolCardAttrs(tool, subscriberOnly = false) {
+    if (!hasToolPage(tool)) {
+      return `data-dev-tool data-card="${escapeHtml(tool.title)}" aria-disabled="true"`;
+    }
+    if (subscriberOnly && !hasSubscriberToolsAccess()) {
+      return `data-open-upgrade data-card="${escapeHtml(tool.title)}"`;
+    }
+    return `data-tool-key="${escapeHtml(tool.key)}" data-card="${escapeHtml(tool.title)}"`;
   }
 
   function renderWritingEditingToolsMain() {
@@ -5279,16 +5306,13 @@
 
           <section class="tools-grid writing-tools-grid" aria-label="أدوات الكتابة والتحرير">
             ${tools.map((tool) => `
-              <button class="tool-card writing-tool-card" type="button" data-tool-key="writing-assistant" data-card="${escapeHtml(tool.title)}">
+              <button class="tool-card writing-tool-card" type="button" ${getToolCardAttrs(tool)}>
                 <span class="tool-card-star" aria-hidden="true">${icons.star}</span>
-                ${renderToolAvailabilityBadge()}
+                ${renderToolAvailabilityBadge(tool)}
                 <span class="tool-card-icon" aria-hidden="true">${tool.icon}</span>
                 <strong>${escapeHtml(tool.title)}</strong>
                 <span class="tool-card-copy">${escapeHtml(tool.description)}</span>
-                <span class="writing-tool-action">
-                  <span>استخدم الأداة</span>
-                  <b aria-hidden="true">←</b>
-                </span>
+                ${renderToolAction(tool, "writing-tool-action")}
               </button>
             `).join("")}
           </section>
@@ -5401,16 +5425,13 @@
                 </h2>
                 <div class="tools-grid summary-tools-grid">
                   ${group.tools.map((tool) => `
-                    <button class="tool-card summary-tool-card" type="button" data-tool-key="writing-assistant" data-card="${escapeHtml(tool.title)}">
+                    <button class="tool-card summary-tool-card" type="button" ${getToolCardAttrs(tool)}>
                       <span class="tool-card-star" aria-hidden="true">${icons.star}</span>
-                      ${renderToolAvailabilityBadge()}
+                      ${renderToolAvailabilityBadge(tool)}
                       <span class="tool-card-icon" aria-hidden="true">${tool.icon}</span>
                       <strong>${escapeHtml(tool.title)}</strong>
                       <span class="tool-card-copy">${escapeHtml(tool.description)}</span>
-                      <span class="summary-tool-action">
-                        <span>استخدم الأداة</span>
-                        <b aria-hidden="true">←</b>
-                      </span>
+                      ${renderToolAction(tool, "summary-tool-action")}
                     </button>
                   `).join("")}
                 </div>
@@ -5512,16 +5533,13 @@
             </h2>
             <div class="tools-grid data-tools-grid">
               ${tools.map((tool) => `
-                <button class="tool-card data-tool-card" type="button" data-tool-key="writing-assistant" data-card="${escapeHtml(tool.title)}">
+                <button class="tool-card data-tool-card" type="button" ${getToolCardAttrs(tool)}>
                   <span class="tool-card-star" aria-hidden="true">${icons.star}</span>
-                  ${renderToolAvailabilityBadge()}
+                  ${renderToolAvailabilityBadge(tool)}
                   <span class="tool-card-icon" aria-hidden="true">${tool.icon}</span>
                   <strong>${escapeHtml(tool.title)}</strong>
                   <span class="tool-card-copy">${escapeHtml(tool.description)}</span>
-                  <span class="data-tool-action">
-                    <span>استخدم الأداة</span>
-                    <b aria-hidden="true">←</b>
-                  </span>
+                  ${renderToolAction(tool, "data-tool-action")}
                 </button>
               `).join("")}
             </div>
@@ -5621,16 +5639,13 @@
             </h2>
             <div class="tools-grid productivity-tools-grid">
               ${tools.map((tool) => `
-                <button class="tool-card productivity-tool-card" type="button" data-tool-key="writing-assistant" data-card="${escapeHtml(tool.title)}">
+                <button class="tool-card productivity-tool-card" type="button" ${getToolCardAttrs(tool)}>
                   <span class="tool-card-star" aria-hidden="true">${icons.star}</span>
-                  ${renderToolAvailabilityBadge()}
+                  ${renderToolAvailabilityBadge(tool)}
                   <span class="tool-card-icon" aria-hidden="true">${tool.icon}</span>
                   <strong>${escapeHtml(tool.title)}</strong>
                   <span class="tool-card-copy">${escapeHtml(tool.description)}</span>
-                  <span class="productivity-tool-action">
-                    <span>استخدم الأداة</span>
-                    <b aria-hidden="true">←</b>
-                  </span>
+                  ${renderToolAction(tool, "productivity-tool-action")}
                 </button>
               `).join("")}
             </div>
@@ -5730,16 +5745,13 @@
             </h2>
             <div class="tools-grid education-tools-grid">
               ${tools.map((tool) => `
-                <button class="tool-card education-tool-card" type="button" data-tool-key="writing-assistant" data-card="${escapeHtml(tool.title)}">
+                <button class="tool-card education-tool-card" type="button" ${getToolCardAttrs(tool)}>
                   <span class="tool-card-star" aria-hidden="true">${icons.star}</span>
-                  ${renderToolAvailabilityBadge()}
+                  ${renderToolAvailabilityBadge(tool)}
                   <span class="tool-card-icon" aria-hidden="true">${tool.icon}</span>
                   <strong>${escapeHtml(tool.title)}</strong>
                   <span class="tool-card-copy">${escapeHtml(tool.description)}</span>
-                  <span class="education-tool-action">
-                    <span>استخدم الأداة</span>
-                    <b aria-hidden="true">←</b>
-                  </span>
+                  ${renderToolAction(tool, "education-tool-action")}
                 </button>
               `).join("")}
             </div>
@@ -5864,21 +5876,17 @@
 
           <section class="tools-grid ${showingSubscriberTools ? "is-subscriber-filter" : ""}">
             ${visibleTools.map((tool) => {
-              const lockedSubscriberTool = showingSubscriberTools && !hasSubscriberAccess;
-              const attrs = showingSubscriberTools
-                ? (lockedSubscriberTool ? `data-open-upgrade data-card="${escapeHtml(tool.title)}"` : `${tool.key ? `data-tool-key="${escapeHtml(tool.key)}"` : ""} data-card="${escapeHtml(tool.title)}"`)
-                : `data-tool-key="${escapeHtml(tool.key || "")}" data-card="${escapeHtml(tool.title)}"`;
+              const attrs = getToolCardAttrs(tool, showingSubscriberTools);
+              const ready = hasToolPage(tool);
+              const authClass = ready && (!isAuthenticated() || (showingSubscriberTools && !hasSubscriberAccess)) ? "requires-auth" : "";
               return `
-              <button class="tool-card ${showingSubscriberTools ? "subscriber-tool-card" : ""} ${isAuthenticated() && (!showingSubscriberTools || hasSubscriberAccess) ? "" : "requires-auth"}" type="button" ${attrs}>
+              <button class="tool-card ${showingSubscriberTools ? "subscriber-tool-card" : ""} ${authClass}" type="button" ${attrs}>
                 <span class="tool-card-star" aria-hidden="true">${icons.star}</span>
-                ${renderToolAvailabilityBadge(showingSubscriberTools)}
+                ${renderToolAvailabilityBadge(tool, showingSubscriberTools)}
                 <span class="tool-card-icon" aria-hidden="true">${tool.icon}</span>
                 <strong>${escapeHtml(tool.title)}</strong>
                 <span class="tool-card-copy">${escapeHtml(tool.description)}</span>
-                <span class="tool-card-action">
-                  <span>استخدم الأداة</span>
-                  <b aria-hidden="true">←</b>
-                </span>
+                ${renderToolAction(tool, "tool-card-action")}
               </button>
             `;
             }).join("")}
@@ -5968,11 +5976,11 @@
 
           <section class="free-tools-grid" aria-label="قائمة الأدوات المجانية للمشتركين">
             ${tools.map((tool) => {
-              const unlockedAttrs = tool.key
-                ? `data-tool-key="${escapeHtml(tool.key)}" data-card="${escapeHtml(tool.title)}"`
-                : `data-card="${escapeHtml(tool.title)}" data-subscriber-tool-card`;
+              const ready = hasToolPage(tool);
+              const attrs = getToolCardAttrs(tool, true);
+              const statusLabel = ready ? availabilityLabel : "قيد التطوير";
               return `
-              <button class="free-tool-card ${hasSubscriberAccess ? "is-unlocked" : "requires-auth"}" type="button" ${hasSubscriberAccess ? unlockedAttrs : `data-open-upgrade data-card="${escapeHtml(tool.title)}"`} aria-label="${escapeHtml(`${tool.title} - ${availabilityLabel}`)}">
+              <button class="free-tool-card ${ready && hasSubscriberAccess ? "is-unlocked" : ""} ${ready && !hasSubscriberAccess ? "requires-auth" : ""} ${ready ? "" : "is-development"}" type="button" ${attrs} aria-label="${escapeHtml(`${tool.title} - ${statusLabel}`)}">
                 <span class="free-tool-favorite" aria-hidden="true">${icons.star}</span>
                 <span class="free-tool-body">
                   <span class="free-tool-icon" aria-hidden="true">${tool.icon}</span>
@@ -5981,9 +5989,9 @@
                     <small>${escapeHtml(tool.description)}</small>
                   </span>
                 </span>
-                <span class="free-tool-lock ${hasSubscriberAccess ? "is-open" : ""}">
-                  <b>${escapeHtml(availabilityLabel)}</b>
-                  ${hasSubscriberAccess ? icons.sparkle : icons.lock}
+                <span class="free-tool-lock ${ready ? (hasSubscriberAccess ? "is-open" : "") : "is-development"}">
+                  <b>${escapeHtml(statusLabel)}</b>
+                  ${ready ? (hasSubscriberAccess ? icons.sparkle : icons.lock) : icons.sparkle}
                 </span>
               </button>
             `;
@@ -11106,6 +11114,13 @@
         state.smartSearch.query = smartSuggestion.getAttribute("data-smart-suggestion") || "";
         state.smartSearch.error = "";
         render();
+        return;
+      }
+
+      const devToolButton = event.target.closest("[data-dev-tool]");
+      if (devToolButton) {
+        const label = devToolButton.getAttribute("data-card") || "هذه الأداة";
+        showToast(`${label} قيد التطوير حاليًا.`);
         return;
       }
 

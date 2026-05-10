@@ -4610,6 +4610,11 @@ body[data-workspace-mode="home"] .guest-root {
   background: rgba(127, 135, 168, 0.1);
 }
 
+.tool-availability-badge.is-development {
+  color: #9b6a10;
+  background: rgba(255, 185, 80, 0.18);
+}
+
 .tool-availability-badge + .tool-card-icon,
 .tool-card-star + .tool-availability-badge + .tool-card-icon {
   margin-top: 20px;
@@ -4698,6 +4703,28 @@ body[data-workspace-mode="home"] .guest-root {
 .tool-card-action b {
   font-size: 0.78rem;
   line-height: 1;
+}
+
+.tool-card[data-dev-tool],
+.free-tool-card[data-dev-tool] {
+  cursor: default;
+}
+
+.tool-card[data-dev-tool]:hover,
+.free-tool-card[data-dev-tool]:hover {
+  border-color: rgba(255, 185, 80, 0.44);
+  box-shadow: 0 16px 36px rgba(255, 185, 80, 0.1);
+}
+
+.tool-card-action.is-development,
+.writing-tool-action.is-development,
+.summary-tool-action.is-development,
+.data-tool-action.is-development,
+.productivity-tool-action.is-development,
+.education-tool-action.is-development {
+  border-color: rgba(255, 185, 80, 0.36);
+  color: #9b6a10;
+  background: rgba(255, 185, 80, 0.12);
 }
 
 .free-tools-main {
@@ -4910,6 +4937,15 @@ body[data-workspace-mode="home"] .guest-root {
 .free-tool-lock.is-open {
   color: #0f8d62;
   background: rgba(21, 190, 128, 0.08);
+}
+
+.free-tool-card.is-development {
+  border-color: rgba(255, 185, 80, 0.2);
+}
+
+.free-tool-lock.is-development {
+  color: #9b6a10;
+  background: rgba(255, 185, 80, 0.14);
 }
 
 .free-tool-body {
@@ -5438,6 +5474,15 @@ body[data-workspace-mode="home"] .guest-root {
 .guest-shell.is-tools-workspace.is-subscriber-tools .free-tool-card.requires-auth .free-tool-lock {
   color: #7f87a8;
   background: rgba(127, 135, 168, 0.1);
+}
+
+.guest-shell.is-tools-workspace.is-subscriber-tools .free-tool-card.is-development {
+  border-color: rgba(255, 185, 80, 0.2);
+}
+
+.guest-shell.is-tools-workspace.is-subscriber-tools .free-tool-lock.is-development {
+  color: #9b6a10;
+  background: rgba(255, 185, 80, 0.14);
 }
 
 .guest-shell.is-tools-workspace.is-subscriber-tools .free-tools-benefits {
