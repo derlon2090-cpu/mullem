@@ -16,6 +16,7 @@
   const modelStorageKey = "orlixor_selected_model";
   const sidebarStorageKey = "orlixor_sidebar_collapsed";
   const recentToolsStorageKey = "orlixor_recent_tools";
+  const savedConversationCacheLimit = 80;
   const avatarStoragePrefix = "orlixor_user_avatar_";
   const xpClaimStoragePrefix = "orlixor_xp_claimed_at_";
   const authBridgeKey = "mlm_auth_bridge";
@@ -653,6 +654,7 @@
     conversationUserId: "",
     savedConversationsLoaded: false,
     savedConversationsLoading: false,
+    savedConversationsCacheLoadedUserId: "",
     hydratedConversationIds: {},
     hydratingConversationIds: {},
     settings: {}
@@ -882,6 +884,71 @@
     const key = getAccountStorageKey("conversation_ids", userId);
     if (!key) return {};
     return loadJson(key, {});
+  }
+
+  function getSavedConversationCacheKey(userId = state.currentUser?.id) {
+    return getAccountStorageKey("saved_conversations", userId);
+  }
+
+  function normalizeConversationCacheItem(item) {
+    const id = String(item?.id || "").trim();
+    if (!id) return null;
+    return {
+      id,
+      guest_session_id: item.guest_session_id || item.guestSessionId || null,
+      user_id: item.user_id != null ? String(item.user_id) : null,
+      project_id: item.project_id != null ? String(item.project_id) : null,
+      title: item.title || null,
+      subject: item.subject || null,
+      stage: item.stage || null,
+      grade: item.grade || null,
+      term: item.term || null,
+      status: item.status || "active",
+      last_message_at: item.last_message_at || item.lastMessageAt || item.updated_at || item.updatedAt || null,
+      created_at: item.created_at || item.createdAt || null,
+      updated_at: item.updated_at || item.updatedAt || null
+    };
+  }
+
+  function readSavedConversationCacheForUser(userId = state.currentUser?.id) {
+    const key = getSavedConversationCacheKey(userId);
+    if (!key) return [];
+    const cached = loadJson(key, []);
+    return (Array.isArray(cached) ? cached : [])
+      .map(normalizeConversationCacheItem)
+      .filter(Boolean)
+      .slice(0, savedConversationCacheLimit);
+  }
+
+  function writeSavedConversationCacheForCurrentUser(items) {
+    const key = getSavedConversationCacheKey();
+    if (!key) return;
+    const normalized = (Array.isArray(items) ? items : [])
+      .map(normalizeConversationCacheItem)
+      .filter(Boolean)
+      .sort((first, second) => getConversationSortTime(second.last_message_at || second.updated_at || second.created_at) - getConversationSortTime(first.last_message_at || first.updated_at || first.created_at))
+      .slice(0, savedConversationCacheLimit);
+    try {
+      localStorage.setItem(key, JSON.stringify(normalized));
+    } catch (_) {
+      // Cache is best-effort only; server data remains authoritative.
+    }
+  }
+
+  function mergeSavedConversationCacheItem(item) {
+    const normalized = normalizeConversationCacheItem(item);
+    if (!normalized) return;
+    const existing = readSavedConversationCacheForUser()
+      .filter((entry) => String(entry.id) !== String(normalized.id));
+    writeSavedConversationCacheForCurrentUser([normalized, ...existing]);
+  }
+
+  function removeSavedConversationCacheItem(conversationId) {
+    const id = String(conversationId || "").trim();
+    if (!id) return;
+    writeSavedConversationCacheForCurrentUser(
+      readSavedConversationCacheForUser().filter((entry) => String(entry.id) !== id)
+    );
   }
 
   function saveConversationIdsForCurrentUser() {
@@ -1308,6 +1375,7 @@
       state.conversationUserId = "";
       state.savedConversationsLoaded = false;
       state.savedConversationsLoading = false;
+      state.savedConversationsCacheLoadedUserId = "";
       state.hydratedConversationIds = {};
       state.hydratingConversationIds = {};
       return;
@@ -1319,9 +1387,12 @@
       state.conversationUserId = userId;
       state.savedConversationsLoaded = false;
       state.savedConversationsLoading = false;
+      state.savedConversationsCacheLoadedUserId = "";
       state.hydratedConversationIds = {};
       state.hydratingConversationIds = {};
     }
+
+    primeSavedConversationsFromCache(userId);
   }
 
   function getSavedConversationSections() {
@@ -1430,6 +1501,20 @@
     });
 
     return primaryThread;
+  }
+
+  function primeSavedConversationsFromCache(userId = state.currentUser?.id) {
+    const safeUserId = String(userId || "").trim();
+    if (!safeUserId || state.savedConversationsCacheLoadedUserId === safeUserId) return false;
+    state.savedConversationsCacheLoadedUserId = safeUserId;
+
+    const cachedItems = readSavedConversationCacheForUser(safeUserId);
+    if (!cachedItems.length) return false;
+
+    cachedItems.forEach((item) => upsertSavedConversationThread(item));
+    getSavedConversationSections().forEach((sectionKey) => sortThreadGroupsByNewest(sectionKey));
+    saveConversationIdsForCurrentUser();
+    return true;
   }
 
   function filterGroups(sectionKey = state.section) {
@@ -4491,6 +4576,7 @@
     if (apiConversationId) {
       delete state.hydratedConversationIds[apiConversationId];
       delete state.hydratingConversationIds[apiConversationId];
+      removeSavedConversationCacheItem(apiConversationId);
     }
 
     let removed = false;
@@ -9928,6 +10014,7 @@
       const result = await apiClient.getChatSession(conversationId);
       if (result?.ok && result.data?.conversation) {
         upsertSavedConversationThread(result.data.conversation, result.data.messages || []);
+        mergeSavedConversationCacheItem(result.data.conversation);
         state.hydratedConversationIds[conversationId] = true;
         saveConversationIdsForCurrentUser();
         render();
@@ -9946,9 +10033,15 @@
 
     state.savedConversationsLoading = true;
     try {
-      const result = await apiClient.getStudentConversations({ limit: 60 });
+      let result = await apiClient.getStudentConversations({ limit: 60 });
+      if ((!result?.ok || !Array.isArray(result.data?.items)) && apiClient.getChatSessions) {
+        result = await apiClient.getChatSessions({ limit: 60 });
+      }
       if (result?.ok) {
         const items = Array.isArray(result.data?.items) ? result.data.items : [];
+        if (items.length || !readSavedConversationCacheForUser().length) {
+          writeSavedConversationCacheForCurrentUser(items);
+        }
         items.forEach((item) => upsertSavedConversationThread(item));
         getSavedConversationSections().forEach((sectionKey) => sortThreadGroupsByNewest(sectionKey));
         state.savedConversationsLoaded = true;
@@ -10213,6 +10306,13 @@
             last_message_at: savedAt,
             created_at: threadEntry.stats?.created || savedAt
           }, threadEntry.messages);
+          mergeSavedConversationCacheItem({
+            id: String(result.data.conversation_id),
+            title: input || threadEntry.title,
+            last_message_at: savedAt,
+            created_at: savedAt,
+            updated_at: savedAt
+          });
           state.hydratedConversationIds[String(result.data.conversation_id)] = true;
           saveConversationIdsForCurrentUser();
         }

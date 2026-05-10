@@ -1073,8 +1073,13 @@
     });
   }
 
-  async function getChatSessions() {
-    return request("/chat/sessions");
+  async function getChatSessions(params = {}) {
+    const query = new URLSearchParams();
+    Object.entries(params || {}).forEach(([key, value]) => {
+      if (value == null || value === "") return;
+      query.set(key, String(value));
+    });
+    return request(`/chat/sessions${query.toString() ? `?${query.toString()}` : ""}`);
   }
 
   async function getChatSession(conversationId) {
