@@ -5103,11 +5103,11 @@
       }
     } catch (error) {
       if (!state.notificationsData) {
-        state.notificationsData = buildFallbackNotifications();
-        state.notificationsUnreadCount = Number(state.notificationsData.unreadCount || 0);
-        state.notificationsLoaded = true;
+        state.notificationsData = null;
+        state.notificationsUnreadCount = 0;
+        state.notificationsLoaded = false;
       }
-      state.notificationsError = "";
+      state.notificationsError = options.silent ? "" : (error?.message || "تعذر تحميل الإشعارات من لوحة الإدارة الآن.");
     } finally {
       state.notificationsLoading = false;
       render();
@@ -5122,12 +5122,9 @@
     state.notificationsOpen = true;
     state.notificationsTab = state.notificationsTab || "all";
     state.balancePanelOpen = false;
-    if (!state.notificationsData) {
-      state.notificationsData = buildFallbackNotifications();
-      state.notificationsUnreadCount = Number(state.notificationsData.unreadCount || 0);
-    }
+    state.notificationsError = "";
     render();
-    loadNotifications({ force: true, silent: true });
+    loadNotifications({ force: true });
   }
 
   async function markNotificationRead(notificationId) {

@@ -3393,6 +3393,156 @@ async function handleMarkAllNotificationsRead(req, res) {
   });
 }
 
+const ADMIN_NOTIFICATION_TYPES = new Set(["xp_discount", "official_update", "feature_update", "account"]);
+const ADMIN_NOTIFICATION_ICONS = new Set(["gift", "megaphone", "sparkle", "bell", "document", "image"]);
+const ADMIN_NOTIFICATION_PLANS = new Set(["all", "free", "starter", "spark", "tuwaiq", "pioneer", "business", "pro", "pro_plus", "pro_max"]);
+
+function buildApiNotification(item = {}) {
+  return {
+    id: String(item.id),
+    title: String(item.title || "").trim(),
+    body: String(item.body || "").trim(),
+    type: String(item.type || "").trim(),
+    badge: String(item.badge || "").trim(),
+    icon: String(item.icon || "").trim(),
+    target_plan: String(item.target_plan || "all").trim(),
+    target_user_id: item.target_user_id != null ? String(item.target_user_id) : null,
+    action_url: String(item.action_url || "").trim() || null,
+    starts_at: item.starts_at || null,
+    expires_at: item.expires_at || null,
+    is_active: item.is_active == null ? true : Boolean(item.is_active),
+    created_at: item.created_at || null,
+    updated_at: item.updated_at || null
+  };
+}
+
+function parseOptionalFutureDate(value, fieldName) {
+  const text = sanitizeOptionalText(value, 80);
+  if (!text) return null;
+  const date = new Date(text);
+  if (Number.isNaN(date.getTime())) {
+    throw createHttpError(422, `${fieldName} must be a valid date.`);
+  }
+  return date.toISOString();
+}
+
+function normalizeAdminNotificationPayload(payload = {}, partial = false) {
+  const normalized = {};
+
+  if (!partial || "title" in payload) {
+    normalized.title = requireTextField(payload.title, "title", 180);
+  }
+
+  if (!partial || "body" in payload) {
+    normalized.body = requireTextField(payload.body, "body", 1200);
+  }
+
+  if (!partial || "type" in payload) {
+    const type = sanitizeOptionalText(payload.type, 40) || "official_update";
+    if (!ADMIN_NOTIFICATION_TYPES.has(type)) {
+      throw createHttpError(422, "Notification type is not supported.");
+    }
+    normalized.type = type;
+  }
+
+  if (!partial || "badge" in payload) {
+    normalized.badge = sanitizeOptionalText(payload.badge, 80) || null;
+  }
+
+  if (!partial || "icon" in payload) {
+    const icon = sanitizeOptionalText(payload.icon, 40) || "sparkle";
+    normalized.icon = ADMIN_NOTIFICATION_ICONS.has(icon) ? icon : "sparkle";
+  }
+
+  if (!partial || "target_plan" in payload || "targetPlan" in payload) {
+    const targetPlan = sanitizeOptionalText(payload.target_plan || payload.targetPlan, 80) || "all";
+    normalized.target_plan = ADMIN_NOTIFICATION_PLANS.has(targetPlan) ? targetPlan : "all";
+  }
+
+  if ("target_user_id" in payload || "targetUserId" in payload) {
+    const targetUserId = Number(payload.target_user_id || payload.targetUserId);
+    normalized.target_user_id = Number.isFinite(targetUserId) && targetUserId > 0 ? Math.round(targetUserId) : null;
+  } else if (!partial) {
+    normalized.target_user_id = null;
+  }
+
+  if (!partial || "action_url" in payload || "actionUrl" in payload) {
+    normalized.action_url = sanitizeOptionalText(payload.action_url || payload.actionUrl, 400) || null;
+  }
+
+  if (!partial || "starts_at" in payload || "startsAt" in payload) {
+    normalized.starts_at = parseOptionalFutureDate(payload.starts_at || payload.startsAt, "starts_at") || new Date().toISOString();
+  }
+
+  if (!partial || "expires_at" in payload || "expiresAt" in payload) {
+    normalized.expires_at = parseOptionalFutureDate(payload.expires_at || payload.expiresAt, "expires_at");
+  }
+
+  if (!partial || "is_active" in payload || "isActive" in payload) {
+    normalized.is_active = payload.is_active == null && payload.isActive == null
+      ? true
+      : Boolean(payload.is_active ?? payload.isActive);
+  }
+
+  return normalized;
+}
+
+async function handleAdminNotifications(req, res) {
+  await requireAdminUser(req);
+  if (typeof databaseClient.listAdminNotifications !== "function") {
+    throw createHttpError(501, "Admin notifications are not available.");
+  }
+  const url = new URL(req.url, `http://${req.headers.host || "127.0.0.1"}`);
+  const items = await databaseClient.listAdminNotifications({
+    limit: Math.max(1, Math.min(Number(url.searchParams.get("limit") || 80), 200)),
+    includeInactive: url.searchParams.get("include_inactive") !== "0"
+  });
+
+  sendJson(req, res, 200, {
+    success: true,
+    data: {
+      items: items.map(buildApiNotification)
+    }
+  });
+}
+
+async function handleAdminCreateNotification(req, res) {
+  const auth = await requireAdminUser(req);
+  if (typeof databaseClient.createNotification !== "function") {
+    throw createHttpError(501, "Admin notifications are not available.");
+  }
+  const payload = normalizeAdminNotificationPayload(await parseJsonBody(req));
+  const item = await databaseClient.createNotification(payload);
+  await recordAdminAction(req, auth, "CREATE_NOTIFICATION", "notification", item?.id || "", payload);
+
+  sendJson(req, res, 201, {
+    success: true,
+    data: {
+      item: buildApiNotification(item)
+    }
+  });
+}
+
+async function handleAdminUpdateNotification(req, res, notificationId) {
+  const auth = await requireAdminUser(req);
+  if (typeof databaseClient.updateNotification !== "function") {
+    throw createHttpError(501, "Admin notifications are not available.");
+  }
+  const payload = normalizeAdminNotificationPayload(await parseJsonBody(req), true);
+  const item = await databaseClient.updateNotification(notificationId, payload);
+  if (!item) {
+    throw createHttpError(404, "Notification was not found.");
+  }
+  await recordAdminAction(req, auth, "UPDATE_NOTIFICATION", "notification", notificationId, payload);
+
+  sendJson(req, res, 200, {
+    success: true,
+    data: {
+      item: buildApiNotification(item)
+    }
+  });
+}
+
 async function handleAdminStats(req, res) {
   const auth = await requireAdminUser(req);
   const stats = await databaseClient.getAdminStats();
@@ -4933,6 +5083,22 @@ async function routeRequest(req, res) {
 
   if (req.method === "GET" && (requestPath === "/api/admin/packages" || requestPath === "/api/admin/plans")) {
     await handleAdminPackages(req, res);
+    return;
+  }
+
+  if (req.method === "GET" && requestPath === "/api/admin/notifications") {
+    await handleAdminNotifications(req, res);
+    return;
+  }
+
+  if (req.method === "POST" && requestPath === "/api/admin/notifications") {
+    await handleAdminCreateNotification(req, res);
+    return;
+  }
+
+  if (req.method === "PATCH" && requestPath.startsWith("/api/admin/notifications/")) {
+    const notificationId = decodeURIComponent(requestPath.replace("/api/admin/notifications/", ""));
+    await handleAdminUpdateNotification(req, res, notificationId);
     return;
   }
 

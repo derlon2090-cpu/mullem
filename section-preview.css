@@ -13483,49 +13483,52 @@ body[data-workspace-mode="home"] .guest-root {
   position: fixed;
   inset: 0;
   z-index: 1800;
-  display: flex;
-  align-items: flex-start;
-  justify-content: center;
-  padding: 22px;
+  display: block;
+  padding: 0;
   direction: rtl;
+  pointer-events: none;
 }
 
 .notifications-backdrop {
   position: absolute;
   inset: 0;
   border: 0;
-  background: rgba(20, 21, 43, 0.18);
-  backdrop-filter: blur(7px);
+  background: rgba(20, 21, 43, 0.10);
+  backdrop-filter: blur(5px);
   cursor: pointer;
+  pointer-events: auto;
 }
 
 .notifications-panel {
-  position: relative;
-  width: min(680px, calc(100vw - 44px));
-  max-height: calc(100vh - 44px);
+  position: fixed;
+  top: 74px;
+  right: 24px;
+  width: min(392px, calc(100vw - 32px));
+  max-height: min(680px, calc(100vh - 94px));
   overflow-y: auto;
   border: 1px solid #eee8ff;
-  border-radius: 28px;
+  border-radius: 24px;
   background: rgba(255, 255, 255, 0.98);
-  box-shadow: 0 26px 88px rgba(109, 76, 255, 0.18);
+  box-shadow: 0 24px 78px rgba(109, 76, 255, 0.18);
   color: #111936;
   scrollbar-width: thin;
   scrollbar-color: rgba(124, 77, 255, 0.34) transparent;
+  pointer-events: auto;
 }
 
 .notification-header {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  gap: 18px;
-  padding: 28px;
+  gap: 12px;
+  padding: 20px;
   border-bottom: 1px solid #f1ecff;
 }
 
 .notification-header-title {
   display: flex;
   align-items: center;
-  gap: 14px;
+  gap: 12px;
 }
 
 .notification-header-icon,
@@ -13560,32 +13563,33 @@ body[data-workspace-mode="home"] .guest-root {
 }
 
 .notification-header-icon {
-  width: 62px;
-  height: 62px;
-  border-radius: 20px;
+  width: 50px;
+  height: 50px;
+  border-radius: 17px;
 }
 
 .notification-header h2 {
   margin: 0;
-  font-size: 1.75rem;
+  font-size: 1.36rem;
   font-weight: 900;
   letter-spacing: 0;
 }
 
 .notification-header p {
-  margin: 6px 0 0;
+  margin: 4px 0 0;
   color: #7680a8;
+  font-size: 0.86rem;
   font-weight: 800;
 }
 
 .notification-close {
-  width: 42px;
-  height: 42px;
+  width: 36px;
+  height: 36px;
   border: 0;
-  border-radius: 14px;
+  border-radius: 12px;
   background: transparent;
   color: #30375f;
-  font-size: 2rem;
+  font-size: 1.55rem;
   line-height: 1;
   cursor: pointer;
 }
@@ -13593,16 +13597,17 @@ body[data-workspace-mode="home"] .guest-root {
 .notification-tabs {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 12px;
-  padding: 18px 28px;
+  gap: 10px;
+  padding: 14px 18px;
 }
 
 .notification-tabs button {
   border: 1px solid #eee8ff;
-  border-radius: 18px;
-  padding: 13px 16px;
+  border-radius: 15px;
+  padding: 11px 14px;
   background: #fff;
   color: #7b6fa3;
+  font-size: 0.9rem;
   font-weight: 900;
   cursor: pointer;
 }
@@ -13625,7 +13630,7 @@ body[data-workspace-mode="home"] .guest-root {
 }
 
 .notification-section {
-  padding: 24px 28px;
+  padding: 18px 20px;
   border-top: 1px solid #f4f0ff;
 }
 
@@ -13648,9 +13653,9 @@ body[data-workspace-mode="home"] .guest-root {
 .notification-section-title div > span {
   display: grid;
   place-items: center;
-  width: 42px;
-  height: 42px;
-  border-radius: 14px;
+  width: 36px;
+  height: 36px;
+  border-radius: 13px;
   background: #f5f0ff;
   color: #6d4cff;
 }
@@ -13671,12 +13676,12 @@ body[data-workspace-mode="home"] .guest-root {
 
 .notification-card {
   display: grid;
-  grid-template-columns: 52px 1fr;
-  gap: 14px;
+  grid-template-columns: 44px 1fr;
+  gap: 12px;
   align-items: center;
-  padding: 16px;
+  padding: 13px;
   border: 1px solid #eee8ff;
-  border-radius: 20px;
+  border-radius: 17px;
   background: #fff;
   box-shadow: 0 12px 32px rgba(31, 44, 93, 0.04);
   cursor: pointer;
@@ -13688,23 +13693,23 @@ body[data-workspace-mode="home"] .guest-root {
 }
 
 .notification-card.is-hero {
-  grid-template-columns: 84px 1fr;
-  min-height: 132px;
+  grid-template-columns: 54px 1fr;
+  min-height: 110px;
   background:
     radial-gradient(circle at 14% 50%, rgba(124, 77, 255, 0.14), transparent 26%),
     linear-gradient(135deg, #fff, #fbf8ff);
 }
 
 .notification-icon {
-  width: 52px;
-  height: 52px;
-  border-radius: 16px;
+  width: 44px;
+  height: 44px;
+  border-radius: 15px;
 }
 
 .notification-card.is-hero .notification-icon {
-  width: 78px;
-  height: 78px;
-  border-radius: 24px;
+  width: 52px;
+  height: 52px;
+  border-radius: 17px;
   box-shadow: inset 0 0 0 1px rgba(124, 77, 255, 0.08);
 }
 
@@ -13716,37 +13721,39 @@ body[data-workspace-mode="home"] .guest-root {
   display: inline-flex;
   align-items: center;
   width: fit-content;
-  padding: 6px 10px;
+  padding: 5px 9px;
   border-radius: 999px;
   background: #f2ecff;
   color: #6d4cff;
-  font-size: 0.76rem;
+  font-size: 0.72rem;
   font-weight: 900;
 }
 
 .notification-card h4 {
-  margin: 8px 0 4px;
+  margin: 7px 0 3px;
   color: #111936;
-  font-size: 1rem;
+  font-size: 0.95rem;
   font-weight: 900;
   letter-spacing: 0;
 }
 
 .notification-card.is-hero h4 {
-  font-size: 1.26rem;
+  font-size: 1.02rem;
 }
 
 .notification-card p {
   margin: 0;
   color: #7680a8;
+  font-size: 0.82rem;
   font-weight: 700;
-  line-height: 1.7;
+  line-height: 1.55;
 }
 
 .notification-card small {
   display: inline-flex;
-  margin-top: 8px;
+  margin-top: 7px;
   color: #7d86ad;
+  font-size: 0.76rem;
   font-weight: 800;
 }
 
@@ -13755,16 +13762,16 @@ body[data-workspace-mode="home"] .guest-root {
   display: grid;
   place-items: center;
   gap: 12px;
-  min-height: 190px;
-  padding: 30px;
+  min-height: 156px;
+  padding: 24px;
   text-align: center;
 }
 
 .notifications-loading span,
 .notifications-empty span {
-  width: 58px;
-  height: 58px;
-  border-radius: 20px;
+  width: 52px;
+  height: 52px;
+  border-radius: 17px;
 }
 
 .notifications-empty strong,
@@ -13792,7 +13799,7 @@ body[data-workspace-mode="home"] .guest-root {
   justify-content: space-between;
   gap: 12px;
   align-items: center;
-  padding: 20px 28px 26px;
+  padding: 16px 20px 20px;
   border-top: 1px solid #f4f0ff;
 }
 
@@ -13807,8 +13814,8 @@ body[data-workspace-mode="home"] .guest-root {
 .notification-header svg,
 .notification-section-title svg,
 .notification-card svg {
-  width: 22px;
-  height: 22px;
+  width: 19px;
+  height: 19px;
 }
 
 @media (max-width: 760px) {

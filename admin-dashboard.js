@@ -8,6 +8,7 @@
     subscriptions: [],
     xpLedger: [],
     logs: [],
+    notifications: [],
     tab: "dashboard"
   };
 
@@ -164,13 +165,14 @@
   }
 
   async function loadAdminData() {
-    const [stats, users, plans, subscriptions, xpLedger, logs] = await Promise.all([
+    const [stats, users, plans, subscriptions, xpLedger, logs, notifications] = await Promise.all([
       api.getAdminStats(),
       api.getAdminUsers({ per_page: 200 }),
       api.getAdminPackages(),
       api.getAdminSubscriptions?.({ limit: 120 }) || api.request("/admin/subscriptions"),
       api.getAdminXpLedger?.({ limit: 140 }) || api.request("/admin/xp-ledger"),
-      api.getAdminLogs?.({ limit: 140 }) || api.request("/admin/logs")
+      api.getAdminLogs?.({ limit: 140 }) || api.request("/admin/logs"),
+      api.getAdminNotifications?.({ limit: 80 }) || api.request("/admin/notifications")
     ]);
 
     if (stats.ok) {
@@ -182,6 +184,7 @@
     if (subscriptions.ok) state.subscriptions = Array.isArray(subscriptions.data?.items) ? subscriptions.data.items : [];
     if (xpLedger.ok) state.xpLedger = Array.isArray(xpLedger.data?.items) ? xpLedger.data.items : [];
     if (logs.ok) state.logs = Array.isArray(logs.data?.items) ? logs.data.items : [];
+    if (notifications.ok) state.notifications = Array.isArray(notifications.data?.items) ? notifications.data.items : [];
 
     renderAll();
   }
@@ -320,6 +323,7 @@
     renderDashboardTables();
     renderTools();
     renderSettings();
+    renderMessages();
   }
 
   function filteredUsers() {
@@ -462,7 +466,105 @@
     ];
     const html = settings.map(([title, text]) => `<article class="admin-setting-card"><strong>${title}</strong><span>${text}</span><button type="button">فتح</button></article>`).join("");
     if (nodes.settingsGrid) nodes.settingsGrid.innerHTML = html;
-    if (nodes.messagesGrid) nodes.messagesGrid.innerHTML = html;
+  }
+
+  function getNotificationTypeLabel(type) {
+    return {
+      xp_discount: "خصومات XP",
+      official_update: "تحديث رسمي",
+      feature_update: "إضافة وتحديث",
+      account: "إشعار حساب"
+    }[String(type || "")] || "تحديث";
+  }
+
+  function getNotificationPlanLabel(plan) {
+    return {
+      all: "كل الباقات",
+      free: "المجانية",
+      starter: "المجانية",
+      spark: "شرارة",
+      pro: "شرارة",
+      tuwaiq: "طويق",
+      pro_plus: "طويق",
+      pioneer: "الرائد",
+      pro_max: "الرائد",
+      business: "الأعمال"
+    }[String(plan || "all")] || plan || "كل الباقات";
+  }
+
+  function formatAdminDate(value) {
+    if (!value) return "بدون انتهاء";
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return "بدون انتهاء";
+    return date.toLocaleDateString("ar-SA", { year: "numeric", month: "short", day: "numeric" });
+  }
+
+  function renderMessages() {
+    if (!nodes.messagesGrid) return;
+    const notificationsList = state.notifications.slice(0, 10).map((item) => `
+      <article class="admin-notification-row">
+        <div>
+          <strong>${escapeHtml(item.title)}</strong>
+          <span>${escapeHtml(item.body)}</span>
+          <small>${escapeHtml(getNotificationTypeLabel(item.type))} · ${escapeHtml(getNotificationPlanLabel(item.target_plan))} · ${escapeHtml(formatAdminDate(item.expires_at))}</small>
+        </div>
+        <button class="${item.is_active ? "" : "admin-danger-btn"}" type="button" data-toggle-notification="${escapeHtml(item.id)}" data-next-active="${item.is_active ? "0" : "1"}">
+          ${item.is_active ? "إيقاف" : "تفعيل"}
+        </button>
+      </article>
+    `).join("") || `<div class="admin-empty-panel">لا توجد إشعارات من لوحة الإدارة حتى الآن.</div>`;
+
+    nodes.messagesGrid.innerHTML = `
+      <form class="admin-notification-form" data-notification-form>
+        <div class="admin-notification-form-head">
+          <strong>إضافة تحديث جديد</strong>
+          <span>سيظهر للمستخدمين مباشرة عند الضغط على زر الجرس حسب الباقة المحددة.</span>
+        </div>
+        <label>العنوان<input class="field" name="title" maxlength="180" required placeholder="مثال: خصم على باقة طويق"></label>
+        <label>النص<textarea class="field" name="body" maxlength="1200" required placeholder="اكتب وصفًا مختصرًا للتحديث أو الخصم"></textarea></label>
+        <div class="admin-notification-form-grid">
+          <label>القسم
+            <select class="field" name="type">
+              <option value="xp_discount">خصومات XP</option>
+              <option value="official_update">التحديثات الرسمية</option>
+              <option value="feature_update">الإضافات والتحديثات</option>
+              <option value="account">حساب المستخدم</option>
+            </select>
+          </label>
+          <label>الشارة<input class="field" name="badge" maxlength="80" placeholder="خصم 30% / إعلان / تحديث"></label>
+          <label>الأيقونة
+            <select class="field" name="icon">
+              <option value="gift">هدية</option>
+              <option value="megaphone">إعلان</option>
+              <option value="sparkle">لمعة</option>
+              <option value="bell">جرس</option>
+              <option value="document">مستند</option>
+              <option value="image">صورة</option>
+            </select>
+          </label>
+          <label>الباقة
+            <select class="field" name="target_plan">
+              <option value="all">كل الباقات</option>
+              <option value="free">المجانية</option>
+              <option value="spark">شرارة</option>
+              <option value="tuwaiq">طويق</option>
+              <option value="pioneer">الرائد</option>
+              <option value="business">الأعمال</option>
+            </select>
+          </label>
+          <label>ينتهي في<input class="field" name="expires_at" type="datetime-local"></label>
+          <label>رابط اختياري<input class="field" name="action_url" placeholder="subscriptions.html"></label>
+        </div>
+        <button class="primary-btn" type="submit">إضافة التحديث</button>
+      </form>
+      <section class="admin-notification-list">
+        <div class="admin-notification-form-head">
+          <strong>آخر المستجدات المنشورة</strong>
+          <span>هذه هي البيانات الحقيقية التي تظهر في نافذة الجرس.</span>
+        </div>
+        ${notificationsList}
+      </section>
+    `;
   }
 
   function renderAll() {
@@ -583,6 +685,52 @@
     await loadAdminData();
   }
 
+  function toIsoDateTime(value) {
+    const text = String(value || "").trim();
+    if (!text) return "";
+    const date = new Date(text);
+    return Number.isNaN(date.getTime()) ? "" : date.toISOString();
+  }
+
+  async function createNotificationFromForm(form) {
+    const formData = new FormData(form);
+    const payload = {
+      title: String(formData.get("title") || "").trim(),
+      body: String(formData.get("body") || "").trim(),
+      type: String(formData.get("type") || "official_update"),
+      badge: String(formData.get("badge") || "").trim(),
+      icon: String(formData.get("icon") || "sparkle"),
+      target_plan: String(formData.get("target_plan") || "all"),
+      expires_at: toIsoDateTime(formData.get("expires_at")),
+      action_url: String(formData.get("action_url") || "").trim()
+    };
+
+    if (!payload.title || !payload.body) {
+      window.alert("اكتب عنوان ونص الإشعار أولًا.");
+      return;
+    }
+
+    const result = await api.createAdminNotification(payload);
+    if (!result.ok) {
+      window.alert(result.message || "تعذر إضافة الإشعار.");
+      return;
+    }
+    form.reset();
+    await loadAdminData();
+  }
+
+  async function toggleNotification(notificationId, nextActive) {
+    if (!notificationId || !api.updateAdminNotification) return;
+    const result = await api.updateAdminNotification(notificationId, {
+      is_active: String(nextActive) === "1"
+    });
+    if (!result.ok) {
+      window.alert(result.message || "تعذر تحديث الإشعار.");
+      return;
+    }
+    await loadAdminData();
+  }
+
   nodes.loginForm?.addEventListener("submit", async (event) => {
     event.preventDefault();
     if (!api) {
@@ -659,6 +807,19 @@
     const removePlan = event.target.closest("[data-user-remove-plan]");
     if (removePlan) {
       await removeUserPlan(removePlan.dataset.userRemovePlan);
+      return;
+    }
+    const toggleNotificationButton = event.target.closest("[data-toggle-notification]");
+    if (toggleNotificationButton) {
+      await toggleNotification(toggleNotificationButton.dataset.toggleNotification, toggleNotificationButton.dataset.nextActive);
+    }
+  });
+
+  document.addEventListener("submit", async (event) => {
+    const notificationForm = event.target.closest("[data-notification-form]");
+    if (notificationForm) {
+      event.preventDefault();
+      await createNotificationFromForm(notificationForm);
     }
   });
 

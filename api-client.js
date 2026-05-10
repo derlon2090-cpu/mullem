@@ -953,6 +953,29 @@
     return request(`/admin/logs${query.toString() ? `?${query.toString()}` : ""}`);
   }
 
+  async function getAdminNotifications(params = {}) {
+    const query = new URLSearchParams();
+    Object.entries(params || {}).forEach(([key, value]) => {
+      if (value == null || value === "") return;
+      query.set(key, String(value));
+    });
+    return request(`/admin/notifications${query.toString() ? `?${query.toString()}` : ""}`);
+  }
+
+  async function createAdminNotification(payload) {
+    return request("/admin/notifications", {
+      method: "POST",
+      body: payload
+    });
+  }
+
+  async function updateAdminNotification(notificationId, payload) {
+    return request(`/admin/notifications/${encodeURIComponent(String(notificationId))}`, {
+      method: "PATCH",
+      body: payload
+    });
+  }
+
   async function adminLogout() {
     return request("/admin/logout", {
       method: "POST"
@@ -1142,6 +1165,9 @@
     assignAdminPlan,
     getAdminXpLedger,
     getAdminLogs,
+    getAdminNotifications,
+    createAdminNotification,
+    updateAdminNotification,
     adminLogout,
     getNotifications,
     markNotificationRead,

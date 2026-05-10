@@ -1357,6 +1357,7 @@ function createPostgresDatabaseClient(rawConfig = {}) {
       action_url: String(row.action_url || "").trim() || null,
       starts_at: row.starts_at || null,
       expires_at: row.expires_at || null,
+      is_active: row.is_active == null ? true : Boolean(row.is_active),
       created_at: row.created_at || null,
       updated_at: row.updated_at || null,
       isRead: Boolean(row.is_read)
@@ -1446,6 +1447,112 @@ function createPostgresDatabaseClient(rawConfig = {}) {
       markedCount += 1;
     }
     return { markedCount };
+  }
+
+  async function listAdminNotifications(options = {}) {
+    const limit = Math.max(1, Math.min(200, Math.round(Number(options.limit || 80) || 80)));
+    const includeInactive = options.includeInactive !== false;
+    const activeSql = includeInactive ? "" : "WHERE is_active = TRUE";
+    const rows = await query(
+      `
+        SELECT *
+        FROM notifications
+        ${activeSql}
+        ORDER BY created_at DESC, id DESC
+        LIMIT $1
+      `,
+      [limit]
+    );
+
+    return rows.map((row) => ({
+      ...serializeNotification(row),
+      isRead: false
+    }));
+  }
+
+  async function createNotification(payload = {}) {
+    const startsAt = payload.starts_at || payload.startsAt || null;
+    const expiresAt = payload.expires_at || payload.expiresAt || null;
+    const rows = await query(
+      `
+        INSERT INTO notifications (
+          title, body, type, badge, icon, target_plan, target_user_id,
+          action_url, starts_at, expires_at, is_active
+        )
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, COALESCE($9::timestamptz, NOW()), $10::timestamptz, $11)
+        ON CONFLICT (type, title) DO UPDATE SET
+          body = EXCLUDED.body,
+          badge = EXCLUDED.badge,
+          icon = EXCLUDED.icon,
+          target_plan = EXCLUDED.target_plan,
+          target_user_id = EXCLUDED.target_user_id,
+          action_url = EXCLUDED.action_url,
+          starts_at = EXCLUDED.starts_at,
+          expires_at = EXCLUDED.expires_at,
+          is_active = EXCLUDED.is_active,
+          updated_at = NOW()
+        RETURNING *
+      `,
+      [
+        String(payload.title || "").trim().slice(0, 180),
+        String(payload.body || "").trim(),
+        String(payload.type || "official_update").trim().slice(0, 40),
+        String(payload.badge || "").trim().slice(0, 80) || null,
+        String(payload.icon || "").trim().slice(0, 40) || null,
+        String(payload.target_plan || payload.targetPlan || "all").trim().slice(0, 80) || "all",
+        payload.target_user_id || payload.targetUserId ? Number(payload.target_user_id || payload.targetUserId) : null,
+        String(payload.action_url || payload.actionUrl || "").trim() || null,
+        startsAt,
+        expiresAt || null,
+        payload.is_active == null ? true : Boolean(payload.is_active)
+      ]
+    );
+
+    return rows[0] ? serializeNotification(rows[0]) : null;
+  }
+
+  async function updateNotification(notificationId, changes = {}) {
+    const id = Number(notificationId);
+    if (!id) return null;
+
+    const allowed = {
+      title: "title",
+      body: "body",
+      type: "type",
+      badge: "badge",
+      icon: "icon",
+      target_plan: "target_plan",
+      target_user_id: "target_user_id",
+      action_url: "action_url",
+      starts_at: "starts_at",
+      expires_at: "expires_at",
+      is_active: "is_active"
+    };
+    const values = [];
+    const setters = [];
+
+    Object.entries(allowed).forEach(([key, column]) => {
+      if (!(key in changes)) return;
+      values.push(changes[key]);
+      setters.push(`${column} = $${values.length}`);
+    });
+
+    if (!setters.length) {
+      const rows = await query("SELECT * FROM notifications WHERE id = $1 LIMIT 1", [id]);
+      return rows[0] ? serializeNotification(rows[0]) : null;
+    }
+
+    values.push(id);
+    const rows = await query(
+      `
+        UPDATE notifications
+        SET ${setters.join(", ")}, updated_at = NOW()
+        WHERE id = $${values.length}
+        RETURNING *
+      `,
+      values
+    );
+    return rows[0] ? serializeNotification(rows[0]) : null;
   }
 
   async function recordAdminLog(payload = {}) {
@@ -2501,6 +2608,9 @@ function createPostgresDatabaseClient(rawConfig = {}) {
     listNotificationsForUser,
     markNotificationAsRead,
     markAllNotificationsAsRead,
+    listAdminNotifications,
+    createNotification,
+    updateNotification,
     grantDailyXpIfNeeded,
     findPackageById,
     findDefaultPackage,

@@ -161,7 +161,9 @@ function createEmptyState() {
       messages: 1,
       guestUsage: 1,
       xpLedger: 1,
-      adminLogs: 1
+      adminLogs: 1,
+      notifications: 1,
+      notificationReads: 1
     },
     packages: clone(DEFAULT_PACKAGES),
     users: [],
@@ -171,7 +173,9 @@ function createEmptyState() {
     messages: [],
     guestUsage: [],
     xpLedger: [],
-    adminLogs: []
+    adminLogs: [],
+    notifications: [],
+    notificationReads: []
   };
 }
 
@@ -788,6 +792,187 @@ function createFallbackDatabaseClient() {
     return { ...entry };
   }
 
+  function getNotificationTargetPlansForUser(user = {}) {
+    const values = new Set(["all"]);
+    [
+      user.plan_type,
+      user.plan_key,
+      user.package_key,
+      user.package,
+      user.package_name
+    ].forEach((value) => {
+      const text = String(value || "").trim().toLowerCase();
+      if (text) values.add(text);
+    });
+
+    const combined = Array.from(values).join(" ");
+    if (/starter|free|مجاني|المجانية/.test(combined)) {
+      values.add("starter");
+      values.add("free");
+    }
+    if (/spark|pro|شرارة/.test(combined)) {
+      values.add("spark");
+      values.add("pro");
+    }
+    if (/tuwaiq|pro_plus|طويق/.test(combined)) {
+      values.add("tuwaiq");
+      values.add("pro_plus");
+    }
+    if (/pioneer|pro_max|رائد|الرائد/.test(combined)) {
+      values.add("pioneer");
+      values.add("pro_max");
+    }
+    return Array.from(values);
+  }
+
+  function serializeNotification(item = {}, userId = null) {
+    const isRead = userId
+      ? data.notificationReads.some((read) =>
+        String(read.notification_id) === String(item.id) && String(read.user_id) === String(userId)
+      )
+      : false;
+    return {
+      id: String(item.id),
+      title: String(item.title || "").trim(),
+      body: String(item.body || "").trim(),
+      type: String(item.type || "").trim(),
+      badge: String(item.badge || "").trim(),
+      icon: String(item.icon || "").trim(),
+      target_plan: String(item.target_plan || "all").trim(),
+      target_user_id: item.target_user_id != null ? String(item.target_user_id) : null,
+      action_url: String(item.action_url || "").trim() || null,
+      starts_at: item.starts_at || null,
+      expires_at: item.expires_at || null,
+      is_active: item.is_active == null ? true : Boolean(item.is_active),
+      created_at: item.created_at || null,
+      updated_at: item.updated_at || null,
+      isRead
+    };
+  }
+
+  function groupNotifications(items = []) {
+    return {
+      xpDiscounts: items.filter((item) => item.type === "xp_discount"),
+      officialUpdates: items.filter((item) => item.type === "official_update"),
+      featureUpdates: items.filter((item) => item.type === "feature_update"),
+      account: items.filter((item) => item.type === "account")
+    };
+  }
+
+  async function listNotificationsForUser(user, options = {}) {
+    const userId = Number(user?.id || options.userId);
+    if (!userId) {
+      return { unreadCount: 0, sections: groupNotifications([]), items: [] };
+    }
+    const now = Date.now();
+    const targetPlans = getNotificationTargetPlansForUser(user);
+    const limit = Math.max(1, Math.min(Number(options.limit || 20), 80));
+    const unreadOnly = Boolean(options.unreadOnly);
+    const items = data.notifications
+      .filter((item) => item.is_active !== false)
+      .filter((item) => !item.starts_at || parseTimestampMs(item.starts_at) <= now)
+      .filter((item) => !item.expires_at || parseTimestampMs(item.expires_at) > now)
+      .filter((item) =>
+        targetPlans.includes(String(item.target_plan || "all").trim().toLowerCase()) ||
+        String(item.target_user_id || "") === String(userId)
+      )
+      .sort((a, b) => String(b.created_at || "").localeCompare(String(a.created_at || "")))
+      .map((item) => serializeNotification(item, userId))
+      .filter((item) => !unreadOnly || !item.isRead)
+      .slice(0, limit);
+
+    return {
+      unreadCount: items.filter((item) => !item.isRead).length,
+      sections: groupNotifications(items),
+      items
+    };
+  }
+
+  async function markNotificationAsRead(userId, notificationId) {
+    const safeUserId = Number(userId);
+    const safeNotificationId = Number(notificationId);
+    if (!safeUserId || !safeNotificationId) return null;
+    const existing = data.notificationReads.find((item) =>
+      Number(item.user_id) === safeUserId && Number(item.notification_id) === safeNotificationId
+    );
+    if (existing) {
+      existing.read_at = nowIso();
+      persist();
+      return { ...existing };
+    }
+    const entry = {
+      id: nextId("notificationReads"),
+      notification_id: safeNotificationId,
+      user_id: safeUserId,
+      read_at: nowIso(),
+      created_at: nowIso()
+    };
+    data.notificationReads.push(entry);
+    persist();
+    return { ...entry };
+  }
+
+  async function markAllNotificationsAsRead(user) {
+    const notifications = await listNotificationsForUser(user, { limit: 80 });
+    let markedCount = 0;
+    for (const notification of notifications.items) {
+      if (notification.isRead) continue;
+      await markNotificationAsRead(user.id, notification.id);
+      markedCount += 1;
+    }
+    return { markedCount };
+  }
+
+  async function listAdminNotifications(options = {}) {
+    const limit = Math.max(1, Math.min(Number(options.limit || 80), 200));
+    const includeInactive = options.includeInactive !== false;
+    return [...data.notifications]
+      .filter((item) => includeInactive || item.is_active !== false)
+      .sort((a, b) => String(b.created_at || "").localeCompare(String(a.created_at || "")))
+      .slice(0, limit)
+      .map((item) => serializeNotification(item));
+  }
+
+  async function createNotification(payload = {}) {
+    const title = String(payload.title || "").trim().slice(0, 180);
+    const type = String(payload.type || "official_update").trim().slice(0, 40);
+    const existingIndex = data.notifications.findIndex((item) =>
+      String(item.title || "") === title && String(item.type || "") === type
+    );
+    const item = {
+      id: existingIndex >= 0 ? data.notifications[existingIndex].id : nextId("notifications"),
+      title,
+      body: String(payload.body || "").trim(),
+      type,
+      badge: String(payload.badge || "").trim().slice(0, 80),
+      icon: String(payload.icon || "sparkle").trim().slice(0, 40),
+      target_plan: String(payload.target_plan || payload.targetPlan || "all").trim().slice(0, 80) || "all",
+      target_user_id: payload.target_user_id || payload.targetUserId ? Number(payload.target_user_id || payload.targetUserId) : null,
+      action_url: String(payload.action_url || payload.actionUrl || "").trim(),
+      starts_at: payload.starts_at || payload.startsAt || nowIso(),
+      expires_at: payload.expires_at || payload.expiresAt || null,
+      is_active: payload.is_active == null ? true : normalizeBoolean(payload.is_active),
+      created_at: existingIndex >= 0 ? data.notifications[existingIndex].created_at : nowIso(),
+      updated_at: nowIso()
+    };
+    if (existingIndex >= 0) data.notifications[existingIndex] = item;
+    else data.notifications.push(item);
+    persist();
+    return serializeNotification(item);
+  }
+
+  async function updateNotification(notificationId, changes = {}) {
+    const index = data.notifications.findIndex((item) => String(item.id) === String(notificationId));
+    if (index === -1) return null;
+    data.notifications[index] = {
+      ...data.notifications[index],
+      ...changes,
+      updated_at: nowIso()
+    };
+    persist();
+    return serializeNotification(data.notifications[index]);
+  }
+
   async function listSubscriptions(options = {}) {
     const status = String(options.status || "").trim().toLowerCase();
     const limit = Math.max(1, Math.min(Number(options.limit || 80), 250));
@@ -1065,6 +1250,12 @@ function createFallbackDatabaseClient() {
     createPackage,
     updatePackage,
     recordXpLedger,
+    listNotificationsForUser,
+    markNotificationAsRead,
+    markAllNotificationsAsRead,
+    listAdminNotifications,
+    createNotification,
+    updateNotification,
     grantDailyXpIfNeeded,
     listSubscriptions,
     assignPackageToUser,
