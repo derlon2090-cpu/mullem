@@ -4316,6 +4316,9 @@
   function getUserPackageLabel(user = state.currentUser) {
     if (!user) return "الباقة المجانية";
     const values = [
+      user.plan,
+      user.plan_key,
+      user.planKey,
       user.packageKey,
       user.planType,
       user.plan_type,
@@ -4333,6 +4336,39 @@
     if (!displayName) return "الباقة المجانية";
     if (/^باقة|^الباقة/.test(displayName)) return displayName;
     return `باقة ${displayName}`;
+  }
+
+  function getUserPackageKey(user = state.currentUser) {
+    const values = [
+      user?.plan,
+      user?.plan_key,
+      user?.planKey,
+      user?.packageKey,
+      user?.package_key,
+      user?.planType,
+      user?.plan_type,
+      user?.package,
+      user?.package_name,
+      user?.packageName
+    ].map((value) => String(value || "").trim()).filter(Boolean);
+    const normalized = values.join(" ").toLowerCase();
+    const dailyXp = Number(user?.packageDailyXp || user?.package_daily_xp || 0);
+
+    if (/business|enterprise|elite|ultra|pro[_\s-]?max|pioneer|الرائد|الأعمال/.test(normalized) || dailyXp >= 600) return "pro_max";
+    if (/pro[_\s-]?plus|tuwaiq|tuwaiq_plus|plus|طويق|بلس/.test(normalized) || dailyXp >= 250) return "pro_plus";
+    if (/(^|\s|_|-)(pro|spark|nano)(\s|_|-|$)|شرارة|نانو/.test(normalized) || dailyXp >= 80) return "pro";
+    return "starter";
+  }
+
+  function getNextUpgradeTarget(user = state.currentUser) {
+    const currentKey = getUserPackageKey(user);
+    const targets = {
+      starter: { key: "pro", name: "شرارة", title: "الترقية إلى شرارة", activeTitle: "باقة شرارة" },
+      pro: { key: "pro_plus", name: "طويق", title: "الترقية إلى طويق", activeTitle: "باقة طويق" },
+      pro_plus: { key: "pro_max", name: "الرائد", title: "الترقية إلى الرائد", activeTitle: "باقة الرائد" },
+      pro_max: { key: "pro_max", name: "الرائد", title: "باقة الرائد مفعلة", activeTitle: "باقة الرائد" }
+    };
+    return targets[currentKey] || targets.starter;
   }
 
   function getUserCardMeta() {
@@ -9157,6 +9193,7 @@
     const userCard = getUserCardMeta();
     const isToolsWorkspace = state.section === "ai-tools";
     const isChatSidebar = ["dashboard", "messages"].includes(state.section);
+    const upgradeTarget = getNextUpgradeTarget();
     const userAccountCard = userCard.guest
       ? `
         <button class="guest-user-card is-guest is-orlixor-guest" type="button" data-open-account>
@@ -9224,7 +9261,7 @@
             <button class="guest-upgrade-card" type="button" data-open-upgrade>
               <div class="upgrade-mark">${icons.crown}</div>
               <div>
-                <strong>الترقية إلى Pro</strong>
+                <strong>${escapeHtml(upgradeTarget.title)}</strong>
                 <span>استمتع بمزايا إضافية وتجربة أفضل</span>
               </div>
             </button>
@@ -9261,7 +9298,11 @@
 
   function renderUpgradeModal() {
     if (!state.upgradeModalOpen) return "";
-    const currentPlanKey = String(state.currentUser?.packageKey || state.currentUser?.planType || state.currentUser?.plan_type || "").trim();
+    const currentPlanKey = getUserPackageKey();
+    const upgradeTarget = getNextUpgradeTarget();
+    const upgradeHeading = currentPlanKey === "pro_max"
+      ? `${escapeHtml(upgradeTarget.activeTitle)} <span>مفعلة</span>`
+      : `الترقية إلى <span>${escapeHtml(upgradeTarget.name)}</span>`;
 
     const plans = [
       {
@@ -9345,12 +9386,12 @@
     return `
       <div class="upgrade-gate is-open">
         <button class="upgrade-gate-backdrop" type="button" data-close-upgrade aria-label="إغلاق نافذة الترقية"></button>
-        <section class="upgrade-modal-card" role="dialog" aria-modal="true" aria-label="الترقية إلى Pro">
+        <section class="upgrade-modal-card" role="dialog" aria-modal="true" aria-label="${escapeHtml(upgradeTarget.title)}">
           <button class="upgrade-close-btn" type="button" data-close-upgrade aria-label="إغلاق">×</button>
           <header class="upgrade-modal-head">
             <div class="upgrade-title-mark">${icons.crown}</div>
             <div>
-              <h2>الترقية إلى <span>Pro</span></h2>
+              <h2>${upgradeHeading}</h2>
               <p>استمتع بمزايا إضافية وتجربة أفضل</p>
             </div>
           </header>
