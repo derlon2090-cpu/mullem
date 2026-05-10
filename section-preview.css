@@ -4336,10 +4336,24 @@ body[data-workspace-mode="home"] .guest-root {
   padding-top: 18px;
 }
 
-.tools-xp-badge {
+.tools-page-actions {
   position: absolute;
   top: 0;
-  right: 0;
+  inset-inline: 0;
+  z-index: 4;
+  display: flex;
+  direction: ltr;
+  align-items: flex-start;
+  justify-content: space-between;
+  pointer-events: none;
+}
+
+.tools-page-actions > * {
+  pointer-events: auto;
+}
+
+.tools-xp-badge {
+  position: static;
   min-height: 38px;
   display: inline-flex;
   align-items: center;
@@ -4573,6 +4587,34 @@ body[data-workspace-mode="home"] .guest-root {
   color: #8d95b2;
 }
 
+.tool-availability-badge {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  min-height: 25px;
+  max-width: 118px;
+  padding: 0 10px;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: #0f9b76;
+  background: rgba(26, 214, 163, 0.13);
+  font-size: 0.64rem;
+  font-weight: 950;
+  white-space: nowrap;
+}
+
+.tool-availability-badge.is-unavailable {
+  color: #7f87a8;
+  background: rgba(127, 135, 168, 0.1);
+}
+
+.tool-availability-badge + .tool-card-icon,
+.tool-card-star + .tool-availability-badge + .tool-card-icon {
+  margin-top: 20px;
+}
+
 .tool-card-icon {
   width: 44px;
   height: 44px;
@@ -4602,34 +4644,6 @@ body[data-workspace-mode="home"] .guest-root {
   line-height: 1.5;
 }
 
-.tool-card-meta {
-  width: 100%;
-  margin-top: auto;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-}
-
-.tool-card-meta b {
-  padding: 5px 10px;
-  border-radius: 999px;
-  color: #0f9b76;
-  background: rgba(26, 214, 163, 0.12);
-  font-size: 0.66rem;
-  font-weight: 950;
-}
-
-.tool-card-meta b.is-available {
-  color: #0f9b76;
-  background: rgba(26, 214, 163, 0.12);
-}
-
-.tool-card-meta b.is-unavailable {
-  color: #7f87a8;
-  background: rgba(127, 135, 168, 0.1);
-}
-
 .tools-grid.is-subscriber-filter .tool-card {
   min-height: 158px;
 }
@@ -4648,12 +4662,6 @@ body[data-workspace-mode="home"] .guest-root {
   -webkit-box-orient: vertical;
 }
 
-.tool-card-meta small {
-  color: #9aa1b8;
-  font-size: 0.66rem;
-  font-weight: 850;
-}
-
 .tools-suggest {
   margin: 12px 0 0;
   text-align: center;
@@ -4669,6 +4677,27 @@ body[data-workspace-mode="home"] .guest-root {
   font: inherit;
   font-weight: 950;
   cursor: pointer;
+}
+
+.tool-card-action {
+  min-height: 26px;
+  margin-top: auto;
+  padding: 0 12px;
+  border: 1px solid rgba(111, 76, 255, 0.34);
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  color: #6b4cff;
+  background: rgba(255, 255, 255, 0.9);
+  font-size: 0.68rem;
+  font-weight: 950;
+}
+
+.tool-card-action b {
+  font-size: 0.78rem;
+  line-height: 1;
 }
 
 .free-tools-main {

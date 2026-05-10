@@ -5175,6 +5175,28 @@
     `;
   }
 
+  function renderToolsTopControls() {
+    return `
+      <div class="tools-page-actions">
+        <button class="tools-unified-return" type="button" data-return-chat>
+          <span aria-hidden="true">←</span>
+          <b>العودة إلى الشات</b>
+        </button>
+        <button class="tools-xp-badge ${isAuthenticated() ? "" : "requires-auth"}" type="button" data-balance>
+          <span aria-hidden="true">${icons.bolt}</span>
+          <b>${escapeHtml(formatNumber(getPreviewBalance()))} XP</b>
+          <small>المتاح</small>
+        </button>
+      </div>
+    `;
+  }
+
+  function renderToolAvailabilityBadge(subscriberOnly = false) {
+    const available = subscriberOnly ? hasSubscriberToolsAccess() : isAuthenticated();
+    const label = available ? "متاحة في باقتك" : (subscriberOnly ? "غير متاحة في باقتك" : "سجّل الدخول");
+    return `<span class="tool-availability-badge ${available ? "is-available" : "is-unavailable"}">${escapeHtml(label)}</span>`;
+  }
+
   function renderWritingEditingToolsMain() {
     const categories = [
       { title: "الأكثر استخدامًا" },
@@ -5238,6 +5260,7 @@
     return `
       <section class="guest-main tools-main tools-writing-main" aria-label="كتابة وتحرير">
         <div class="tools-page writing-tools-page">
+          ${renderToolsTopControls()}
           <header class="tools-hero writing-tools-hero">
             <div class="tools-title-row">
               <span class="tools-title-icon" aria-hidden="true">${icons.edit}</span>
@@ -5252,16 +5275,13 @@
                 ${escapeHtml(category.title)}
               </button>
             `).join("")}
-            <button class="tools-unified-return" type="button" data-return-chat>
-              <span aria-hidden="true">←</span>
-              <b>العودة إلى الشات</b>
-            </button>
           </nav>
 
           <section class="tools-grid writing-tools-grid" aria-label="أدوات الكتابة والتحرير">
             ${tools.map((tool) => `
               <button class="tool-card writing-tool-card" type="button" data-tool-key="writing-assistant" data-card="${escapeHtml(tool.title)}">
                 <span class="tool-card-star" aria-hidden="true">${icons.star}</span>
+                ${renderToolAvailabilityBadge()}
                 <span class="tool-card-icon" aria-hidden="true">${tool.icon}</span>
                 <strong>${escapeHtml(tool.title)}</strong>
                 <span class="tool-card-copy">${escapeHtml(tool.description)}</span>
@@ -5355,6 +5375,7 @@
     return `
       <section class="guest-main tools-main tools-summary-main" aria-label="تلخيص وتنظيم">
         <div class="tools-page summary-tools-page">
+          ${renderToolsTopControls()}
           <header class="tools-hero summary-tools-hero">
             <div class="tools-title-row">
               <span class="tools-title-icon" aria-hidden="true">${icons.document}</span>
@@ -5369,10 +5390,6 @@
                 ${escapeHtml(category.title)}
               </button>
             `).join("")}
-            <button class="tools-unified-return" type="button" data-return-chat>
-              <span aria-hidden="true">←</span>
-              <b>العودة إلى الشات</b>
-            </button>
           </nav>
 
           <div class="summary-tools-sections">
@@ -5386,6 +5403,7 @@
                   ${group.tools.map((tool) => `
                     <button class="tool-card summary-tool-card" type="button" data-tool-key="writing-assistant" data-card="${escapeHtml(tool.title)}">
                       <span class="tool-card-star" aria-hidden="true">${icons.star}</span>
+                      ${renderToolAvailabilityBadge()}
                       <span class="tool-card-icon" aria-hidden="true">${tool.icon}</span>
                       <strong>${escapeHtml(tool.title)}</strong>
                       <span class="tool-card-copy">${escapeHtml(tool.description)}</span>
@@ -5470,6 +5488,7 @@
     return `
       <section class="guest-main tools-main tools-data-main" aria-label="تحليل وبيانات">
         <div class="tools-page data-tools-page">
+          ${renderToolsTopControls()}
           <header class="tools-hero data-tools-hero">
             <div class="tools-title-row">
               <span class="tools-title-icon" aria-hidden="true">${dataToolIcons.chart}</span>
@@ -5484,10 +5503,6 @@
                 ${escapeHtml(category.title)}
               </button>
             `).join("")}
-            <button class="tools-unified-return" type="button" data-return-chat>
-              <span aria-hidden="true">←</span>
-              <b>العودة إلى الشات</b>
-            </button>
           </nav>
 
           <section class="data-tools-block" aria-label="أدوات التحليل والبيانات">
@@ -5499,6 +5514,7 @@
               ${tools.map((tool) => `
                 <button class="tool-card data-tool-card" type="button" data-tool-key="writing-assistant" data-card="${escapeHtml(tool.title)}">
                   <span class="tool-card-star" aria-hidden="true">${icons.star}</span>
+                  ${renderToolAvailabilityBadge()}
                   <span class="tool-card-icon" aria-hidden="true">${tool.icon}</span>
                   <strong>${escapeHtml(tool.title)}</strong>
                   <span class="tool-card-copy">${escapeHtml(tool.description)}</span>
@@ -5581,6 +5597,7 @@
     return `
       <section class="guest-main tools-main tools-productivity-main" aria-label="إنتاجية">
         <div class="tools-page productivity-tools-page">
+          ${renderToolsTopControls()}
           <header class="tools-hero productivity-tools-hero">
             <div class="tools-title-row">
               <span class="tools-title-icon" aria-hidden="true">${productivityToolIcons.bolt}</span>
@@ -5595,10 +5612,6 @@
                 ${escapeHtml(category.title)}
               </button>
             `).join("")}
-            <button class="tools-unified-return" type="button" data-return-chat>
-              <span aria-hidden="true">←</span>
-              <b>العودة إلى الشات</b>
-            </button>
           </nav>
 
           <section class="productivity-tools-block" aria-label="أدوات الإنتاجية">
@@ -5610,6 +5623,7 @@
               ${tools.map((tool) => `
                 <button class="tool-card productivity-tool-card" type="button" data-tool-key="writing-assistant" data-card="${escapeHtml(tool.title)}">
                   <span class="tool-card-star" aria-hidden="true">${icons.star}</span>
+                  ${renderToolAvailabilityBadge()}
                   <span class="tool-card-icon" aria-hidden="true">${tool.icon}</span>
                   <strong>${escapeHtml(tool.title)}</strong>
                   <span class="tool-card-copy">${escapeHtml(tool.description)}</span>
@@ -5692,6 +5706,7 @@
     return `
       <section class="guest-main tools-main tools-education-main" aria-label="تعليم وتعلم">
         <div class="tools-page education-tools-page">
+          ${renderToolsTopControls()}
           <header class="tools-hero education-tools-hero">
             <div class="tools-title-row">
               <span class="tools-title-icon" aria-hidden="true">${educationToolIcons.plan}</span>
@@ -5706,10 +5721,6 @@
                 ${escapeHtml(category.title)}
               </button>
             `).join("")}
-            <button class="tools-unified-return" type="button" data-return-chat>
-              <span aria-hidden="true">←</span>
-              <b>العودة إلى الشات</b>
-            </button>
           </nav>
 
           <section class="education-tools-block" aria-label="أدوات التعليم والتعلم">
@@ -5721,6 +5732,7 @@
               ${tools.map((tool) => `
                 <button class="tool-card education-tool-card" type="button" data-tool-key="writing-assistant" data-card="${escapeHtml(tool.title)}">
                   <span class="tool-card-star" aria-hidden="true">${icons.star}</span>
+                  ${renderToolAvailabilityBadge()}
                   <span class="tool-card-icon" aria-hidden="true">${tool.icon}</span>
                   <strong>${escapeHtml(tool.title)}</strong>
                   <span class="tool-card-copy">${escapeHtml(tool.description)}</span>
@@ -5740,7 +5752,6 @@
   function renderToolsMain(profile) {
     const showingSubscriberTools = state.toolView === "subscriber-tools";
     const hasSubscriberAccess = hasSubscriberToolsAccess();
-    const availabilityLabel = hasSubscriberAccess ? "متاحة في باقتك" : "غير متاحة في باقتك";
     const subscriberToolIcons = {
       image: '<svg viewBox="0 0 24 24"><rect x="4" y="5" width="16" height="14" rx="2.5"/><path d="m7 16 3.2-3.2 2.7 2.7 2.3-2.3L19 17"/><circle cx="9" cy="10" r="1.4"/></svg>',
       crop: '<svg viewBox="0 0 24 24"><path d="M6 3v13a2 2 0 0 0 2 2h13"/><path d="M3 6h13a2 2 0 0 1 2 2v13"/><path d="M9 9h6v6H9z"/></svg>',
@@ -5833,11 +5844,7 @@
     return `
       <section class="guest-main tools-main" aria-label="${escapeHtml(heroTitle)}">
         <div class="tools-page">
-          <button class="tools-xp-badge ${isAuthenticated() ? "" : "requires-auth"}" type="button" data-balance>
-            <span aria-hidden="true">${icons.bolt}</span>
-            <b>${escapeHtml(formatNumber(getPreviewBalance()))} XP</b>
-            <small>المتاح</small>
-          </button>
+          ${renderToolsTopControls()}
 
           <header class="tools-hero ${showingSubscriberTools ? "is-subscriber-tools" : ""}">
             <div class="tools-title-row">
@@ -5853,10 +5860,6 @@
                 ${escapeHtml(category.title)}
               </button>
             `).join("")}
-            <button class="tools-unified-return" type="button" data-return-chat>
-              <span aria-hidden="true">←</span>
-              <b>العودة إلى الشات</b>
-            </button>
           </nav>
 
           <section class="tools-grid ${showingSubscriberTools ? "is-subscriber-filter" : ""}">
@@ -5868,12 +5871,13 @@
               return `
               <button class="tool-card ${showingSubscriberTools ? "subscriber-tool-card" : ""} ${isAuthenticated() && (!showingSubscriberTools || hasSubscriberAccess) ? "" : "requires-auth"}" type="button" ${attrs}>
                 <span class="tool-card-star" aria-hidden="true">${icons.star}</span>
+                ${renderToolAvailabilityBadge(showingSubscriberTools)}
                 <span class="tool-card-icon" aria-hidden="true">${tool.icon}</span>
                 <strong>${escapeHtml(tool.title)}</strong>
                 <span class="tool-card-copy">${escapeHtml(tool.description)}</span>
-                <span class="tool-card-meta">
-                  <b class="${showingSubscriberTools ? (hasSubscriberAccess ? "is-available" : "is-unavailable") : ""}">${escapeHtml(showingSubscriberTools ? availabilityLabel : "مجاني")}</b>
-                  <small>${escapeHtml(showingSubscriberTools ? "شرارة، طويق، الرائد" : "متاح في: طويق، برو")}</small>
+                <span class="tool-card-action">
+                  <span>استخدم الأداة</span>
+                  <b aria-hidden="true">←</b>
                 </span>
               </button>
             `;
@@ -5939,11 +5943,7 @@
     return `
       <section class="guest-main tools-main free-tools-main" aria-label="أدوات مجانية للمشتركين">
         <div class="tools-page free-tools-page">
-          <button class="tools-xp-badge ${isAuthenticated() ? "" : "requires-auth"}" type="button" data-balance>
-            <span aria-hidden="true">${icons.bolt}</span>
-            <b>${escapeHtml(formatNumber(getPreviewBalance()))} XP</b>
-            <small>المتاح</small>
-          </button>
+          ${renderToolsTopControls()}
 
           <header class="free-tools-hero">
             <div class="free-tools-title">
@@ -5964,10 +5964,6 @@
                 ${escapeHtml(category.title)}
               </button>
             `).join("")}
-            <button class="tools-unified-return" type="button" data-return-chat>
-              <span aria-hidden="true">←</span>
-              <b>العودة إلى الشات</b>
-            </button>
           </nav>
 
           <section class="free-tools-grid" aria-label="قائمة الأدوات المجانية للمشتركين">
