@@ -745,7 +745,7 @@
       };
     }
 
-    if (verified.status === 401 || verified.status === 403 || verified.networkError || verified.serverUnavailable) {
+    if (verified.status === 401 || verified.status === 403) {
       clearSession();
       return {
         ...result,
@@ -757,7 +757,15 @@
       };
     }
 
-    return result;
+    return {
+      ...result,
+      data: {
+        ...(result.data || {}),
+        user: session.user,
+        token: session.token
+      },
+      sessionVerified: false
+    };
   }
 
   async function login(payload) {
