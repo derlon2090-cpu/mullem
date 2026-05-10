@@ -3337,6 +3337,62 @@ async function handlePackages(req, res) {
   });
 }
 
+async function handleNotifications(req, res) {
+  const auth = await requireAuthenticatedUser(req);
+  const url = new URL(req.url, `http://${req.headers.host || "127.0.0.1"}`);
+  const syncedUser = await syncUserDailyProgress(auth.user, "فتح الإشعارات");
+  const unreadOnly = url.searchParams.get("tab") === "unread" || url.searchParams.get("unread") === "1";
+  const limit = Math.max(1, Math.min(80, Number(url.searchParams.get("limit") || 20) || 20));
+  const notifications = await databaseClient.listNotificationsForUser(syncedUser || auth.user, {
+    unreadOnly,
+    limit
+  });
+
+  sendJson(req, res, 200, {
+    success: true,
+    data: {
+      user: buildApiUser(syncedUser || auth.user),
+      ...notifications
+    }
+  });
+}
+
+async function handleMarkNotificationRead(req, res, notificationId) {
+  const auth = await requireAuthenticatedUser(req);
+  const syncedUser = await syncUserDailyProgress(auth.user, "قراءة إشعار");
+  const visibleNotifications = await databaseClient.listNotificationsForUser(syncedUser || auth.user, { limit: 80 });
+  const canReadNotification = visibleNotifications.items.some((item) => String(item.id) === String(notificationId));
+  if (!canReadNotification) {
+    throw createHttpError(404, "Notification was not found.");
+  }
+  await databaseClient.markNotificationAsRead(auth.user.id, notificationId);
+  const notifications = await databaseClient.listNotificationsForUser(syncedUser || auth.user, { limit: 20 });
+
+  sendJson(req, res, 200, {
+    success: true,
+    data: {
+      user: buildApiUser(syncedUser || auth.user),
+      ...notifications
+    }
+  });
+}
+
+async function handleMarkAllNotificationsRead(req, res) {
+  const auth = await requireAuthenticatedUser(req);
+  const syncedUser = await syncUserDailyProgress(auth.user, "قراءة كل الإشعارات");
+  const result = await databaseClient.markAllNotificationsAsRead(syncedUser || auth.user);
+  const notifications = await databaseClient.listNotificationsForUser(syncedUser || auth.user, { limit: 20 });
+
+  sendJson(req, res, 200, {
+    success: true,
+    data: {
+      user: buildApiUser(syncedUser || auth.user),
+      markedCount: Number(result?.markedCount || 0),
+      ...notifications
+    }
+  });
+}
+
 async function handleAdminStats(req, res) {
   const auth = await requireAdminUser(req);
   const stats = await databaseClient.getAdminStats();
@@ -4847,6 +4903,22 @@ async function routeRequest(req, res) {
 
   if (req.method === "GET" && requestPath === "/api/packages") {
     await handlePackages(req, res);
+    return;
+  }
+
+  if (req.method === "GET" && requestPath === "/api/notifications") {
+    await handleNotifications(req, res);
+    return;
+  }
+
+  if (req.method === "POST" && requestPath === "/api/notifications/read-all") {
+    await handleMarkAllNotificationsRead(req, res);
+    return;
+  }
+
+  if (req.method === "POST" && requestPath.startsWith("/api/notifications/") && requestPath.endsWith("/read")) {
+    const notificationId = decodeURIComponent(requestPath.replace("/api/notifications/", "").replace("/read", ""));
+    await handleMarkNotificationRead(req, res, notificationId);
     return;
   }
 

@@ -639,6 +639,13 @@
     },
     upgradeModalOpen: false,
     balancePanelOpen: false,
+    notificationsOpen: false,
+    notificationsTab: "all",
+    notificationsLoading: false,
+    notificationsError: "",
+    notificationsData: null,
+    notificationsUnreadCount: 0,
+    notificationsLoaded: false,
     openThreadMenuId: "",
     authReason: "",
     conversationIds: {},
@@ -4685,7 +4692,10 @@
             ${icons.sparkle}
             <span>الرصيد: ${formatNumber(getPreviewBalance())} نقطة</span>
           </button>
-          <button class="circle-control ${isAuthenticated() ? "" : "requires-auth"}" type="button" aria-label="الإشعارات">${icons.bell}</button>
+          <button class="circle-control ${isAuthenticated() ? "" : "requires-auth"}" type="button" aria-label="الإشعارات" data-open-notifications>
+            ${icons.bell}
+            ${renderNotificationBellBadge()}
+          </button>
           <button class="circle-control" type="button" aria-label="تبديل الثيم" data-theme-toggle>${icons.moon}</button>
         </div>
 
@@ -4786,11 +4796,299 @@
           </button>
           ${renderBalancePanel()}
         </div>
-        <button class="circle-control ${isAuthenticated() ? "" : "requires-auth"}" type="button" aria-label="الإشعارات">${icons.bell}</button>
+        <button class="circle-control ${isAuthenticated() ? "" : "requires-auth"}" type="button" aria-label="الإشعارات" data-open-notifications>
+          ${icons.bell}
+          ${renderNotificationBellBadge()}
+        </button>
         <button class="circle-control" type="button" aria-label="تبديل الثيم" data-theme-toggle>${icons.moon}</button>
         ${accountButton}
       </div>
     `;
+  }
+
+  function getNotificationsPayload() {
+    const payload = state.notificationsData && typeof state.notificationsData === "object"
+      ? state.notificationsData
+      : {};
+    const sections = payload.sections && typeof payload.sections === "object" ? payload.sections : {};
+    return {
+      unreadCount: Number(payload.unreadCount ?? state.notificationsUnreadCount ?? 0) || 0,
+      sections: {
+        xpDiscounts: Array.isArray(sections.xpDiscounts) ? sections.xpDiscounts : [],
+        officialUpdates: Array.isArray(sections.officialUpdates) ? sections.officialUpdates : [],
+        featureUpdates: Array.isArray(sections.featureUpdates) ? sections.featureUpdates : [],
+        account: Array.isArray(sections.account) ? sections.account : []
+      }
+    };
+  }
+
+  function flattenNotifications(payload = getNotificationsPayload()) {
+    return [
+      ...payload.sections.xpDiscounts,
+      ...payload.sections.officialUpdates,
+      ...payload.sections.featureUpdates,
+      ...payload.sections.account
+    ];
+  }
+
+  function renderNotificationBellBadge() {
+    const count = Number(state.notificationsUnreadCount || getNotificationsPayload().unreadCount || 0);
+    if (!isAuthenticated() || count <= 0) return "";
+    return `<span class="notification-count-badge">${count > 9 ? "9+" : escapeHtml(count)}</span>`;
+  }
+
+  function getNotificationIcon(iconKey, type) {
+    const key = String(iconKey || "").trim();
+    if (key === "gift" || type === "xp_discount") return icons.gift;
+    if (key === "megaphone") {
+      return '<svg viewBox="0 0 24 24"><path d="M4 13h4l9 5V6L8 11H4v2Z"/><path d="M8 13v5a2 2 0 0 0 2 2h1"/><path d="M19 9a4 4 0 0 1 0 6"/></svg>';
+    }
+    if (key === "image") {
+      return '<svg viewBox="0 0 24 24"><rect x="4" y="5" width="16" height="14" rx="3"/><path d="m7 16 4-4 3 3 2-2 3 3"/><circle cx="9" cy="9" r="1.5"/></svg>';
+    }
+    if (key === "bell" || type === "account") return icons.bell;
+    if (key === "document") return icons.document;
+    return icons.sparkle;
+  }
+
+  function formatNotificationTime(item) {
+    if (item?.type === "xp_discount" && item.expires_at) {
+      const expiresAt = new Date(item.expires_at);
+      const diff = expiresAt.getTime() - Date.now();
+      if (Number.isFinite(diff) && diff > 0) {
+        const days = Math.ceil(diff / (24 * 60 * 60 * 1000));
+        return days <= 1 ? "ينتهي خلال يوم" : `ينتهي خلال ${days} يوم`;
+      }
+    }
+
+    const sourceDate = item?.created_at || item?.starts_at;
+    if (!sourceDate) return "";
+    const date = new Date(sourceDate);
+    if (!Number.isFinite(date.getTime())) return "";
+    return date.toLocaleDateString("ar-SA", { month: "long", day: "numeric" });
+  }
+
+  function getNotificationSectionItems(items) {
+    if (state.notificationsTab !== "unread") return items;
+    return items.filter((item) => !item.isRead);
+  }
+
+  function renderNotificationCard(item, variant = "compact") {
+    const unreadClass = item.isRead ? "" : "unread";
+    const timeLabel = formatNotificationTime(item);
+    const badge = item.badge || (item.type === "xp_discount" ? "خصم" : "تحديث");
+    const isHero = variant === "hero";
+
+    return `
+      <article class="notification-card ${unreadClass} ${isHero ? "is-hero" : ""}" data-notification-id="${escapeHtml(item.id)}">
+        <span class="notification-icon" aria-hidden="true">${getNotificationIcon(item.icon, item.type)}</span>
+        <div class="notification-card-body">
+          <span class="notification-badge-label">${escapeHtml(badge)}</span>
+          <h4>${escapeHtml(item.title)}</h4>
+          <p>${escapeHtml(item.body)}</p>
+          ${timeLabel ? `<small>${escapeHtml(timeLabel)}</small>` : ""}
+        </div>
+      </article>
+    `;
+  }
+
+  function renderNotificationSection({ title, icon, items, type, hero = false }) {
+    const visibleItems = getNotificationSectionItems(items).slice(0, 2);
+    if (!visibleItems.length) return "";
+
+    return `
+      <section class="notification-section">
+        <header class="notification-section-title">
+          <div>
+            <span>${icon}</span>
+            <strong>${escapeHtml(title)}</strong>
+          </div>
+          <button type="button" data-notifications-view-all="${escapeHtml(type)}">عرض الكل ←</button>
+        </header>
+        <div class="notification-section-list">
+          ${visibleItems.map((item) => renderNotificationCard(item, hero ? "hero" : "compact")).join("")}
+        </div>
+      </section>
+    `;
+  }
+
+  function renderNotificationsModal() {
+    if (!state.notificationsOpen) return "";
+    const payload = getNotificationsPayload();
+    const sectionsMarkup = [
+      renderNotificationSection({
+        title: "خصومات XP",
+        icon: icons.gift,
+        items: payload.sections.xpDiscounts,
+        type: "xp_discount",
+        hero: true
+      }),
+      renderNotificationSection({
+        title: "التحديثات الرسمية",
+        icon: getNotificationIcon("megaphone"),
+        items: payload.sections.officialUpdates,
+        type: "official_update"
+      }),
+      renderNotificationSection({
+        title: "الإضافات والتحديثات",
+        icon: icons.sparkle,
+        items: payload.sections.featureUpdates,
+        type: "feature_update"
+      }),
+      renderNotificationSection({
+        title: "إشعارات حسابك",
+        icon: icons.bell,
+        items: payload.sections.account,
+        type: "account"
+      })
+    ].filter(Boolean).join("");
+    const hasVisibleNotifications = Boolean(sectionsMarkup);
+
+    return `
+      <div class="notifications-gate is-open">
+        <button class="notifications-backdrop" type="button" data-close-notifications aria-label="إغلاق الإشعارات"></button>
+        <section class="notifications-panel" role="dialog" aria-modal="true" aria-label="الإشعارات">
+          <header class="notification-header">
+            <button class="notification-close" type="button" data-close-notifications aria-label="إغلاق">×</button>
+            <div class="notification-header-title">
+              <span class="notification-header-icon">${icons.bell}</span>
+              <div>
+                <h2>الإشعارات</h2>
+                <p>مرحبًا بك في أورليكس!</p>
+              </div>
+            </div>
+          </header>
+
+          <div class="notification-tabs">
+            <button class="${state.notificationsTab === "all" ? "active" : ""}" type="button" data-notifications-tab="all">الكل</button>
+            <button class="${state.notificationsTab === "unread" ? "active" : ""}" type="button" data-notifications-tab="unread">غير مقروء</button>
+          </div>
+
+          ${state.notificationsLoading ? `
+            <div class="notifications-loading">
+              <span>${icons.sparkle}</span>
+              <strong>جاري تحميل الإشعارات...</strong>
+            </div>
+          ` : ""}
+
+          ${state.notificationsError ? `
+            <div class="notifications-empty is-error">
+              <span>${icons.bell}</span>
+              <strong>${escapeHtml(state.notificationsError)}</strong>
+            </div>
+          ` : ""}
+
+          ${!state.notificationsLoading && !state.notificationsError && hasVisibleNotifications ? sectionsMarkup : ""}
+
+          ${!state.notificationsLoading && !state.notificationsError && !hasVisibleNotifications ? `
+            <div class="notifications-empty">
+              <span>${icons.sparkle}</span>
+              <strong>${state.notificationsTab === "unread" ? "لا توجد إشعارات غير مقروءة" : "لا توجد إشعارات حاليًا"}</strong>
+              <p>عند توفر خصومات أو تحديثات جديدة ستظهر هنا مباشرة.</p>
+            </div>
+          ` : ""}
+
+          <footer class="notifications-footer">
+            <button type="button" data-notification-read-all>${icons.settings}<span>تعليم الكل كمقروء</span></button>
+            <button type="button" data-notifications-view-all="all">عرض جميع الإشعارات ←</button>
+          </footer>
+        </section>
+      </div>
+    `;
+  }
+
+  async function loadNotifications(options = {}) {
+    if (!isAuthenticated()) return;
+    const apiClient = getApiClient();
+    if (!apiClient?.getNotifications) return;
+    if (state.notificationsLoading && !options.force) return;
+
+    state.notificationsLoading = !options.silent;
+    state.notificationsError = "";
+    if (!options.silent) render();
+
+    try {
+      const result = await apiClient.getNotifications({
+        limit: 20,
+        tab: state.notificationsTab === "unread" ? "unread" : ""
+      });
+      if (!result.ok) {
+        throw new Error(result.message || "تعذر تحميل الإشعارات الآن");
+      }
+      state.notificationsData = result.data || null;
+      state.notificationsUnreadCount = Number(result.data?.unreadCount || 0);
+      state.notificationsLoaded = true;
+      if (result.data?.user) {
+        const token = apiClient.getToken?.();
+        if (token) apiClient.setSession?.({ token, user: result.data.user });
+        state.currentUser = normalizeUser(result.data.user);
+      }
+    } catch (error) {
+      state.notificationsError = error?.message || "تعذر تحميل الإشعارات الآن";
+    } finally {
+      state.notificationsLoading = false;
+      render();
+    }
+  }
+
+  function openNotificationsPanel() {
+    if (!isAuthenticated()) {
+      openAuthModal("سجّل دخولك لعرض الإشعارات الخاصة بحسابك.");
+      return;
+    }
+    state.notificationsOpen = true;
+    state.notificationsTab = state.notificationsTab || "all";
+    state.balancePanelOpen = false;
+    render();
+    loadNotifications({ force: true });
+  }
+
+  async function markNotificationRead(notificationId) {
+    const id = String(notificationId || "").trim();
+    if (!id) return;
+    const payload = getNotificationsPayload();
+    const allItems = flattenNotifications(payload);
+    const target = allItems.find((item) => String(item.id) === id);
+    if (target?.isRead) return;
+    if (target) {
+      target.isRead = true;
+      state.notificationsUnreadCount = Math.max(0, Number(state.notificationsUnreadCount || payload.unreadCount || 0) - 1);
+      render();
+    }
+
+    const apiClient = getApiClient();
+    if (!apiClient?.markNotificationRead) return;
+    try {
+      const result = await apiClient.markNotificationRead(id);
+      if (result.ok && result.data) {
+        state.notificationsData = result.data;
+        state.notificationsUnreadCount = Number(result.data.unreadCount || 0);
+        render();
+      }
+    } catch (_) {
+      // Keep the optimistic UI state; the next load will reconcile it.
+    }
+  }
+
+  async function markAllNotificationsRead() {
+    const payload = getNotificationsPayload();
+    const allItems = flattenNotifications(payload);
+    for (const item of allItems) item.isRead = true;
+    state.notificationsUnreadCount = 0;
+    render();
+
+    const apiClient = getApiClient();
+    if (!apiClient?.markAllNotificationsRead) return;
+    try {
+      const result = await apiClient.markAllNotificationsRead();
+      if (result.ok && result.data) {
+        state.notificationsData = result.data;
+        state.notificationsUnreadCount = Number(result.data.unreadCount || 0);
+        render();
+      }
+    } catch (_) {
+      showToast("تم تحديث الواجهة، وسنزامن حالة القراءة عند إعادة التحميل.");
+    }
   }
 
   function renderModelSwitcher() {
@@ -9454,6 +9752,7 @@
       ${renderAuthModal()}
       ${renderUpgradeModal()}
       ${renderSettingsModal()}
+      ${renderNotificationsModal()}
       <div class="guest-toast-stack" aria-live="polite"></div>
     `;
   }
@@ -10653,6 +10952,41 @@
         return;
       }
 
+      if (event.target.closest("[data-close-notifications]")) {
+        state.notificationsOpen = false;
+        render();
+        return;
+      }
+
+      if (event.target.closest("[data-open-notifications]")) {
+        openNotificationsPanel();
+        return;
+      }
+
+      const notificationsTabButton = event.target.closest("[data-notifications-tab]");
+      if (notificationsTabButton) {
+        state.notificationsTab = notificationsTabButton.getAttribute("data-notifications-tab") || "all";
+        render();
+        loadNotifications({ force: true });
+        return;
+      }
+
+      if (event.target.closest("[data-notification-read-all]")) {
+        await markAllNotificationsRead();
+        return;
+      }
+
+      const notificationCard = event.target.closest("[data-notification-id]");
+      if (notificationCard) {
+        await markNotificationRead(notificationCard.getAttribute("data-notification-id"));
+        return;
+      }
+
+      if (event.target.closest("[data-notifications-view-all]")) {
+        showToast("صفحة الإشعارات الكاملة قيد التجهيز، وهذه النافذة تعرض آخر التحديثات الآن.");
+        return;
+      }
+
       if (event.target.closest("[data-balance]")) {
         if (!isAuthenticated()) {
           openAuthModal("سجّل دخولك لعرض رصيد XP ووقت التجدد اليومي.");
@@ -10816,6 +11150,10 @@
           state.settingsModalOpen = false;
           state.authModalOpen = false;
           state.upgradeModalOpen = false;
+          state.notificationsOpen = false;
+          state.notificationsData = null;
+          state.notificationsUnreadCount = 0;
+          state.notificationsLoaded = false;
           state.balancePanelOpen = false;
           state.homeConversationOpen = false;
           render();
@@ -12510,6 +12848,11 @@
   bindEvents();
   render();
   refreshSessionUser();
+  window.setTimeout(() => {
+    if (isAuthenticated()) {
+      loadNotifications({ silent: true, force: true });
+    }
+  }, 400);
   window.setInterval(() => {
     if (state.authModalOpen) {
       applyBridgedAuthSession();

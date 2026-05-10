@@ -959,6 +959,27 @@
     });
   }
 
+  async function getNotifications(params = {}) {
+    const query = new URLSearchParams();
+    Object.entries(params || {}).forEach(([key, value]) => {
+      if (value == null || value === "") return;
+      query.set(key, String(value));
+    });
+    return request(`/notifications${query.toString() ? `?${query.toString()}` : ""}`);
+  }
+
+  async function markNotificationRead(notificationId) {
+    return request(`/notifications/${encodeURIComponent(String(notificationId))}/read`, {
+      method: "POST"
+    });
+  }
+
+  async function markAllNotificationsRead() {
+    return request("/notifications/read-all", {
+      method: "POST"
+    });
+  }
+
   async function sendChat(payload) {
     return request("/chat/send", {
       method: "POST",
@@ -1122,6 +1143,9 @@
     getAdminXpLedger,
     getAdminLogs,
     adminLogout,
+    getNotifications,
+    markNotificationRead,
+    markAllNotificationsRead,
     sendChat,
     smartSearch,
     runWritingAssistant,

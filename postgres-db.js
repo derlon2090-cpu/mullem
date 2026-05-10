@@ -632,6 +632,42 @@ function createPostgresDatabaseClient(rawConfig = {}) {
     await pool.query("CREATE INDEX IF NOT EXISTS idx_xp_ledger_user_created ON xp_ledger (user_id, created_at DESC)");
 
     await pool.query(`
+      CREATE TABLE IF NOT EXISTS notifications (
+        id BIGSERIAL PRIMARY KEY,
+        title VARCHAR(180) NOT NULL,
+        body TEXT NOT NULL,
+        type VARCHAR(40) NOT NULL,
+        badge VARCHAR(80) NULL,
+        icon VARCHAR(40) NULL,
+        target_plan VARCHAR(80) NOT NULL DEFAULT 'all',
+        target_user_id BIGINT NULL REFERENCES app_users(id) ON DELETE CASCADE,
+        action_url TEXT NULL,
+        starts_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        expires_at TIMESTAMPTZ NULL,
+        is_active BOOLEAN NOT NULL DEFAULT TRUE,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )
+    `);
+    await pool.query("CREATE UNIQUE INDEX IF NOT EXISTS uq_notifications_type_title ON notifications (type, title)");
+    await pool.query("CREATE INDEX IF NOT EXISTS idx_notifications_active_target ON notifications (is_active, target_plan, starts_at DESC)");
+    await pool.query("CREATE INDEX IF NOT EXISTS idx_notifications_target_user ON notifications (target_user_id, created_at DESC)");
+
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS notification_reads (
+        id BIGSERIAL PRIMARY KEY,
+        notification_id BIGINT NOT NULL REFERENCES notifications(id) ON DELETE CASCADE,
+        user_id BIGINT NOT NULL REFERENCES app_users(id) ON DELETE CASCADE,
+        read_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        UNIQUE (notification_id, user_id)
+      )
+    `);
+    await pool.query("CREATE INDEX IF NOT EXISTS idx_notification_reads_user ON notification_reads (user_id, read_at DESC)");
+    await pool.query("CREATE INDEX IF NOT EXISTS idx_notification_reads_notification ON notification_reads (notification_id)");
+    await ensureDefaultNotifications();
+
+    await pool.query(`
       CREATE TABLE IF NOT EXISTS admin_logs (
         id BIGSERIAL PRIMARY KEY,
         admin_id BIGINT NULL REFERENCES app_users(id) ON DELETE SET NULL,
@@ -672,6 +708,77 @@ function createPostgresDatabaseClient(rawConfig = {}) {
     `);
     await pool.query("CREATE UNIQUE INDEX IF NOT EXISTS uq_app_guest_usage_session ON app_guest_usage (guest_session_id)");
     await ensureColumn("app_guest_usage", "usage_date", "usage_date DATE NULL");
+  }
+
+  async function ensureDefaultNotifications() {
+    const defaults = [
+      {
+        title: "خصم على باقة طويق",
+        body: "احصل على 30% XP إضافية عند شراء باقة طويق",
+        type: "xp_discount",
+        badge: "خصم 30%",
+        icon: "gift",
+        target_plan: "all",
+        expires_at: "NOW() + INTERVAL '2 days'"
+      },
+      {
+        title: "تحديث نظام نقاط XP",
+        body: "تم تحسين أداء النظام وإضافة خيارات جديدة لإدارة النقاط",
+        type: "official_update",
+        badge: "تحديث",
+        icon: "sparkle",
+        target_plan: "all",
+        expires_at: null
+      },
+      {
+        title: "صيانة مجدولة",
+        body: "ستتم صيانة الخوادم يوم الأحد من 2 ص إلى 4 ص",
+        type: "official_update",
+        badge: "إعلان",
+        icon: "megaphone",
+        target_plan: "all",
+        expires_at: null
+      },
+      {
+        title: "أداة تلخيص المحتوى",
+        body: "أداة جديدة تساعدك على تلخيص أي نص بسرعة وذكاء",
+        type: "feature_update",
+        badge: "إضافة جديدة",
+        icon: "sparkle",
+        target_plan: "all",
+        expires_at: null
+      },
+      {
+        title: "تحسين واجهة المستخدم",
+        body: "تم تحسين سرعة الموقع وتجربة المستخدم بشكل عام",
+        type: "feature_update",
+        badge: "تحسين",
+        icon: "image",
+        target_plan: "all",
+        expires_at: null
+      }
+    ];
+
+    for (const item of defaults) {
+      const expiresSql = item.expires_at || "NULL";
+      await pool.query(
+        `
+          INSERT INTO notifications (
+            title, body, type, badge, icon, target_plan, starts_at, expires_at, is_active
+          ) VALUES ($1, $2, $3, $4, $5, $6, NOW(), ${expiresSql}, TRUE)
+          ON CONFLICT (type, title) DO UPDATE SET
+            body = EXCLUDED.body,
+            badge = EXCLUDED.badge,
+            icon = EXCLUDED.icon,
+            target_plan = EXCLUDED.target_plan,
+            starts_at = EXCLUDED.starts_at,
+            expires_at = EXCLUDED.expires_at,
+            is_active = TRUE,
+            updated_at = NOW()
+        `,
+        [item.title, item.body, item.type, item.badge, item.icon, item.target_plan]
+      );
+    }
   }
 
   async function ensureDefaultPackages() {
@@ -1198,6 +1305,147 @@ function createPostgresDatabaseClient(rawConfig = {}) {
       ]
     );
     return rows[0] || null;
+  }
+
+  function getNotificationTargetPlansForUser(user = {}) {
+    const planValues = new Set(["all"]);
+    const rawValues = [
+      user.plan_type,
+      user.planType,
+      user.package_key,
+      user.packageKey,
+      user.package_name,
+      user.package
+    ];
+
+    for (const value of rawValues) {
+      const normalized = String(value || "").trim().toLowerCase();
+      if (normalized) planValues.add(normalized);
+    }
+
+    const combined = Array.from(planValues).join(" ");
+    if (/starter|free|مجاني|المجانية/.test(combined)) {
+      planValues.add("starter");
+      planValues.add("free");
+    }
+    if (/pro\b|spark|شرارة/.test(combined)) {
+      planValues.add("pro");
+      planValues.add("spark");
+    }
+    if (/pro_plus|tuwaiq|طويق/.test(combined)) {
+      planValues.add("pro_plus");
+      planValues.add("tuwaiq");
+    }
+    if (/pro_max|pioneer|رائد|الرائد/.test(combined)) {
+      planValues.add("pro_max");
+      planValues.add("pioneer");
+    }
+
+    return Array.from(planValues);
+  }
+
+  function serializeNotification(row = {}) {
+    return {
+      id: String(row.id),
+      title: String(row.title || "").trim(),
+      body: String(row.body || "").trim(),
+      type: String(row.type || "").trim(),
+      badge: String(row.badge || "").trim(),
+      icon: String(row.icon || "").trim(),
+      target_plan: String(row.target_plan || "all").trim(),
+      target_user_id: row.target_user_id != null ? String(row.target_user_id) : null,
+      action_url: String(row.action_url || "").trim() || null,
+      starts_at: row.starts_at || null,
+      expires_at: row.expires_at || null,
+      created_at: row.created_at || null,
+      updated_at: row.updated_at || null,
+      isRead: Boolean(row.is_read)
+    };
+  }
+
+  function groupNotifications(items = []) {
+    return {
+      xpDiscounts: items.filter((item) => item.type === "xp_discount"),
+      officialUpdates: items.filter((item) => item.type === "official_update"),
+      featureUpdates: items.filter((item) => item.type === "feature_update"),
+      account: items.filter((item) => item.type === "account")
+    };
+  }
+
+  async function listNotificationsForUser(user, options = {}) {
+    const userId = Number(user?.id || options.userId);
+    if (!userId) {
+      return {
+        unreadCount: 0,
+        sections: groupNotifications([]),
+        items: []
+      };
+    }
+
+    const targetPlans = getNotificationTargetPlansForUser(user);
+    const limit = Math.max(1, Math.min(80, Math.round(Number(options.limit || 20) || 20)));
+    const unreadOnly = Boolean(options.unreadOnly);
+    const unreadSql = unreadOnly ? "AND r.id IS NULL" : "";
+
+    const rows = await query(
+      `
+        SELECT n.*, (r.id IS NOT NULL) AS is_read
+        FROM notifications n
+        LEFT JOIN notification_reads r
+          ON r.notification_id = n.id
+         AND r.user_id = $1
+        WHERE n.is_active = TRUE
+          AND n.starts_at <= NOW()
+          AND (n.expires_at IS NULL OR n.expires_at > NOW())
+          AND (n.target_plan = ANY($2::text[]) OR n.target_user_id = $1)
+          ${unreadSql}
+        ORDER BY n.created_at DESC, n.id DESC
+        LIMIT $3
+      `,
+      [userId, targetPlans, limit]
+    );
+
+    const items = rows.map(serializeNotification);
+    const unreadCount = items.filter((item) => !item.isRead).length;
+
+    return {
+      unreadCount,
+      sections: groupNotifications(items),
+      items
+    };
+  }
+
+  async function markNotificationAsRead(userId, notificationId) {
+    const safeUserId = Number(userId);
+    const safeNotificationId = Number(notificationId);
+    if (!safeUserId || !safeNotificationId) return null;
+
+    const rows = await query(
+      `
+        INSERT INTO notification_reads (notification_id, user_id, read_at)
+        VALUES ($1, $2, NOW())
+        ON CONFLICT (notification_id, user_id) DO UPDATE SET
+          read_at = EXCLUDED.read_at
+        RETURNING *
+      `,
+      [safeNotificationId, safeUserId]
+    );
+
+    return rows[0] || null;
+  }
+
+  async function markAllNotificationsAsRead(user) {
+    const userId = Number(user?.id);
+    if (!userId) return { markedCount: 0 };
+
+    const notifications = await listNotificationsForUser(user, { limit: 80 });
+    let markedCount = 0;
+    for (const notification of notifications.items) {
+      if (notification.isRead) continue;
+      await markNotificationAsRead(userId, notification.id);
+      markedCount += 1;
+    }
+    return { markedCount };
   }
 
   async function recordAdminLog(payload = {}) {
@@ -2250,6 +2498,9 @@ function createPostgresDatabaseClient(rawConfig = {}) {
     saveFeedback,
     saveToolUsage,
     recordXpLedger,
+    listNotificationsForUser,
+    markNotificationAsRead,
+    markAllNotificationsAsRead,
     grantDailyXpIfNeeded,
     findPackageById,
     findDefaultPackage,
