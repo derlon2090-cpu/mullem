@@ -5180,7 +5180,7 @@
       { title: "الأكثر استخدامًا" },
       { title: "كتابة وتحرير", writingTools: true },
       { title: "تلخيص وتنظيم", summaryTools: true },
-      { title: "تحليل وبيانات" },
+      { title: "تحليل وبيانات", dataTools: true },
       { title: "إنتاجية" },
       { title: "تعليم وتعلم" },
       { title: "أدوات مجانية", freeTools: true }
@@ -5248,7 +5248,7 @@
 
           <nav class="tools-unified-bar" aria-label="تصنيفات الأدوات">
             ${categories.map((category, index) => `
-              <button class="tools-unified-filter ${category.writingTools ? "is-active" : ""}" type="button" ${category.freeTools ? "data-open-free-tools" : category.writingTools ? "data-open-writing-tools" : category.summaryTools ? "data-open-summary-tools" : "data-open-tools"}>
+              <button class="tools-unified-filter ${category.writingTools ? "is-active" : ""}" type="button" ${category.freeTools ? "data-open-free-tools" : category.writingTools ? "data-open-writing-tools" : category.summaryTools ? "data-open-summary-tools" : category.dataTools ? "data-open-data-tools" : "data-open-tools"}>
                 ${escapeHtml(category.title)}
               </button>
             `).join("")}
@@ -5282,7 +5282,7 @@
       { title: "الأكثر استخدامًا" },
       { title: "كتابة وتحرير", writingTools: true },
       { title: "تلخيص وتنظيم", summaryTools: true },
-      { title: "تحليل وبيانات" },
+      { title: "تحليل وبيانات", dataTools: true },
       { title: "إنتاجية" },
       { title: "تعليم وتعلم" },
       { title: "أدوات مجانية", freeTools: true }
@@ -5365,7 +5365,7 @@
 
           <nav class="tools-unified-bar" aria-label="تصنيفات الأدوات">
             ${categories.map((category) => `
-              <button class="tools-unified-filter ${category.summaryTools ? "is-active" : ""}" type="button" ${category.freeTools ? "data-open-free-tools" : category.writingTools ? "data-open-writing-tools" : category.summaryTools ? "data-open-summary-tools" : "data-open-tools"}>
+              <button class="tools-unified-filter ${category.summaryTools ? "is-active" : ""}" type="button" ${category.freeTools ? "data-open-free-tools" : category.writingTools ? "data-open-writing-tools" : category.summaryTools ? "data-open-summary-tools" : category.dataTools ? "data-open-data-tools" : "data-open-tools"}>
                 ${escapeHtml(category.title)}
               </button>
             `).join("")}
@@ -5404,6 +5404,117 @@
     `;
   }
 
+  function renderDataAnalysisToolsMain() {
+    const categories = [
+      { title: "الأكثر استخدامًا" },
+      { title: "كتابة وتحرير", writingTools: true },
+      { title: "تلخيص وتنظيم", summaryTools: true },
+      { title: "تحليل وبيانات", dataTools: true },
+      { title: "إنتاجية" },
+      { title: "تعليم وتعلم" },
+      { title: "أدوات مجانية", freeTools: true }
+    ];
+    const dataToolIcons = {
+      trend: '<svg viewBox="0 0 24 24"><path d="M4 18h16"/><path d="m6 15 4-5 4 3 4-7"/><path d="M16 6h2v2"/></svg>',
+      database: '<svg viewBox="0 0 24 24"><ellipse cx="12" cy="6" rx="7" ry="3"/><path d="M5 6v6c0 1.7 3.1 3 7 3s7-1.3 7-3V6"/><path d="M5 12v6c0 1.7 3.1 3 7 3s7-1.3 7-3v-6"/></svg>',
+      chart: '<svg viewBox="0 0 24 24"><path d="M5 19V5"/><path d="M5 19h15"/><rect x="8" y="12" width="2.7" height="5"/><rect x="12.2" y="8" width="2.7" height="9"/><rect x="16.4" y="5" width="2.7" height="12"/></svg>',
+      sheet: '<svg viewBox="0 0 24 24"><path d="M6 3h9l3 3v15H6a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2Z"/><path d="M15 3v5h5M8 12h8M8 16h8M11 10v8M15 10v8"/></svg>',
+      clean: '<svg viewBox="0 0 24 24"><path d="M5 6h14l-5.5 6.4V19l-3 1.5v-8.1Z"/><path d="M8 5V3M16 5V3"/></svg>',
+      anomaly: '<svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="6"/><path d="m16 16 4 4"/><path d="M8.5 11h5M11 8.5v5"/></svg>',
+      forecast: '<svg viewBox="0 0 24 24"><path d="M5 18h14"/><path d="M6 15c2.2-4.5 4.3-5.5 6.5-3s4.2 1.8 5.5-3.5"/><circle cx="7" cy="15" r="1"/><circle cx="12.5" cy="12.5" r="1"/><circle cx="18" cy="8.5" r="1"/></svg>',
+      aggregate: '<svg viewBox="0 0 24 24"><path d="M7 7h10M7 12h10M7 17h10"/><path d="M4 7h.1M4 12h.1M4 17h.1M20 7h.1M20 12h.1M20 17h.1"/></svg>'
+    };
+    const tools = [
+      {
+        title: "تحليل الاتجاهات",
+        description: "اكتشاف الأنماط والاتجاهات داخل البيانات",
+        icon: dataToolIcons.trend
+      },
+      {
+        title: "استعلام البيانات",
+        description: "كتابة استعلامات SQL مبسطة لاستخراج البيانات",
+        icon: dataToolIcons.database
+      },
+      {
+        title: "إنشاء تقارير بيانية",
+        description: "إنشاء تقارير ورسوم بيانية احترافية",
+        icon: dataToolIcons.chart
+      },
+      {
+        title: "تحليل الجداول",
+        description: "تحليل ملفات الجداول واستخراج المعلومات والملاحظات",
+        icon: dataToolIcons.sheet
+      },
+      {
+        title: "تنظيف البيانات",
+        description: "تنظيف ومعالجة البيانات وإزالة القيم المكررة والخاطئة",
+        icon: dataToolIcons.clean
+      },
+      {
+        title: "كشف الشذوذ",
+        description: "اكتشاف القيم الشاذة والفروقات غير الطبيعية",
+        icon: dataToolIcons.anomaly
+      },
+      {
+        title: "التنبؤ والتحليل التقديري",
+        description: "عمل نماذج أولية وتوقع النتائج المستقبلية",
+        icon: dataToolIcons.forecast
+      },
+      {
+        title: "تحليل البيانات المجمعة",
+        description: "تلخيص وتحليل البيانات من مصادر متعددة",
+        icon: dataToolIcons.aggregate
+      }
+    ];
+
+    return `
+      <section class="guest-main tools-main tools-data-main" aria-label="تحليل وبيانات">
+        <div class="tools-page data-tools-page">
+          <header class="tools-hero data-tools-hero">
+            <div class="tools-title-row">
+              <span class="tools-title-icon" aria-hidden="true">${dataToolIcons.chart}</span>
+              <h1>تحليل وبيانات</h1>
+            </div>
+            <p>مجموعة أدوات متخصصة لتحليل البيانات واستكشاف الرؤى واتخاذ قرارات مبنية على البيانات</p>
+          </header>
+
+          <nav class="tools-unified-bar" aria-label="تصنيفات الأدوات">
+            ${categories.map((category) => `
+              <button class="tools-unified-filter ${category.dataTools ? "is-active" : ""}" type="button" ${category.freeTools ? "data-open-free-tools" : category.writingTools ? "data-open-writing-tools" : category.summaryTools ? "data-open-summary-tools" : category.dataTools ? "data-open-data-tools" : "data-open-tools"}>
+                ${escapeHtml(category.title)}
+              </button>
+            `).join("")}
+            <button class="tools-unified-return" type="button" data-return-chat>
+              <span aria-hidden="true">←</span>
+              <b>العودة إلى الشات</b>
+            </button>
+          </nav>
+
+          <section class="data-tools-block" aria-label="أدوات التحليل والبيانات">
+            <h2>
+              <span aria-hidden="true">${dataToolIcons.chart}</span>
+              <b>أدوات التحليل والبيانات</b>
+            </h2>
+            <div class="tools-grid data-tools-grid">
+              ${tools.map((tool) => `
+                <button class="tool-card data-tool-card" type="button" data-tool-key="writing-assistant" data-card="${escapeHtml(tool.title)}">
+                  <span class="tool-card-star" aria-hidden="true">${icons.star}</span>
+                  <span class="tool-card-icon" aria-hidden="true">${tool.icon}</span>
+                  <strong>${escapeHtml(tool.title)}</strong>
+                  <span class="tool-card-copy">${escapeHtml(tool.description)}</span>
+                  <span class="data-tool-action">
+                    <span>استخدم الأداة</span>
+                    <b aria-hidden="true">←</b>
+                  </span>
+                </button>
+              `).join("")}
+            </div>
+          </section>
+        </div>
+      </section>
+    `;
+  }
+
   function renderToolsMain(profile) {
     const showingSubscriberTools = state.toolView === "subscriber-tools";
     const hasSubscriberAccess = hasSubscriberToolsAccess();
@@ -5422,7 +5533,7 @@
       { title: "الأكثر استخدامًا" },
       { title: "كتابة وتحرير", writingTools: true },
       { title: "تلخيص وتنظيم", summaryTools: true },
-      { title: "تحليل وبيانات" },
+      { title: "تحليل وبيانات", dataTools: true },
       { title: "إنتاجية" },
       { title: "تعليم وتعلم" },
       { title: "أدوات مجانية", freeTools: true }
@@ -5516,7 +5627,7 @@
 
           <nav class="tools-unified-bar" aria-label="تصنيفات الأدوات">
             ${categories.map((category, index) => `
-              <button class="tools-unified-filter ${category.freeTools ? (showingSubscriberTools ? "is-active" : "") : (!showingSubscriberTools && index === 0 ? "is-active" : "")}" type="button" ${category.freeTools ? "data-open-free-tools" : category.writingTools ? "data-open-writing-tools" : category.summaryTools ? "data-open-summary-tools" : "data-open-tools"}>
+              <button class="tools-unified-filter ${category.freeTools ? (showingSubscriberTools ? "is-active" : "") : (!showingSubscriberTools && index === 0 ? "is-active" : "")}" type="button" ${category.freeTools ? "data-open-free-tools" : category.writingTools ? "data-open-writing-tools" : category.summaryTools ? "data-open-summary-tools" : category.dataTools ? "data-open-data-tools" : "data-open-tools"}>
                 ${escapeHtml(category.title)}
               </button>
             `).join("")}
@@ -5594,9 +5705,9 @@
 
     const categories = [
       { title: "الكل" },
-      { title: "كتابة وتحرير" },
-      { title: "تلخيص وتنظيم" },
-      { title: "تحليل وبيانات" },
+      { title: "كتابة وتحرير", writingTools: true },
+      { title: "تلخيص وتنظيم", summaryTools: true },
+      { title: "تحليل وبيانات", dataTools: true },
       { title: "إنتاجية" },
       { title: "تعليم وتعلم" },
       { title: "أدوات مجانية", freeTools: true }
@@ -5627,7 +5738,7 @@
 
           <nav class="tools-unified-bar" aria-label="تصنيفات أدوات المشتركين">
             ${categories.map((category) => `
-              <button class="tools-unified-filter ${category.freeTools ? "is-active" : ""}" type="button" ${category.freeTools ? "data-open-free-tools" : "data-open-tools"}>
+              <button class="tools-unified-filter ${category.freeTools ? "is-active" : ""}" type="button" ${category.freeTools ? "data-open-free-tools" : category.writingTools ? "data-open-writing-tools" : category.summaryTools ? "data-open-summary-tools" : category.dataTools ? "data-open-data-tools" : "data-open-tools"}>
                 ${escapeHtml(category.title)}
               </button>
             `).join("")}
@@ -8688,6 +8799,9 @@
       if (state.toolView === "summary-tools") {
         return renderSummaryOrganizationToolsMain(profile);
       }
+      if (state.toolView === "data-tools") {
+        return renderDataAnalysisToolsMain(profile);
+      }
       if (state.toolView === "image-enhancer") {
         return renderImageEnhancerMain(profile);
       }
@@ -10294,6 +10408,14 @@
         state.homeConversationOpen = false;
         state.openThreadMenuId = "";
         state.toolView = "summary-tools";
+        setSection("ai-tools");
+        return;
+      }
+
+      if (event.target.closest("[data-open-data-tools]")) {
+        state.homeConversationOpen = false;
+        state.openThreadMenuId = "";
+        state.toolView = "data-tools";
         setSection("ai-tools");
         return;
       }
