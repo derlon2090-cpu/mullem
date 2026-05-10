@@ -2005,6 +2005,27 @@ body[data-workspace-mode="home"] .guest-root {
   place-items: center;
 }
 
+.ghost-action.feedback-btn {
+  color: #8b93ad;
+  background: transparent;
+  border-color: transparent;
+  cursor: pointer;
+  transition: color 0.2s ease, transform 0.2s ease;
+}
+
+.ghost-action.feedback-btn:hover {
+  color: #6d4cff;
+  transform: scale(1.05);
+}
+
+.ghost-action.feedback-btn.liked {
+  color: #6d4cff;
+}
+
+.ghost-action.feedback-btn.liked svg path {
+  fill: currentColor;
+}
+
 .guest-shell.theme-dark .ghost-action {
   background: rgba(32, 34, 60, 0.98);
   border-color: rgba(151, 125, 255, 0.16);
@@ -13462,8 +13483,9 @@ body[data-workspace-mode="home"] .guest-root {
   position: fixed;
   inset: 0;
   z-index: 1800;
-  display: grid;
-  place-items: center;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
   padding: 22px;
   direction: rtl;
 }
@@ -13479,8 +13501,8 @@ body[data-workspace-mode="home"] .guest-root {
 
 .notifications-panel {
   position: relative;
-  width: min(540px, 100%);
-  max-height: 80vh;
+  width: min(680px, calc(100vw - 44px));
+  max-height: calc(100vh - 44px);
   overflow-y: auto;
   border: 1px solid #eee8ff;
   border-radius: 28px;
@@ -13515,6 +13537,26 @@ body[data-workspace-mode="home"] .guest-root {
   flex: 0 0 auto;
   color: #6d4cff;
   background: #f2ecff;
+}
+
+.notification-header-icon svg,
+.notification-icon svg,
+.notifications-empty svg,
+.notifications-loading svg,
+.notification-section-title svg,
+.notifications-footer svg {
+  stroke: currentColor;
+  fill: none;
+}
+
+.notification-header-icon svg path,
+.notification-icon svg path,
+.notifications-empty svg path,
+.notifications-loading svg path,
+.notification-section-title svg path,
+.notifications-footer svg path {
+  stroke: currentColor;
+  fill: none;
 }
 
 .notification-header-icon {
@@ -13772,7 +13814,7 @@ body[data-workspace-mode="home"] .guest-root {
 @media (max-width: 760px) {
   .notifications-gate {
     padding: 0;
-    place-items: stretch;
+    display: block;
   }
 
   .notifications-panel {
