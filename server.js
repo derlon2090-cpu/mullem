@@ -60,13 +60,17 @@ const OPENAI_MODEL_CORRECTION = String(process.env.ORLIXOR_CORRECTION_MODEL || p
 const OPENAI_MODEL_STYLE = String(process.env.ORLIXOR_STYLE_MODEL || process.env.OPENAI_MODEL_STYLE || OPENAI_MODEL_WRITING || "gpt-4.1-mini").trim();
 const OPENAI_IMAGE_MODEL = String(process.env.OPENAI_IMAGE_MODEL || "dall-e-3").trim();
 const OPENAI_RESPONSES_ENDPOINT = String(process.env.OPENAI_RESPONSES_ENDPOINT || "https://api.openai.com/v1/responses").trim();
+const OPENAI_CHAT_COMPLETIONS_ENDPOINT = String(process.env.OPENAI_CHAT_COMPLETIONS_ENDPOINT || "https://api.openai.com/v1/chat/completions").trim();
+const OPENAI_VISION_MODEL = String(process.env.ORLIXOR_VISION_MODEL || process.env.OPENAI_VISION_MODEL || "gpt-4.1-mini").trim();
 const OPENAI_EMBEDDINGS_ENDPOINT = String(process.env.OPENAI_EMBEDDINGS_ENDPOINT || "https://api.openai.com/v1/embeddings").trim();
 const OPENAI_EMBEDDING_MODEL = String(process.env.ORLIXOR_EMBEDDING_MODEL || process.env.OPENAI_EMBEDDING_MODEL || "text-embedding-3-small").trim();
 const ORLIXOR_ENABLE_EMBEDDINGS = /^(1|true|yes|on)$/i.test(String(process.env.ORLIXOR_ENABLE_EMBEDDINGS || "").trim());
 const OPENAI_TIMEOUT_MS = Number(process.env.OPENAI_TIMEOUT_MS || 25000);
 const OPENAI_MAX_OUTPUT_TOKENS = Math.max(120, Math.min(Number(process.env.OPENAI_MAX_OUTPUT_TOKENS || 900), 2000));
 const DB_INIT_TIMEOUT_MS = Math.max(1000, Number(process.env.DB_INIT_TIMEOUT_MS || 30000));
-const MAX_BODY_BYTES = Math.max(10_000, Number(process.env.MAX_BODY_BYTES || 1_000_000));
+const MAX_BODY_BYTES = Math.max(10_000, Number(process.env.MAX_BODY_BYTES || 8_000_000));
+const MAX_IMAGE_INPUTS = Math.max(1, Math.min(Number(process.env.MAX_IMAGE_INPUTS || 4), 8));
+const MAX_IMAGE_DATA_URL_BYTES = Math.max(100_000, Number(process.env.MAX_IMAGE_DATA_URL_BYTES || 1_800_000));
 const MAX_MESSAGE_LENGTH = Math.max(200, Number(process.env.MAX_MESSAGE_LENGTH || 4000));
 const MAX_QUESTION_LENGTH = Math.max(200, Number(process.env.MAX_QUESTION_LENGTH || 4000));
 const MAX_METADATA_LENGTH = Math.max(40, Number(process.env.MAX_METADATA_LENGTH || 120));
@@ -594,11 +598,46 @@ function sanitizeAttachmentPreviews(value) {
     .slice(0, 4);
 }
 
+function estimateDataUrlBytes(value) {
+  const match = String(value || "").match(/^data:[^;]+;base64,([\s\S]+)$/i);
+  if (!match) return 0;
+  const base64 = match[1].replace(/\s+/g, "");
+  const padding = (base64.match(/=+$/) || [""])[0].length;
+  return Math.max(0, Math.floor((base64.length * 3) / 4) - padding);
+}
+
+function sanitizeAttachmentImages(value) {
+  if (!Array.isArray(value)) return [];
+  return value
+    .map((item) => {
+      const name = sanitizeOptionalText(item?.name, 160) || "image";
+      let type = sanitizeOptionalText(item?.type, 80).toLowerCase();
+      let url = String(item?.url || item?.data_url || item?.dataUrl || "").trim();
+      const dataUrlMatch = url.match(/^data:(image\/(?:png|jpe?g|webp));base64,([\s\S]+)$/i);
+
+      if (dataUrlMatch) {
+        type = dataUrlMatch[1].toLowerCase().replace("image/jpg", "image/jpeg");
+        const cleanBase64 = dataUrlMatch[2].replace(/\s+/g, "");
+        url = `data:${type};base64,${cleanBase64}`;
+        if (estimateDataUrlBytes(url) > MAX_IMAGE_DATA_URL_BYTES) return null;
+      } else if (!/^https:\/\//i.test(url)) {
+        return null;
+      }
+
+      if (!["image/png", "image/jpeg", "image/webp"].includes(type)) return null;
+      return { name, type, url };
+    })
+    .filter(Boolean)
+    .slice(0, MAX_IMAGE_INPUTS);
+}
+
 function buildAttachmentContext(payload) {
   const names = sanitizeAttachmentNames(payload?.attachment_names || payload?.attachmentNames);
   const previews = sanitizeAttachmentPreviews(payload?.attachment_previews || payload?.attachmentPreviews);
+  const images = sanitizeAttachmentImages(payload?.attachment_images || payload?.attachmentImages);
   const attachmentCount = Math.max(
     names.length,
+    images.length,
     Number(payload?.attachment_count || payload?.attachmentCount || 0) || 0
   );
 
@@ -1957,6 +1996,121 @@ async function callOpenAI({ input, modelProfile }) {
   const text = extractResponseText(payload);
   if (!text) {
     throw createHttpError(502, "Orlixor AI returned an empty response.");
+  }
+
+  return { text, raw: payload, usage: extractTokenUsage(payload) };
+}
+
+function resolveVisionModel(profile) {
+  const candidate = String(profile?.openaiModel || OPENAI_VISION_MODEL || OPENAI_MODEL_DEFAULT || OPENAI_MODEL).trim();
+  if (!candidate || /text$/i.test(candidate) || /-text/i.test(candidate)) {
+    return OPENAI_VISION_MODEL || "gpt-4.1-mini";
+  }
+  return candidate;
+}
+
+function buildVisionChatMessages(messages = [], images = [], profile = modelProfiles.orlixor) {
+  const safeMessages = (Array.isArray(messages) ? messages : [])
+    .map((item) => {
+      const role = String(item?.role || "").trim().toLowerCase();
+      const safeRole = role === "system" || role === "assistant" ? role : "user";
+      const content = coerceModelText(item?.content);
+      return content ? { role: safeRole, content } : null;
+    })
+    .filter(Boolean);
+
+  const lastUserIndex = safeMessages.map((item) => item.role).lastIndexOf("user");
+  const targetIndex = lastUserIndex >= 0 ? lastUserIndex : safeMessages.length;
+  if (targetIndex === safeMessages.length) {
+    safeMessages.push({ role: "user", content: "" });
+  }
+
+  const userText = limitPromptContext(
+    safeMessages[targetIndex].content || "حلل هذه الصورة بالتفصيل.",
+    profile.maxContextTokens || FREE_MAX_CONTEXT_TOKENS
+  );
+  safeMessages[targetIndex] = {
+    role: "user",
+    content: [
+      {
+        type: "text",
+        text: [
+          userText,
+          "",
+          "أنت محلل صور ذكي في Orlixor. قم بتحليل الصورة بدقة، واقرأ أي نص ظاهر، واشرح الواجهة أو العناصر المرئية بالتفصيل. لا تقل إن الصورة غير واضحة إلا إذا كانت تالفة فعلاً."
+        ].join("\n")
+      },
+      ...images.map((image) => ({
+        type: "image_url",
+        image_url: {
+          url: image.url,
+          detail: "auto"
+        }
+      }))
+    ]
+  };
+
+  return safeMessages;
+}
+
+async function callOpenAIVision({ messages, images, modelProfile }) {
+  if (!OPENAI_API_KEY) {
+    throw createHttpError(503, "OPENAI_API_KEY is not configured on the server.");
+  }
+
+  const profile = modelProfile || modelProfiles.pro || modelProfiles.orlixor;
+  const safeImages = sanitizeAttachmentImages(images);
+  if (!safeImages.length) {
+    return callOpenAI({ input: buildResponsesInput(messages), modelProfile: profile });
+  }
+
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), OPENAI_TIMEOUT_MS);
+  let response;
+
+  try {
+    response = await fetch(OPENAI_CHAT_COMPLETIONS_ENDPOINT, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${OPENAI_API_KEY}`,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        model: resolveVisionModel(profile),
+        messages: buildVisionChatMessages(messages, safeImages, profile),
+        temperature: Number(profile.temperature ?? 0.45),
+        max_tokens: Math.max(120, Math.min(Number(profile.maxOutputTokens || OPENAI_MAX_OUTPUT_TOKENS), 1600))
+      }),
+      signal: controller.signal
+    });
+  } catch (error) {
+    if (error?.name === "AbortError") {
+      throw createHttpError(504, "Orlixor AI vision request timed out on the server.");
+    }
+    throw createHttpError(503, "Failed to reach Orlixor AI vision from the server.");
+  } finally {
+    clearTimeout(timeoutId);
+  }
+
+  const contentType = response.headers.get("content-type") || "";
+  const payload = contentType.includes("application/json")
+    ? await response.json()
+    : { error: await response.text() };
+
+  if (!response.ok) {
+    let message =
+      payload?.error?.message ||
+      payload?.message ||
+      `Orlixor AI vision request failed with status ${response.status}`;
+    message = String(message)
+      .replace(/OpenAI/gi, "Orlixor AI")
+      .replace(/gpt-[a-z0-9.\-]+/gi, "Orlixor AI");
+    throw createHttpError(response.status, message);
+  }
+
+  const text = extractResponseText(payload);
+  if (!text) {
+    throw createHttpError(502, "Orlixor AI returned an empty vision response.");
   }
 
   return { text, raw: payload, usage: extractTokenUsage(payload) };
@@ -3885,10 +4039,13 @@ async function buildChatMessages(conversation, payload) {
   ].filter(Boolean).join("\n");
   const history = await listConversationHistory(conversation);
   const attachmentContext = buildAttachmentContext(payload);
+  const attachmentImages = sanitizeAttachmentImages(payload.attachment_images || payload.attachmentImages);
   const messages = [
     {
       role: "system",
-      content: systemPrompt
+      content: attachmentImages.length
+        ? `${systemPrompt}\n\nتمرير الصور مفعل في هذا الطلب. اقرأ الصور مباشرة وحلل النصوص والعناصر المرئية بدل افتراض أنها غير واضحة.`
+        : systemPrompt
     }
   ];
   const accountMemoryMessages = await getAccountMemoryMessages({
@@ -3931,12 +4088,16 @@ async function handleChatSend(req, res) {
   const term = sanitizeOptionalText(payload.term, MAX_METADATA_LENGTH);
   const projectId = sanitizeOptionalText(payload.project_id, MAX_METADATA_LENGTH);
   const attachmentNames = sanitizeAttachmentNames(payload.attachment_names || payload.attachmentNames);
+  const attachmentImages = sanitizeAttachmentImages(payload.attachment_images || payload.attachmentImages);
   const attachmentCount = Math.max(
     attachmentNames.length,
+    attachmentImages.length,
     Number(payload.attachment_count || payload.attachmentCount || 0) || 0
   );
   const hasAttachment = Boolean(payload.has_attachment || payload.hasAttachment || attachmentCount > 0);
-  const hasOnlyImageAttachments = attachmentNames.length > 0 && attachmentNames.every(isImageAttachmentName);
+  const hasOnlyImageAttachments = attachmentCount > 0
+    && (attachmentImages.length > 0 || attachmentNames.length > 0)
+    && attachmentNames.every(isImageAttachmentName);
   const auth = await getAuthContext(req);
   const activeUser = auth?.user ? await syncUserDailyProgressSafely(auth.user, "بدأ جلسة شات جديدة") : null;
 
@@ -3979,25 +4140,33 @@ async function handleChatSend(req, res) {
 
   let chargedUser = activeUser || null;
 
-  const result = await callOpenAI({
+  const chatMessages = await buildChatMessages(conversation, {
+    ...payload,
+    message,
+    selected_model: selectedModel,
     modelProfile,
-    input: buildResponsesInput(await buildChatMessages(conversation, {
-      ...payload,
-      message,
-      selected_model: selectedModel,
-      modelProfile,
-      attachment_count: attachmentCount,
-      attachment_names: attachmentNames,
-      user_id: activeUser?.id || null,
-      project_id: project?.id || null,
-      subject: subject || project?.subject || activeUser?.subject || "",
-      stage,
-      grade: grade || project?.grade || activeUser?.grade || "",
-      term: term || project?.term || "",
-      lesson: lesson || project?.lesson || "",
-      projectTitle: project?.title || ""
-    }))
+    attachment_count: attachmentCount,
+    attachment_names: attachmentNames,
+    attachment_images: attachmentImages,
+    user_id: activeUser?.id || null,
+    project_id: project?.id || null,
+    subject: subject || project?.subject || activeUser?.subject || "",
+    stage,
+    grade: grade || project?.grade || activeUser?.grade || "",
+    term: term || project?.term || "",
+    lesson: lesson || project?.lesson || "",
+    projectTitle: project?.title || ""
   });
+  const result = attachmentImages.length
+    ? await callOpenAIVision({
+      modelProfile,
+      messages: chatMessages,
+      images: attachmentImages
+    })
+    : await callOpenAI({
+      modelProfile,
+      input: buildResponsesInput(chatMessages)
+    });
   const assistantText = sanitizeModelDisplayText(result.text);
   const xpCost = calculateFinalXpCost(modelProfile, assistantText, attachmentCount, attachmentNames, result.usage);
 
@@ -4763,11 +4932,15 @@ async function handleSolveQuestion(req, res) {
   const term = sanitizeOptionalText(payload.term, MAX_METADATA_LENGTH);
   const lesson = sanitizeOptionalText(payload.lesson, 180);
   const attachmentNames = sanitizeAttachmentNames(payload.attachment_names || payload.attachmentNames);
+  const attachmentImages = sanitizeAttachmentImages(payload.attachment_images || payload.attachmentImages);
   const attachmentCount = Math.max(
     attachmentNames.length,
+    attachmentImages.length,
     Number(payload.attachment_count || payload.attachmentCount || 0) || 0
   );
-  const hasOnlyImageAttachments = attachmentNames.length > 0 && attachmentNames.every(isImageAttachmentName);
+  const hasOnlyImageAttachments = attachmentCount > 0
+    && (attachmentImages.length > 0 || attachmentNames.length > 0)
+    && attachmentNames.every(isImageAttachmentName);
   const auth = await getAuthContext(req);
   const activeUser = auth?.user ? await syncUserDailyProgressSafely(auth.user, "بدأ حل سؤال دقيق") : null;
 
@@ -4786,19 +4959,27 @@ async function handleSolveQuestion(req, res) {
     throw createHttpError(402, `Insufficient XP balance. This request needs ${preflightXpCost} XP.`);
   }
 
-  const result = await callOpenAI({
+  const solvePrompt = buildSolveSystemPrompt({
+    ...payload,
+    selected_model: selectedModel,
     modelProfile,
-    input: buildSolveSystemPrompt({
-      ...payload,
-      selected_model: selectedModel,
-      modelProfile,
-      question,
-      grade,
-      subject,
-      term,
-      lesson
-    })
+    question,
+    grade,
+    subject,
+    term,
+    lesson,
+    attachment_images: attachmentImages
   });
+  const result = attachmentImages.length
+    ? await callOpenAIVision({
+      modelProfile,
+      messages: [{ role: "user", content: solvePrompt }],
+      images: attachmentImages
+    })
+    : await callOpenAI({
+      modelProfile,
+      input: solvePrompt
+    });
 
   const cleanedSolveText = sanitizeModelDisplayText(result.text);
   const parsed = extractJsonObject(cleanedSolveText);

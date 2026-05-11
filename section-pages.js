@@ -10288,6 +10288,83 @@
     return previews;
   }
 
+  function isVisionImageFile(file) {
+    const type = String(file?.type || "").toLowerCase();
+    const name = String(file?.name || "").toLowerCase();
+    return ["image/png", "image/jpeg", "image/webp"].includes(type)
+      || /\.(png|jpe?g|webp)$/i.test(name);
+  }
+
+  function readFileAsDataUrl(file) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(String(reader.result || ""));
+      reader.onerror = () => reject(reader.error || new Error("Unable to read file."));
+      reader.readAsDataURL(file);
+    });
+  }
+
+  function loadImageFromDataUrl(dataUrl) {
+    return new Promise((resolve, reject) => {
+      const image = new Image();
+      image.onload = () => resolve(image);
+      image.onerror = () => reject(new Error("Unable to load image."));
+      image.src = dataUrl;
+    });
+  }
+
+  async function compressImageForVision(file) {
+    const sourceDataUrl = await readFileAsDataUrl(file);
+    const image = await loadImageFromDataUrl(sourceDataUrl);
+    const attempts = [
+      { maxSide: 1600, quality: 0.84 },
+      { maxSide: 1200, quality: 0.78 },
+      { maxSide: 900, quality: 0.72 }
+    ];
+
+    for (const attempt of attempts) {
+      const ratio = Math.min(1, attempt.maxSide / Math.max(image.naturalWidth || image.width, image.naturalHeight || image.height));
+      const width = Math.max(1, Math.round((image.naturalWidth || image.width) * ratio));
+      const height = Math.max(1, Math.round((image.naturalHeight || image.height) * ratio));
+      const canvas = document.createElement("canvas");
+      const ctx = canvas.getContext("2d");
+      canvas.width = width;
+      canvas.height = height;
+      ctx.fillStyle = "#ffffff";
+      ctx.fillRect(0, 0, width, height);
+      ctx.imageSmoothingEnabled = true;
+      ctx.imageSmoothingQuality = "high";
+      ctx.drawImage(image, 0, 0, width, height);
+      const dataUrl = canvas.toDataURL("image/jpeg", attempt.quality);
+      if (dataUrl.length <= 1_600_000 || attempt === attempts[attempts.length - 1]) {
+        return {
+          name: file.name || "image.jpg",
+          type: "image/jpeg",
+          url: dataUrl,
+          width,
+          height,
+          original_size: Number(file.size || 0)
+        };
+      }
+    }
+
+    return null;
+  }
+
+  async function readImageAttachments(files = []) {
+    const images = [];
+    for (const file of files.filter(isVisionImageFile).slice(0, 4)) {
+      if (Number(file.size || 0) > 10 * 1024 * 1024) continue;
+      try {
+        const image = await compressImageForVision(file);
+        if (image?.url) images.push(image);
+      } catch (_) {
+        // Image payloads are optional; the filename is still sent.
+      }
+    }
+    return images;
+  }
+
   async function deleteThreadPermanently(threadId, sectionKey = state.section) {
     if (!threadId) return false;
     const apiClient = getApiClient();
@@ -10368,6 +10445,7 @@
 
     try {
       const attachmentPreviews = await readAttachmentPreviews(outgoingFiles);
+      const attachmentImages = await readImageAttachments(outgoingFiles);
       const result = await apiClient.sendChat({
         conversation_id: state.conversationIds[threadEntry.id] || undefined,
         selected_model: state.selectedModel || "orlixor",
@@ -10379,7 +10457,8 @@
         has_attachment: outgoingFiles.length > 0,
         attachment_count: outgoingFiles.length,
         attachment_names: outgoingFiles.map((file) => file.name).slice(0, 8),
-        attachment_previews: attachmentPreviews
+        attachment_previews: attachmentPreviews,
+        attachment_images: attachmentImages
       });
 
       threadEntry.messages.pop();
