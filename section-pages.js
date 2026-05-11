@@ -16,6 +16,8 @@
   const modelStorageKey = "orlixor_selected_model";
   const sidebarStorageKey = "orlixor_sidebar_collapsed";
   const recentToolsStorageKey = "orlixor_recent_tools";
+  const appPreferencesStorageKey = "orlixor_app_preferences";
+  const sectionSettingsStorageKey = "orlixor_section_settings";
   const savedConversationCacheLimit = 80;
   const avatarStoragePrefix = "orlixor_user_avatar_";
   const xpClaimStoragePrefix = "orlixor_xp_claimed_at_";
@@ -23,6 +25,17 @@
   const legacyStorageKeys = {
     users: "mlm_users",
     currentUser: "mlm_current_user"
+  };
+  const defaultAppPreferences = {
+    language: "العربية",
+    timezone: "Asia/Riyadh",
+    dateFormat: "YYYY-MM-DD",
+    weekStart: "sunday",
+    notifications: true,
+    chatAlerts: true,
+    files: true,
+    saveChats: true,
+    parentMonitoring: false
   };
   let sessionRefreshPromise = null;
 
@@ -412,6 +425,7 @@
     sending: false,
     homeConversationOpen: false,
     theme: loadStoredTheme(),
+    appPreferences: loadAppPreferences(),
     authModalOpen: false,
     settingsModalOpen: false,
     settingsModalTab: "general",
@@ -657,7 +671,7 @@
     savedConversationsCacheLoadedUserId: "",
     hydratedConversationIds: {},
     hydratingConversationIds: {},
-    settings: {}
+    settings: loadSectionSettings()
   };
 
   function buildProfile(config) {
@@ -728,7 +742,8 @@
 
   function loadStoredTheme() {
     try {
-      return localStorage.getItem(themeKey) === "dark" ? "dark" : "light";
+      const stored = localStorage.getItem(themeKey);
+      return ["light", "dark", "system"].includes(stored) ? stored : "light";
     } catch (_) {
       return "light";
     }
@@ -740,6 +755,116 @@
     } catch (_) {
       // Ignore storage issues.
     }
+  }
+
+  function getSystemTheme() {
+    try {
+      return window.matchMedia?.("(prefers-color-scheme: dark)")?.matches ? "dark" : "light";
+    } catch (_) {
+      return "light";
+    }
+  }
+
+  function getEffectiveTheme() {
+    return state.theme === "system" ? getSystemTheme() : state.theme;
+  }
+
+  function loadAppPreferences() {
+    try {
+      const parsed = JSON.parse(localStorage.getItem(appPreferencesStorageKey) || "{}");
+      return {
+        ...defaultAppPreferences,
+        ...(parsed && typeof parsed === "object" ? parsed : {})
+      };
+    } catch (_) {
+      return { ...defaultAppPreferences };
+    }
+  }
+
+  function saveAppPreferences() {
+    try {
+      localStorage.setItem(appPreferencesStorageKey, JSON.stringify(state.appPreferences || defaultAppPreferences));
+    } catch (_) {
+      // Ignore storage issues.
+    }
+  }
+
+  function updateAppPreference(key, value) {
+    state.appPreferences = {
+      ...defaultAppPreferences,
+      ...(state.appPreferences || {}),
+      [key]: value
+    };
+    saveAppPreferences();
+    applyAppPreferences();
+  }
+
+  function loadSectionSettings() {
+    try {
+      const parsed = JSON.parse(localStorage.getItem(sectionSettingsStorageKey) || "{}");
+      return parsed && typeof parsed === "object" ? parsed : {};
+    } catch (_) {
+      return {};
+    }
+  }
+
+  function saveSectionSettings() {
+    try {
+      localStorage.setItem(sectionSettingsStorageKey, JSON.stringify(state.settings || {}));
+    } catch (_) {
+      // Ignore storage issues.
+    }
+  }
+
+  function applyAppPreferences() {
+    const language = String(state.appPreferences?.language || "العربية");
+    document.documentElement.lang = language === "English" ? "en" : "ar";
+    document.documentElement.dir = "rtl";
+  }
+
+  function getPreferenceLabel(key, onLabel = "مفعّل", offLabel = "متوقف") {
+    return state.appPreferences?.[key] ? onLabel : offLabel;
+  }
+
+  function getLocaleForPreferences() {
+    return state.appPreferences?.language === "English" ? "en-US" : "ar-SA";
+  }
+
+  function getTimeZoneForPreferences() {
+    return state.appPreferences?.timezone || "Asia/Riyadh";
+  }
+
+  function formatPreferenceDate(date) {
+    const locale = getLocaleForPreferences();
+    const timeZone = getTimeZoneForPreferences();
+    const format = state.appPreferences?.dateFormat || "YYYY-MM-DD";
+
+    if (format === "DD/MM/YYYY") {
+      return date.toLocaleDateString(locale, {
+        timeZone,
+        day: "2-digit",
+        month: "2-digit",
+        year: "numeric"
+      });
+    }
+
+    if (format === "D MMM YYYY") {
+      return date.toLocaleDateString(locale, {
+        timeZone,
+        day: "numeric",
+        month: "short",
+        year: "numeric"
+      });
+    }
+
+    const parts = new Intl.DateTimeFormat("en-CA", {
+      timeZone,
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit"
+    }).formatToParts(date);
+    const lookup = Object.fromEntries(parts.map((part) => [part.type, part.value]));
+    return `${lookup.year || "0000"}-${lookup.month || "01"}-${lookup.day || "01"}`;
   }
 
   function loadSelectedModel() {
@@ -1415,9 +1540,13 @@
     const now = new Date();
     const sameDay = date.toDateString() === now.toDateString();
     if (sameDay) {
-      return date.toLocaleTimeString("ar-SA", { hour: "2-digit", minute: "2-digit" });
+      return date.toLocaleTimeString(getLocaleForPreferences(), {
+        timeZone: getTimeZoneForPreferences(),
+        hour: "2-digit",
+        minute: "2-digit"
+      });
     }
-    return date.toLocaleDateString("ar-SA", { month: "short", day: "numeric" });
+    return formatPreferenceDate(date);
   }
 
   function getConversationSortTime(value) {
@@ -5282,6 +5411,10 @@
   }
 
   function renderSettingsContent(tabKey, settings) {
+    const preferences = {
+      ...defaultAppPreferences,
+      ...(state.appPreferences || {})
+    };
     if (tabKey === "notifications") {
       return `
         <section class="settings-general-head">
@@ -5298,7 +5431,7 @@
               <strong>تنبيهات الرصيد</strong>
               <small>إشعار عند قرب انتهاء رصيد XP اليومي.</small>
             </div>
-            <button class="settings-inline-action" type="button" data-settings-action="notifications">مفعّل</button>
+            <button class="settings-inline-action ${preferences.notifications ? "success" : ""}" type="button" data-preference-toggle="notifications">${getPreferenceLabel("notifications")}</button>
           </article>
           <article class="settings-option-row">
             <span class="settings-option-icon">${icons.chat}</span>
@@ -5306,7 +5439,7 @@
               <strong>تنبيهات المحادثات</strong>
               <small>إظهار تنبيه عند حفظ أو تحديث محادثة.</small>
             </div>
-            <button class="settings-inline-action" type="button" data-settings-action="chat-alerts">مفعّل</button>
+            <button class="settings-inline-action ${preferences.chatAlerts ? "success" : ""}" type="button" data-preference-toggle="chatAlerts">${getPreferenceLabel("chatAlerts")}</button>
           </article>
         </div>
       `;
@@ -5366,7 +5499,7 @@
               <strong>رفع الملفات</strong>
               <small>السماح بإرفاق الصور والمستندات داخل المحادثة.</small>
             </div>
-            <button class="settings-inline-action" type="button" data-settings-action="files">متاح</button>
+            <button class="settings-inline-action ${preferences.files ? "success" : ""}" type="button" data-preference-toggle="files">${preferences.files ? "متاح" : "متوقف"}</button>
           </article>
           <article class="settings-option-row">
             <span class="settings-option-icon">${icons.internet}</span>
@@ -5374,7 +5507,7 @@
               <strong>البحث في الإنترنت</strong>
               <small>استخدمه عند الحاجة لمعلومة حديثة.</small>
             </div>
-            <button class="settings-inline-action" type="button" data-toggle-web>${settings.webEnabled ? "مفعّل" : "متوقف"}</button>
+            <button class="settings-inline-action ${settings.webEnabled ? "success" : ""}" type="button" data-toggle-web>${settings.webEnabled ? "مفعّل" : "متوقف"}</button>
           </article>
         </div>
       `;
@@ -5396,7 +5529,7 @@
               <strong>حفظ المحادثات</strong>
               <small>المحادثات تحفظ داخل حسابك عند تسجيل الدخول.</small>
             </div>
-            <span class="settings-pill">مفعّل</span>
+            <button class="settings-inline-action ${preferences.saveChats ? "success" : ""}" type="button" data-preference-toggle="saveChats">${getPreferenceLabel("saveChats")}</button>
           </article>
           <article class="settings-option-row">
             <span class="settings-option-icon">${icons.delete}</span>
@@ -5464,7 +5597,15 @@
               <strong>الأجهزة النشطة</strong>
               <small>يمكنك تسجيل الخروج يدويًا عند الحاجة.</small>
             </div>
-            <span class="settings-pill">1 جهاز</span>
+            <button class="settings-inline-action" type="button" data-refresh-session>تحديث</button>
+          </article>
+          <article class="settings-option-row">
+            <span class="settings-option-icon">${icons.login}</span>
+            <div class="settings-option-copy">
+              <strong>إنهاء جلسة هذا الجهاز</strong>
+              <small>يسجل خروجك من هذا المتصفح فقط.</small>
+            </div>
+            <button class="settings-inline-action danger" type="button" data-logout>خروج</button>
           </article>
         </div>
       `;
@@ -5484,9 +5625,9 @@
             <span class="settings-option-icon">${icons.eye}</span>
             <div class="settings-option-copy">
               <strong>وضع المتابعة</strong>
-              <small>عرض ملخصات الاستخدام والتقدم لاحقًا.</small>
+              <small>عرض ملخصات الاستخدام والتقدم داخل الحساب.</small>
             </div>
-            <span class="settings-pill">قريبًا</span>
+            <button class="settings-inline-action ${preferences.parentMonitoring ? "success" : ""}" type="button" data-preference-toggle="parentMonitoring">${getPreferenceLabel("parentMonitoring")}</button>
           </article>
         </div>
       `;
@@ -5541,7 +5682,7 @@
           <div class="settings-segmented">
             <button type="button" data-modal-theme="light" class="${state.theme === "light" ? "active" : ""}">فاتح</button>
             <button type="button" data-modal-theme="dark" class="${state.theme === "dark" ? "active" : ""}">داكن</button>
-            <button type="button" data-modal-theme="system">تلقائي</button>
+            <button type="button" data-modal-theme="system" class="${state.theme === "system" ? "active" : ""}">تلقائي</button>
           </div>
         </article>
 
@@ -5551,9 +5692,9 @@
             <strong>اللغة</strong>
             <small>تغيير لغة واجهة المنصة</small>
           </div>
-          <select data-setting="language">
+          <select data-preference-select="language">
             ${["العربية", "English"].map((item) => `
-              <option value="${escapeHtml(item)}" ${settings.language === item ? "selected" : ""}>${escapeHtml(item)}</option>
+              <option value="${escapeHtml(item)}" ${preferences.language === item ? "selected" : ""}>${escapeHtml(item)}</option>
             `).join("")}
           </select>
         </article>
@@ -5564,9 +5705,10 @@
             <strong>المنطقة الزمنية</strong>
             <small>تحديد المنطقة الزمنية الخاصة بك</small>
           </div>
-          <select>
-            <option>(GMT+3) الرياض</option>
-            <option>(GMT+3) مكة</option>
+          <select data-preference-select="timezone">
+            <option value="Asia/Riyadh" ${preferences.timezone === "Asia/Riyadh" ? "selected" : ""}>الرياض (GMT+3)</option>
+            <option value="Asia/Dubai" ${preferences.timezone === "Asia/Dubai" ? "selected" : ""}>دبي (GMT+4)</option>
+            <option value="UTC" ${preferences.timezone === "UTC" ? "selected" : ""}>UTC</option>
           </select>
         </article>
 
@@ -5576,9 +5718,10 @@
             <strong>تنسيق التاريخ</strong>
             <small>اختر تنسيق عرض التاريخ</small>
           </div>
-          <select>
-            <option>YYYY-MM-DD</option>
-            <option>DD/MM/YYYY</option>
+          <select data-preference-select="dateFormat">
+            <option value="YYYY-MM-DD" ${preferences.dateFormat === "YYYY-MM-DD" ? "selected" : ""}>YYYY-MM-DD</option>
+            <option value="DD/MM/YYYY" ${preferences.dateFormat === "DD/MM/YYYY" ? "selected" : ""}>DD/MM/YYYY</option>
+            <option value="D MMM YYYY" ${preferences.dateFormat === "D MMM YYYY" ? "selected" : ""}>D MMM YYYY</option>
           </select>
         </article>
 
@@ -5589,8 +5732,8 @@
             <small>اختر اليوم الذي يبدأ منه الأسبوع</small>
           </div>
           <div class="settings-segmented">
-            <button type="button" class="active">الأحد</button>
-            <button type="button">السبت</button>
+            <button type="button" data-preference-choice="weekStart" data-preference-value="sunday" class="${preferences.weekStart === "sunday" ? "active" : ""}">الأحد</button>
+            <button type="button" data-preference-choice="weekStart" data-preference-value="saturday" class="${preferences.weekStart === "saturday" ? "active" : ""}">السبت</button>
           </div>
         </article>
       </div>
@@ -9895,7 +10038,7 @@
     const isToolsWorkspace = state.section === "ai-tools";
     const isSubscriberTools = isToolsWorkspace && ["image-enhancer", "image-clarifier", "png-to-pdf", "pdf-to-png", "pdf-unlock", "image-converter", "image-compressor", "image-rotator", "image-cropper"].includes(state.toolView);
     app.innerHTML = `
-      <div class="guest-shell ${state.theme === "dark" ? "theme-dark" : ""} ${isHomeWorkspace ? "is-home-workspace" : ""} ${isToolsWorkspace ? "is-tools-workspace" : ""} ${isSubscriberTools ? "is-subscriber-tools" : ""} ${state.sidebarCollapsed ? "is-sidebar-collapsed" : ""}">
+      <div class="guest-shell ${getEffectiveTheme() === "dark" ? "theme-dark" : ""} ${isHomeWorkspace ? "is-home-workspace" : ""} ${isToolsWorkspace ? "is-tools-workspace" : ""} ${isSubscriberTools ? "is-subscriber-tools" : ""} ${state.sidebarCollapsed ? "is-sidebar-collapsed" : ""}">
         ${renderSidebar()}
         ${renderMain(profile)}
         ${isHomeWorkspace ? "" : renderRightPanel(profile)}
@@ -10040,6 +10183,7 @@
   }
 
   function scheduleSavedConversationSync() {
+    if (state.appPreferences?.saveChats === false) return;
     window.setTimeout(() => {
       syncSavedConversations();
     }, 0);
@@ -10104,6 +10248,13 @@
   function pickFiles() {
     if (!isAuthenticated()) {
       openAuthModal("أضف الملفات بعد تسجيل الدخول.");
+      return;
+    }
+    if (state.appPreferences?.files === false) {
+      showToast("رفع الملفات متوقف من الإعدادات.");
+      state.settingsModalTab = "apps";
+      state.settingsModalOpen = true;
+      render();
       return;
     }
     getFileInput()?.click();
@@ -11291,6 +11442,40 @@
         return;
       }
 
+      const preferenceToggle = event.target.closest("[data-preference-toggle]");
+      if (preferenceToggle) {
+        event.preventDefault();
+        const key = preferenceToggle.getAttribute("data-preference-toggle");
+        if (!key) return;
+        const currentValue = Boolean(state.appPreferences?.[key]);
+        updateAppPreference(key, !currentValue);
+        if (key === "saveChats" && !currentValue) {
+          state.savedConversationsLoaded = false;
+          scheduleSavedConversationSync();
+        }
+        render();
+        return;
+      }
+
+      const preferenceChoice = event.target.closest("[data-preference-choice]");
+      if (preferenceChoice) {
+        event.preventDefault();
+        const key = preferenceChoice.getAttribute("data-preference-choice");
+        const value = preferenceChoice.getAttribute("data-preference-value");
+        if (!key || value == null) return;
+        updateAppPreference(key, value);
+        render();
+        return;
+      }
+
+      if (event.target.closest("[data-refresh-session]")) {
+        event.preventDefault();
+        Promise.resolve(refreshSessionUser()).finally(() => {
+          showToast("تم تحديث حالة الجلسة.");
+        });
+        return;
+      }
+
       const settingsActionButton = event.target.closest("[data-settings-action]");
       if (settingsActionButton) {
         event.preventDefault();
@@ -11301,7 +11486,7 @@
       const modalThemeButton = event.target.closest("[data-modal-theme]");
       if (modalThemeButton) {
         const nextTheme = modalThemeButton.getAttribute("data-modal-theme") || "light";
-        state.theme = nextTheme === "system" ? "light" : nextTheme;
+        state.theme = ["light", "dark", "system"].includes(nextTheme) ? nextTheme : "light";
         setStoredTheme(state.theme);
         render();
         return;
@@ -12181,7 +12366,9 @@
           openAuthModal("فعّل هذه الإعدادات بعد تسجيل الدخول.");
           return;
         }
+        ensureThreadState();
         state.settings[state.section].webEnabled = !state.settings[state.section].webEnabled;
+        saveSectionSettings();
         render();
         return;
       }
@@ -12805,13 +12992,25 @@
         return;
       }
 
+      const preferenceSelect = event.target.closest("[data-preference-select]");
+      if (preferenceSelect) {
+        const key = preferenceSelect.getAttribute("data-preference-select");
+        if (!key) return;
+        updateAppPreference(key, preferenceSelect.value);
+        render();
+        return;
+      }
+
       const select = event.target.closest("[data-setting]");
       if (!select) return;
       if (!isAuthenticated()) {
         openAuthModal("عدّل الإعدادات بعد تسجيل الدخول.");
         return;
       }
+      ensureThreadState();
       state.settings[state.section][select.getAttribute("data-setting")] = select.value;
+      saveSectionSettings();
+      render();
     });
 
     app.addEventListener("dragstart", (event) => {
@@ -13033,6 +13232,7 @@
   });
 
   updateUrl(true);
+  applyAppPreferences();
   bindEvents();
   render();
   refreshSessionUser();

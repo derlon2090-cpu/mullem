@@ -2843,6 +2843,17 @@ body[data-workspace-mode="home"] .guest-root {
   background: rgba(255, 77, 87, 0.08);
 }
 
+.settings-inline-action.success {
+  color: #059669;
+  border-color: rgba(5, 150, 105, 0.14);
+  background: rgba(5, 150, 105, 0.1);
+}
+
+.settings-inline-action.success:hover {
+  border-color: rgba(5, 150, 105, 0.24);
+  background: rgba(5, 150, 105, 0.14);
+}
+
 .settings-pill.success {
   color: #059669;
   border-color: rgba(5, 150, 105, 0.14);
