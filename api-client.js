@@ -1052,6 +1052,13 @@
     });
   }
 
+  async function sendMessageFeedback(messageId, payload) {
+    return request(`/messages/${encodeURIComponent(String(messageId))}/feedback`, {
+      method: "POST",
+      body: payload
+    });
+  }
+
   async function smartSearch(payload) {
     return request("/tools/smart-search", {
       method: "POST",
@@ -1244,6 +1251,7 @@
     markNotificationRead,
     markAllNotificationsRead,
     sendChat,
+    sendMessageFeedback,
     smartSearch,
     runWritingAssistant,
     analyzeImage,

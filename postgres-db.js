@@ -600,6 +600,36 @@ function createPostgresDatabaseClient(rawConfig = {}) {
     await pool.query("CREATE INDEX IF NOT EXISTS idx_feedback_user_message ON feedback (user_id, message_id)");
 
     await pool.query(`
+      CREATE TABLE IF NOT EXISTS ai_feedback (
+        id BIGSERIAL PRIMARY KEY,
+        user_id BIGINT NOT NULL REFERENCES app_users(id) ON DELETE CASCADE,
+        conversation_id VARCHAR(64) NULL REFERENCES conversations(id) ON DELETE SET NULL,
+        message_id BIGINT NULL REFERENCES messages(id) ON DELETE SET NULL,
+        model_key VARCHAR(80) NULL,
+        provider VARCHAR(40) NULL,
+        rating VARCHAR(20) NOT NULL,
+        reason TEXT NULL,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )
+    `);
+    await pool.query("CREATE INDEX IF NOT EXISTS idx_ai_feedback_model_rating ON ai_feedback (model_key, rating, created_at DESC)");
+    await pool.query("CREATE INDEX IF NOT EXISTS idx_ai_feedback_user_created ON ai_feedback (user_id, created_at DESC)");
+
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS ai_training_examples (
+        id BIGSERIAL PRIMARY KEY,
+        input_text TEXT NOT NULL,
+        ideal_output TEXT NOT NULL,
+        task_type VARCHAR(80) NULL,
+        model_key VARCHAR(80) NULL,
+        quality_score INTEGER NOT NULL DEFAULT 0,
+        approved_by_admin BOOLEAN NOT NULL DEFAULT FALSE,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )
+    `);
+    await pool.query("CREATE INDEX IF NOT EXISTS idx_ai_training_examples_quality ON ai_training_examples (approved_by_admin, quality_score DESC, created_at DESC)");
+
+    await pool.query(`
       CREATE TABLE IF NOT EXISTS tool_usage (
         id BIGSERIAL PRIMARY KEY,
         user_id BIGINT NOT NULL REFERENCES app_users(id) ON DELETE CASCADE,
@@ -1243,6 +1273,8 @@ function createPostgresDatabaseClient(rawConfig = {}) {
     const userId = Number(payload.user_id);
     const rating = String(payload.rating || "").trim().toLowerCase();
     if (!userId || !rating) return null;
+    const rawMessageId = Number(payload.message_id);
+    const messageId = Number.isFinite(rawMessageId) ? rawMessageId : null;
     const rows = await query(
       `
         INSERT INTO feedback (user_id, message_id, rating, note)
@@ -1251,9 +1283,51 @@ function createPostgresDatabaseClient(rawConfig = {}) {
       `,
       [
         userId,
-        payload.message_id ? Number(payload.message_id) : null,
+        messageId,
         rating.slice(0, 20),
         String(payload.note || "").trim() || null
+      ]
+    );
+    try {
+      await query(
+        `
+          INSERT INTO ai_feedback (user_id, conversation_id, message_id, model_key, provider, rating, reason)
+          VALUES ($1, $2, $3, $4, $5, $6, $7)
+        `,
+        [
+          userId,
+          payload.conversation_id ? String(payload.conversation_id) : null,
+          messageId,
+          String(payload.model_key || payload.modelKey || "").trim().slice(0, 80) || null,
+          String(payload.provider || "").trim().toLowerCase().slice(0, 40) || null,
+          rating.slice(0, 20),
+          String(payload.reason || payload.note || "").trim() || null
+        ]
+      );
+    } catch (error) {
+      console.warn("AI feedback write failed:", error?.message || error);
+    }
+    return rows[0] || null;
+  }
+
+  async function saveAiTrainingExample(payload = {}) {
+    const inputText = String(payload.input_text || payload.inputText || "").trim();
+    const idealOutput = String(payload.ideal_output || payload.idealOutput || "").trim();
+    if (!inputText || !idealOutput) return null;
+    const rows = await query(
+      `
+        INSERT INTO ai_training_examples (
+          input_text, ideal_output, task_type, model_key, quality_score, approved_by_admin
+        ) VALUES ($1, $2, $3, $4, $5, $6)
+        RETURNING *
+      `,
+      [
+        inputText,
+        idealOutput,
+        String(payload.task_type || payload.taskType || "").trim().slice(0, 80) || null,
+        String(payload.model_key || payload.modelKey || "").trim().slice(0, 80) || null,
+        Math.max(0, Math.min(Math.round(Number(payload.quality_score || payload.qualityScore || 0)), 100)),
+        normalizeBoolean(payload.approved_by_admin || payload.approvedByAdmin)
       ]
     );
     return rows[0] || null;
@@ -2603,6 +2677,7 @@ function createPostgresDatabaseClient(rawConfig = {}) {
     saveUserMemory,
     saveMessageEmbedding,
     saveFeedback,
+    saveAiTrainingExample,
     saveToolUsage,
     recordXpLedger,
     listNotificationsForUser,

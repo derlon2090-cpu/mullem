@@ -12502,6 +12502,16 @@
         if (feedbackKey) {
           state.likedReplies[feedbackKey] = !state.likedReplies[feedbackKey];
           render();
+          const apiClient = getApiClient();
+          if (apiClient?.sendMessageFeedback) {
+            const activeThread = getActiveThread();
+            const conversationId = state.conversationIds?.[activeThread?.id] || "";
+            apiClient.sendMessageFeedback(feedbackKey, {
+              feedback: state.likedReplies[feedbackKey] ? "like" : null,
+              conversation_id: conversationId,
+              model_key: state.selectedModel || "orlixor"
+            }).catch(() => {});
+          }
         }
         return;
       }

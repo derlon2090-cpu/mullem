@@ -46,11 +46,20 @@ function readEnvNumber(keys, fallback) {
 }
 
 const OPENAI_API_KEY = String(process.env.OPENAI_API_KEY || "").trim();
-const OPENAI_MODEL = String(process.env.OPENAI_MODEL || "gpt-4o-mini").trim();
-const OPENAI_MODEL_DEFAULT = String(process.env.ORLIXOR_DEFAULT_MODEL || process.env.OPENAI_MODEL_DEFAULT || process.env.OPENAI_MODEL_ORLIXOR || "gpt-4.1-mini").trim();
-const OPENAI_MODEL_TURBO = String(process.env.ORLIXOR_TURBO_MODEL || process.env.OPENAI_MODEL_TURBO || "gpt-4.1-nano").trim();
-const OPENAI_MODEL_PRO = String(process.env.ORLIXOR_PRO_MODEL || process.env.OPENAI_MODEL_PRO || "gpt-4.1").trim();
-const OPENAI_MODEL_CREATIVE = String(process.env.ORLIXOR_CREATIVE_MODEL || process.env.OPENAI_MODEL_CREATIVE || "gpt-4.1-mini").trim();
+const DEEPSEEK_API_KEY = readEnvValue(["DEEPSEEK_API_KEY", "ORLIXOR_DEEPSEEK_API_KEY"], "");
+const DEEPSEEK_CHAT_COMPLETIONS_ENDPOINT = String(process.env.DEEPSEEK_CHAT_COMPLETIONS_ENDPOINT || "https://api.deepseek.com/chat/completions").trim();
+const OPENAI_MODEL = String(process.env.OPENAI_MODEL || "gpt-4.1-mini").trim();
+const ORLIXOR_DEFAULT_PROVIDER = String(process.env.ORLIXOR_DEFAULT_PROVIDER || process.env.MULLEM_AI_PROVIDER || "deepseek").trim().toLowerCase();
+const ORLIXOR_TURBO_PROVIDER = String(process.env.ORLIXOR_TURBO_PROVIDER || ORLIXOR_DEFAULT_PROVIDER || "deepseek").trim().toLowerCase();
+const ORLIXOR_PRO_PROVIDER = String(process.env.ORLIXOR_PRO_PROVIDER || ORLIXOR_DEFAULT_PROVIDER || "deepseek").trim().toLowerCase();
+const ORLIXOR_CREATIVE_PROVIDER = String(process.env.ORLIXOR_CREATIVE_PROVIDER || ORLIXOR_DEFAULT_PROVIDER || "deepseek").trim().toLowerCase();
+const ORLIXOR_ALPHA_PROVIDER = String(process.env.ORLIXOR_ALPHA_PROVIDER || ORLIXOR_PRO_PROVIDER || "deepseek").trim().toLowerCase();
+const ORLIXOR_ALLOW_PROVIDER_FALLBACK = !/^(0|false|no|off)$/i.test(String(process.env.ORLIXOR_ALLOW_PROVIDER_FALLBACK || "true").trim());
+const OPENAI_MODEL_DEFAULT = String(process.env.ORLIXOR_DEFAULT_MODEL || process.env.OPENAI_MODEL_DEFAULT || process.env.OPENAI_MODEL_ORLIXOR || "deepseek-chat").trim();
+const OPENAI_MODEL_TURBO = String(process.env.ORLIXOR_TURBO_MODEL || process.env.OPENAI_MODEL_TURBO || "deepseek-chat").trim();
+const OPENAI_MODEL_PRO = String(process.env.ORLIXOR_PRO_MODEL || process.env.OPENAI_MODEL_PRO || "deepseek-reasoner").trim();
+const OPENAI_MODEL_CREATIVE = String(process.env.ORLIXOR_CREATIVE_MODEL || process.env.OPENAI_MODEL_CREATIVE || "deepseek-chat").trim();
+const ORLIXOR_ALPHA_MODEL = String(process.env.ORLIXOR_ALPHA_MODEL || "deepseek-reasoner").trim();
 const OPENAI_MODEL_SEARCH = String(process.env.ORLIXOR_SEARCH_MODEL || process.env.OPENAI_MODEL_SEARCH || OPENAI_MODEL_DEFAULT || "gpt-4.1-mini").trim();
 const OPENAI_MODEL_WRITING = String(process.env.ORLIXOR_WRITING_MODEL || process.env.OPENAI_MODEL_WRITING || OPENAI_MODEL_CREATIVE || OPENAI_MODEL_DEFAULT || "gpt-4.1-mini").trim();
 const OPENAI_MODEL_TONE = String(process.env.ORLIXOR_TONE_MODEL || process.env.OPENAI_MODEL_TONE || OPENAI_MODEL_WRITING || "gpt-4.1-mini").trim();
@@ -184,10 +193,15 @@ const DAILY_MOTIVATION_BONUS = Math.max(1, Number(process.env.DAILY_MOTIVATION_B
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const ACCOUNT_MEMORY_LIMIT = Math.max(1, Math.min(Number(process.env.ACCOUNT_MEMORY_LIMIT || 5), 8));
 const ACCOUNT_MEMORY_CANDIDATES = Math.max(ACCOUNT_MEMORY_LIMIT, Math.min(Number(process.env.ACCOUNT_MEMORY_CANDIDATES || 28), 60));
+const ORLIXOR_ALPHA_ACCESS = String(process.env.ORLIXOR_ALPHA_ACCESS || "admin,beta_tester,pioneer")
+  .split(",")
+  .map((item) => item.trim().toLowerCase())
+  .filter(Boolean);
 const modelProfiles = {
   orlixor: {
     key: "orlixor",
     name: "Orlixor AI",
+    provider: ORLIXOR_DEFAULT_PROVIDER,
     openaiModel: OPENAI_MODEL_DEFAULT || OPENAI_MODEL,
     temperature: 0.5,
     minXpCost: 8,
@@ -204,8 +218,9 @@ const modelProfiles = {
   turbo: {
     key: "turbo",
     name: "Orlixor AI Turbo",
+    provider: ORLIXOR_TURBO_PROVIDER,
     openaiModel: OPENAI_MODEL_TURBO || OPENAI_MODEL,
-    temperature: 0.3,
+    temperature: 0.4,
     minXpCost: 5,
     maxXpCost: 10,
     maxOutputTokens: Math.min(500, OPENAI_MAX_OUTPUT_TOKENS),
@@ -220,10 +235,11 @@ const modelProfiles = {
   pro: {
     key: "pro",
     name: "Orlixor AI Pro",
+    provider: ORLIXOR_PRO_PROVIDER,
     openaiModel: OPENAI_MODEL_PRO || OPENAI_MODEL,
     temperature: 0.4,
     minXpCost: 10,
-    maxXpCost: 15,
+    maxXpCost: 20,
     maxOutputTokens: Math.min(1400, OPENAI_MAX_OUTPUT_TOKENS),
     maxContextTokens: Math.max(FREE_MAX_CONTEXT_TOKENS, 5000),
     systemPrompt: [
@@ -236,8 +252,9 @@ const modelProfiles = {
   creative: {
     key: "creative",
     name: "Orlixor AI Creative",
+    provider: ORLIXOR_CREATIVE_PROVIDER,
     openaiModel: OPENAI_MODEL_CREATIVE || OPENAI_MODEL,
-    temperature: 0.85,
+    temperature: 0.8,
     minXpCost: 10,
     maxXpCost: 15,
     maxOutputTokens: Math.min(1200, OPENAI_MAX_OUTPUT_TOKENS),
@@ -247,6 +264,24 @@ const modelProfiles = {
       "مهمتك إنتاج محتوى إبداعي وتسويقي عالي الجودة.",
       "اكتب بأسلوب جذاب، واضح، ومناسب للجمهور.",
       "مناسب للمقالات، الإعلانات، العناوين، السكربتات، والأفكار."
+    ].join("\n")
+  },
+  alpha: {
+    key: "alpha",
+    name: "Orlixor AI Alpha",
+    provider: ORLIXOR_ALPHA_PROVIDER,
+    openaiModel: ORLIXOR_ALPHA_MODEL || OPENAI_MODEL_PRO || OPENAI_MODEL,
+    temperature: 0.35,
+    minXpCost: 8,
+    maxXpCost: 10,
+    maxOutputTokens: Math.min(1000, OPENAI_MAX_OUTPUT_TOKENS),
+    maxContextTokens: Math.max(FREE_MAX_CONTEXT_TOKENS, 4200),
+    systemPrompt: [
+      "أنت Orlixor AI Alpha.",
+      "أنت نموذج تجريبي تحت التطوير داخل Orlixor.",
+      "قدّم ردودًا دقيقة ومرتبة واحترافية.",
+      "استفد من التقييمات لتحسين أسلوب الرد دون حفظ بيانات حساسة.",
+      "لا تذكر أسماء مزودي الخدمة أو أسماء الموديلات التقنية."
     ].join("\n")
   }
 };
@@ -1131,6 +1166,7 @@ function normalizeSelectedModel(value) {
   if (!raw || raw === "default" || raw === "general" || raw === "orlixor ai") return "orlixor";
   if (raw.includes("turbo")) return "turbo";
   if (raw.includes("creative")) return "creative";
+  if (raw.includes("alpha")) return "alpha";
   if (raw.includes("pro")) return "pro";
   return modelProfiles[raw] ? raw : "orlixor";
 }
@@ -1197,6 +1233,25 @@ function getUserPlanKey(user) {
 
 function canUseHighImageQuality(user) {
   return ["pioneer", "business"].includes(getUserPlanKey(user));
+}
+
+function hasAlphaModelAccess(user) {
+  if (!user) return false;
+  const role = normalizeUserRole(user.role);
+  const planKey = getUserPlanKey(user);
+  const labels = [
+    role,
+    planKey,
+    user.beta_tester,
+    user.betaTester,
+    user.package_key,
+    user.package_name,
+    user.plan_type
+  ].map((item) => String(item || "").trim().toLowerCase());
+
+  if (role === "admin" || role === "super_admin") return true;
+  if (planKey === "pioneer" || planKey === "business") return true;
+  return ORLIXOR_ALPHA_ACCESS.some((key) => labels.some((label) => label === key || label.includes(key)));
 }
 
 function normalizeImageTaskQuality(value) {
@@ -1298,6 +1353,8 @@ function buildImageServiceError(payload, fallback, statusCode) {
   let message = payload?.error?.message || payload?.message || fallback || "تعذر تنفيذ طلب الصور.";
   message = String(message)
     .replace(/OpenAI/gi, "Orlixor")
+    .replace(/DeepSeek/gi, "Orlixor")
+    .replace(/deepseek-[a-z0-9.\-]+/gi, "Orlixor AI")
     .replace(/gpt-[a-z0-9.\-]+/gi, "Orlixor Image")
     .replace(/dall-e-[a-z0-9.\-]+/gi, "Orlixor Image");
   return createHttpError(statusCode || 502, message);
@@ -1328,6 +1385,7 @@ function detectAdvancedTask({ message = "", attachmentCount = 0, attachmentNames
 
 function resolveEffectiveModelKey(selectedModel, options = {}) {
   const normalized = normalizeSelectedModel(selectedModel);
+  if (normalized === "alpha") return "alpha";
   return detectAdvancedTask(options) ? "pro" : normalized;
 }
 
@@ -2082,12 +2140,126 @@ function normalizeQuestionType(value) {
   return allowed.has(String(value || "").trim()) ? String(value).trim() : "general";
 }
 
-async function callOpenAI({ input, modelProfile }) {
-  if (!OPENAI_API_KEY) {
-    throw createHttpError(503, "OPENAI_API_KEY is not configured on the server.");
+function normalizeProviderKey(value) {
+  const raw = String(value || "").trim().toLowerCase();
+  return raw === "deepseek" ? "deepseek" : "openai";
+}
+
+function resolveProfileProvider(profile) {
+  const provider = normalizeProviderKey(profile?.provider || ORLIXOR_DEFAULT_PROVIDER || "deepseek");
+  if (provider === "deepseek" && !DEEPSEEK_API_KEY && OPENAI_API_KEY && ORLIXOR_ALLOW_PROVIDER_FALLBACK) {
+    return "openai";
+  }
+  return provider;
+}
+
+function resolveProviderModel(profile, provider) {
+  const rawModel = String(profile?.openaiModel || "").trim();
+  const safeProvider = normalizeProviderKey(provider);
+  if (safeProvider === "deepseek") {
+    return rawModel && !/^gpt-|^dall-e/i.test(rawModel) ? rawModel : "deepseek-chat";
+  }
+  if (!rawModel || /^deepseek-/i.test(rawModel)) {
+    return OPENAI_MODEL || "gpt-4.1-mini";
+  }
+  return rawModel;
+}
+
+function sanitizeProviderErrorMessage(message, fallback = "تعذر تنفيذ طلب الذكاء الاصطناعي.") {
+  return String(message || fallback)
+    .replace(/OpenAI/gi, "Orlixor")
+    .replace(/DeepSeek/gi, "Orlixor")
+    .replace(/deepseek-[a-z0-9.\-]+/gi, "Orlixor AI")
+    .replace(/gpt-[a-z0-9.\-]+/gi, "Orlixor AI")
+    .replace(/dall-e-[a-z0-9.\-]+/gi, "Orlixor Image");
+}
+
+function buildChatCompletionMessagesFromInput(input, profile) {
+  if (Array.isArray(input)) {
+    return input
+      .map((item) => {
+        const role = String(item?.role || "user").trim().toLowerCase();
+        const safeRole = role === "system" || role === "assistant" ? role : "user";
+        const content = limitPromptContext(coerceModelText(item?.content), profile.maxContextTokens || FREE_MAX_CONTEXT_TOKENS);
+        return content ? { role: safeRole, content } : null;
+      })
+      .filter(Boolean);
+  }
+
+  const systemPrompt = coerceModelText(profile?.systemPrompt);
+  const userInput = limitPromptContext(input, profile.maxContextTokens || FREE_MAX_CONTEXT_TOKENS);
+  return [
+    systemPrompt ? { role: "system", content: systemPrompt } : null,
+    { role: "user", content: userInput }
+  ].filter(Boolean);
+}
+
+async function callDeepSeekChat({ input, modelProfile }) {
+  if (!DEEPSEEK_API_KEY) {
+    throw createHttpError(503, "مزود النصوص غير مفعّل حاليًا.");
   }
 
   const profile = modelProfile || modelProfiles.orlixor;
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), OPENAI_TIMEOUT_MS);
+  let response;
+
+  try {
+    response = await fetch(DEEPSEEK_CHAT_COMPLETIONS_ENDPOINT, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${DEEPSEEK_API_KEY}`,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        model: resolveProviderModel(profile, "deepseek"),
+        messages: buildChatCompletionMessagesFromInput(input, profile),
+        temperature: Number(profile.temperature ?? 0.5),
+        max_tokens: Math.max(120, Math.min(Number(profile.maxOutputTokens || OPENAI_MAX_OUTPUT_TOKENS), 1600)),
+        stream: false
+      }),
+      signal: controller.signal
+    });
+  } catch (error) {
+    if (error?.name === "AbortError") {
+      throw createHttpError(504, "انتهت مهلة طلب Orlixor AI.");
+    }
+    throw createHttpError(503, "تعذر الوصول إلى مزود النصوص.");
+  } finally {
+    clearTimeout(timeoutId);
+  }
+
+  const contentType = response.headers.get("content-type") || "";
+  const payload = contentType.includes("application/json")
+    ? await response.json()
+    : { error: await response.text() };
+
+  if (!response.ok) {
+    const message = sanitizeProviderErrorMessage(
+      payload?.error?.message || payload?.message,
+      `فشل طلب Orlixor AI برمز ${response.status}.`
+    );
+    throw createHttpError(response.status, message);
+  }
+
+  const text = extractResponseText(payload);
+  if (!text) {
+    throw createHttpError(502, "عاد Orlixor AI برد فارغ.");
+  }
+
+  return { text, raw: payload, usage: extractTokenUsage(payload), provider: "deepseek" };
+}
+
+async function callOpenAI({ input, modelProfile }) {
+  const profile = modelProfile || modelProfiles.orlixor;
+  if (resolveProfileProvider(profile) === "deepseek") {
+    return callDeepSeekChat({ input, modelProfile: profile });
+  }
+
+  if (!OPENAI_API_KEY) {
+    throw createHttpError(503, "خدمة الذكاء الاصطناعي غير مفعلة حاليًا.");
+  }
+
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), OPENAI_TIMEOUT_MS);
 
@@ -2100,7 +2272,7 @@ async function callOpenAI({ input, modelProfile }) {
         "Content-Type": "application/json"
       },
       body: JSON.stringify({
-        model: profile.openaiModel || OPENAI_MODEL,
+        model: resolveProviderModel(profile, "openai"),
         input: limitPromptContext(input, profile.maxContextTokens || FREE_MAX_CONTEXT_TOKENS),
         temperature: Number(profile.temperature ?? 0.5),
         max_output_tokens: Math.max(120, Math.min(Number(profile.maxOutputTokens || OPENAI_MAX_OUTPUT_TOKENS), 1600))
@@ -2126,9 +2298,7 @@ async function callOpenAI({ input, modelProfile }) {
       payload?.error?.message ||
       payload?.message ||
       `Orlixor AI request failed with status ${response.status}`;
-    message = String(message)
-      .replace(/OpenAI/gi, "Orlixor AI")
-      .replace(/gpt-[a-z0-9.\-]+/gi, "Orlixor AI");
+    message = sanitizeProviderErrorMessage(message, "Orlixor AI request failed.");
     if (message.includes("Invalid value: 'input_text'")) {
       message = "Orlixor AI request format mismatch on the server.";
     }
@@ -2144,8 +2314,11 @@ async function callOpenAI({ input, modelProfile }) {
 }
 
 function resolveVisionModel(profile) {
+  if (resolveProfileProvider(profile) === "deepseek") {
+    return ORLIXOR_IMAGE_ANALYSIS_MODEL || OPENAI_VISION_MODEL || "gpt-4.1-mini";
+  }
   const candidate = String(profile?.openaiModel || OPENAI_VISION_MODEL || OPENAI_MODEL_DEFAULT || OPENAI_MODEL).trim();
-  if (!candidate || /text$/i.test(candidate) || /-text/i.test(candidate)) {
+  if (!candidate || /^deepseek-/i.test(candidate) || /text$/i.test(candidate) || /-text/i.test(candidate)) {
     return OPENAI_VISION_MODEL || "gpt-4.1-mini";
   }
   return candidate;
@@ -2441,6 +2614,7 @@ function getWritingProfile(taskType, user) {
   const base = {
     key: `writing-${task}`,
     name: "Orlixor Writing Assistant",
+    provider: task === "longGenerate" ? ORLIXOR_PRO_PROVIDER : ORLIXOR_CREATIVE_PROVIDER,
     openaiModel: task === "longGenerate" ? (OPENAI_MODEL_PRO || OPENAI_MODEL_WRITING) : (OPENAI_MODEL_WRITING || OPENAI_MODEL_CREATIVE || OPENAI_MODEL_DEFAULT),
     temperature: 0.55,
     maxOutputTokens: 700,
@@ -2590,7 +2764,8 @@ function getToneProfile(user) {
   return {
     key: "writing-tone",
     name: "Orlixor Tone",
-    openaiModel: OPENAI_MODEL_TONE || OPENAI_MODEL_WRITING || OPENAI_MODEL_DEFAULT,
+    provider: ORLIXOR_TURBO_PROVIDER,
+    openaiModel: OPENAI_MODEL_TONE || OPENAI_MODEL_TURBO || OPENAI_MODEL_DEFAULT,
     temperature: 0.55,
     maxOutputTokens: isFreeUser(user) ? 500 : 700,
     maxContextTokens: isFreeUser(user) ? FREE_MAX_CONTEXT_TOKENS : 2200,
@@ -2671,7 +2846,8 @@ function getCorrectionProfile(user, level = "balanced") {
   return {
     key: "writing-correction",
     name: "Orlixor Correction",
-    openaiModel: OPENAI_MODEL_CORRECTION || OPENAI_MODEL_WRITING || OPENAI_MODEL_DEFAULT,
+    provider: ORLIXOR_DEFAULT_PROVIDER,
+    openaiModel: OPENAI_MODEL_CORRECTION || OPENAI_MODEL_DEFAULT,
     temperature: normalizedLevel === "strong" ? 0.36 : 0.3,
     maxOutputTokens: isFreeUser(user) ? 400 : 700,
     maxContextTokens: isFreeUser(user) ? FREE_MAX_CONTEXT_TOKENS : 2500,
@@ -2756,7 +2932,8 @@ function getExpandProfile(user, level = "medium") {
   return {
     key: "writing-expand",
     name: "Orlixor Expand",
-    openaiModel: OPENAI_MODEL_EXPAND || OPENAI_MODEL_WRITING || OPENAI_MODEL_DEFAULT,
+    provider: ORLIXOR_CREATIVE_PROVIDER,
+    openaiModel: OPENAI_MODEL_EXPAND || OPENAI_MODEL_CREATIVE || OPENAI_MODEL_DEFAULT,
     temperature: 0.65,
     maxOutputTokens: isFreeUser(user) ? (isDeep ? 650 : 550) : (isDeep ? 1000 : 750),
     maxContextTokens: isFreeUser(user) ? FREE_MAX_CONTEXT_TOKENS : 2600,
@@ -2845,7 +3022,8 @@ function getSummaryProfile(user, summaryLength = "medium") {
   return {
     key: "writing-summary",
     name: "Orlixor Summary",
-    openaiModel: OPENAI_MODEL_SUMMARY || OPENAI_MODEL_WRITING || OPENAI_MODEL_DEFAULT,
+    provider: ORLIXOR_TURBO_PROVIDER,
+    openaiModel: OPENAI_MODEL_SUMMARY || OPENAI_MODEL_TURBO || OPENAI_MODEL_DEFAULT,
     temperature: 0.3,
     maxOutputTokens: isFreeUser(user) ? (isDetailed ? 500 : 420) : (isDetailed ? 900 : 500),
     maxContextTokens: isFreeUser(user) ? FREE_MAX_CONTEXT_TOKENS : 5000,
@@ -2941,7 +3119,8 @@ function getStyleProfile(user, level = "balanced") {
   return {
     key: "writing-style",
     name: "Orlixor Style",
-    openaiModel: OPENAI_MODEL_STYLE || OPENAI_MODEL_WRITING || OPENAI_MODEL_DEFAULT,
+    provider: ORLIXOR_CREATIVE_PROVIDER,
+    openaiModel: OPENAI_MODEL_STYLE || OPENAI_MODEL_CREATIVE || OPENAI_MODEL_DEFAULT,
     temperature: 0.45,
     maxOutputTokens: isFreeUser(user) ? 400 : (isDeep ? 900 : 650),
     maxContextTokens: isFreeUser(user) ? FREE_MAX_CONTEXT_TOKENS : 2500,
@@ -4419,6 +4598,9 @@ async function handleChatSend(req, res) {
 
   const requestedModel = normalizeSelectedModel(payload.selected_model || payload.selectedModel || payload.model || "orlixor");
   const selectedModel = resolveEffectiveModelKey(requestedModel, { message, attachmentCount, attachmentNames });
+  if (selectedModel === "alpha" && !hasAlphaModelAccess(activeUser)) {
+    throw createHttpError(403, "Orlixor AI Alpha متاح لمجموعة تجريبية محدودة فقط.");
+  }
   const routingNotice = buildModelRoutingNotice(requestedModel, selectedModel, { message, attachmentCount, attachmentNames });
   const modelProfile = applyUserModelLimits(getModelProfile(selectedModel), activeUser);
 
@@ -4539,6 +4721,45 @@ async function handleChatSend(req, res) {
       user: chargedUser ? buildApiUser(chargedUser) : null,
       guest: null
     }
+  });
+}
+
+async function handleMessageFeedback(req, res, messageId) {
+  const auth = await requireAuthenticatedUser(req);
+  const payload = await parseJsonBody(req);
+  const rating = String(payload.feedback || payload.rating || "").trim().toLowerCase();
+
+  if (!rating || rating === "null" || rating === "none") {
+    sendJson(req, res, 200, {
+      success: true,
+      data: { saved: false }
+    });
+    return;
+  }
+
+  if (!["like", "dislike"].includes(rating)) {
+    throw createHttpError(422, "قيمة التقييم غير صحيحة.");
+  }
+
+  const numericMessageId = Number(messageId);
+  const modelKey = normalizeSelectedModel(payload.model_key || payload.modelKey || payload.model);
+  const provider = payload.provider ? normalizeProviderKey(payload.provider) : resolveProfileProvider(getModelProfile(modelKey));
+  if (isDatabaseReady() && typeof databaseClient.saveFeedback === "function") {
+    await databaseClient.saveFeedback({
+      user_id: auth.user.id,
+      message_id: Number.isFinite(numericMessageId) ? numericMessageId : null,
+      conversation_id: sanitizeOptionalText(payload.conversation_id || payload.conversationId, MAX_METADATA_LENGTH) || null,
+      model_key: modelKey,
+      provider,
+      rating,
+      reason: sanitizeOptionalText(payload.reason, 500),
+      note: sanitizeOptionalText(payload.note || payload.reason, 500)
+    });
+  }
+
+  sendJson(req, res, 200, {
+    success: true,
+    data: { saved: true }
   });
 }
 
@@ -5437,6 +5658,9 @@ async function handleSolveQuestion(req, res) {
 
   const requestedModel = normalizeSelectedModel(payload.selected_model || payload.selectedModel || payload.model || "orlixor");
   const selectedModel = resolveEffectiveModelKey(requestedModel, { message: question, attachmentCount, attachmentNames });
+  if (selectedModel === "alpha" && !hasAlphaModelAccess(activeUser)) {
+    throw createHttpError(403, "Orlixor AI Alpha متاح لمجموعة تجريبية محدودة فقط.");
+  }
   const routingNotice = buildModelRoutingNotice(requestedModel, selectedModel, { message: question, attachmentCount, attachmentNames });
   const modelProfile = applyUserModelLimits(getModelProfile(selectedModel), activeUser);
 
@@ -5688,7 +5912,9 @@ async function routeRequest(req, res) {
       status: "ok",
       request_id: requestId,
       provider: "orlixor",
-      ai_configured: Boolean(OPENAI_API_KEY),
+      ai_configured: Boolean(DEEPSEEK_API_KEY || OPENAI_API_KEY),
+      text_ai_configured: ORLIXOR_DEFAULT_PROVIDER === "deepseek" ? Boolean(DEEPSEEK_API_KEY) : Boolean(OPENAI_API_KEY),
+      image_ai_configured: Boolean(OPENAI_API_KEY),
       model: "Orlixor AI",
       image_model: "Orlixor Image",
       db: buildPublicDatabaseState(),
@@ -5715,13 +5941,20 @@ async function routeRequest(req, res) {
   }
 
   if (req.method === "GET" && requestPath === "/api/ready") {
-    const ready = Boolean(databaseState.connected && OPENAI_API_KEY);
+    const textAiConfigured = ORLIXOR_DEFAULT_PROVIDER === "deepseek"
+      ? Boolean(DEEPSEEK_API_KEY || OPENAI_API_KEY)
+      : Boolean(OPENAI_API_KEY);
+    const ready = Boolean(databaseState.connected && textAiConfigured);
     sendJson(req, res, ready ? 200 : 503, {
       success: ready,
       request_id: requestId,
       checks: {
         database_connected: Boolean(databaseState.connected),
-        ai_configured: Boolean(OPENAI_API_KEY)
+        ai_configured: textAiConfigured,
+        text_ai_configured: textAiConfigured,
+        image_ai_configured: Boolean(OPENAI_API_KEY),
+        openai_configured: Boolean(OPENAI_API_KEY),
+        deepseek_configured: Boolean(DEEPSEEK_API_KEY)
       }
     });
     return;
@@ -5950,6 +6183,12 @@ async function routeRequest(req, res) {
 
   if (req.method === "POST" && requestPath === "/api/chat/send") {
     await handleChatSend(req, res);
+    return;
+  }
+
+  if (req.method === "POST" && requestPath.startsWith("/api/messages/") && requestPath.endsWith("/feedback")) {
+    const messageId = decodeURIComponent(requestPath.replace("/api/messages/", "").replace("/feedback", ""));
+    await handleMessageFeedback(req, res, messageId);
     return;
   }
 
