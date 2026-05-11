@@ -424,6 +424,53 @@ function resetInlineErrors() {
   setFieldError(registerPassword, false);
 }
 
+function getFriendlyLoginError(result = {}) {
+  const status = Number(result.status || 0);
+  const rawMessage = String(result.message || "").trim();
+  const requestId = String(result.request_id || result.requestId || result.payload?.request_id || "").trim();
+  const suffix = requestId ? ` (رقم الطلب: ${requestId})` : "";
+
+  if (status === 401 || /invalid email or password/i.test(rawMessage)) {
+    return {
+      message: "البريد الإلكتروني أو كلمة المرور غير صحيحة",
+      field: "password"
+    };
+  }
+
+  if (status === 429 || /rate[_ -]?limited|too many requests/i.test(rawMessage)) {
+    return {
+      message: "محاولات كثيرة، حاول بعد قليل",
+      field: ""
+    };
+  }
+
+  if (status === 0 || result.networkError) {
+    return {
+      message: "تعذر الاتصال بالخادم الآن. تحقق من اتصالك أو حاول لاحقًا",
+      field: ""
+    };
+  }
+
+  if (status >= 500 || result.serverUnavailable) {
+    return {
+      message: `حدث خطأ في الخادم، حاول لاحقًا${suffix}`,
+      field: ""
+    };
+  }
+
+  if (rawMessage) {
+    return {
+      message: rawMessage,
+      field: /كلمة المرور|password/i.test(rawMessage) ? "password" : ""
+    };
+  }
+
+  return {
+    message: "تعذر تسجيل الدخول. تحقق من البيانات ثم حاول مرة أخرى.",
+    field: ""
+  };
+}
+
 function setActivePanel(mode) {
   authTabs.forEach((tab) => {
     tab.classList.toggle("active", tab.getAttribute("data-auth-tab") === mode);
@@ -631,10 +678,13 @@ loginForm?.addEventListener("submit", async (event) => {
       password,
       device_name: "mullem-web"
     });
-  } catch (_) {
+  } catch (error) {
     apiResult = {
       ok: false,
+      status: 0,
       serverUnavailable: true,
+      networkError: true,
+      error: String(error?.message || error || ""),
       message: "تعذر الاتصال بالخادم الآن."
     };
   } finally {
@@ -649,6 +699,16 @@ loginForm?.addEventListener("submit", async (event) => {
 
   event.preventDefault();
   event.stopImmediatePropagation();
+
+  if (!apiResult.ok || !apiResult.data?.user) {
+    const friendlyError = getFriendlyLoginError(apiResult);
+    setInlineError(loginError, friendlyError.message);
+    if (friendlyError.field === "password") {
+      setFieldError(loginPassword, true);
+    }
+    setState(friendlyError.message);
+    return;
+  }
 
   if (apiResult.ok && apiResult.data?.user) {
     if (isAuthAdminRole(apiResult.data.user.role)) {

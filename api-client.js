@@ -139,6 +139,31 @@
     return hostname === "127.0.0.1" || hostname === "localhost" || hostname === "";
   }
 
+  function shouldDebugApiFailures() {
+    try {
+      return isLocalHost() ||
+        localStorage.getItem("mlm_debug_api") === "1" ||
+        new URLSearchParams(window.location.search).get("debugApi") === "1";
+    } catch (_) {
+      return isLocalHost();
+    }
+  }
+
+  function debugApiFailure(path, result) {
+    if (!shouldDebugApiFailures()) return;
+    const cleanPath = String(path || "");
+    if (!/\/auth\/login|\/auth\/register|\/auth\/me/i.test(cleanPath)) return;
+    console.warn("[Orlixor API]", cleanPath, {
+      status: result?.status,
+      message: result?.message,
+      requestId: result?.request_id,
+      url: result?.url,
+      payload: result?.payload,
+      networkError: Boolean(result?.networkError),
+      serverUnavailable: Boolean(result?.serverUnavailable)
+    });
+  }
+
   function getLocalLaravelBases() {
     if (!isLocalHost()) return [];
     return ["http://127.0.0.1:8010", "http://localhost:8010"];
@@ -657,6 +682,8 @@
           message,
           errors: payload?.errors || {},
           payload,
+          request_id: payload?.request_id || payload?.requestId || response.headers.get("x-request-id") || "",
+          url,
           serverUnavailable: response.status === 404 || response.status >= 500,
           networkError: false
         };
@@ -674,10 +701,11 @@
         }
 
         lastFailure = result;
+        debugApiFailure(cleanPath, result);
         if (!result.serverUnavailable && !preferredFailure) {
           preferredFailure = result;
         }
-      } catch (_) {
+      } catch (error) {
         lastFailure = {
           ok: false,
           status: 0,
@@ -685,9 +713,13 @@
           message: "Network request failed",
           errors: {},
           payload: null,
+          request_id: "",
+          url,
+          error: String(error?.message || error || ""),
           serverUnavailable: true,
           networkError: true
         };
+        debugApiFailure(cleanPath, lastFailure);
       } finally {
         if (timeoutId) window.clearTimeout(timeoutId);
       }
@@ -700,6 +732,8 @@
       message: "Network request failed",
       errors: {},
       payload: null,
+      request_id: "",
+      url: "",
       serverUnavailable: true,
       networkError: true
     };

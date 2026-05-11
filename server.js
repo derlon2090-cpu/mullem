@@ -2914,7 +2914,18 @@ async function handleLogin(req, res) {
   const password = requirePassword(payload.password);
   const deviceName = sanitizeOptionalText(payload.device_name || payload.deviceName, MAX_METADATA_LENGTH) || "mullem-web";
 
-  const user = await databaseClient.findUserByEmail(email);
+  let user = null;
+  try {
+    user = await databaseClient.findUserByEmail(email);
+  } catch (error) {
+    console.error("[mullem] login user lookup failed", {
+      request_id: req.__requestId,
+      email,
+      message: error?.message || String(error || ""),
+      stack: error?.stack
+    });
+    throw createHttpError(503, "تعذر الوصول إلى بيانات الحساب الآن. حاول لاحقًا.");
+  }
   if (!user || !verifyPassword(password, user.password_hash)) {
     throw createHttpError(401, "Invalid email or password.");
   }
@@ -4981,6 +4992,7 @@ function serveStatic(req, res) {
 
 async function routeRequest(req, res) {
   const requestId = buildRequestId();
+  req.__requestId = requestId;
   res.setHeader("X-Request-Id", requestId);
 
   if (req.method === "OPTIONS") {
@@ -5339,15 +5351,25 @@ async function routeRequest(req, res) {
 const server = http.createServer((req, res) => {
   routeRequest(req, res).catch((error) => {
     const statusCode = Number(error?.statusCode) || 500;
+    const isExpectedHttpError = Number.isFinite(Number(error?.statusCode));
+    const safeMessage = String(error?.message || "Internal server error");
     if (statusCode >= 500) {
-      console.error("[mullem] request failed", error);
+      console.error("[mullem] request failed", {
+        request_id: req.__requestId,
+        method: req.method,
+        url: req.url,
+        statusCode,
+        message: safeMessage,
+        stack: error?.stack
+      });
     }
     sendJson(req, res, statusCode, {
       success: false,
+      request_id: req.__requestId,
       code: statusCode >= 500 ? "server_error" : "request_error",
-      message: statusCode >= 500
+      message: statusCode >= 500 && !isExpectedHttpError
         ? "تعذر تنفيذ الطلب الآن. أعد المحاولة بعد قليل."
-        : String(error?.message || "Internal server error")
+        : safeMessage
     });
   });
 });
