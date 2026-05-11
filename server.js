@@ -65,7 +65,7 @@ const OPENAI_EMBEDDING_MODEL = String(process.env.ORLIXOR_EMBEDDING_MODEL || pro
 const ORLIXOR_ENABLE_EMBEDDINGS = /^(1|true|yes|on)$/i.test(String(process.env.ORLIXOR_ENABLE_EMBEDDINGS || "").trim());
 const OPENAI_TIMEOUT_MS = Number(process.env.OPENAI_TIMEOUT_MS || 25000);
 const OPENAI_MAX_OUTPUT_TOKENS = Math.max(120, Math.min(Number(process.env.OPENAI_MAX_OUTPUT_TOKENS || 900), 2000));
-const DB_INIT_TIMEOUT_MS = Math.max(1000, Number(process.env.DB_INIT_TIMEOUT_MS || 8000));
+const DB_INIT_TIMEOUT_MS = Math.max(1000, Number(process.env.DB_INIT_TIMEOUT_MS || 30000));
 const MAX_BODY_BYTES = Math.max(10_000, Number(process.env.MAX_BODY_BYTES || 1_000_000));
 const MAX_MESSAGE_LENGTH = Math.max(200, Number(process.env.MAX_MESSAGE_LENGTH || 4000));
 const MAX_QUESTION_LENGTH = Math.max(200, Number(process.env.MAX_QUESTION_LENGTH || 4000));
@@ -547,15 +547,16 @@ function getPublicDatabaseMessage(featureLabel = "هذه الميزة") {
 }
 
 function buildPublicDatabaseState() {
+  const ready = isDatabaseReady();
   return {
     configured: Boolean(databaseState?.configured),
-    connected: Boolean(databaseState?.connected),
+    connected: ready,
     driver: databaseState?.driver || "postgres",
     host: databaseState?.host || DB_HOST,
     port: databaseState?.port || DB_PORT,
     database: databaseState?.database || DB_DATABASE,
     env: buildDatabaseEnvDiagnostics(),
-    message: databaseState?.connected
+    message: ready
       ? String(databaseState?.message || "PostgreSQL/Neon connected successfully.")
       : getPublicDatabaseMessage("حفظ البيانات")
   };
@@ -791,7 +792,7 @@ function requirePassword(value, fieldName = "password") {
 
 function requireDatabaseConnection() {
   if (!isDatabaseReady()) {
-    throw createHttpError(503, databaseState.message || "PostgreSQL/Neon is not connected.");
+    throw createHttpError(503, "قاعدة البيانات لا تزال غير جاهزة. أعد المحاولة بعد قليل.");
   }
 }
 
@@ -1508,8 +1509,8 @@ async function initializeDatabaseLayer() {
         "Neon/PostgreSQL connection is not ready. Set DATABASE_URL or one of the supported Neon/Postgres environment variables."
       );
     }
-    databaseClient = primaryClient;
     await ensureDefaultUsers(primaryClient);
+    databaseClient = primaryClient;
     databaseState = typeof primaryClient.getState === "function"
       ? primaryClient.getState()
       : {
