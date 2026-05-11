@@ -257,6 +257,7 @@ const MIME_TYPES = {
 const conversations = new Map();
 const guestConversationMap = new Map();
 const rateLimitStore = new Map();
+const authTokenFallbackSessions = new Map();
 let databaseClient = null;
 let databaseState = {
   configured: Boolean(DATABASE_URL || (DB_HOST && DB_DATABASE && DB_USERNAME)),
@@ -1059,6 +1060,15 @@ async function syncUserDailyProgress(user, activityText = "") {
   return updatedUser;
 }
 
+async function syncUserDailyProgressSafely(user, activityText = "") {
+  try {
+    return await syncUserDailyProgress(user, activityText);
+  } catch (error) {
+    console.warn("[mullem] daily progress sync skipped:", error?.message || error);
+    return user;
+  }
+}
+
 function isImageAttachmentName(value) {
   return /\.(png|jpe?g|webp|gif|bmp|heic|heif|svg)$/i.test(String(value || "").trim());
 }
@@ -1308,11 +1318,20 @@ function buildApiUser(user) {
 async function issueAuthToken(user, deviceName = "mullem-web") {
   requireDatabaseConnection();
   const rawToken = generateApiToken();
-  await databaseClient.createApiToken({
-    user_id: user.id,
-    name: sanitizeOptionalText(deviceName, MAX_METADATA_LENGTH) || "mullem-web",
-    token_hash: hashApiToken(rawToken)
-  });
+  const tokenHash = hashApiToken(rawToken);
+  try {
+    await databaseClient.createApiToken({
+      user_id: user.id,
+      name: sanitizeOptionalText(deviceName, MAX_METADATA_LENGTH) || "mullem-web",
+      token_hash: tokenHash
+    });
+  } catch (error) {
+    console.warn("[mullem] persistent auth token write failed, using runtime token:", error?.message || error);
+    authTokenFallbackSessions.set(tokenHash, {
+      userId: user.id,
+      expiresAt: Date.now() + 7 * 24 * 60 * 60 * 1000
+    });
+  }
   return rawToken;
 }
 
@@ -1377,13 +1396,30 @@ async function getAuthContext(req) {
   }
 
   const tokenHash = hashApiToken(rawToken);
-  const user = await databaseClient.findUserByTokenHash(tokenHash);
+  let user = null;
+  try {
+    user = await databaseClient.findUserByTokenHash(tokenHash);
+  } catch (error) {
+    console.warn("[mullem] persistent auth lookup failed:", error?.message || error);
+  }
+  if (!user) {
+    const fallbackSession = authTokenFallbackSessions.get(tokenHash);
+    if (fallbackSession && Number(fallbackSession.expiresAt || 0) > Date.now() && typeof databaseClient.findUserById === "function") {
+      user = await databaseClient.findUserById(fallbackSession.userId);
+    } else if (fallbackSession) {
+      authTokenFallbackSessions.delete(tokenHash);
+    }
+  }
   if (!user) {
     req.__mullemAuthContext = null;
     return null;
   }
 
-  await databaseClient.touchApiToken(tokenHash);
+  try {
+    await databaseClient.touchApiToken(tokenHash);
+  } catch (error) {
+    console.warn("[mullem] auth token touch skipped:", error?.message || error);
+  }
   req.__mullemAuthContext = { token: rawToken, tokenHash, user };
   return req.__mullemAuthContext;
 }
@@ -2891,13 +2927,17 @@ async function handleLogin(req, res) {
     throw createHttpError(403, "This account is suspended.");
   }
 
-  const updatedUser = await syncUserDailyProgress(user, "تم تسجيل الدخول عبر الخادم");
+  const updatedUser = await syncUserDailyProgressSafely(user, "تم تسجيل الدخول عبر الخادم");
 
   const token = await issueAuthToken(updatedUser || user, deviceName);
   if (["admin", "super_admin"].includes(normalizeUserRole((updatedUser || user).role))) {
-    await recordAdminAction(req, { user: updatedUser || user }, "ADMIN_LOGIN", "admin", (updatedUser || user).id, {
-      deviceName
-    });
+    try {
+      await recordAdminAction(req, { user: updatedUser || user }, "ADMIN_LOGIN", "admin", (updatedUser || user).id, {
+        deviceName
+      });
+    } catch (error) {
+      console.warn("[mullem] admin login log skipped:", error?.message || error);
+    }
   }
 
   sendJson(req, res, 200, {
@@ -2911,7 +2951,7 @@ async function handleLogin(req, res) {
 
 async function handleAuthMe(req, res) {
   const auth = await requireAuthenticatedUser(req);
-  const syncedUser = await syncUserDailyProgress(auth.user, "تم تحديث جلسة المستخدم");
+  const syncedUser = await syncUserDailyProgressSafely(auth.user, "تم تحديث جلسة المستخدم");
   sendJson(req, res, 200, {
     success: true,
     data: {
@@ -3111,7 +3151,7 @@ async function handlePdfRemoveProtection(req, res) {
 async function handleStudentDashboard(req, res) {
   const auth = await requireAuthenticatedUser(req);
   ensureDatabaseFeatureAvailable("لوحة الطالب");
-  const syncedUser = await syncUserDailyProgress(auth.user, "زار لوحة الطالب");
+  const syncedUser = await syncUserDailyProgressSafely(auth.user, "زار لوحة الطالب");
   const dashboard = await databaseClient.getStudentDashboard((syncedUser || auth.user).id);
   if (!dashboard) {
     throw createHttpError(404, "User not found.");
@@ -3312,7 +3352,7 @@ async function handlePackages(req, res) {
   requireDatabaseConnection();
   const auth = await getAuthContext(req);
   const syncedUser = auth?.user
-    ? await syncUserDailyProgress(auth.user, "زار صفحة الباقات")
+    ? await syncUserDailyProgressSafely(auth.user, "زار صفحة الباقات")
     : null;
   const items = await databaseClient.listPackages({ include_inactive: false });
 
@@ -3340,7 +3380,7 @@ async function handlePackages(req, res) {
 async function handleNotifications(req, res) {
   const auth = await requireAuthenticatedUser(req);
   const url = new URL(req.url, `http://${req.headers.host || "127.0.0.1"}`);
-  const syncedUser = await syncUserDailyProgress(auth.user, "فتح الإشعارات");
+  const syncedUser = await syncUserDailyProgressSafely(auth.user, "فتح الإشعارات");
   const unreadOnly = url.searchParams.get("tab") === "unread" || url.searchParams.get("unread") === "1";
   const limit = Math.max(1, Math.min(80, Number(url.searchParams.get("limit") || 20) || 20));
   const notifications = await databaseClient.listNotificationsForUser(syncedUser || auth.user, {
@@ -3359,7 +3399,7 @@ async function handleNotifications(req, res) {
 
 async function handleMarkNotificationRead(req, res, notificationId) {
   const auth = await requireAuthenticatedUser(req);
-  const syncedUser = await syncUserDailyProgress(auth.user, "قراءة إشعار");
+  const syncedUser = await syncUserDailyProgressSafely(auth.user, "قراءة إشعار");
   const visibleNotifications = await databaseClient.listNotificationsForUser(syncedUser || auth.user, { limit: 80 });
   const canReadNotification = visibleNotifications.items.some((item) => String(item.id) === String(notificationId));
   if (!canReadNotification) {
@@ -3379,7 +3419,7 @@ async function handleMarkNotificationRead(req, res, notificationId) {
 
 async function handleMarkAllNotificationsRead(req, res) {
   const auth = await requireAuthenticatedUser(req);
-  const syncedUser = await syncUserDailyProgress(auth.user, "قراءة كل الإشعارات");
+  const syncedUser = await syncUserDailyProgressSafely(auth.user, "قراءة كل الإشعارات");
   const result = await databaseClient.markAllNotificationsAsRead(syncedUser || auth.user);
   const notifications = await databaseClient.listNotificationsForUser(syncedUser || auth.user, { limit: 20 });
 
@@ -3886,7 +3926,7 @@ async function handleChatSend(req, res) {
   const hasAttachment = Boolean(payload.has_attachment || payload.hasAttachment || attachmentCount > 0);
   const hasOnlyImageAttachments = attachmentNames.length > 0 && attachmentNames.every(isImageAttachmentName);
   const auth = await getAuthContext(req);
-  const activeUser = auth?.user ? await syncUserDailyProgress(auth.user, "بدأ جلسة شات جديدة") : null;
+  const activeUser = auth?.user ? await syncUserDailyProgressSafely(auth.user, "بدأ جلسة شات جديدة") : null;
 
   if (!activeUser) {
     throw createHttpError(401, "Authentication is required to use chat.");
@@ -4182,7 +4222,7 @@ async function handleSmartSearch(req, res) {
   const language = sanitizeOptionalText(payload.language, 40) || "العربية";
   const sourceType = sanitizeOptionalText(payload.source_type || payload.sourceType, 40) || "all";
   const auth = await getAuthContext(req);
-  const activeUser = auth?.user ? await syncUserDailyProgress(auth.user, "استخدم البحث الذكي") : null;
+  const activeUser = auth?.user ? await syncUserDailyProgressSafely(auth.user, "استخدم البحث الذكي") : null;
 
   if (!activeUser) {
     throw createHttpError(401, "Authentication is required to use smart search.");
@@ -4232,7 +4272,7 @@ async function handleToneTool(req, res) {
   const tone = normalizeToneKey(payload.tone);
   const level = normalizeToneLevel(payload.level);
   const auth = await getAuthContext(req);
-  const activeUser = auth?.user ? await syncUserDailyProgress(auth.user, "استخدم تغيير النبرة") : null;
+  const activeUser = auth?.user ? await syncUserDailyProgressSafely(auth.user, "استخدم تغيير النبرة") : null;
 
   if (!activeUser) {
     throw createHttpError(401, "Authentication is required to use tone changer.");
@@ -4308,7 +4348,7 @@ async function handleCorrectTextTool(req, res) {
   const level = normalizeCorrectionLevel(payload.level || payload.correctionLevel || payload.correction_level);
   const keepStyle = payload.keepStyle !== false && payload.keep_style !== false;
   const auth = await getAuthContext(req);
-  const activeUser = auth?.user ? await syncUserDailyProgress(auth.user, "استخدم التصحيح اللغوي") : null;
+  const activeUser = auth?.user ? await syncUserDailyProgressSafely(auth.user, "استخدم التصحيح اللغوي") : null;
 
   if (!activeUser) {
     throw createHttpError(401, "Authentication is required to correct text.");
@@ -4388,7 +4428,7 @@ async function handleExpandTextTool(req, res) {
   const focus = normalizeExpandFocus(payload.focus);
   const audience = sanitizeOptionalText(payload.audience, 80) || "عام";
   const auth = await getAuthContext(req);
-  const activeUser = auth?.user ? await syncUserDailyProgress(auth.user, "استخدم توسيع النص") : null;
+  const activeUser = auth?.user ? await syncUserDailyProgressSafely(auth.user, "استخدم توسيع النص") : null;
 
   if (!activeUser) {
     throw createHttpError(401, "Authentication is required to use text expansion.");
@@ -4469,7 +4509,7 @@ async function handleSummarizeTextTool(req, res) {
   const pointsCount = normalizePointsCount(payload.pointsCount || payload.points_count);
   const audience = sanitizeOptionalText(payload.audience, 80) || "عام";
   const auth = await getAuthContext(req);
-  const activeUser = auth?.user ? await syncUserDailyProgress(auth.user, "استخدم تلخيص النص") : null;
+  const activeUser = auth?.user ? await syncUserDailyProgressSafely(auth.user, "استخدم تلخيص النص") : null;
 
   if (!activeUser) {
     throw createHttpError(401, "Authentication is required to summarize text.");
@@ -4554,7 +4594,7 @@ async function handleImproveStyleTool(req, res) {
   const keepMeaning = payload.keepMeaning !== false && payload.keep_meaning !== false;
   const audience = sanitizeOptionalText(payload.audience, 80) || "عام";
   const auth = await getAuthContext(req);
-  const activeUser = auth?.user ? await syncUserDailyProgress(auth.user, "استخدم تحسين الأسلوب") : null;
+  const activeUser = auth?.user ? await syncUserDailyProgressSafely(auth.user, "استخدم تحسين الأسلوب") : null;
 
   if (!activeUser) {
     throw createHttpError(401, "Authentication is required to improve style.");
@@ -4636,7 +4676,7 @@ async function handleWritingAssistant(req, res) {
   const details = sanitizeOptionalText(payload.details || payload.extra_details || payload.extraDetails, 3000);
   const options = payload.options && typeof payload.options === "object" ? payload.options : {};
   const auth = await getAuthContext(req);
-  const activeUser = auth?.user ? await syncUserDailyProgress(auth.user, "استخدم مساعد الكتابة") : null;
+  const activeUser = auth?.user ? await syncUserDailyProgressSafely(auth.user, "استخدم مساعد الكتابة") : null;
 
   if (!activeUser) {
     throw createHttpError(401, "Authentication is required to use the writing assistant.");
@@ -4717,7 +4757,7 @@ async function handleSolveQuestion(req, res) {
   );
   const hasOnlyImageAttachments = attachmentNames.length > 0 && attachmentNames.every(isImageAttachmentName);
   const auth = await getAuthContext(req);
-  const activeUser = auth?.user ? await syncUserDailyProgress(auth.user, "بدأ حل سؤال دقيق") : null;
+  const activeUser = auth?.user ? await syncUserDailyProgressSafely(auth.user, "بدأ حل سؤال دقيق") : null;
 
   if (!activeUser) {
     throw createHttpError(401, "Authentication is required to solve questions.");
