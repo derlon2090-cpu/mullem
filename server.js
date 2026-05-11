@@ -62,6 +62,11 @@ const OPENAI_IMAGE_MODEL = String(process.env.OPENAI_IMAGE_MODEL || "dall-e-3").
 const OPENAI_RESPONSES_ENDPOINT = String(process.env.OPENAI_RESPONSES_ENDPOINT || "https://api.openai.com/v1/responses").trim();
 const OPENAI_CHAT_COMPLETIONS_ENDPOINT = String(process.env.OPENAI_CHAT_COMPLETIONS_ENDPOINT || "https://api.openai.com/v1/chat/completions").trim();
 const OPENAI_VISION_MODEL = String(process.env.ORLIXOR_VISION_MODEL || process.env.OPENAI_VISION_MODEL || "gpt-4.1-mini").trim();
+const ORLIXOR_IMAGE_ANALYSIS_MODEL = String(process.env.ORLIXOR_IMAGE_ANALYSIS_MODEL || process.env.OPENAI_IMAGE_ANALYSIS_MODEL || OPENAI_VISION_MODEL || "gpt-4.1-mini").trim();
+const ORLIXOR_IMAGE_GENERATION_MODEL = String(process.env.ORLIXOR_IMAGE_GENERATION_MODEL || "gpt-image-1-mini").trim();
+const ORLIXOR_IMAGE_GENERATION_PRO_MODEL = String(process.env.ORLIXOR_IMAGE_GENERATION_PRO_MODEL || "gpt-image-1.5").trim();
+const OPENAI_IMAGES_GENERATIONS_ENDPOINT = String(process.env.OPENAI_IMAGES_GENERATIONS_ENDPOINT || "https://api.openai.com/v1/images/generations").trim();
+const OPENAI_IMAGES_EDITS_ENDPOINT = String(process.env.OPENAI_IMAGES_EDITS_ENDPOINT || "https://api.openai.com/v1/images/edits").trim();
 const OPENAI_EMBEDDINGS_ENDPOINT = String(process.env.OPENAI_EMBEDDINGS_ENDPOINT || "https://api.openai.com/v1/embeddings").trim();
 const OPENAI_EMBEDDING_MODEL = String(process.env.ORLIXOR_EMBEDDING_MODEL || process.env.OPENAI_EMBEDDING_MODEL || "text-embedding-3-small").trim();
 const ORLIXOR_ENABLE_EMBEDDINGS = /^(1|true|yes|on)$/i.test(String(process.env.ORLIXOR_ENABLE_EMBEDDINGS || "").trim());
@@ -157,6 +162,14 @@ const DEFAULT_STUDENT_NAME = String(process.env.DEFAULT_STUDENT_NAME || "Orlixor
 const TEXT_MESSAGE_XP_COST = Math.max(1, Number(process.env.TEXT_MESSAGE_XP_COST || process.env.TEXT_MESSAGE_XP_REWARD || 10));
 const IMAGE_GENERATION_XP_COST = Math.max(1, Number(process.env.IMAGE_GENERATION_XP_COST || process.env.IMAGE_MESSAGE_XP_COST || process.env.IMAGE_MESSAGE_XP_REWARD || 15));
 const ATTACHMENT_ANALYSIS_XP_COST = Math.max(1, Number(process.env.ATTACHMENT_ANALYSIS_XP_COST || process.env.ATTACHMENT_XP_COST || 15));
+const IMAGE_TOOL_MAX_FILE_SIZE = Math.max(1024 * 1024, Number(process.env.IMAGE_TOOL_MAX_FILE_SIZE || 10 * 1024 * 1024));
+const IMAGE_PROMPT_MAX_LENGTH = Math.max(120, Math.min(Number(process.env.IMAGE_PROMPT_MAX_LENGTH || 32000), 32000));
+const IMAGE_XP_COSTS = Object.freeze({
+  analyze: Math.max(1, Number(process.env.IMAGE_ANALYZE_XP_COST || 5)),
+  generate_standard: Math.max(1, Number(process.env.IMAGE_GENERATE_STANDARD_XP_COST || 20)),
+  generate_high: Math.max(1, Number(process.env.IMAGE_GENERATE_HIGH_XP_COST || 35)),
+  edit: Math.max(1, Number(process.env.IMAGE_EDIT_XP_COST || 25))
+});
 const DAILY_LOGIN_XP_REWARD = Math.max(0, Number(process.env.DAILY_LOGIN_XP_REWARD || 5));
 const FIRST_SIGNUP_XP = Math.max(0, Number(process.env.FIRST_SIGNUP_XP || 50));
 const DAILY_XP_BY_PLAN = Object.freeze({
@@ -1161,6 +1174,135 @@ async function requireSubscriberToolUser(req) {
   return auth;
 }
 
+function getUserPlanKey(user) {
+  const raw = [
+    user?.plan_key,
+    user?.planKey,
+    user?.plan_type,
+    user?.planType,
+    user?.package_key,
+    user?.packageKey,
+    user?.package_name,
+    user?.packageName,
+    user?.package
+  ].map((item) => String(item || "").trim().toLowerCase()).find(Boolean) || "free";
+
+  if (raw.includes("pioneer") || raw.includes("الرائد")) return "pioneer";
+  if (raw.includes("business") || raw.includes("أعمال") || raw.includes("اعمال")) return "business";
+  if (raw.includes("tuwaiq") || raw.includes("طويق")) return "tuwaiq";
+  if (raw.includes("spark") || raw.includes("شرارة")) return "spark";
+  if (raw.includes("pro") || raw.includes("elite") || raw.includes("ultra")) return "pioneer";
+  return "free";
+}
+
+function canUseHighImageQuality(user) {
+  return ["pioneer", "business"].includes(getUserPlanKey(user));
+}
+
+function normalizeImageTaskQuality(value) {
+  const raw = String(value || "standard").trim().toLowerCase();
+  if (["high", "hd", "pro", "premium", "professional"].includes(raw)) return "high";
+  return "standard";
+}
+
+function normalizeOpenAIImageQuality(value) {
+  return normalizeImageTaskQuality(value) === "high" ? "high" : "medium";
+}
+
+function normalizeImageSize(value) {
+  const raw = String(value || "1024x1024").trim().toLowerCase();
+  const allowed = new Set(["1024x1024", "1024x1536", "1536x1024", "auto"]);
+  return allowed.has(raw) ? raw : "1024x1024";
+}
+
+function isSupportedImageMimeType(value) {
+  return ["image/png", "image/jpeg", "image/webp"].includes(String(value || "").trim().toLowerCase());
+}
+
+function getMultipartImageFile(files) {
+  return files?.image || files?.file || files?.upload || null;
+}
+
+function validateImageUpload(file, label = "image") {
+  if (!file) {
+    throw createHttpError(400, "لم يتم رفع صورة.");
+  }
+  if (!isSupportedImageMimeType(file.mimetype)) {
+    throw createHttpError(400, "صيغة الصورة غير مدعومة. استخدم PNG أو JPG أو WebP.");
+  }
+  if (Number(file.size || 0) > IMAGE_TOOL_MAX_FILE_SIZE) {
+    throw createHttpError(413, "حجم الصورة كبير جدًا.");
+  }
+  if (!Buffer.isBuffer(file.buffer) || !file.buffer.length) {
+    throw createHttpError(400, `ملف ${label} غير صالح.`);
+  }
+  return file;
+}
+
+function chooseImageModel(task, userPlan, quality) {
+  if (task === "analyze") {
+    return ORLIXOR_IMAGE_ANALYSIS_MODEL || "gpt-4.1-mini";
+  }
+
+  if (task === "generate" || task === "edit") {
+    if (normalizeImageTaskQuality(quality) === "high" && ["pioneer", "business"].includes(String(userPlan || "").toLowerCase())) {
+      return ORLIXOR_IMAGE_GENERATION_PRO_MODEL || ORLIXOR_IMAGE_GENERATION_MODEL || "gpt-image-1-mini";
+    }
+    return ORLIXOR_IMAGE_GENERATION_MODEL || "gpt-image-1-mini";
+  }
+
+  throw createHttpError(400, "نوع مهمة الصور غير معروف.");
+}
+
+function ensureImageServiceConfigured() {
+  if (!OPENAI_API_KEY) {
+    throw createHttpError(503, "خدمة الصور غير مفعلة حاليًا.");
+  }
+}
+
+async function getActiveImageTaskUser(req, activityText) {
+  const auth = await getAuthContext(req);
+  const activeUser = auth?.user ? await syncUserDailyProgressSafely(auth.user, activityText) : null;
+  if (!activeUser) {
+    throw createHttpError(401, "يلزم تسجيل الدخول لاستخدام نظام الصور.");
+  }
+  return activeUser;
+}
+
+function ensureUserCanSpendXp(user, xpCost, taskLabel) {
+  const currentXp = Math.max(0, Number(user?.xp || 0));
+  if (currentXp < xpCost) {
+    throw createHttpError(402, `${taskLabel} يحتاج ${xpCost} XP.`);
+  }
+}
+
+function normalizeImageApiResult(item) {
+  const safeItem = item && typeof item === "object" ? item : {};
+  return {
+    url: String(safeItem.url || "").trim(),
+    b64_json: String(safeItem.b64_json || "").trim(),
+    mime_type: "image/png",
+    revised_prompt: String(safeItem.revised_prompt || "").trim()
+  };
+}
+
+async function readOpenAIJsonResponse(response) {
+  const contentType = response.headers.get("content-type") || "";
+  if (contentType.includes("application/json")) {
+    return response.json();
+  }
+  return { error: await response.text() };
+}
+
+function buildImageServiceError(payload, fallback, statusCode) {
+  let message = payload?.error?.message || payload?.message || fallback || "تعذر تنفيذ طلب الصور.";
+  message = String(message)
+    .replace(/OpenAI/gi, "Orlixor")
+    .replace(/gpt-[a-z0-9.\-]+/gi, "Orlixor Image")
+    .replace(/dall-e-[a-z0-9.\-]+/gi, "Orlixor Image");
+  return createHttpError(statusCode || 502, message);
+}
+
 function applyUserModelLimits(profile, user) {
   const safeProfile = { ...(profile || modelProfiles.orlixor) };
   if (!isFreeUser(user)) return safeProfile;
@@ -2114,6 +2256,176 @@ async function callOpenAIVision({ messages, images, modelProfile }) {
   }
 
   return { text, raw: payload, usage: extractTokenUsage(payload) };
+}
+
+async function callImageAnalysisModel({ imageFile, prompt, user }) {
+  ensureImageServiceConfigured();
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), OPENAI_TIMEOUT_MS);
+  const model = chooseImageModel("analyze", getUserPlanKey(user), "standard");
+  let response;
+
+  try {
+    response = await fetch(OPENAI_CHAT_COMPLETIONS_ENDPOINT, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${OPENAI_API_KEY}`,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        model,
+        messages: [
+          {
+            role: "system",
+            content: [
+              "أنت محلل صور ذكي في Orlixor.",
+              "حلل الصورة بوضوح واقرأ النصوص إن وجدت واشرح العناصر المهمة.",
+              "إذا كانت الصورة واجهة أو تصميمًا فاشرح ترتيبها وملاحظاتها بدقة.",
+              "لا تقل إن الصورة غير واضحة إلا إذا كانت تالفة فعلًا.",
+              "لا تذكر أسماء مزودي الخدمة أو أسماء الموديلات التقنية."
+            ].join("\n")
+          },
+          {
+            role: "user",
+            content: [
+              {
+                type: "text",
+                text: prompt || "حلل هذه الصورة بالتفصيل، وإذا كان فيها نص فاقرأه، وإذا كانت واجهة فاشرح عناصرها."
+              },
+              {
+                type: "image_url",
+                image_url: {
+                  url: `data:${imageFile.mimetype};base64,${imageFile.buffer.toString("base64")}`,
+                  detail: "auto"
+                }
+              }
+            ]
+          }
+        ],
+        temperature: 0.2,
+        max_tokens: 900
+      }),
+      signal: controller.signal
+    });
+  } catch (error) {
+    if (error?.name === "AbortError") {
+      throw createHttpError(504, "انتهت مهلة تحليل الصورة.");
+    }
+    throw createHttpError(503, "تعذر الوصول إلى خدمة تحليل الصور.");
+  } finally {
+    clearTimeout(timeoutId);
+  }
+
+  const payload = await readOpenAIJsonResponse(response);
+  if (!response.ok) {
+    throw buildImageServiceError(payload, "تعذر تحليل الصورة.", response.status);
+  }
+
+  const output = sanitizeModelDisplayText(extractResponseText(payload));
+  if (!output) {
+    throw createHttpError(502, "تعذر استخراج تحليل واضح من الصورة.");
+  }
+
+  return { output, raw: payload, usage: extractTokenUsage(payload) };
+}
+
+async function callImageGenerationModel({ prompt, size, quality, user }) {
+  ensureImageServiceConfigured();
+  const planKey = getUserPlanKey(user);
+  const model = chooseImageModel("generate", planKey, quality);
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), OPENAI_TIMEOUT_MS * 2);
+  let response;
+
+  try {
+    response = await fetch(OPENAI_IMAGES_GENERATIONS_ENDPOINT, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${OPENAI_API_KEY}`,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        model,
+        prompt: [
+          "أنشئ صورة احترافية حسب الوصف التالي:",
+          prompt,
+          "",
+          "التزم بتكوين مرتب وتفاصيل واضحة وجودة مناسبة. لا تضف نصوصًا عشوائية داخل الصورة."
+        ].join("\n"),
+        size,
+        quality: normalizeOpenAIImageQuality(quality),
+        n: 1
+      }),
+      signal: controller.signal
+    });
+  } catch (error) {
+    if (error?.name === "AbortError") {
+      throw createHttpError(504, "انتهت مهلة إنشاء الصورة.");
+    }
+    throw createHttpError(503, "تعذر الوصول إلى خدمة إنشاء الصور.");
+  } finally {
+    clearTimeout(timeoutId);
+  }
+
+  const payload = await readOpenAIJsonResponse(response);
+  if (!response.ok) {
+    throw buildImageServiceError(payload, "تعذر إنشاء الصورة.", response.status);
+  }
+
+  const image = normalizeImageApiResult(payload?.data?.[0]);
+  if (!image.url && !image.b64_json) {
+    throw createHttpError(502, "لم يتم إنشاء صورة صالحة.");
+  }
+
+  return { image, raw: payload, usage: payload?.usage || null };
+}
+
+async function callImageEditModel({ imageFile, prompt, size, quality, user }) {
+  ensureImageServiceConfigured();
+  const planKey = getUserPlanKey(user);
+  const model = chooseImageModel("edit", planKey, quality);
+  const form = new FormData();
+  const imageBlob = new Blob([imageFile.buffer], { type: imageFile.mimetype });
+  const filename = sanitizeOptionalText(imageFile.filename, 120) || "orlixor-image.png";
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), OPENAI_TIMEOUT_MS * 2);
+  let response;
+
+  form.append("model", model);
+  form.append("prompt", prompt);
+  form.append("size", size);
+  form.append("quality", normalizeOpenAIImageQuality(quality));
+  form.append("image", imageBlob, filename);
+
+  try {
+    response = await fetch(OPENAI_IMAGES_EDITS_ENDPOINT, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${OPENAI_API_KEY}`
+      },
+      body: form,
+      signal: controller.signal
+    });
+  } catch (error) {
+    if (error?.name === "AbortError") {
+      throw createHttpError(504, "انتهت مهلة تعديل الصورة.");
+    }
+    throw createHttpError(503, "تعذر الوصول إلى خدمة تعديل الصور.");
+  } finally {
+    clearTimeout(timeoutId);
+  }
+
+  const payload = await readOpenAIJsonResponse(response);
+  if (!response.ok) {
+    throw buildImageServiceError(payload, "تعذر تعديل الصورة.", response.status);
+  }
+
+  const image = normalizeImageApiResult(payload?.data?.[0]);
+  if (!image.url && !image.b64_json) {
+    throw createHttpError(502, "لم يتم إنشاء صورة معدلة صالحة.");
+  }
+
+  return { image, raw: payload, usage: payload?.usage || null };
 }
 
 function normalizeWritingTask(value) {
@@ -4924,6 +5236,181 @@ async function handleWritingAssistant(req, res) {
   });
 }
 
+async function saveImageToolUsage({ user, taskType, inputText = "", outputText = "", xpCost = 0, usage = {}, metadata = {} }) {
+  if (!isDatabaseReady() || typeof databaseClient.saveToolUsage !== "function" || !user?.id) return;
+  try {
+    await databaseClient.saveToolUsage({
+      user_id: user.id,
+      tool_key: "image_system",
+      task_type: taskType,
+      input_text: String(inputText || "").slice(0, 4000),
+      output_text: String(outputText || "").slice(0, 4000),
+      xp_cost: xpCost,
+      input_tokens: Number(usage?.input_tokens || usage?.prompt_tokens || 0),
+      output_tokens: Number(usage?.output_tokens || usage?.completion_tokens || 0),
+      metadata
+    });
+  } catch (error) {
+    console.warn("Image tool usage write failed:", error?.message || error);
+  }
+}
+
+async function handleImageAnalyze(req, res) {
+  const activeUser = await getActiveImageTaskUser(req, "استخدم تحليل الصور");
+  const xpCost = IMAGE_XP_COSTS.analyze;
+  ensureUserCanSpendXp(activeUser, xpCost, "تحليل الصور");
+
+  const { fields, files } = await parseMultipartFormData(req, {
+    maxBytes: IMAGE_TOOL_MAX_FILE_SIZE + IMAGE_PROMPT_MAX_LENGTH + 64 * 1024,
+    maxFileBytes: IMAGE_TOOL_MAX_FILE_SIZE
+  });
+  const imageFile = validateImageUpload(getMultipartImageFile(files));
+  const prompt = String(fields.prompt || "").trim().slice(0, IMAGE_PROMPT_MAX_LENGTH)
+    || "حلل هذه الصورة بالتفصيل، وإذا كان فيها نص فاقرأه، وإذا كانت واجهة فاشرح عناصرها.";
+
+  const result = await callImageAnalysisModel({ imageFile, prompt, user: activeUser });
+  const chargedUser = await chargeUserForMessage(activeUser, xpCost, "استخدم تحليل الصور");
+
+  await saveImageToolUsage({
+    user: chargedUser || activeUser,
+    taskType: "analyze",
+    inputText: prompt,
+    outputText: result.output,
+    xpCost,
+    usage: result.usage,
+    metadata: {
+      filename: sanitizeOptionalText(imageFile.filename, 160),
+      mimetype: imageFile.mimetype,
+      file_size: imageFile.size
+    }
+  });
+
+  sendJson(req, res, 200, {
+    success: true,
+    data: {
+      output: result.output,
+      usage: result.usage,
+      xp_spent: xpCost,
+      xp_remaining: Math.max(0, Number(chargedUser?.xp || activeUser.xp || 0)),
+      user: chargedUser ? buildApiUser(chargedUser) : buildApiUser(activeUser)
+    }
+  });
+}
+
+async function handleImageGenerate(req, res) {
+  const activeUser = await getActiveImageTaskUser(req, "استخدم إنشاء الصور");
+  const payload = await parseJsonBody(req);
+  const prompt = requireTextField(payload.prompt, "prompt", IMAGE_PROMPT_MAX_LENGTH);
+  const requestedQuality = normalizeImageTaskQuality(payload.quality);
+  const size = normalizeImageSize(payload.size);
+
+  if (requestedQuality === "high" && !canUseHighImageQuality(activeUser)) {
+    throw createHttpError(403, "الجودة العالية متاحة لباقة الرائد والأعمال فقط.");
+  }
+
+  const xpCost = requestedQuality === "high" ? IMAGE_XP_COSTS.generate_high : IMAGE_XP_COSTS.generate_standard;
+  ensureUserCanSpendXp(activeUser, xpCost, "إنشاء الصور");
+
+  const result = await callImageGenerationModel({
+    prompt,
+    size,
+    quality: requestedQuality,
+    user: activeUser
+  });
+  const chargedUser = await chargeUserForMessage(
+    activeUser,
+    xpCost,
+    requestedQuality === "high" ? "استخدم إنشاء الصور بجودة عالية" : "استخدم إنشاء الصور"
+  );
+
+  await saveImageToolUsage({
+    user: chargedUser || activeUser,
+    taskType: "generate",
+    inputText: prompt,
+    outputText: result.image.revised_prompt || "image_generated",
+    xpCost,
+    usage: result.usage,
+    metadata: {
+      size,
+      quality: requestedQuality,
+      result_type: result.image.url ? "url" : "base64"
+    }
+  });
+
+  sendJson(req, res, 200, {
+    success: true,
+    data: {
+      image: result.image,
+      images: [result.image],
+      size,
+      quality: requestedQuality,
+      usage: result.usage,
+      xp_spent: xpCost,
+      xp_remaining: Math.max(0, Number(chargedUser?.xp || activeUser.xp || 0)),
+      user: chargedUser ? buildApiUser(chargedUser) : buildApiUser(activeUser)
+    }
+  });
+}
+
+async function handleImageEdit(req, res) {
+  const activeUser = await getActiveImageTaskUser(req, "استخدم تعديل الصور");
+  const xpCost = IMAGE_XP_COSTS.edit;
+  ensureUserCanSpendXp(activeUser, xpCost, "تعديل الصور");
+
+  const { fields, files } = await parseMultipartFormData(req, {
+    maxBytes: IMAGE_TOOL_MAX_FILE_SIZE + IMAGE_PROMPT_MAX_LENGTH + 64 * 1024,
+    maxFileBytes: IMAGE_TOOL_MAX_FILE_SIZE
+  });
+  const imageFile = validateImageUpload(getMultipartImageFile(files));
+  const prompt = requireTextField(fields.prompt || fields.instructions || fields.text, "prompt", IMAGE_PROMPT_MAX_LENGTH);
+  const requestedQuality = normalizeImageTaskQuality(fields.quality);
+  const size = normalizeImageSize(fields.size);
+
+  if (requestedQuality === "high" && !canUseHighImageQuality(activeUser)) {
+    throw createHttpError(403, "الجودة العالية متاحة لباقة الرائد والأعمال فقط.");
+  }
+
+  const result = await callImageEditModel({
+    imageFile,
+    prompt,
+    size,
+    quality: requestedQuality,
+    user: activeUser
+  });
+  const chargedUser = await chargeUserForMessage(activeUser, xpCost, "استخدم تعديل الصور");
+
+  await saveImageToolUsage({
+    user: chargedUser || activeUser,
+    taskType: "edit",
+    inputText: prompt,
+    outputText: result.image.revised_prompt || "image_edited",
+    xpCost,
+    usage: result.usage,
+    metadata: {
+      filename: sanitizeOptionalText(imageFile.filename, 160),
+      mimetype: imageFile.mimetype,
+      file_size: imageFile.size,
+      size,
+      quality: requestedQuality,
+      result_type: result.image.url ? "url" : "base64"
+    }
+  });
+
+  sendJson(req, res, 200, {
+    success: true,
+    data: {
+      image: result.image,
+      images: [result.image],
+      size,
+      quality: requestedQuality,
+      usage: result.usage,
+      xp_spent: xpCost,
+      xp_remaining: Math.max(0, Number(chargedUser?.xp || activeUser.xp || 0)),
+      user: chargedUser ? buildApiUser(chargedUser) : buildApiUser(activeUser)
+    }
+  });
+}
+
 async function handleSolveQuestion(req, res) {
   const payload = await parseJsonBody(req);
   const question = requireTextField(payload.question, "question", MAX_QUESTION_LENGTH);
@@ -5214,6 +5701,11 @@ async function routeRequest(req, res) {
         text_message_xp_cost: TEXT_MESSAGE_XP_COST,
         image_generation_xp_cost: IMAGE_GENERATION_XP_COST,
         attachment_analysis_xp_cost: ATTACHMENT_ANALYSIS_XP_COST,
+        image_analyze_xp_cost: IMAGE_XP_COSTS.analyze,
+        image_generate_standard_xp_cost: IMAGE_XP_COSTS.generate_standard,
+        image_generate_high_xp_cost: IMAGE_XP_COSTS.generate_high,
+        image_edit_xp_cost: IMAGE_XP_COSTS.edit,
+        image_tool_max_file_size: IMAGE_TOOL_MAX_FILE_SIZE,
         rate_limit_window_ms: RATE_LIMIT_WINDOW_MS,
         rate_limit_chat_max: RATE_LIMIT_CHAT_MAX,
         rate_limit_solve_max: RATE_LIMIT_SOLVE_MAX
@@ -5498,6 +5990,21 @@ async function routeRequest(req, res) {
 
   if (req.method === "POST" && requestPath === "/api/tools/writing-assistant") {
     await handleWritingAssistant(req, res);
+    return;
+  }
+
+  if (req.method === "POST" && requestPath === "/api/images/analyze") {
+    await handleImageAnalyze(req, res);
+    return;
+  }
+
+  if (req.method === "POST" && requestPath === "/api/images/generate") {
+    await handleImageGenerate(req, res);
+    return;
+  }
+
+  if (req.method === "POST" && requestPath === "/api/images/edit") {
+    await handleImageEdit(req, res);
     return;
   }
 

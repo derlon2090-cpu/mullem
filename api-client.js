@@ -1066,6 +1066,30 @@
     });
   }
 
+  async function analyzeImage(formData) {
+    return request("/images/analyze", {
+      method: "POST",
+      body: formData,
+      timeoutMs: 60000
+    });
+  }
+
+  async function generateImage(payload) {
+    return request("/images/generate", {
+      method: "POST",
+      body: payload,
+      timeoutMs: 90000
+    });
+  }
+
+  async function editImage(formData) {
+    return request("/images/edit", {
+      method: "POST",
+      body: formData,
+      timeoutMs: 90000
+    });
+  }
+
   async function changeTone(payload) {
     return request("/tools/tone", {
       method: "POST",
@@ -1222,6 +1246,9 @@
     sendChat,
     smartSearch,
     runWritingAssistant,
+    analyzeImage,
+    generateImage,
+    editImage,
     changeTone,
     correctText,
     expandText,
