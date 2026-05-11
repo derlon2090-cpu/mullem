@@ -13850,6 +13850,213 @@ body[data-workspace-mode="home"] .guest-root {
   }
 }
 
+.notifications-gate.is-compact {
+  display: block;
+  pointer-events: none;
+}
+
+.notifications-gate.is-compact .notifications-backdrop {
+  background: transparent;
+  backdrop-filter: none;
+  pointer-events: auto;
+}
+
+.notifications-panel.is-compact {
+  top: 66px;
+  right: 18px;
+  width: min(280px, calc(100vw - 24px));
+  max-height: min(528px, calc(100vh - 78px));
+  overflow-y: auto;
+  border-radius: 16px;
+  border: 1px solid #eee8ff;
+  background: rgba(255, 255, 255, 0.99);
+  box-shadow: 0 18px 48px rgba(31, 44, 93, 0.12);
+}
+
+.notification-mini-header {
+  direction: ltr;
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  gap: 8px;
+  min-height: 42px;
+  padding: 10px 11px 8px;
+  border-bottom: 1px solid #f2efff;
+}
+
+.notification-mini-header > * {
+  direction: rtl;
+}
+
+.notification-mini-header strong {
+  color: #111936;
+  font-size: 0.9rem;
+  font-weight: 900;
+  letter-spacing: 0;
+  white-space: nowrap;
+}
+
+.notification-mini-link,
+.notification-mini-settings {
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+}
+
+.notification-mini-link {
+  justify-self: start;
+  color: #6d4cff;
+  font-size: 0.7rem;
+  font-weight: 900;
+  white-space: nowrap;
+}
+
+.notification-mini-settings {
+  justify-self: end;
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 10px;
+  color: #7280a8;
+}
+
+.notification-mini-settings svg {
+  width: 15px;
+  height: 15px;
+  stroke: currentColor;
+  fill: none;
+}
+
+.notification-mini-list {
+  display: grid;
+  gap: 7px;
+  padding: 9px 10px 10px;
+}
+
+.notification-card.is-dropdown {
+  direction: ltr;
+  display: grid;
+  grid-template-columns: 8px 42px 1fr;
+  gap: 9px;
+  align-items: center;
+  min-height: 62px;
+  padding: 8px 9px;
+  border-radius: 12px;
+  border-color: #eee8ff;
+  box-shadow: 0 9px 24px rgba(31, 44, 93, 0.035);
+}
+
+.notification-card.is-dropdown.unread {
+  border-color: #e5ddff;
+  background: #fff;
+}
+
+.notification-card.is-dropdown .notification-unread-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+  background: #6d4cff;
+}
+
+.notification-card.is-dropdown:not(.unread) .notification-unread-dot {
+  opacity: 0;
+}
+
+.notification-card.is-dropdown .notification-icon {
+  width: 40px;
+  height: 40px;
+  border-radius: 11px;
+  background: #f2ecff;
+}
+
+.notification-card.is-dropdown .notification-icon svg {
+  width: 18px;
+  height: 18px;
+}
+
+.notification-card.is-dropdown .notification-card-body {
+  direction: rtl;
+  text-align: right;
+}
+
+.notification-card.is-dropdown h4 {
+  margin: 0 0 3px;
+  font-size: 0.78rem;
+  line-height: 1.35;
+  color: #111936;
+}
+
+.notification-card.is-dropdown p {
+  display: -webkit-box;
+  margin: 0;
+  overflow: hidden;
+  color: #7680a8;
+  font-size: 0.67rem;
+  font-weight: 800;
+  line-height: 1.45;
+  -webkit-line-clamp: 1;
+  -webkit-box-orient: vertical;
+}
+
+.notification-card.is-dropdown small {
+  margin-top: 3px;
+  color: #95a0be;
+  font-size: 0.62rem;
+  font-weight: 800;
+}
+
+.notifications-panel.is-compact .notifications-loading,
+.notifications-panel.is-compact .notifications-empty {
+  min-height: 190px;
+  padding: 26px 18px;
+}
+
+.notifications-panel.is-compact .notifications-empty strong,
+.notifications-panel.is-compact .notifications-loading strong {
+  font-size: 0.86rem;
+}
+
+.notifications-panel.is-compact .notifications-empty p {
+  max-width: 210px;
+  font-size: 0.72rem;
+}
+
+.notifications-panel.is-compact .notifications-footer {
+  justify-content: center;
+  padding: 10px 12px 12px;
+  border-top: 1px solid #f2efff;
+}
+
+.notifications-panel.is-compact .notifications-footer button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  width: 100%;
+  min-height: 30px;
+  color: #6d4cff;
+  font-size: 0.72rem;
+  font-weight: 900;
+}
+
+.notifications-panel.is-compact .notifications-footer svg {
+  width: 15px;
+  height: 15px;
+}
+
+@media (max-width: 760px) {
+  .notifications-panel.is-compact {
+    top: 62px;
+    right: 12px;
+    width: min(280px, calc(100vw - 24px));
+    height: auto;
+    max-height: min(528px, calc(100vh - 74px));
+    border: 1px solid #eee8ff;
+    border-radius: 16px;
+  }
+}
+
 /* Tools pages use the same top actions as the chat home: XP, bell, theme, avatar on the visual right. */
 .guest-shell.is-tools-workspace .tools-main-topbar {
   direction: ltr;

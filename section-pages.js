@@ -5042,6 +5042,21 @@
     const timeLabel = formatNotificationTime(item);
     const badge = item.badge || (item.type === "xp_discount" ? "خصم" : "تحديث");
     const isHero = variant === "hero";
+    const isDropdown = variant === "dropdown";
+
+    if (isDropdown) {
+      return `
+        <article class="notification-card is-dropdown ${unreadClass}" data-notification-id="${escapeHtml(item.id)}">
+          <span class="notification-unread-dot" aria-hidden="true"></span>
+          <span class="notification-icon" aria-hidden="true">${getNotificationIcon(item.icon, item.type)}</span>
+          <div class="notification-card-body">
+            <h4>${escapeHtml(item.title)}</h4>
+            <p>${escapeHtml(item.body)}</p>
+            ${timeLabel ? `<small>${escapeHtml(timeLabel)}</small>` : ""}
+          </div>
+        </article>
+      `;
+    }
 
     return `
       <article class="notification-card ${unreadClass} ${isHero ? "is-hero" : ""}" data-notification-id="${escapeHtml(item.id)}">
@@ -5079,59 +5094,23 @@
   function renderNotificationsModal() {
     if (!state.notificationsOpen) return "";
     const payload = getNotificationsPayload();
-    const sectionsMarkup = [
-      renderNotificationSection({
-        title: "خصومات XP",
-        icon: icons.gift,
-        items: payload.sections.xpDiscounts,
-        type: "xp_discount",
-        hero: true
-      }),
-      renderNotificationSection({
-        title: "التحديثات الرسمية",
-        icon: getNotificationIcon("megaphone"),
-        items: payload.sections.officialUpdates,
-        type: "official_update"
-      }),
-      renderNotificationSection({
-        title: "الإضافات والتحديثات",
-        icon: icons.sparkle,
-        items: payload.sections.featureUpdates,
-        type: "feature_update"
-      }),
-      renderNotificationSection({
-        title: "إشعارات حسابك",
-        icon: icons.bell,
-        items: payload.sections.account,
-        type: "account"
-      })
-    ].filter(Boolean).join("");
-    const hasVisibleNotifications = Boolean(sectionsMarkup);
+    const dropdownItems = getNotificationSectionItems(flattenNotifications(payload)).slice(0, 5);
+    const hasVisibleNotifications = dropdownItems.length > 0;
 
     return `
-      <div class="notifications-gate is-open">
-        <button class="notifications-backdrop" type="button" data-close-notifications aria-label="إغلاق الإشعارات"></button>
-        <section class="notifications-panel" role="dialog" aria-modal="true" aria-label="الإشعارات">
-          <header class="notification-header">
-            <button class="notification-close" type="button" data-close-notifications aria-label="إغلاق">×</button>
-            <div class="notification-header-title">
-              <span class="notification-header-icon">${icons.bell}</span>
-              <div>
-                <h2>الإشعارات</h2>
-                <p>مرحبًا بك في أورليكس!</p>
-              </div>
-            </div>
+      <div class="notifications-gate is-open is-compact">
+        <button class="notifications-backdrop" type="button" data-close-notifications aria-label="إغلاق التنبيهات"></button>
+        <section class="notifications-panel is-compact" role="dialog" aria-modal="true" aria-label="التنبيهات">
+          <header class="notification-mini-header">
+            <button class="notification-mini-link" type="button" data-notifications-view-all="all">عرض الكل</button>
+            <strong>التنبيهات</strong>
+            <button class="notification-mini-settings" type="button" data-open-notification-settings aria-label="إعدادات التنبيهات">${icons.settings}</button>
           </header>
-
-          <div class="notification-tabs">
-            <button class="${state.notificationsTab === "all" ? "active" : ""}" type="button" data-notifications-tab="all">الكل</button>
-            <button class="${state.notificationsTab === "unread" ? "active" : ""}" type="button" data-notifications-tab="unread">غير مقروء</button>
-          </div>
 
           ${state.notificationsLoading ? `
             <div class="notifications-loading">
               <span>${icons.sparkle}</span>
-              <strong>جاري تحميل الإشعارات...</strong>
+              <strong>جاري تحميل التنبيهات...</strong>
             </div>
           ` : ""}
 
@@ -5142,19 +5121,22 @@
             </div>
           ` : ""}
 
-          ${!state.notificationsLoading && !state.notificationsError && hasVisibleNotifications ? sectionsMarkup : ""}
+          ${!state.notificationsLoading && !state.notificationsError && hasVisibleNotifications ? `
+            <div class="notification-mini-list">
+              ${dropdownItems.map((item) => renderNotificationCard(item, "dropdown")).join("")}
+            </div>
+          ` : ""}
 
           ${!state.notificationsLoading && !state.notificationsError && !hasVisibleNotifications ? `
             <div class="notifications-empty">
               <span>${icons.sparkle}</span>
-              <strong>${state.notificationsTab === "unread" ? "لا توجد إشعارات غير مقروءة" : "لا توجد إشعارات حاليًا"}</strong>
+              <strong>${state.notificationsTab === "unread" ? "لا توجد تنبيهات غير مقروءة" : "لا توجد تنبيهات حاليًا"}</strong>
               <p>عند توفر خصومات أو تحديثات جديدة ستظهر هنا مباشرة.</p>
             </div>
           ` : ""}
 
           <footer class="notifications-footer">
-            <button type="button" data-notification-read-all>${icons.settings}<span>تعليم الكل كمقروء</span></button>
-            <button type="button" data-notifications-view-all="all">عرض جميع الإشعارات ←</button>
+            <button type="button" data-open-notification-settings>${icons.bell}<span>إعدادات التنبيهات</span></button>
           </footer>
         </section>
       </div>
@@ -11144,6 +11126,14 @@
 
       if (event.target.closest("[data-open-notifications]")) {
         openNotificationsPanel();
+        return;
+      }
+
+      if (event.target.closest("[data-open-notification-settings]")) {
+        state.notificationsOpen = false;
+        state.settingsModalTab = "notifications";
+        state.settingsModalOpen = true;
+        render();
         return;
       }
 
