@@ -13873,6 +13873,64 @@ body[data-workspace-mode="home"] .guest-root {
   box-shadow: 0 18px 48px rgba(31, 44, 93, 0.12);
 }
 
+.notifications-gate.is-open .notifications-panel:not(.is-compact) {
+  top: 66px;
+  right: 18px;
+  width: min(280px, calc(100vw - 24px));
+  max-height: min(528px, calc(100vh - 78px));
+  border-radius: 16px;
+  box-shadow: 0 18px 48px rgba(31, 44, 93, 0.12);
+}
+
+.notifications-gate.is-open .notifications-panel:not(.is-compact) .notification-header,
+.notifications-gate.is-open .notifications-panel:not(.is-compact) .notification-tabs,
+.notifications-gate.is-open .notifications-panel:not(.is-compact) .notification-section-title,
+.notifications-gate.is-open .notifications-panel:not(.is-compact) .notification-badge-label,
+.notifications-gate.is-open .notifications-panel:not(.is-compact) .notification-card p,
+.notifications-gate.is-open .notifications-panel:not(.is-compact) .notification-card small {
+  display: none;
+}
+
+.notifications-gate.is-open .notifications-panel:not(.is-compact) .notification-section {
+  padding: 7px 10px;
+  border-top: 0;
+}
+
+.notifications-gate.is-open .notifications-panel:not(.is-compact) .notification-section-list {
+  gap: 7px;
+}
+
+.notifications-gate.is-open .notifications-panel:not(.is-compact) .notification-card {
+  grid-template-columns: 42px 1fr;
+  min-height: 62px;
+  padding: 8px 9px;
+  border-radius: 12px;
+  box-shadow: 0 9px 24px rgba(31, 44, 93, 0.035);
+}
+
+.notifications-gate.is-open .notifications-panel:not(.is-compact) .notification-card.is-hero {
+  min-height: 62px;
+  background: #fff;
+}
+
+.notifications-gate.is-open .notifications-panel:not(.is-compact) .notification-icon,
+.notifications-gate.is-open .notifications-panel:not(.is-compact) .notification-card.is-hero .notification-icon {
+  width: 40px;
+  height: 40px;
+  border-radius: 11px;
+}
+
+.notifications-gate.is-open .notifications-panel:not(.is-compact) .notification-card h4 {
+  margin: 0;
+  font-size: 0.78rem;
+  line-height: 1.35;
+}
+
+.notifications-gate.is-open .notifications-panel:not(.is-compact) .notifications-footer {
+  justify-content: center;
+  padding: 10px 12px 12px;
+}
+
 .notification-mini-header {
   direction: ltr;
   display: grid;

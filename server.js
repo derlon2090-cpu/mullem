@@ -4986,8 +4986,14 @@ function serveStatic(req, res) {
 
   const extension = path.extname(filePath).toLowerCase();
   const contentType = MIME_TYPES[extension] || "application/octet-stream";
+  const headers = { "Content-Type": contentType };
+  if (extension === ".html" || extension === ".js" || extension === ".css") {
+    headers["Cache-Control"] = "no-store, no-cache, must-revalidate, proxy-revalidate";
+    headers.Pragma = "no-cache";
+    headers.Expires = "0";
+  }
   setCorsHeaders(req, res);
-  res.writeHead(200, { "Content-Type": contentType });
+  res.writeHead(200, headers);
   fs.createReadStream(filePath).pipe(res);
 }
 
