@@ -164,6 +164,32 @@ body[data-workspace-mode="home"] .guest-root {
   justify-content: flex-start;
 }
 
+.guest-brand-combo {
+  width: 168px;
+  min-height: 52px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  direction: ltr;
+}
+
+.guest-brand-word {
+  color: #101936;
+  font-size: 1.95rem;
+  font-weight: 900;
+  line-height: 1;
+  letter-spacing: 0;
+  white-space: nowrap;
+}
+
+.guest-brand .guest-brand-symbol {
+  width: 43px;
+  height: 43px;
+  flex: 0 0 43px;
+  object-fit: contain;
+}
+
 .guest-brand img {
   width: 168px;
   max-width: 100%;
@@ -173,6 +199,24 @@ body[data-workspace-mode="home"] .guest-root {
 
 .guest-shell.is-home-workspace .guest-brand img {
   width: 150px;
+}
+
+.guest-shell.is-home-workspace .guest-brand-full.guest-brand-combo {
+  width: 150px;
+  min-height: 52px;
+  gap: 7px;
+}
+
+.guest-shell.is-home-workspace .guest-brand .guest-brand-symbol {
+  width: 39px;
+  height: 39px;
+  flex-basis: 39px;
+  object-fit: contain;
+  object-position: center;
+}
+
+.guest-shell.is-home-workspace .guest-brand-word {
+  font-size: 1.8rem;
 }
 
 .guest-new-chat {
@@ -4234,6 +4278,14 @@ body[data-workspace-mode="home"] .guest-root {
     object-position: left center;
   }
 
+  .guest-shell.is-home-workspace .guest-brand .guest-brand-symbol,
+  .guest-shell.is-home-workspace .guest-brand .guest-brand-mark {
+    width: 46px;
+    height: 46px;
+    object-fit: contain;
+    object-position: center;
+  }
+
   .guest-shell.is-home-workspace .guest-new-chat {
     min-height: 48px;
     justify-content: center;
@@ -4316,6 +4368,10 @@ body[data-workspace-mode="home"] .guest-root {
 
 .guest-brand .guest-brand-mark {
   display: none;
+  width: 46px;
+  height: 46px;
+  object-fit: contain;
+  object-position: center;
 }
 
 .guest-sidebar-toggle {

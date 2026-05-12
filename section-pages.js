@@ -9885,7 +9885,10 @@
       <aside class="guest-sidebar">
         <div class="guest-sidebar-head">
           <a class="guest-brand" href="${shellBaseUrl}" aria-label="Orlixor">
-            <img class="guest-brand-full" src="orlixor-brand.png" alt="Orlixor">
+            <span class="guest-brand-full guest-brand-combo">
+              <img class="guest-brand-symbol" src="orlixor-mark.png" alt="" aria-hidden="true">
+              <span class="guest-brand-word">Orlixor</span>
+            </span>
             <img class="guest-brand-mark" src="orlixor-mark.png" alt="" aria-hidden="true">
           </a>
           <button class="guest-sidebar-toggle" type="button" data-toggle-sidebar aria-label="${state.sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}" aria-expanded="${state.sidebarCollapsed ? "false" : "true"}">
