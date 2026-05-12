@@ -1869,9 +1869,9 @@ body[data-workspace-mode="home"] .guest-root {
 }
 
 .guest-shell.is-home-workspace .home-compose .compose-send-status {
-  top: 78px;
-  right: 34px;
-  left: 104px;
+  top: 80px;
+  right: 126px;
+  left: 34px;
   bottom: auto;
   text-align: right;
 }
@@ -2123,29 +2123,44 @@ body[data-workspace-mode="home"] .guest-root {
 
 .compose-send.is-sending {
   overflow: visible;
-  background: linear-gradient(180deg, #f7f3ff, #ece3ff);
-  color: #11142a;
-  box-shadow: 0 12px 28px rgba(132, 102, 255, 0.18);
+  background: linear-gradient(180deg, #ffffff, #f7f2ff);
+  color: #6d4cff;
+  box-shadow: 0 13px 30px rgba(132, 102, 255, 0.16);
 }
 
 .compose-send.is-sending::before {
   content: "";
   position: absolute;
-  inset: -7px;
+  inset: -6px;
   border-radius: inherit;
-  border: 4px solid rgba(124, 92, 255, 0.22);
-  border-top-color: rgba(124, 92, 255, 0.74);
+  border: 5px solid rgba(124, 92, 255, 0.18);
+  border-top-color: rgba(124, 92, 255, 0.82);
   animation: compose-send-spin 900ms linear infinite;
 }
 
-.compose-stop-square {
+.compose-loading-dots {
   position: relative;
   z-index: 1;
-  width: 13px;
-  height: 13px;
-  border-radius: 3px;
-  background: #0d1024;
-  box-shadow: 0 0 0 1px rgba(13, 16, 36, 0.04);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+}
+
+.compose-loading-dots i {
+  width: 5px;
+  height: 5px;
+  border-radius: 999px;
+  background: currentColor;
+  animation: compose-dot-pulse 900ms ease-in-out infinite;
+}
+
+.compose-loading-dots i:nth-child(2) {
+  animation-delay: 120ms;
+}
+
+.compose-loading-dots i:nth-child(3) {
+  animation-delay: 240ms;
 }
 
 .compose-send-status {
@@ -2166,6 +2181,20 @@ body[data-workspace-mode="home"] .guest-root {
 @keyframes compose-send-spin {
   to {
     transform: rotate(360deg);
+  }
+}
+
+@keyframes compose-dot-pulse {
+  0%,
+  80%,
+  100% {
+    opacity: 0.42;
+    transform: translateY(0);
+  }
+
+  40% {
+    opacity: 1;
+    transform: translateY(-1px);
   }
 }
 

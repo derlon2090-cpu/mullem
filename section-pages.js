@@ -10148,7 +10148,7 @@
     ].filter(Boolean).join(" ");
     const label = state.sending ? "جاري الإرسال" : "إرسال";
     const content = state.sending
-      ? '<span class="compose-stop-square" aria-hidden="true"></span>'
+      ? '<span class="compose-loading-dots" aria-hidden="true"><i></i><i></i><i></i></span>'
       : icons.send;
 
     return `
