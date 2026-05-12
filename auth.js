@@ -55,6 +55,7 @@ const adminCredentials = {
 
 const isEmbeddedAuth = new URLSearchParams(window.location.search).get("embed") === "1";
 const authBridgeKey = "mlm_auth_bridge";
+const savedConversationCacheLimit = 100;
 
 function normalizeAuthRoleKey(value) {
   return String(value || "").trim().toLowerCase().replace(/[\s-]+/g, "_");
@@ -140,6 +141,64 @@ function buildSessionPayload(payload = {}) {
   return sessionPayload;
 }
 
+function getAccountStorageKey(suffix, userId) {
+  const safeUserId = String(userId || "").trim();
+  return safeUserId ? `orlixor_${suffix}_${safeUserId}` : "";
+}
+
+function normalizeLoginConversationCacheItem(item) {
+  const id = String(item?.id || "").trim();
+  if (!id) return null;
+  return {
+    id,
+    guest_session_id: item.guest_session_id || item.guestSessionId || null,
+    user_id: item.user_id != null ? String(item.user_id) : null,
+    project_id: item.project_id != null ? String(item.project_id) : null,
+    title: item.title || null,
+    subject: item.subject || null,
+    stage: item.stage || null,
+    grade: item.grade || null,
+    term: item.term || null,
+    status: item.status || "active",
+    last_message_at: item.last_message_at || item.lastMessageAt || item.updated_at || item.updatedAt || null,
+    created_at: item.created_at || item.createdAt || null,
+    updated_at: item.updated_at || item.updatedAt || null
+  };
+}
+
+function getConversationSortTime(value) {
+  const date = value ? new Date(value) : null;
+  return date && !Number.isNaN(date.getTime()) ? date.getTime() : Date.now();
+}
+
+function cacheLoginConversationsForUser(user, conversations) {
+  const userId = String(user?.id || "").trim();
+  if (!userId || !Array.isArray(conversations) || !conversations.length) return;
+
+  const normalized = conversations
+    .map(normalizeLoginConversationCacheItem)
+    .filter(Boolean)
+    .sort((first, second) =>
+      getConversationSortTime(second.last_message_at || second.updated_at || second.created_at) -
+      getConversationSortTime(first.last_message_at || first.updated_at || first.created_at)
+    )
+    .slice(0, savedConversationCacheLimit);
+
+  if (!normalized.length) return;
+
+  try {
+    localStorage.setItem(getAccountStorageKey("saved_conversations", userId), JSON.stringify(normalized));
+    const conversationIdsKey = getAccountStorageKey("conversation_ids", userId);
+    const conversationIds = loadJson(conversationIdsKey, {});
+    normalized.forEach((item) => {
+      conversationIds[`server-${item.id}`] = item.id;
+    });
+    localStorage.setItem(conversationIdsKey, JSON.stringify(conversationIds));
+  } catch (_) {
+    // The chat page will still fetch conversations from the server if cache storage is restricted.
+  }
+}
+
 function persistAuthBridge(payload = {}) {
   const sessionPayload = buildSessionPayload(payload);
   if (!sessionPayload.token || !sessionPayload.user) return sessionPayload;
@@ -221,8 +280,9 @@ function upsertApiUserLocally(user, passwordOverride = "") {
   return normalizedUser;
 }
 
-function completeStudentApiLogin(user, message, passwordOverride = "") {
+function completeStudentApiLogin(user, message, passwordOverride = "", conversations = []) {
   const normalizedUser = upsertApiUserLocally(user, passwordOverride);
+  cacheLoginConversationsForUser(normalizedUser, conversations);
   localStorage.removeItem(storageKeys.adminSession);
   localStorage.setItem(storageKeys.currentUser, normalizedUser.id);
   persistClientAuthState();
@@ -733,7 +793,8 @@ loginForm?.addEventListener("submit", async (event) => {
     completeStudentApiLogin(
       apiResult.data.user,
       `أهلًا ${apiResult.data.user.name || ""}، تم تسجيل الدخول بنجاح.`,
-      password
+      password,
+      apiResult.data.recent_conversations || apiResult.data.conversations || []
     );
     return;
   }
@@ -815,7 +876,8 @@ registerForm?.addEventListener("submit", async (event) => {
     completeStudentApiLogin(
       apiResult.data.user,
       `تم إنشاء الحساب بنجاح يا ${apiResult.data.user.name || name}.`,
-      password
+      password,
+      apiResult.data.recent_conversations || apiResult.data.conversations || []
     );
     return;
   }

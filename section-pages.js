@@ -18,7 +18,7 @@
   const recentToolsStorageKey = "orlixor_recent_tools";
   const appPreferencesStorageKey = "orlixor_app_preferences";
   const sectionSettingsStorageKey = "orlixor_section_settings";
-  const savedConversationCacheLimit = 80;
+  const savedConversationCacheLimit = 100;
   const avatarStoragePrefix = "orlixor_user_avatar_";
   const xpClaimStoragePrefix = "orlixor_xp_claimed_at_";
   const authBridgeKey = "mlm_auth_bridge";
@@ -10158,9 +10158,9 @@
 
     state.savedConversationsLoading = true;
     try {
-      let result = await apiClient.getStudentConversations({ limit: 60 });
+      let result = await apiClient.getStudentConversations({ limit: 100 });
       if ((!result?.ok || !Array.isArray(result.data?.items)) && apiClient.getChatSessions) {
-        result = await apiClient.getChatSessions({ limit: 60 });
+        result = await apiClient.getChatSessions({ limit: 100 });
       }
       if (result?.ok) {
         const items = Array.isArray(result.data?.items) ? result.data.items : [];

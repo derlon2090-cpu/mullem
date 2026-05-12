@@ -3597,11 +3597,23 @@ async function handleLogin(req, res) {
     }
   }
 
+  let recentConversations = [];
+  try {
+    if (typeof databaseClient.listUserConversations === "function") {
+      recentConversations = await databaseClient.listUserConversations((updatedUser || user).id, {
+        limit: 100
+      });
+    }
+  } catch (error) {
+    console.warn("[mullem] login conversations preload skipped:", error?.message || error);
+  }
+
   sendJson(req, res, 200, {
     success: true,
     data: {
       token,
-      user: buildApiUser(updatedUser || user)
+      user: buildApiUser(updatedUser || user),
+      recent_conversations: recentConversations.map(buildConversationSummary).filter(Boolean)
     }
   });
 }
