@@ -2061,6 +2061,7 @@ body[data-workspace-mode="home"] .guest-root {
   gap: 12px;
   justify-content: flex-end;
   align-items: flex-end;
+  direction: ltr;
 }
 
 .guest-attachment-pill {
@@ -2078,7 +2079,7 @@ body[data-workspace-mode="home"] .guest-root {
   color: #515a83;
   box-shadow: 0 18px 42px rgba(31, 44, 93, 0.07);
   direction: rtl;
-  overflow: hidden;
+  overflow: visible;
 }
 
 .guest-attachment-pill:not(.has-preview) {
