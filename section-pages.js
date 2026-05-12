@@ -10165,6 +10165,50 @@
     render();
   }
 
+  function getScrollSnapshot() {
+    const pageScroller = document.scrollingElement || document.documentElement;
+    const mainScroller = app.querySelector(".guest-main");
+    const conversationScroller = app.querySelector(".guest-conversation-card");
+    return {
+      windowX: window.scrollX || 0,
+      windowY: window.scrollY || 0,
+      pageTop: pageScroller?.scrollTop || 0,
+      pageLeft: pageScroller?.scrollLeft || 0,
+      mainTop: mainScroller?.scrollTop || 0,
+      mainLeft: mainScroller?.scrollLeft || 0,
+      conversationTop: conversationScroller?.scrollTop || 0,
+      conversationLeft: conversationScroller?.scrollLeft || 0
+    };
+  }
+
+  function restoreScrollSnapshot(snapshot) {
+    if (!snapshot) return;
+    const pageScroller = document.scrollingElement || document.documentElement;
+    const mainScroller = app.querySelector(".guest-main");
+    const conversationScroller = app.querySelector(".guest-conversation-card");
+    if (pageScroller) {
+      pageScroller.scrollTop = snapshot.pageTop;
+      pageScroller.scrollLeft = snapshot.pageLeft;
+    }
+    if (mainScroller) {
+      mainScroller.scrollTop = snapshot.mainTop;
+      mainScroller.scrollLeft = snapshot.mainLeft;
+    }
+    if (conversationScroller) {
+      conversationScroller.scrollTop = snapshot.conversationTop;
+      conversationScroller.scrollLeft = snapshot.conversationLeft;
+    }
+    window.scrollTo(snapshot.windowX, snapshot.windowY);
+  }
+
+  function preserveScrollPosition(callback) {
+    const snapshot = getScrollSnapshot();
+    const result = callback();
+    restoreScrollSnapshot(snapshot);
+    window.requestAnimationFrame(() => restoreScrollSnapshot(snapshot));
+    return result;
+  }
+
   function focusComposerSoon() {
     window.requestAnimationFrame(() => {
       const composeInput = app.querySelector("[data-compose-input]");
@@ -10337,9 +10381,11 @@
 
   function removeSelectedFile(index) {
     if (index < 0 || index >= state.selectedFiles.length) return;
-    const [removed] = state.selectedFiles.splice(index, 1);
-    revokeAttachmentPreview(removed);
-    render();
+    preserveScrollPosition(() => {
+      const [removed] = state.selectedFiles.splice(index, 1);
+      revokeAttachmentPreview(removed);
+      render();
+    });
   }
 
   function pickFiles() {
@@ -11306,8 +11352,10 @@
     const fileInput = getFileInput();
     fileInput?.addEventListener("change", (event) => {
       const files = Array.from(event.target.files || []);
-      setSelectedFiles(files);
-      render();
+      preserveScrollPosition(() => {
+        setSelectedFiles(files);
+        render();
+      });
     });
 
     app.addEventListener("click", async (event) => {
@@ -11760,6 +11808,8 @@
       }
 
       if (event.target.closest("[data-pick-file]")) {
+        event.preventDefault();
+        event.stopPropagation();
         pickFiles();
         return;
       }
@@ -12058,6 +12108,8 @@
 
       const removeFile = event.target.closest("[data-remove-file]");
       if (removeFile) {
+        event.preventDefault();
+        event.stopPropagation();
         removeSelectedFile(Number(removeFile.getAttribute("data-remove-file")));
         return;
       }
@@ -13186,13 +13238,15 @@
           filePicker.value = "";
           return;
         }
-        setSelectedFiles(files);
+        preserveScrollPosition(() => {
+          setSelectedFiles(files);
+          render();
+        });
         if (files.length) {
           showToast(`تم إرفاق ${files.length} ملف.`);
         } else {
           showToast("اختر صورة أو مستندًا مدعومًا.");
         }
-        render();
         return;
       }
 
