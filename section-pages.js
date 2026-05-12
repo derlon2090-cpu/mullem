@@ -4796,21 +4796,24 @@
       const isLiked = Boolean(state.likedReplies[feedbackKey]);
       const safeBody = message.body && Array.isArray(message.body.bullets)
         ? {
-            heading: coerceDisplayText(message.body.heading) || "رد محفوظ",
+            heading: coerceDisplayText(message.body.heading),
             bullets: message.body.bullets.map((item) => coerceDisplayText(item)).filter(Boolean)
           }
         : assistantReply("رد محفوظ", splitReplyToBullets(message.body));
-      if (!safeBody.bullets.length) {
+      if (!safeBody.heading && !safeBody.bullets.length) {
+        safeBody.heading = "رد محفوظ";
         safeBody.bullets = ["لم يصلنا نص واضح من الخدمة."];
       }
       return `
         <article class="guest-message assistant">
           <div class="guest-message-mark">${icons.logo}</div>
           <div class="guest-message-body">
-            <h3>${escapeHtml(safeBody.heading)}</h3>
-            <ul>
-              ${safeBody.bullets.map((item) => `<li>${escapeHtml(item)}</li>`).join("")}
-            </ul>
+            ${safeBody.heading ? `<h3>${escapeHtml(safeBody.heading)}</h3>` : ""}
+            ${safeBody.bullets.length ? `
+              <ul>
+                ${safeBody.bullets.map((item) => `<li>${escapeHtml(item)}</li>`).join("")}
+              </ul>
+            ` : ""}
             <div class="guest-message-actions">
               <button class="ghost-action ${isAuthenticated() ? "" : "requires-auth"}" type="button" data-copy-reply>${icons.copy}</button>
               <button class="ghost-action ${isAuthenticated() ? "" : "requires-auth"}" type="button" data-refresh-reply>${icons.refresh}</button>
@@ -10558,7 +10561,7 @@
         }
         threadEntry.messages.push({
           role: "assistant",
-          body: assistantReply("تم استلام رسالتك، جاري ترتيب الإجابة من الخادم.", splitReplyToBullets(result.data.assistant_message.body))
+          body: buildAssistantReplyFromText(result.data.assistant_message.body)
         });
         if (result.data.conversation_id) {
           const savedAt = new Date().toISOString();
@@ -11227,6 +11230,12 @@
     if (lines.length >= 2) return lines.slice(0, 6);
     const sentences = cleaned.split(/(?<=[.!؟])\s+/).map((item) => item.trim()).filter(Boolean);
     return (sentences.length ? sentences : [cleaned]).slice(0, 6);
+  }
+
+  function buildAssistantReplyFromText(text) {
+    const parts = splitReplyToBullets(text).filter(Boolean);
+    const heading = parts.shift() || "";
+    return assistantReply(heading, parts);
   }
 
   function bindEvents() {
