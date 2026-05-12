@@ -1135,6 +1135,18 @@
     });
   }
 
+  async function getReady(params = {}) {
+    const query = new URLSearchParams();
+    Object.entries(params || {}).forEach(([key, value]) => {
+      if (value == null || value === "") return;
+      query.set(key, String(value));
+    });
+    return request(`/ready${query.toString() ? `?${query.toString()}` : ""}`, {
+      method: "GET",
+      skipAuth: true
+    });
+  }
+
   async function streamChat(payload) {
     return request("/chat/stream", {
       method: "POST",
@@ -1259,6 +1271,7 @@
     summarizeText,
     improveStyle,
     getHealth,
+    getReady,
     streamChat,
     getChatSessions,
     getChatSession,

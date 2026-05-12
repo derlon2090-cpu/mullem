@@ -10446,6 +10446,16 @@
     try {
       const attachmentPreviews = await readAttachmentPreviews(outgoingFiles);
       const attachmentImages = await readImageAttachments(outgoingFiles);
+      const hasImageAttachments = outgoingFiles.some(isVisionImageFile);
+      if (hasImageAttachments && !attachmentImages.length) {
+        throw new Error("تعذر تجهيز الصورة للإرسال. استخدم PNG أو JPG أو WebP بحجم أقل من 10MB.");
+      }
+      if (hasImageAttachments && apiClient.getReady) {
+        const ready = await apiClient.getReady({ task: "image" });
+        if (!ready?.ok) {
+          throw new Error(ready?.message || "خدمة تحليل الصور غير جاهزة على الخادم الآن.");
+        }
+      }
       const result = await apiClient.sendChat({
         conversation_id: state.conversationIds[threadEntry.id] || undefined,
         selected_model: state.selectedModel || "orlixor",
@@ -10480,9 +10490,10 @@
       }
 
       if (!result.ok || !result.data?.assistant_message?.body) {
+        const hasImageAttachments = outgoingFiles.some(isVisionImageFile);
         threadEntry.messages.push({
           role: "assistant",
-          body: assistantReply("تعذر الوصول إلى خدمة الشات الآن.", [
+          body: assistantReply(hasImageAttachments ? "تعذر تحليل الصورة الآن." : "تعذر الوصول إلى خدمة الشات الآن.", [
             result.message || "أعد المحاولة بعد قليل أو تحقق من جاهزية الخادم."
           ])
         });
@@ -10534,13 +10545,21 @@
             : threadEntry.title;
         }
       }
-    } catch (_) {
+    } catch (error) {
       threadEntry.messages.pop();
+      const hasImageAttachments = outgoingFiles.some(isVisionImageFile);
+      const errorMessage = String(error?.message || "").trim();
       threadEntry.messages.push({
         role: "assistant",
-        body: assistantReply("تعذر الوصول إلى خدمة الشات الآن.", [
-          "تحقق من جاهزية الخادم ثم أعد المحاولة بعد قليل."
-        ])
+        body: assistantReply(
+          hasImageAttachments ? "تعذر تحليل الصورة الآن." : "تعذر الوصول إلى خدمة الشات الآن.",
+          [
+            errorMessage ||
+              (hasImageAttachments
+                ? "لم يكتمل إرسال الصورة إلى الخادم. تحقق من خدمة تحليل الصور ثم أعد المحاولة."
+                : "تحقق من جاهزية الخادم ثم أعد المحاولة بعد قليل.")
+          ]
+        )
       });
     } finally {
       state.sending = false;

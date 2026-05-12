@@ -2370,7 +2370,7 @@ function buildVisionChatMessages(messages = [], images = [], profile = modelProf
 
 async function callOpenAIVision({ messages, images, modelProfile }) {
   if (!OPENAI_API_KEY) {
-    throw createHttpError(503, "OPENAI_API_KEY is not configured on the server.");
+    throw createHttpError(503, "خدمة تحليل الصور غير مفعلة على الخادم. تحقق من إعداد OPENAI_API_KEY ثم أعد تشغيل الخادم.");
   }
 
   const profile = modelProfile || modelProfiles.pro || modelProfiles.orlixor;
@@ -2400,9 +2400,9 @@ async function callOpenAIVision({ messages, images, modelProfile }) {
     });
   } catch (error) {
     if (error?.name === "AbortError") {
-      throw createHttpError(504, "Orlixor AI vision request timed out on the server.");
+      throw createHttpError(504, "انتهت مهلة تحليل الصورة من الخادم. حاول بصورة أصغر أو أعد المحاولة بعد قليل.");
     }
-    throw createHttpError(503, "Failed to reach Orlixor AI vision from the server.");
+    throw createHttpError(503, "تعذر اتصال الخادم بخدمة تحليل الصور. تحقق من OPENAI_CHAT_COMPLETIONS_ENDPOINT أو اتصال الخادم بالإنترنت.");
   } finally {
     clearTimeout(timeoutId);
   }
@@ -2420,12 +2420,17 @@ async function callOpenAIVision({ messages, images, modelProfile }) {
     message = String(message)
       .replace(/OpenAI/gi, "Orlixor AI")
       .replace(/gpt-[a-z0-9.\-]+/gi, "Orlixor AI");
+    if (response.status === 401 || response.status === 403) {
+      message = "تعذر تشغيل تحليل الصور بسبب إعداد مفتاح الخدمة على الخادم. تحقق من OPENAI_API_KEY.";
+    } else if (response.status === 429) {
+      message = "خدمة تحليل الصور عليها ضغط الآن. حاول بعد قليل.";
+    }
     throw createHttpError(response.status, message);
   }
 
   const text = extractResponseText(payload);
   if (!text) {
-    throw createHttpError(502, "Orlixor AI returned an empty vision response.");
+    throw createHttpError(502, "عاد تحليل الصور برد فارغ. حاول بصورة أوضح أو أعد المحاولة.");
   }
 
   return { text, raw: payload, usage: extractTokenUsage(payload) };
@@ -5953,19 +5958,31 @@ async function routeRequest(req, res) {
   }
 
   if (req.method === "GET" && requestPath === "/api/ready") {
+    const url = new URL(req.url, `http://${req.headers.host || "127.0.0.1"}`);
+    const task = String(url.searchParams.get("task") || "").trim().toLowerCase();
     const textAiConfigured = ORLIXOR_DEFAULT_PROVIDER === "deepseek"
       ? Boolean(DEEPSEEK_API_KEY || OPENAI_API_KEY)
       : Boolean(OPENAI_API_KEY);
-    const ready = Boolean(databaseState.connected && textAiConfigured);
+    const imageAiConfigured = Boolean(OPENAI_API_KEY);
+    const requestedAiReady = task === "image" || task === "vision"
+      ? imageAiConfigured
+      : textAiConfigured;
+    const ready = Boolean(databaseState.connected && requestedAiReady);
     sendJson(req, res, ready ? 200 : 503, {
       success: ready,
       request_id: requestId,
+      task: task || "text",
+      message: ready
+        ? "الخادم جاهز."
+        : (task === "image" || task === "vision")
+          ? "خدمة تحليل الصور غير جاهزة على الخادم الآن. تحقق من OPENAI_API_KEY واتصال الخادم."
+          : "خدمة الشات غير جاهزة على الخادم الآن.",
       checks: {
         database_connected: Boolean(databaseState.connected),
-        ai_configured: textAiConfigured,
+        ai_configured: requestedAiReady,
         text_ai_configured: textAiConfigured,
-        image_ai_configured: Boolean(OPENAI_API_KEY),
-        openai_configured: Boolean(OPENAI_API_KEY),
+        image_ai_configured: imageAiConfigured,
+        openai_configured: imageAiConfigured,
         deepseek_configured: Boolean(DEEPSEEK_API_KEY)
       }
     });
