@@ -169,6 +169,15 @@
     return ["http://127.0.0.1:8010", "http://localhost:8010"];
   }
 
+  function getFallbackApiBases() {
+    const rawFallbacks = Array.isArray(window.MULLEM_FALLBACK_API_BASES)
+      ? window.MULLEM_FALLBACK_API_BASES
+      : [window.MULLEM_FALLBACK_API_BASES || ""];
+    return rawFallbacks
+      .map(sanitizeBaseUrl)
+      .filter(Boolean);
+  }
+
   function toReadableMessage(value) {
     if (typeof value === "string") {
       const message = value.trim();
@@ -270,29 +279,12 @@
     return `/api${cleanPath}`;
   }
 
-  function isSameOriginBase(baseUrl) {
-    const normalized = sanitizeBaseUrl(baseUrl);
-    if (!normalized) return true;
-
-    try {
-      const target = new URL(normalized, window.location.href);
-      return target.origin === window.location.origin;
-    } catch (_) {
-      return true;
-    }
-  }
-
-  function shouldTrySameOriginFallback() {
-    const baseUrl = resolveBaseUrl();
-    if (!baseUrl) return true;
-    if (isLocalHost()) return true;
-    return isSameOriginBase(baseUrl);
-  }
-
   function buildApiCandidates(path) {
     const cleanPath = `/${String(path || "").replace(/^\/+/, "")}`;
     const baseUrl = resolveBaseUrl();
     const candidates = [];
+
+    candidates.push(buildSameOriginApiUrl(cleanPath));
 
     if (baseUrl) {
       candidates.push(buildApiUrl(cleanPath));
@@ -306,8 +298,12 @@
       }
     }
 
-    if (shouldTrySameOriginFallback()) {
-      candidates.push(buildSameOriginApiUrl(cleanPath));
+    for (const fallbackBase of getFallbackApiBases()) {
+      if (/\/api$/i.test(fallbackBase)) {
+        candidates.push(`${fallbackBase}${cleanPath}`);
+      } else {
+        candidates.push(`${fallbackBase}/api${cleanPath}`);
+      }
     }
 
     return Array.from(new Set(candidates.map(sanitizeBaseUrl).filter(Boolean)));

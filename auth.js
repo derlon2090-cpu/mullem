@@ -430,6 +430,13 @@ function getFriendlyLoginError(result = {}) {
   const requestId = String(result.request_id || result.requestId || result.payload?.request_id || "").trim();
   const suffix = requestId ? ` (رقم الطلب: ${requestId})` : "";
 
+  if (typeof navigator !== "undefined" && navigator.onLine === false) {
+    return {
+      message: "يبدو أنك غير متصل بالإنترنت",
+      field: ""
+    };
+  }
+
   if (status === 401 || /invalid email or password/i.test(rawMessage)) {
     return {
       message: "البريد الإلكتروني أو كلمة المرور غير صحيحة",
@@ -440,6 +447,13 @@ function getFriendlyLoginError(result = {}) {
   if (status === 429 || /rate[_ -]?limited|too many requests/i.test(rawMessage)) {
     return {
       message: "محاولات كثيرة، حاول بعد قليل",
+      field: ""
+    };
+  }
+
+  if (status === 404) {
+    return {
+      message: `تعذر العثور على خدمة تسجيل الدخول. حدّث الصفحة أو حاول لاحقًا${suffix}`,
       field: ""
     };
   }

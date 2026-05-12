@@ -40,10 +40,13 @@
   const storedBase = sanitizeBaseUrl(safeLocalStorageGet(STORAGE_KEY));
   const host = String(window.location.hostname || "").toLowerCase();
   const isStaticHost = STATIC_HOST_SUFFIXES.some((suffix) => host.endsWith(suffix));
-  const fallbackBase = isLocalHost(host) ? "" : DEFAULT_BACKEND_URL;
-  const presetBase = sanitizeBaseUrl(window.MULLEM_API_BASE || fallbackBase);
+  const explicitWindowBase = sanitizeBaseUrl(window.MULLEM_API_BASE || "");
+  const fallbackBase = !explicitWindowBase && isStaticHost && !isLocalHost(host)
+    ? DEFAULT_BACKEND_URL
+    : "";
+  const presetBase = explicitWindowBase || fallbackBase;
 
-  const resolvedBase = queryBase || presetBase || metaBase || storedBase || "";
+  const resolvedBase = queryBase || metaBase || storedBase || presetBase || "";
   const deploymentMode = resolvedBase
     ? "external-backend"
     : (isStaticHost ? "static-host-needs-backend" : "same-origin-or-external-backend");
@@ -53,14 +56,18 @@
   }
 
   window.MULLEM_API_BASE = resolvedBase;
+  window.MULLEM_FALLBACK_API_BASES = DEFAULT_BACKEND_URL && !isLocalHost(host)
+    ? [DEFAULT_BACKEND_URL]
+    : [];
   window.MULLEM_RUNTIME_INFO = {
     deploymentMode,
     isStaticHost,
     backendConfigured: Boolean(resolvedBase),
     backendUrl: resolvedBase || null,
+    fallbackBackendUrls: window.MULLEM_FALLBACK_API_BASES,
     notes: [
-      "If the site is deployed locally, leave MULLEM_API_BASE empty.",
-      "In production, the frontend will default to the Render backend unless another API base is provided.",
+      "Same-origin /api is used by default when the site is served by the Node backend.",
+      "Static hosts can still use the fallback Render backend or a configured API base.",
       "You can temporarily override the backend from the URL using ?api=https://your-backend-domain.com."
     ]
   };
