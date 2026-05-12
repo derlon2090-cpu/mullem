@@ -1,6 +1,7 @@
 (() => {
   const STORAGE_KEY = "mlm_api_base_url";
   const STATIC_HOST_SUFFIXES = [".github.io", ".pages.dev", ".netlify.app"];
+  const STATIC_CUSTOM_HOSTS = ["orlixor.com", "www.orlixor.com"];
   const DEFAULT_BACKEND_URL = "https://mullem-spdu.onrender.com";
 
   function sanitizeBaseUrl(value) {
@@ -40,8 +41,9 @@
   const storedBase = sanitizeBaseUrl(safeLocalStorageGet(STORAGE_KEY));
   const host = String(window.location.hostname || "").toLowerCase();
   const isStaticHost = STATIC_HOST_SUFFIXES.some((suffix) => host.endsWith(suffix));
+  const isStaticCustomHost = STATIC_CUSTOM_HOSTS.includes(host);
   const explicitWindowBase = sanitizeBaseUrl(window.MULLEM_API_BASE || "");
-  const fallbackBase = !explicitWindowBase && isStaticHost && !isLocalHost(host)
+  const fallbackBase = !explicitWindowBase && (isStaticHost || isStaticCustomHost) && !isLocalHost(host)
     ? DEFAULT_BACKEND_URL
     : "";
   const presetBase = explicitWindowBase || fallbackBase;
@@ -56,14 +58,17 @@
   }
 
   window.MULLEM_API_BASE = resolvedBase;
+  window.MULLEM_PREFER_SAME_ORIGIN_API = !fallbackBase;
   window.MULLEM_FALLBACK_API_BASES = DEFAULT_BACKEND_URL && !isLocalHost(host)
     ? [DEFAULT_BACKEND_URL]
     : [];
   window.MULLEM_RUNTIME_INFO = {
     deploymentMode,
     isStaticHost,
+    isStaticCustomHost,
     backendConfigured: Boolean(resolvedBase),
     backendUrl: resolvedBase || null,
+    preferSameOriginApi: window.MULLEM_PREFER_SAME_ORIGIN_API,
     fallbackBackendUrls: window.MULLEM_FALLBACK_API_BASES,
     notes: [
       "Same-origin /api is used by default when the site is served by the Node backend.",

@@ -5926,7 +5926,9 @@ async function routeRequest(req, res) {
 
   if (req.method === "GET" && (requestPath === "/health" || requestPath === "/api/health")) {
     sendJson(req, res, 200, {
+      ok: true,
       status: "ok",
+      time: new Date().toISOString(),
       request_id: requestId,
       provider: "orlixor",
       ai_configured: Boolean(DEEPSEEK_API_KEY || OPENAI_API_KEY),
@@ -6210,7 +6212,7 @@ async function routeRequest(req, res) {
     return;
   }
 
-  if (req.method === "POST" && requestPath === "/api/chat/send") {
+  if (req.method === "POST" && (requestPath === "/api/chat/send" || requestPath === "/api/chat")) {
     await handleChatSend(req, res);
     return;
   }

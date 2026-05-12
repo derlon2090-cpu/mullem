@@ -283,11 +283,18 @@
     const cleanPath = `/${String(path || "").replace(/^\/+/, "")}`;
     const baseUrl = resolveBaseUrl();
     const candidates = [];
+    const preferSameOrigin = window.MULLEM_PREFER_SAME_ORIGIN_API !== false;
 
-    candidates.push(buildSameOriginApiUrl(cleanPath));
+    if (preferSameOrigin) {
+      candidates.push(buildSameOriginApiUrl(cleanPath));
+    }
 
     if (baseUrl) {
       candidates.push(buildApiUrl(cleanPath));
+    }
+
+    if (!preferSameOrigin) {
+      candidates.push(buildSameOriginApiUrl(cleanPath));
     }
 
     for (const localBase of getLocalLaravelBases()) {
@@ -592,6 +599,7 @@
   }
 
   async function request(path, options = {}) {
+    const cleanPath = `/${String(path || "").replace(/^\/+/, "")}`;
     const headers = {
       Accept: "application/json",
       ...(options.headers || {})

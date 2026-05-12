@@ -10443,6 +10443,18 @@
 
     let shouldKeepDraft = false;
 
+    const formatChatFailureMessage = (result, hasImageAttachments = false) => {
+      const status = Number(result?.status || 0);
+      const message = String(result?.message || "").trim();
+      if (status === 401 || status === 403) return "انتهت الجلسة، سجّل الدخول من جديد.";
+      if (status === 413) return hasImageAttachments ? "الصورة أو الملف كبير جدًا. جرّب صورة أصغر." : "الطلب كبير جدًا. اختصر الرسالة ثم أعد المحاولة.";
+      if (status === 429) return "طلبات كثيرة، حاول بعد قليل.";
+      if (status === 404) return "مسار الشات غير موجود على هذا الدومين. تحقق من API backend أو رابط النشر.";
+      if (status >= 500) return message || (hasImageAttachments ? "حدث خطأ في خادم تحليل الصور." : "حدث خطأ في الخادم.");
+      if (result?.networkError || status === 0) return "تعذر الاتصال بالـ Backend. تحقق من رابط API أو اتصالك ثم أعد المحاولة.";
+      return message || "تعذر تنفيذ الطلب.";
+    };
+
     try {
       const attachmentPreviews = await readAttachmentPreviews(outgoingFiles);
       const attachmentImages = await readImageAttachments(outgoingFiles);
@@ -10494,7 +10506,7 @@
         threadEntry.messages.push({
           role: "assistant",
           body: assistantReply(hasImageAttachments ? "تعذر تحليل الصورة الآن." : "تعذر الوصول إلى خدمة الشات الآن.", [
-            result.message || "أعد المحاولة بعد قليل أو تحقق من جاهزية الخادم."
+            formatChatFailureMessage(result, hasImageAttachments)
           ])
         });
       } else {
@@ -10557,7 +10569,7 @@
             errorMessage ||
               (hasImageAttachments
                 ? "لم يكتمل إرسال الصورة إلى الخادم. تحقق من خدمة تحليل الصور ثم أعد المحاولة."
-                : "تحقق من جاهزية الخادم ثم أعد المحاولة بعد قليل.")
+                : "تعذر الاتصال بالـ Backend. تحقق من رابط API أو أعد المحاولة بعد قليل.")
           ]
         )
       });
