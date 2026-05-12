@@ -423,6 +423,7 @@
     composerDraft: {},
     selectedFiles: [],
     sending: false,
+    chatSendError: "",
     homeConversationOpen: false,
     theme: loadStoredTheme(),
     appPreferences: loadAppPreferences(),
@@ -9620,7 +9621,9 @@
             data-compose-input
             value="${escapeHtml(getComposerValue())}"
             placeholder="اكتب رسالتك هنا..."
+            ${state.sending ? "disabled" : ""}
           >
+          ${renderComposeStatus()}
           <div class="home-compose-actions">
             <button class="home-compose-tool ${isAuthenticated() ? "" : "requires-auth"}" type="button" data-pick-file>
               ${icons.attach}
@@ -9631,9 +9634,7 @@
               <span>أدوات</span>
             </button>
           </div>
-          <button class="compose-send ${isAuthenticated() ? "" : "requires-auth"}" type="submit" ${state.sending ? "disabled" : ""} aria-label="إرسال">
-            ${icons.send}
-          </button>
+          ${renderComposeSendButton()}
         </form>
         <p class="guest-compose-note home-compose-note">قد يخطئ Orlixor في بعض المعلومات. تحقّق من المعلومات المهمة.</p>
       </section>
@@ -9724,10 +9725,10 @@
             value="${escapeHtml(getComposerValue())}"
             placeholder="اكتب رسالتك هنا..."
             ${isAuthenticated() ? "" : 'data-auth-focus="1"'}
+            ${state.sending ? "disabled" : ""}
           >
-          <button class="compose-send ${isAuthenticated() ? "" : "requires-auth"}" type="submit" ${state.sending ? "disabled" : ""} aria-label="إرسال">
-            ${icons.send}
-          </button>
+          ${renderComposeStatus()}
+          ${renderComposeSendButton()}
         </form>
         <p class="guest-compose-note">قد يخطئ Orlixor في بعض المعلومات، تحقّق من المعلومات المهمة.</p>
       </section>
@@ -10128,6 +10129,35 @@
     });
   }
 
+  function getComposeStatusText() {
+    if (state.sending) return "جاري الإرسال...";
+    return String(state.chatSendError || "").trim();
+  }
+
+  function renderComposeStatus() {
+    const statusText = getComposeStatusText();
+    if (!statusText) return "";
+    return `<span class="compose-send-status ${state.chatSendError ? "is-error" : ""}" data-compose-status>${escapeHtml(statusText)}</span>`;
+  }
+
+  function renderComposeSendButton() {
+    const buttonClass = [
+      "compose-send",
+      isAuthenticated() ? "" : "requires-auth",
+      state.sending ? "is-sending" : ""
+    ].filter(Boolean).join(" ");
+    const label = state.sending ? "جاري الإرسال" : "إرسال";
+    const content = state.sending
+      ? '<span class="compose-stop-square" aria-hidden="true"></span>'
+      : icons.send;
+
+    return `
+      <button class="${buttonClass}" type="submit" ${state.sending ? "disabled" : ""} aria-label="${label}" aria-busy="${state.sending ? "true" : "false"}">
+        ${content}
+      </button>
+    `;
+  }
+
   async function hydrateSavedConversation(threadId) {
     const apiClient = getApiClient();
     const conversationId = state.conversationIds?.[threadId];
@@ -10383,6 +10413,7 @@
   async function submitMessage() {
     state.currentUser = getActiveUser() || state.currentUser;
     const input = (getComposerValue() || "").trim();
+    if (state.sending) return;
     if (!input && !state.selectedFiles.length) return;
 
     if (!isAuthenticated()) {
@@ -10396,10 +10427,16 @@
       return;
     }
 
+    state.sending = true;
+    state.chatSendError = "";
+    render();
+
     const outgoingFiles = [...state.selectedFiles];
     const outboundMessage = input || "حلل المرفقات المرسلة.";
     const canSendLargeRequest = await confirmLargeChatRequest(outboundMessage);
     if (!canSendLargeRequest) {
+      state.sending = false;
+      render();
       showToast("تم إلغاء الإرسال قبل استهلاك XP.");
       return;
     }
@@ -10436,12 +10473,10 @@
       sortTime: sentAtMs
     };
     sortThreadGroupsByNewest(state.section);
-    state.sending = true;
-    setComposerValue("");
     render();
     scrollConversationToLatest();
 
-    let shouldKeepDraft = false;
+    let sentSuccessfully = false;
 
     const formatChatFailureMessage = (result, hasImageAttachments = false) => {
       const status = Number(result?.status || 0);
@@ -10494,7 +10529,6 @@
           // Ignore cleanup issues.
         }
         state.currentUser = null;
-        shouldKeepDraft = true;
         setComposerValue(input);
         state.authReason = "انتهت الجلسة أو لم تكتمل. سجّل دخولك مرة أخرى حتى يعمل الشات من حسابك.";
         state.authModalOpen = true;
@@ -10503,6 +10537,7 @@
 
       if (!result.ok || !result.data?.assistant_message?.body) {
         const hasImageAttachments = outgoingFiles.some(isVisionImageFile);
+        state.chatSendError = "تعذر إرسال الرسالة، حاول مرة أخرى.";
         threadEntry.messages.push({
           role: "assistant",
           body: assistantReply(hasImageAttachments ? "تعذر تحليل الصورة الآن." : "تعذر الوصول إلى خدمة الشات الآن.", [
@@ -10523,7 +10558,7 @@
         }
         threadEntry.messages.push({
           role: "assistant",
-          body: assistantReply("تم توليد الرد بنجاح.", splitReplyToBullets(result.data.assistant_message.body))
+          body: assistantReply("تم استلام رسالتك، جاري ترتيب الإجابة من الخادم.", splitReplyToBullets(result.data.assistant_message.body))
         });
         if (result.data.conversation_id) {
           const savedAt = new Date().toISOString();
@@ -10556,11 +10591,16 @@
             ? (input || "تحليل مرفقات").slice(0, 32)
             : threadEntry.title;
         }
+        sentSuccessfully = true;
+        state.chatSendError = "";
+        setComposerValue("");
       }
     } catch (error) {
       threadEntry.messages.pop();
       const hasImageAttachments = outgoingFiles.some(isVisionImageFile);
       const errorMessage = String(error?.message || "").trim();
+      state.chatSendError = "تعذر إرسال الرسالة، حاول مرة أخرى.";
+      showToast(state.chatSendError);
       threadEntry.messages.push({
         role: "assistant",
         body: assistantReply(
@@ -10575,7 +10615,7 @@
       });
     } finally {
       state.sending = false;
-      if (!shouldKeepDraft) {
+      if (sentSuccessfully) {
         state.selectedFiles = [];
       } else {
         state.selectedFiles = outgoingFiles;
