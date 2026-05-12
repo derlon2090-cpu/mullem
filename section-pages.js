@@ -19,6 +19,7 @@
   const appPreferencesStorageKey = "orlixor_app_preferences";
   const sectionSettingsStorageKey = "orlixor_section_settings";
   const savedConversationCacheLimit = 100;
+  const attachmentPreviewUrls = new WeakMap();
   const avatarStoragePrefix = "orlixor_user_avatar_";
   const xpClaimStoragePrefix = "orlixor_xp_claimed_at_";
   const authBridgeKey = "mlm_auth_bridge";
@@ -4890,15 +4891,70 @@
     };
   }
 
+  function formatAttachmentSize(file) {
+    const bytes = Number(file?.size || 0);
+    if (!bytes) return "0 KB";
+    if (bytes >= 1024 * 1024) return `${(bytes / 1024 / 1024).toFixed(bytes >= 10 * 1024 * 1024 ? 0 : 1)} MB`;
+    return `${Math.max(1, Math.round(bytes / 1024))} KB`;
+  }
+
+  function getAttachmentDisplayName(file) {
+    const name = String(file?.name || "ملف مرفق").trim();
+    return name || "ملف مرفق";
+  }
+
+  function getAttachmentPreviewUrl(file) {
+    if (!file || !isVisionImageFile(file)) return "";
+    const existing = attachmentPreviewUrls.get(file);
+    if (existing) return existing;
+    const previewUrl = URL.createObjectURL(file);
+    attachmentPreviewUrls.set(file, previewUrl);
+    return previewUrl;
+  }
+
+  function revokeAttachmentPreview(file) {
+    const previewUrl = file ? attachmentPreviewUrls.get(file) : "";
+    if (!previewUrl) return;
+    URL.revokeObjectURL(previewUrl);
+    attachmentPreviewUrls.delete(file);
+  }
+
+  function setSelectedFiles(files = []) {
+    state.selectedFiles.forEach((file) => {
+      if (!files.includes(file)) revokeAttachmentPreview(file);
+    });
+    state.selectedFiles = files;
+  }
+
+  function clearSelectedFiles() {
+    setSelectedFiles([]);
+  }
+
+  function renderAttachmentPreview(file) {
+    const previewUrl = getAttachmentPreviewUrl(file);
+    if (!previewUrl) {
+      return `<div class="guest-attachment-preview placeholder" aria-hidden="true">${icons.document}</div>`;
+    }
+    return `<img class="guest-attachment-preview" src="${escapeHtml(previewUrl)}" alt="${escapeHtml(getAttachmentDisplayName(file))}">`;
+  }
+
   function renderAttachmentPills() {
     if (!state.selectedFiles.length) return "";
     return `
       <div class="guest-attachment-pills">
         ${state.selectedFiles.map((file, index) => `
-          <span class="guest-attachment-pill">
-            ${escapeHtml(file.name)}
-            <button type="button" data-remove-file="${index}" aria-label="إزالة ${escapeHtml(file.name)}">×</button>
-          </span>
+          <article class="guest-attachment-pill ${isVisionImageFile(file) ? "has-preview" : ""}">
+            <button class="guest-attachment-remove" type="button" data-remove-file="${index}" aria-label="إزالة ${escapeHtml(file.name)}">×</button>
+            <div class="guest-attachment-info">
+              <span class="guest-attachment-file-icon" aria-hidden="true">${icons.document}</span>
+              <div>
+                <strong>${escapeHtml(getAttachmentDisplayName(file))}</strong>
+                <small>${escapeHtml(formatAttachmentSize(file))}</small>
+                <em>تم رفع الملف بنجاح</em>
+              </div>
+            </div>
+            ${renderAttachmentPreview(file)}
+          </article>
         `).join("")}
       </div>
     `;
@@ -9595,8 +9651,15 @@
     const greeting = firstName === "بك" ? "مرحبًا بك" : `مرحبًا بك، ${escapeHtml(firstName)}`;
     const isChatting = state.homeConversationOpen;
 
+    const mainClass = [
+      "guest-main",
+      "home-orlixor-main",
+      isChatting ? "is-chatting" : "",
+      state.selectedFiles.length ? "has-attachments" : ""
+    ].filter(Boolean).join(" ");
+
     return `
-      <section class="guest-main home-orlixor-main ${isChatting ? "is-chatting" : ""}">
+      <section class="${mainClass}">
         <header class="guest-main-topbar home-main-topbar">
           ${renderModelSwitcher()}
           ${renderHomeTopActions()}
@@ -10274,7 +10337,8 @@
 
   function removeSelectedFile(index) {
     if (index < 0 || index >= state.selectedFiles.length) return;
-    state.selectedFiles.splice(index, 1);
+    const [removed] = state.selectedFiles.splice(index, 1);
+    revokeAttachmentPreview(removed);
     render();
   }
 
@@ -10619,7 +10683,7 @@
     } finally {
       state.sending = false;
       if (sentSuccessfully) {
-        state.selectedFiles = [];
+        clearSelectedFiles();
       } else {
         state.selectedFiles = outgoingFiles;
       }
@@ -11242,7 +11306,7 @@
     const fileInput = getFileInput();
     fileInput?.addEventListener("change", (event) => {
       const files = Array.from(event.target.files || []);
-      state.selectedFiles = files;
+      setSelectedFiles(files);
       render();
     });
 
@@ -12574,14 +12638,18 @@
 
       const likeButton = event.target.closest("[data-like-reply]");
       if (likeButton) {
+        event.preventDefault();
+        event.stopPropagation();
         if (!isAuthenticated()) {
           openAuthModal("أكمل التفاعل بعد تسجيل الدخول.");
           return;
         }
         const feedbackKey = likeButton.getAttribute("data-like-reply") || "";
         if (feedbackKey) {
-          state.likedReplies[feedbackKey] = !state.likedReplies[feedbackKey];
-          render();
+          const nextLiked = !state.likedReplies[feedbackKey];
+          state.likedReplies[feedbackKey] = nextLiked;
+          likeButton.classList.toggle("liked", nextLiked);
+          likeButton.setAttribute("aria-pressed", nextLiked ? "true" : "false");
           const apiClient = getApiClient();
           if (apiClient?.sendMessageFeedback) {
             const activeThread = getActiveThread();
@@ -12590,7 +12658,11 @@
               feedback: state.likedReplies[feedbackKey] ? "like" : null,
               conversation_id: conversationId,
               model_key: state.selectedModel || "orlixor"
-            }).catch(() => {});
+            }).catch(() => {
+              state.likedReplies[feedbackKey] = !nextLiked;
+              likeButton.classList.toggle("liked", !nextLiked);
+              likeButton.setAttribute("aria-pressed", !nextLiked ? "true" : "false");
+            });
           }
         }
         return;
@@ -13114,7 +13186,7 @@
           filePicker.value = "";
           return;
         }
-        state.selectedFiles = files;
+        setSelectedFiles(files);
         if (files.length) {
           showToast(`تم إرفاق ${files.length} ملف.`);
         } else {
