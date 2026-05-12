@@ -5880,6 +5880,15 @@
     `;
   }
 
+  function renderToolsSuggestion() {
+    return `
+      <p class="tools-suggest">
+        هل لديك اقتراح لأداة جديدة؟
+        <button type="button" data-card="اقتراح أداة جديدة">أخبرنا عن رأيك</button>
+      </p>
+    `;
+  }
+
   function hasToolPage(tool) {
     return Boolean(tool?.key);
   }
@@ -6005,6 +6014,7 @@
               </button>
             `).join("")}
           </section>
+          ${renderToolsSuggestion()}
         </div>
       </section>
     `;
@@ -6127,6 +6137,7 @@
               </section>
             `).join("")}
           </div>
+          ${renderToolsSuggestion()}
         </div>
       </section>
     `;
@@ -6233,6 +6244,7 @@
               `).join("")}
             </div>
           </section>
+          ${renderToolsSuggestion()}
         </div>
       </section>
     `;
@@ -6339,6 +6351,7 @@
               `).join("")}
             </div>
           </section>
+          ${renderToolsSuggestion()}
         </div>
       </section>
     `;
@@ -6445,6 +6458,7 @@
               `).join("")}
             </div>
           </section>
+          ${renderToolsSuggestion()}
         </div>
       </section>
     `;
@@ -6581,10 +6595,7 @@
             }).join("")}
           </section>
 
-          <p class="tools-suggest">
-            هل لديك اقتراح لأداة جديدة؟
-            <button type="button" data-card="اقتراح أداة جديدة">أخبرنا عن رأيك</button>
-          </p>
+          ${renderToolsSuggestion()}
         </div>
       </section>
     `;
@@ -6686,6 +6697,7 @@
             `;
             }).join("")}
           </section>
+          ${renderToolsSuggestion()}
 
           <footer class="free-tools-benefits" aria-label="مزايا أدوات المشتركين">
             <article class="free-tools-footer-card">

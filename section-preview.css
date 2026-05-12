@@ -4999,20 +4999,28 @@ body[data-workspace-mode="home"] .guest-root {
 }
 
 .tools-suggest {
-  margin: 12px 0 0;
+  margin: 18px auto 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  flex-wrap: wrap;
   text-align: center;
   color: #8c94ad;
-  font-size: 0.74rem;
+  font-size: 0.9rem;
   font-weight: 850;
+  line-height: 1.4;
 }
 
 .tools-suggest button {
   border: 0;
+  padding: 0;
   color: #6b4cff;
   background: transparent;
   font: inherit;
   font-weight: 950;
   cursor: pointer;
+  text-decoration: none;
 }
 
 .tool-card-action {
