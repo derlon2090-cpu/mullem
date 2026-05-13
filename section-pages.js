@@ -663,6 +663,15 @@
     notificationsData: null,
     notificationsUnreadCount: 0,
     notificationsLoaded: false,
+    toolSuggestionModalOpen: false,
+    toolSuggestionSubmitting: false,
+    toolSuggestionError: "",
+    toolSuggestionSuccess: "",
+    toolSuggestionResultType: "",
+    toolSuggestionImportance: 3,
+    toolSuggestionAttachmentName: "",
+    toolSuggestionAttachmentDataUrl: "",
+    toolSuggestionDraft: {},
     likedReplies: {},
     openThreadMenuId: "",
     authReason: "",
@@ -686,6 +695,19 @@
       webEnabled: Boolean(config.webEnabled)
     };
   }
+
+  const toolSuggestionCategories = [
+    "الأكثر استخدامًا",
+    "كتابة وتحرير",
+    "تلخيص وتنظيم",
+    "تحليل وبيانات",
+    "إنتاجية",
+    "تعليم وتعلم",
+    "أدوات مجانية",
+    "أدوات مرئية",
+    "PDF وملفات",
+    "أخرى"
+  ];
 
   function group(title, items) {
     return { title, items };
@@ -5884,7 +5906,7 @@
     return `
       <p class="tools-suggest">
         هل لديك اقتراح لأداة جديدة؟
-        <button type="button" data-card="اقتراح أداة جديدة">أخبرنا عن رأيك</button>
+        <button type="button" data-open-tool-suggestion>أخبرنا عن رأيك</button>
       </p>
     `;
   }
@@ -6710,7 +6732,7 @@
             <div class="free-tools-suggest-center">
               <span>هل لديك اقتراح لأداة جديدة؟</span>
               <small>نحن نعمل باستمرار على إضافة أدوات ذكية بناءً على اقتراحاتك</small>
-              <button type="button" data-card="اقتراح أداة جديدة">اقترح أداة جديدة</button>
+              <button type="button" data-open-tool-suggestion>اقترح أداة جديدة</button>
             </div>
             <article class="free-tools-footer-card">
               <i aria-hidden="true">${icons.gift}</i>
@@ -10115,6 +10137,89 @@
     `;
   }
 
+  function renderToolSuggestionModal() {
+    if (!state.toolSuggestionModalOpen) return "";
+    const importance = Math.max(1, Math.min(5, Number(state.toolSuggestionImportance || 3)));
+    const draft = state.toolSuggestionDraft || {};
+    const statusClass = state.toolSuggestionResultType === "matched" || state.toolSuggestionResultType === "already_voted"
+      ? "is-matched"
+      : "is-created";
+    return `
+      <div class="tool-suggestion-gate is-open">
+        <button class="tool-suggestion-backdrop" type="button" data-close-tool-suggestion aria-label="إغلاق نموذج اقتراح أداة"></button>
+        <section class="tool-suggestion-card" role="dialog" aria-modal="true" aria-label="اقتراح أداة جديدة">
+          <button class="tool-suggestion-close" type="button" data-close-tool-suggestion aria-label="إغلاق">×</button>
+          <header class="tool-suggestion-head">
+            <span class="tool-suggestion-mark" aria-hidden="true">${icons.sparkle}</span>
+            <div>
+              <h2>اقتراح أداة جديدة</h2>
+              <p>شاركنا الأداة التي تحتاجها، وإذا كان هناك اقتراح مشابه سنضيف صوتك عليه بدل التكرار.</p>
+            </div>
+          </header>
+
+          <div class="tool-suggestion-reward">
+            <span aria-hidden="true">${icons.gift}</span>
+            <b>إذا تم تنفيذ الأداة لاحقًا تحصل أنت وكل من صوّت عليها على 50 XP تلقائيًا.</b>
+          </div>
+
+          <form class="tool-suggestion-form" data-tool-suggestion-form>
+            <div class="tool-suggestion-grid">
+              <label>
+                <span>اسم الأداة المقترحة *</span>
+                <input class="tool-suggestion-field" name="title" maxlength="180" required placeholder="مثال: مزيل خلفية الصور" value="${escapeHtml(draft.title || "")}">
+              </label>
+              <label>
+                <span>فئة الأداة *</span>
+                <select class="tool-suggestion-field" name="category" required>
+                  ${toolSuggestionCategories.map((category) => `<option value="${escapeHtml(category)}" ${category === (draft.category || "") ? "selected" : ""}>${escapeHtml(category)}</option>`).join("")}
+                </select>
+              </label>
+            </div>
+            <label>
+              <span>وصف الأداة *</span>
+              <textarea class="tool-suggestion-field" name="description" maxlength="1800" required placeholder="اشرح ماذا تفعل الأداة بشكل مختصر وواضح">${escapeHtml(draft.description || "")}</textarea>
+            </label>
+            <label>
+              <span>لماذا تحتاج هذه الأداة؟ *</span>
+              <textarea class="tool-suggestion-field" name="useCase" maxlength="1800" required placeholder="اذكر حالة الاستخدام أو المشكلة التي ستحلها الأداة">${escapeHtml(draft.useCase || "")}</textarea>
+            </label>
+            <label>
+              <span>اقتراحات إضافية</span>
+              <textarea class="tool-suggestion-field" name="extraNotes" maxlength="1400" placeholder="أي تفاصيل اختيارية مثل الصيغ المدعومة أو طريقة العمل">${escapeHtml(draft.extraNotes || "")}</textarea>
+            </label>
+
+            <div class="tool-suggestion-bottom-row">
+              <div class="tool-suggestion-importance">
+                <span>تقييم الأهمية</span>
+                <div>
+                  ${[1, 2, 3, 4, 5].map((value) => `
+                    <button class="${value === importance ? "is-active" : ""}" type="button" data-tool-suggestion-importance="${value}">${value}</button>
+                  `).join("")}
+                </div>
+              </div>
+              <label class="tool-suggestion-upload">
+                <input type="file" accept="image/png,image/jpeg,image/webp" data-tool-suggestion-image hidden>
+                <span>${icons.document}</span>
+                <b>${state.toolSuggestionAttachmentName ? escapeHtml(state.toolSuggestionAttachmentName) : "صورة توضيحية اختيارية"}</b>
+                <small>PNG, JPG, WebP حتى 700KB</small>
+              </label>
+            </div>
+
+            ${state.toolSuggestionError ? `<p class="tool-suggestion-alert is-error">${escapeHtml(state.toolSuggestionError)}</p>` : ""}
+            ${state.toolSuggestionSuccess ? `<p class="tool-suggestion-alert ${statusClass}">${escapeHtml(state.toolSuggestionSuccess)}</p>` : ""}
+
+            <footer class="tool-suggestion-actions">
+              <button class="tool-suggestion-secondary" type="button" data-close-tool-suggestion>إلغاء</button>
+              <button class="tool-suggestion-primary" type="submit" ${state.toolSuggestionSubmitting ? "disabled" : ""}>
+                ${state.toolSuggestionSubmitting ? "جاري الإرسال..." : "إرسال الاقتراح"}
+              </button>
+            </footer>
+          </form>
+        </section>
+      </div>
+    `;
+  }
+
   function renderShell() {
     const profile = getProfile();
     const isToolsWorkspace = state.section === "ai-tools";
@@ -10128,6 +10233,7 @@
       </div>
       ${renderAuthModal()}
       ${renderUpgradeModal()}
+      ${renderToolSuggestionModal()}
       ${renderSettingsModal()}
       ${renderNotificationsModal()}
       <div class="guest-toast-stack" aria-live="polite"></div>
@@ -10178,6 +10284,16 @@
   function closeUpgradeModal() {
     state.upgradeModalOpen = false;
     render();
+  }
+
+  function resetToolSuggestionFormState() {
+    state.toolSuggestionError = "";
+    state.toolSuggestionSuccess = "";
+    state.toolSuggestionResultType = "";
+    state.toolSuggestionImportance = 3;
+    state.toolSuggestionAttachmentName = "";
+    state.toolSuggestionAttachmentDataUrl = "";
+    state.toolSuggestionDraft = {};
   }
 
   function getScrollSnapshot() {
@@ -11363,6 +11479,105 @@
     return assistantReply(heading, parts);
   }
 
+  function readToolSuggestionImage(file) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(String(reader.result || ""));
+      reader.onerror = () => reject(reader.error || new Error("تعذر قراءة الصورة."));
+      reader.readAsDataURL(file);
+    });
+  }
+
+  function captureToolSuggestionDraft(form = app.querySelector("[data-tool-suggestion-form]")) {
+    if (!form) return state.toolSuggestionDraft || {};
+    const formData = new FormData(form);
+    const draft = {
+      title: String(formData.get("title") || "").trim(),
+      category: String(formData.get("category") || "").trim(),
+      description: String(formData.get("description") || "").trim(),
+      useCase: String(formData.get("useCase") || "").trim(),
+      extraNotes: String(formData.get("extraNotes") || "").trim()
+    };
+    state.toolSuggestionDraft = draft;
+    return draft;
+  }
+
+  async function handleToolSuggestionImage(file) {
+    captureToolSuggestionDraft();
+    if (!file) return;
+    const allowedTypes = ["image/png", "image/jpeg", "image/webp"];
+    if (!allowedTypes.includes(file.type)) {
+      state.toolSuggestionError = "الصورة التوضيحية يجب أن تكون PNG أو JPG أو WebP.";
+      state.toolSuggestionAttachmentName = "";
+      state.toolSuggestionAttachmentDataUrl = "";
+      render();
+      return;
+    }
+    if (file.size > 700 * 1024) {
+      state.toolSuggestionError = "حجم الصورة التوضيحية يجب ألا يتجاوز 700KB.";
+      state.toolSuggestionAttachmentName = "";
+      state.toolSuggestionAttachmentDataUrl = "";
+      render();
+      return;
+    }
+    try {
+      const dataUrl = await readToolSuggestionImage(file);
+      state.toolSuggestionError = "";
+      state.toolSuggestionAttachmentName = file.name;
+      state.toolSuggestionAttachmentDataUrl = dataUrl;
+      render();
+    } catch (error) {
+      state.toolSuggestionError = error?.message || "تعذر قراءة الصورة التوضيحية.";
+      render();
+    }
+  }
+
+  async function submitToolSuggestionForm(form) {
+    if (state.toolSuggestionSubmitting) return;
+    if (!isAuthenticated()) {
+      state.toolSuggestionModalOpen = false;
+      openAuthModal("سجّل دخولك حتى ترسل اقتراح أداة جديدة.");
+      return;
+    }
+    const formData = new FormData(form);
+    const payload = {
+      title: String(formData.get("title") || "").trim(),
+      category: String(formData.get("category") || "").trim(),
+      description: String(formData.get("description") || "").trim(),
+      useCase: String(formData.get("useCase") || "").trim(),
+      extraNotes: String(formData.get("extraNotes") || "").trim(),
+      importance: Math.max(1, Math.min(5, Number(state.toolSuggestionImportance || 3))),
+      attachmentName: state.toolSuggestionAttachmentName,
+      attachmentDataUrl: state.toolSuggestionAttachmentDataUrl
+    };
+    if (!payload.title || !payload.category || !payload.description || !payload.useCase) {
+      state.toolSuggestionError = "أكمل الحقول المطلوبة قبل إرسال الاقتراح.";
+      state.toolSuggestionSuccess = "";
+      render();
+      return;
+    }
+    state.toolSuggestionDraft = payload;
+    state.toolSuggestionSubmitting = true;
+    state.toolSuggestionError = "";
+    state.toolSuggestionSuccess = "";
+    render();
+    const result = await getApiClient()?.submitToolSuggestion?.(payload);
+    state.toolSuggestionSubmitting = false;
+    if (!result?.ok) {
+      state.toolSuggestionError = result?.message || "تعذر إرسال الاقتراح الآن، حاول مرة أخرى.";
+      render();
+      return;
+    }
+    const data = result.data || {};
+    state.toolSuggestionResultType = data.type || "";
+    state.toolSuggestionSuccess = data.message || "تم إرسال اقتراحك بنجاح، شكرًا لمساعدتنا في تطوير Orlixor.";
+    state.toolSuggestionAttachmentName = "";
+    state.toolSuggestionAttachmentDataUrl = "";
+    state.toolSuggestionImportance = 3;
+    state.toolSuggestionDraft = {};
+    render();
+  }
+
   function bindEvents() {
     const fileInput = getFileInput();
     fileInput?.addEventListener("change", (event) => {
@@ -11552,6 +11767,34 @@
 
       if (event.target.closest("[data-close-upgrade]")) {
         closeUpgradeModal();
+        return;
+      }
+
+      if (event.target.closest("[data-close-tool-suggestion]")) {
+        state.toolSuggestionModalOpen = false;
+        state.toolSuggestionSubmitting = false;
+        render();
+        return;
+      }
+
+      if (event.target.closest("[data-open-tool-suggestion]")) {
+        event.preventDefault();
+        if (!isAuthenticated()) {
+          openAuthModal("سجّل دخولك حتى ترسل اقتراح أداة جديدة.");
+          return;
+        }
+        resetToolSuggestionFormState();
+        state.toolSuggestionModalOpen = true;
+        render();
+        return;
+      }
+
+      const suggestionImportance = event.target.closest("[data-tool-suggestion-importance]");
+      if (suggestionImportance) {
+        event.preventDefault();
+        captureToolSuggestionDraft();
+        state.toolSuggestionImportance = Number(suggestionImportance.getAttribute("data-tool-suggestion-importance") || 3);
+        render();
         return;
       }
 
@@ -12879,6 +13122,13 @@
     });
 
     app.addEventListener("change", async (event) => {
+      const toolSuggestionImage = event.target.closest("[data-tool-suggestion-image]");
+      if (toolSuggestionImage) {
+        await handleToolSuggestionImage(toolSuggestionImage.files?.[0]);
+        toolSuggestionImage.value = "";
+        return;
+      }
+
       const imageEnhancerInput = event.target.closest("[data-image-enhancer-input]");
       if (imageEnhancerInput) {
         await handleImageEnhancerFile(imageEnhancerInput.files?.[0]);
@@ -13445,6 +13695,13 @@
     });
 
     app.addEventListener("submit", (event) => {
+      const toolSuggestionForm = event.target.closest("[data-tool-suggestion-form]");
+      if (toolSuggestionForm) {
+        event.preventDefault();
+        submitToolSuggestionForm(toolSuggestionForm);
+        return;
+      }
+
       const smartSearchForm = event.target.closest("[data-smart-search-form]");
       if (smartSearchForm) {
         event.preventDefault();

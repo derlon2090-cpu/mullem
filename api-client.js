@@ -1022,6 +1022,47 @@
     });
   }
 
+  async function submitToolSuggestion(payload) {
+    return request("/tool-suggestions", {
+      method: "POST",
+      body: payload
+    });
+  }
+
+  async function getAdminToolSuggestions(params = {}) {
+    const query = new URLSearchParams();
+    Object.entries(params || {}).forEach(([key, value]) => {
+      if (value == null || value === "") return;
+      query.set(key, String(value));
+    });
+    return request(`/admin/tool-suggestions${query.toString() ? `?${query.toString()}` : ""}`);
+  }
+
+  async function updateAdminToolSuggestionStatus(suggestionId, payload) {
+    return request(`/admin/tool-suggestions/${encodeURIComponent(String(suggestionId))}/status`, {
+      method: "PATCH",
+      body: payload
+    });
+  }
+
+  async function approveAdminToolSuggestion(suggestionId) {
+    return request(`/admin/tool-suggestions/${encodeURIComponent(String(suggestionId))}/approve`, {
+      method: "POST"
+    });
+  }
+
+  async function rejectAdminToolSuggestion(suggestionId) {
+    return request(`/admin/tool-suggestions/${encodeURIComponent(String(suggestionId))}/reject`, {
+      method: "POST"
+    });
+  }
+
+  async function implementAdminToolSuggestion(suggestionId) {
+    return request(`/admin/tool-suggestions/${encodeURIComponent(String(suggestionId))}/implemented`, {
+      method: "POST"
+    });
+  }
+
   async function adminLogout() {
     return request("/admin/logout", {
       method: "POST"
@@ -1262,6 +1303,12 @@
     getAdminNotifications,
     createAdminNotification,
     updateAdminNotification,
+    submitToolSuggestion,
+    getAdminToolSuggestions,
+    updateAdminToolSuggestionStatus,
+    approveAdminToolSuggestion,
+    rejectAdminToolSuggestion,
+    implementAdminToolSuggestion,
     adminLogout,
     getNotifications,
     markNotificationRead,

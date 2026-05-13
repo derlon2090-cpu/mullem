@@ -9,6 +9,7 @@
     xpLedger: [],
     logs: [],
     notifications: [],
+    toolSuggestions: [],
     tab: "dashboard"
   };
 
@@ -165,14 +166,15 @@
   }
 
   async function loadAdminData() {
-    const [stats, users, plans, subscriptions, xpLedger, logs, notifications] = await Promise.all([
+    const [stats, users, plans, subscriptions, xpLedger, logs, notifications, toolSuggestions] = await Promise.all([
       api.getAdminStats(),
       api.getAdminUsers({ per_page: 200 }),
       api.getAdminPackages(),
       api.getAdminSubscriptions?.({ limit: 120 }) || api.request("/admin/subscriptions"),
       api.getAdminXpLedger?.({ limit: 140 }) || api.request("/admin/xp-ledger"),
       api.getAdminLogs?.({ limit: 140 }) || api.request("/admin/logs"),
-      api.getAdminNotifications?.({ limit: 80 }) || api.request("/admin/notifications")
+      api.getAdminNotifications?.({ limit: 80 }) || api.request("/admin/notifications"),
+      api.getAdminToolSuggestions?.({ limit: 120 }) || api.request("/admin/tool-suggestions")
     ]);
 
     if (stats.ok) {
@@ -185,6 +187,7 @@
     if (xpLedger.ok) state.xpLedger = Array.isArray(xpLedger.data?.items) ? xpLedger.data.items : [];
     if (logs.ok) state.logs = Array.isArray(logs.data?.items) ? logs.data.items : [];
     if (notifications.ok) state.notifications = Array.isArray(notifications.data?.items) ? notifications.data.items : [];
+    if (toolSuggestions.ok) state.toolSuggestions = Array.isArray(toolSuggestions.data?.items) ? toolSuggestions.data.items : [];
 
     renderAll();
   }
@@ -448,13 +451,83 @@
     }
   }
 
+  function getToolSuggestionStatusLabel(status) {
+    return {
+      pending: "قيد الانتظار",
+      reviewing: "قيد المراجعة",
+      approved: "معتمد",
+      rejected: "مرفوض",
+      implemented: "تم التنفيذ"
+    }[String(status || "pending")] || "قيد الانتظار";
+  }
+
+  function getToolSuggestionStatusClass(status) {
+    return `is-${String(status || "pending").replace(/[^a-z_]/g, "")}`;
+  }
+
   function renderTools() {
-    if (nodes.toolsGrid) {
-      const tools = ["البحث الذكي", "مساعد الكتابة", "تلخيص المحتوى", "استخراج البيانات", "تحسين الصور", "PDF إلى PNG", "PNG إلى PDF", "OCR"];
-      nodes.toolsGrid.innerHTML = tools.map((tool, index) => `
-        <article class="admin-tool-card"><strong>${tool}</strong><span>${index < 4 ? "مجاني" : "للمشتركين"}</span><label><input type="checkbox" checked> مفعلة</label></article>
-      `).join("");
-    }
+    if (!nodes.toolsGrid) return;
+    const tools = ["البحث الذكي", "مساعد الكتابة", "تلخيص المحتوى", "استخراج البيانات", "تحسين الصور", "PDF إلى PNG", "PNG إلى PDF", "OCR"];
+    const statusCounts = ["pending", "reviewing", "approved", "implemented", "rejected"].map((status) => ({
+      status,
+      count: state.toolSuggestions.filter((item) => String(item.status || "pending") === status).length
+    }));
+    const suggestions = [...state.toolSuggestions].sort((a, b) => Number(b.votes_count || 0) - Number(a.votes_count || 0));
+
+    nodes.toolsGrid.innerHTML = `
+      <section class="admin-tools-live-grid">
+        ${tools.map((tool, index) => `
+          <article class="admin-tool-card">
+            <strong>${escapeHtml(tool)}</strong>
+            <span>${index < 4 ? "متاحة" : "للمشتركين"}</span>
+            <label><input type="checkbox" checked> مفعلة</label>
+          </article>
+        `).join("")}
+      </section>
+
+      <section class="admin-tool-suggestions">
+        <div class="admin-tool-suggestions-head">
+          <div>
+            <strong>اقتراحات الأدوات</strong>
+            <span>راجع اقتراحات المستخدمين، اعتمدها، أو حوّلها إلى قيد التطوير، وعند التنفيذ يتم منح 50 XP تلقائيًا لكل مصوّت.</span>
+          </div>
+          <b>${formatNumber(state.toolSuggestions.length)} اقتراح</b>
+        </div>
+        <div class="admin-suggestion-stats">
+          ${statusCounts.map((item) => `
+            <span class="${getToolSuggestionStatusClass(item.status)}">
+              <b>${formatNumber(item.count)}</b>
+              ${escapeHtml(getToolSuggestionStatusLabel(item.status))}
+            </span>
+          `).join("")}
+        </div>
+        <div class="admin-suggestion-list">
+          ${suggestions.map((item) => {
+            const voters = Array.isArray(item.voters) ? item.voters : [];
+            return `
+              <article class="admin-suggestion-card ${getToolSuggestionStatusClass(item.status)}">
+                <div class="admin-suggestion-main">
+                  <span class="admin-suggestion-status ${getToolSuggestionStatusClass(item.status)}">${escapeHtml(getToolSuggestionStatusLabel(item.status))}</span>
+                  <h3>${escapeHtml(item.title)}</h3>
+                  <p>${escapeHtml(item.description || "بدون وصف")}</p>
+                  <small>${escapeHtml(item.category || "أخرى")} · ${formatNumber(item.votes_count || 0)} صوت · أهمية ${formatNumber(item.importance || 3)}/5</small>
+                  <small>المقترح الأول: ${escapeHtml(item.created_by_name || item.created_by_email || "مستخدم")} · ${escapeHtml(formatAdminDate(item.created_at))}</small>
+                  ${item.use_case ? `<blockquote>${escapeHtml(item.use_case)}</blockquote>` : ""}
+                  ${voters.length ? `<div class="admin-suggestion-voters">${voters.slice(0, 4).map((vote) => `<span>${escapeHtml(vote.name || vote.email || `#${vote.user_id}`)}</span>`).join("")}</div>` : ""}
+                </div>
+                <div class="admin-suggestion-actions">
+                  <button type="button" data-tool-suggestion-status="${escapeHtml(item.id)}" data-status="reviewing">مراجعة</button>
+                  <button type="button" data-tool-suggestion-status="${escapeHtml(item.id)}" data-status="approved">اعتماد</button>
+                  <button type="button" data-tool-suggestion-status="${escapeHtml(item.id)}" data-status="pending">انتظار</button>
+                  <button class="admin-warning-btn" type="button" data-tool-suggestion-status="${escapeHtml(item.id)}" data-status="implemented">تم التنفيذ + 50 XP</button>
+                  <button class="admin-danger-btn" type="button" data-tool-suggestion-status="${escapeHtml(item.id)}" data-status="rejected">رفض</button>
+                </div>
+              </article>
+            `;
+          }).join("") || `<div class="admin-empty-panel">لا توجد اقتراحات أدوات حتى الآن.</div>`}
+        </div>
+      </section>
+    `;
   }
 
   function renderSettings() {
@@ -586,6 +659,27 @@
       panel.hidden = !active;
       panel.classList.toggle("is-active", active);
     });
+  }
+
+  async function setToolSuggestionStatus(suggestionId, status) {
+    if (!suggestionId || !status) return;
+    let result = null;
+    if (status === "implemented") {
+      const confirmed = window.confirm("سيتم وضع الاقتراح كمنفذ ومنح 50 XP لكل مستخدم اقترحه أو صوّت له. هل تريد المتابعة؟");
+      if (!confirmed) return;
+      result = await api.implementAdminToolSuggestion?.(suggestionId);
+    } else if (status === "approved") {
+      result = await api.approveAdminToolSuggestion?.(suggestionId);
+    } else if (status === "rejected") {
+      result = await api.rejectAdminToolSuggestion?.(suggestionId);
+    } else {
+      result = await api.updateAdminToolSuggestionStatus?.(suggestionId, { status });
+    }
+    if (!result?.ok) {
+      window.alert(result?.message || "تعذر تحديث حالة الاقتراح.");
+      return;
+    }
+    await loadAdminData();
   }
 
   async function savePlan(button) {
@@ -812,6 +906,12 @@
     const toggleNotificationButton = event.target.closest("[data-toggle-notification]");
     if (toggleNotificationButton) {
       await toggleNotification(toggleNotificationButton.dataset.toggleNotification, toggleNotificationButton.dataset.nextActive);
+      return;
+    }
+    const suggestionStatusButton = event.target.closest("[data-tool-suggestion-status]");
+    if (suggestionStatusButton) {
+      await setToolSuggestionStatus(suggestionStatusButton.dataset.toolSuggestionStatus, suggestionStatusButton.dataset.status);
+      return;
     }
   });
 

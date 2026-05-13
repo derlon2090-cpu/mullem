@@ -698,6 +698,60 @@ function createPostgresDatabaseClient(rawConfig = {}) {
     await ensureDefaultNotifications();
 
     await pool.query(`
+      CREATE TABLE IF NOT EXISTS tool_suggestions (
+        id BIGSERIAL PRIMARY KEY,
+        title VARCHAR(180) NOT NULL,
+        normalized_title VARCHAR(180) NOT NULL,
+        category VARCHAR(120) NOT NULL,
+        description TEXT NOT NULL,
+        use_case TEXT NOT NULL,
+        extra_notes TEXT NULL,
+        importance INTEGER NOT NULL DEFAULT 3,
+        attachment_name VARCHAR(180) NULL,
+        attachment_data_url TEXT NULL,
+        status VARCHAR(40) NOT NULL DEFAULT 'pending',
+        votes_count INTEGER NOT NULL DEFAULT 1,
+        created_by BIGINT NULL REFERENCES app_users(id) ON DELETE SET NULL,
+        approved_by BIGINT NULL REFERENCES app_users(id) ON DELETE SET NULL,
+        approved_at TIMESTAMPTZ NULL,
+        implemented_at TIMESTAMPTZ NULL,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )
+    `);
+    await ensureColumn("tool_suggestions", "importance", "importance INTEGER NOT NULL DEFAULT 3");
+    await ensureColumn("tool_suggestions", "attachment_name", "attachment_name VARCHAR(180) NULL");
+    await ensureColumn("tool_suggestions", "attachment_data_url", "attachment_data_url TEXT NULL");
+    await pool.query("CREATE INDEX IF NOT EXISTS idx_tool_suggestions_status_votes ON tool_suggestions (status, votes_count DESC, created_at DESC)");
+    await pool.query("CREATE INDEX IF NOT EXISTS idx_tool_suggestions_normalized ON tool_suggestions (normalized_title)");
+
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS tool_suggestion_votes (
+        id BIGSERIAL PRIMARY KEY,
+        suggestion_id BIGINT NOT NULL REFERENCES tool_suggestions(id) ON DELETE CASCADE,
+        user_id BIGINT NOT NULL REFERENCES app_users(id) ON DELETE CASCADE,
+        vote_type VARCHAR(40) NOT NULL DEFAULT 'upvote',
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        UNIQUE (suggestion_id, user_id)
+      )
+    `);
+    await pool.query("CREATE INDEX IF NOT EXISTS idx_tool_suggestion_votes_user ON tool_suggestion_votes (user_id, created_at DESC)");
+    await pool.query("CREATE INDEX IF NOT EXISTS idx_tool_suggestion_votes_suggestion ON tool_suggestion_votes (suggestion_id)");
+
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS tool_suggestion_rewards (
+        id BIGSERIAL PRIMARY KEY,
+        suggestion_id BIGINT NOT NULL REFERENCES tool_suggestions(id) ON DELETE CASCADE,
+        user_id BIGINT NOT NULL REFERENCES app_users(id) ON DELETE CASCADE,
+        xp_amount INTEGER NOT NULL DEFAULT 50,
+        reason TEXT NULL,
+        granted_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        UNIQUE (suggestion_id, user_id)
+      )
+    `);
+    await pool.query("CREATE INDEX IF NOT EXISTS idx_tool_suggestion_rewards_user ON tool_suggestion_rewards (user_id, granted_at DESC)");
+
+    await pool.query(`
       CREATE TABLE IF NOT EXISTS admin_logs (
         id BIGSERIAL PRIMARY KEY,
         admin_id BIGINT NULL REFERENCES app_users(id) ON DELETE SET NULL,
@@ -1445,6 +1499,352 @@ function createPostgresDatabaseClient(rawConfig = {}) {
       featureUpdates: items.filter((item) => item.type === "feature_update"),
       account: items.filter((item) => item.type === "account")
     };
+  }
+
+  function normalizeArabicText(text) {
+    return String(text || "")
+      .trim()
+      .toLowerCase()
+      .replace(/[أإآ]/g, "ا")
+      .replace(/ة/g, "ه")
+      .replace(/ى/g, "ي")
+      .replace(/[^\u0600-\u06FFa-zA-Z0-9\s]/g, "")
+      .replace(/\s+/g, " ");
+  }
+
+  function suggestionSimilarity(a, b) {
+    const wordsA = new Set(normalizeArabicText(a).split(" ").filter(Boolean));
+    const wordsB = new Set(normalizeArabicText(b).split(" ").filter(Boolean));
+    const union = new Set([...wordsA, ...wordsB]).size;
+    if (!union) return 0;
+    const intersection = [...wordsA].filter((word) => wordsB.has(word)).length;
+    return intersection / union;
+  }
+
+  function serializeToolSuggestion(row = {}) {
+    const voters = Array.isArray(row.voters)
+      ? row.voters
+      : (() => {
+        try {
+          return Array.isArray(row.voters) ? row.voters : JSON.parse(row.voters || "[]");
+        } catch (_) {
+          return [];
+        }
+      })();
+    return {
+      id: String(row.id || ""),
+      title: String(row.title || "").trim(),
+      normalized_title: String(row.normalized_title || "").trim(),
+      category: String(row.category || "").trim(),
+      description: String(row.description || "").trim(),
+      use_case: String(row.use_case || "").trim(),
+      extra_notes: String(row.extra_notes || "").trim(),
+      importance: Number(row.importance || 3),
+      attachment_name: String(row.attachment_name || "").trim(),
+      attachment_data_url: String(row.attachment_data_url || "").trim(),
+      status: String(row.status || "pending").trim(),
+      votes_count: Number(row.votes_count || 0),
+      created_by: row.created_by != null ? String(row.created_by) : null,
+      created_by_name: String(row.created_by_name || "").trim(),
+      created_by_email: String(row.created_by_email || "").trim(),
+      approved_by: row.approved_by != null ? String(row.approved_by) : null,
+      approved_by_name: String(row.approved_by_name || "").trim(),
+      approved_at: row.approved_at || null,
+      implemented_at: row.implemented_at || null,
+      created_at: row.created_at || null,
+      updated_at: row.updated_at || null,
+      voters: voters.filter(Boolean)
+    };
+  }
+
+  async function submitToolSuggestion(userId, input = {}) {
+    const safeUserId = Number(userId);
+    if (!safeUserId) throw new Error("User is required");
+
+    const title = String(input.title || "").trim().slice(0, 180);
+    const normalizedTitle = normalizeArabicText(title).slice(0, 180);
+    const category = String(input.category || "").trim().slice(0, 120);
+    const description = String(input.description || "").trim().slice(0, 1800);
+    const useCase = String(input.use_case || input.useCase || "").trim().slice(0, 1800);
+    const extraNotes = String(input.extra_notes || input.extraNotes || "").trim().slice(0, 1400);
+    const importance = Math.max(1, Math.min(5, Math.round(Number(input.importance || 3) || 3)));
+    const attachmentName = String(input.attachment_name || input.attachmentName || "").trim().slice(0, 180) || null;
+    const attachmentDataUrl = String(input.attachment_data_url || input.attachmentDataUrl || "").trim().slice(0, 1100000) || null;
+
+    const todayRows = await query(
+      `
+        SELECT COUNT(*) AS count
+        FROM tool_suggestions
+        WHERE created_by = $1
+          AND created_at >= (NOW() AT TIME ZONE 'Asia/Riyadh')::date
+      `,
+      [safeUserId]
+    );
+    if (Number(todayRows?.[0]?.count || 0) >= 5) {
+      return {
+        type: "rate_limited",
+        message: "وصلت للحد اليومي من الاقتراحات. حاول غدًا.",
+        suggestion: null
+      };
+    }
+
+    const existingRows = await query(
+      `
+        SELECT *
+        FROM tool_suggestions
+        WHERE status IN ('pending', 'reviewing', 'approved')
+        ORDER BY votes_count DESC, created_at DESC
+        LIMIT 300
+      `
+    );
+    const matched = existingRows.find((suggestion) => (
+      suggestionSimilarity(normalizedTitle, suggestion.normalized_title || suggestion.title) >= 0.65
+    ));
+
+    const client = await pool.connect();
+    try {
+      await client.query("BEGIN");
+
+      if (matched) {
+        const lockedRows = await client.query(
+          "SELECT * FROM tool_suggestions WHERE id = $1 FOR UPDATE",
+          [matched.id]
+        );
+        const locked = lockedRows.rows[0] || matched;
+        const voteRows = await client.query(
+          `
+            INSERT INTO tool_suggestion_votes (suggestion_id, user_id, vote_type)
+            VALUES ($1, $2, 'upvote')
+            ON CONFLICT (suggestion_id, user_id) DO NOTHING
+            RETURNING id
+          `,
+          [locked.id, safeUserId]
+        );
+        if (voteRows.rows.length) {
+          await client.query(
+            "UPDATE tool_suggestions SET votes_count = votes_count + 1, updated_at = NOW() WHERE id = $1",
+            [locked.id]
+          );
+        }
+        const finalRows = await client.query("SELECT * FROM tool_suggestions WHERE id = $1", [locked.id]);
+        await client.query("COMMIT");
+        return {
+          type: voteRows.rows.length ? "matched" : "already_voted",
+          message: voteRows.rows.length
+            ? "وجدنا اقتراحًا مشابهًا، وتم احتساب صوتك عليه بدل إنشاء اقتراح مكرر."
+            : "اقتراحك مشابه لاقتراح موجود، وقد تم تسجيل صوتك عليه سابقًا.",
+          suggestion: serializeToolSuggestion(finalRows.rows[0] || locked)
+        };
+      }
+
+      const suggestionRows = await client.query(
+        `
+          INSERT INTO tool_suggestions (
+            title, normalized_title, category, description, use_case,
+            extra_notes, importance, attachment_name, attachment_data_url,
+            status, votes_count, created_by
+          )
+          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'pending', 1, $10)
+          RETURNING *
+        `,
+        [
+          title,
+          normalizedTitle,
+          category,
+          description,
+          useCase,
+          extraNotes || null,
+          importance,
+          attachmentName,
+          attachmentDataUrl,
+          safeUserId
+        ]
+      );
+      const suggestion = suggestionRows.rows[0];
+      await client.query(
+        `
+          INSERT INTO tool_suggestion_votes (suggestion_id, user_id, vote_type)
+          VALUES ($1, $2, 'suggest')
+          ON CONFLICT (suggestion_id, user_id) DO NOTHING
+        `,
+        [suggestion.id, safeUserId]
+      );
+      await client.query("COMMIT");
+
+      return {
+        type: "created",
+        message: "تم إرسال اقتراحك بنجاح، شكرًا لمساعدتنا في تطوير Orlixor.",
+        suggestion: serializeToolSuggestion(suggestion)
+      };
+    } catch (error) {
+      await client.query("ROLLBACK").catch(() => {});
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
+  async function listAdminToolSuggestions(options = {}) {
+    const limit = Math.max(1, Math.min(300, Math.round(Number(options.limit || 120) || 120)));
+    const status = String(options.status || "").trim();
+    const statusSql = status ? "WHERE s.status = $2" : "";
+    const params = status ? [limit, status] : [limit];
+    const rows = await query(
+      `
+        SELECT
+          s.*,
+          creator.name AS created_by_name,
+          creator.email AS created_by_email,
+          approver.name AS approved_by_name,
+          COALESCE(
+            json_agg(
+              json_build_object(
+                'user_id', v.user_id,
+                'vote_type', v.vote_type,
+                'created_at', v.created_at,
+                'name', voter.name,
+                'email', voter.email
+              )
+              ORDER BY v.created_at DESC
+            ) FILTER (WHERE v.id IS NOT NULL),
+            '[]'::json
+          ) AS voters
+        FROM tool_suggestions s
+        LEFT JOIN app_users creator ON creator.id = s.created_by
+        LEFT JOIN app_users approver ON approver.id = s.approved_by
+        LEFT JOIN tool_suggestion_votes v ON v.suggestion_id = s.id
+        LEFT JOIN app_users voter ON voter.id = v.user_id
+        ${statusSql}
+        GROUP BY s.id, creator.name, creator.email, approver.name
+        ORDER BY
+          CASE s.status
+            WHEN 'pending' THEN 1
+            WHEN 'reviewing' THEN 2
+            WHEN 'approved' THEN 3
+            WHEN 'implemented' THEN 4
+            WHEN 'rejected' THEN 5
+            ELSE 6
+          END,
+          s.votes_count DESC,
+          s.created_at DESC
+        LIMIT $1
+      `,
+      params
+    );
+    return rows.map(serializeToolSuggestion);
+  }
+
+  async function updateToolSuggestionStatus(payload = {}) {
+    const id = Number(payload.suggestion_id || payload.suggestionId || payload.id);
+    const adminId = payload.admin_id || payload.adminId ? Number(payload.admin_id || payload.adminId) : null;
+    const status = String(payload.status || "").trim().toLowerCase();
+    if (!id || !["pending", "reviewing", "approved", "rejected"].includes(status)) return null;
+
+    const rows = await query(
+      `
+        UPDATE tool_suggestions
+        SET status = $1,
+            approved_by = CASE WHEN $1 = 'approved' THEN $2 ELSE approved_by END,
+            approved_at = CASE WHEN $1 = 'approved' THEN NOW() ELSE approved_at END,
+            updated_at = NOW()
+        WHERE id = $3
+        RETURNING *
+      `,
+      [status, adminId, id]
+    );
+    return rows[0] ? serializeToolSuggestion(rows[0]) : null;
+  }
+
+  async function markToolSuggestionImplemented(payload = {}) {
+    const suggestionId = Number(payload.suggestion_id || payload.suggestionId || payload.id);
+    const adminId = payload.admin_id || payload.adminId ? Number(payload.admin_id || payload.adminId) : null;
+    if (!suggestionId) return null;
+
+    const client = await pool.connect();
+    try {
+      await client.query("BEGIN");
+      const suggestionRows = await client.query(
+        `
+          UPDATE tool_suggestions
+          SET status = 'implemented',
+              implemented_at = COALESCE(implemented_at, NOW()),
+              updated_at = NOW()
+          WHERE id = $1
+          RETURNING *
+        `,
+        [suggestionId]
+      );
+      const suggestion = suggestionRows.rows[0];
+      if (!suggestion) {
+        await client.query("COMMIT");
+        return null;
+      }
+
+      const votesRows = await client.query(
+        "SELECT user_id FROM tool_suggestion_votes WHERE suggestion_id = $1 ORDER BY created_at ASC",
+        [suggestionId]
+      );
+      let rewardedUsers = 0;
+      for (const vote of votesRows.rows) {
+        const userId = Number(vote.user_id);
+        if (!userId) continue;
+        const rewardRows = await client.query(
+          `
+            INSERT INTO tool_suggestion_rewards (suggestion_id, user_id, xp_amount, reason)
+            VALUES ($1, $2, 50, 'implemented_tool_suggestion')
+            ON CONFLICT (suggestion_id, user_id) DO NOTHING
+            RETURNING id
+          `,
+          [suggestionId, userId]
+        );
+        if (!rewardRows.rows.length) continue;
+        rewardedUsers += 1;
+        await client.query(
+          "UPDATE app_users SET xp = COALESCE(xp, 0) + 50, total_xp = COALESCE(total_xp, 0) + 50, updated_at = NOW() WHERE id = $1",
+          [userId]
+        );
+        await client.query(
+          `
+            INSERT INTO xp_ledger (user_id, amount, type, reason, admin_id)
+            VALUES ($1, 50, 'tool_suggestion_reward', $2, $3)
+          `,
+          [userId, `مكافأة اقتراح أداة تم تنفيذها: ${suggestion.title}`, adminId]
+        );
+        await client.query(
+          `
+            INSERT INTO notifications (title, body, type, badge, icon, target_plan, target_user_id, starts_at, is_active)
+            VALUES ($1, $2, 'account', 'مكافأة', 'gift', 'all', $3, NOW(), TRUE)
+            ON CONFLICT (type, title) DO UPDATE SET
+              body = EXCLUDED.body,
+              target_user_id = EXCLUDED.target_user_id,
+              updated_at = NOW()
+          `,
+          [
+            `تم تنفيذ اقتراحك: ${suggestion.title} #${userId}`.slice(0, 180),
+            `تم تنفيذ الأداة المقترحة "${suggestion.title}" وتمت إضافة 50 XP إلى رصيدك.`,
+            userId
+          ]
+        );
+      }
+      await client.query(
+        `
+          INSERT INTO admin_logs (admin_id, action, target_type, target_id, details_json)
+          VALUES ($1, 'IMPLEMENT_TOOL_SUGGESTION', 'tool_suggestion', $2, $3::jsonb)
+        `,
+        [adminId, String(suggestionId), JSON.stringify({ rewardedUsers, xpPerUser: 50 })]
+      );
+      await client.query("COMMIT");
+      return {
+        suggestion: serializeToolSuggestion(suggestion),
+        rewardedUsers,
+        xpPerUser: 50
+      };
+    } catch (error) {
+      await client.query("ROLLBACK").catch(() => {});
+      throw error;
+    } finally {
+      client.release();
+    }
   }
 
   async function listNotificationsForUser(user, options = {}) {
@@ -2686,6 +3086,10 @@ function createPostgresDatabaseClient(rawConfig = {}) {
     listAdminNotifications,
     createNotification,
     updateNotification,
+    submitToolSuggestion,
+    listAdminToolSuggestions,
+    updateToolSuggestionStatus,
+    markToolSuggestionImplemented,
     grantDailyXpIfNeeded,
     findPackageById,
     findDefaultPackage,

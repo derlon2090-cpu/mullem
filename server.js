@@ -4130,6 +4130,177 @@ function buildApiNotification(item = {}) {
   };
 }
 
+const TOOL_SUGGESTION_CATEGORIES = new Set([
+  "الأكثر استخدامًا",
+  "كتابة وتحرير",
+  "تلخيص وتنظيم",
+  "تحليل وبيانات",
+  "إنتاجية",
+  "تعليم وتعلم",
+  "أدوات مجانية",
+  "أدوات مرئية",
+  "PDF وملفات",
+  "أخرى"
+]);
+const TOOL_SUGGESTION_STATUSES = new Set(["pending", "reviewing", "approved", "rejected", "implemented"]);
+
+function buildApiToolSuggestion(item = {}) {
+  return {
+    id: String(item.id || ""),
+    title: String(item.title || "").trim(),
+    normalized_title: String(item.normalized_title || "").trim(),
+    category: String(item.category || "").trim(),
+    description: String(item.description || "").trim(),
+    use_case: String(item.use_case || item.useCase || "").trim(),
+    extra_notes: String(item.extra_notes || item.extraNotes || "").trim(),
+    importance: Math.max(1, Math.min(5, Number(item.importance || 3))),
+    attachment_name: String(item.attachment_name || item.attachmentName || "").trim(),
+    attachment_data_url: String(item.attachment_data_url || item.attachmentDataUrl || "").trim(),
+    status: String(item.status || "pending").trim(),
+    votes_count: Number(item.votes_count || 0),
+    created_by: item.created_by != null ? String(item.created_by) : null,
+    created_by_name: String(item.created_by_name || "").trim(),
+    created_by_email: String(item.created_by_email || "").trim(),
+    approved_by: item.approved_by != null ? String(item.approved_by) : null,
+    approved_by_name: String(item.approved_by_name || "").trim(),
+    approved_at: item.approved_at || null,
+    implemented_at: item.implemented_at || null,
+    created_at: item.created_at || null,
+    updated_at: item.updated_at || null,
+    voters: Array.isArray(item.voters) ? item.voters.map((vote) => ({
+      user_id: vote?.user_id != null ? String(vote.user_id) : "",
+      vote_type: String(vote?.vote_type || "").trim(),
+      created_at: vote?.created_at || null,
+      name: String(vote?.name || "").trim(),
+      email: String(vote?.email || "").trim()
+    })) : []
+  };
+}
+
+function normalizeToolSuggestionPayload(payload = {}) {
+  const title = requireTextField(payload.title, "title", 180);
+  const categoryText = requireTextField(payload.category, "category", 120);
+  const category = TOOL_SUGGESTION_CATEGORIES.has(categoryText) ? categoryText : categoryText.slice(0, 120);
+  const description = requireTextField(payload.description, "description", 1800);
+  const useCase = requireTextField(payload.useCase || payload.use_case, "useCase", 1800);
+  const importance = Math.max(1, Math.min(5, Math.round(Number(payload.importance || 3) || 3)));
+  const attachmentName = sanitizeOptionalText(payload.attachmentName || payload.attachment_name, 180);
+  const attachmentDataUrl = String(payload.attachmentDataUrl || payload.attachment_data_url || "").trim();
+  if (attachmentDataUrl && !/^data:image\/(?:png|jpe?g|webp);base64,/i.test(attachmentDataUrl)) {
+    throw createHttpError(422, "صورة الاقتراح يجب أن تكون PNG أو JPG أو WebP.");
+  }
+  if (attachmentDataUrl && attachmentDataUrl.length > 1100000) {
+    throw createHttpError(413, "صورة الاقتراح كبيرة جدًا.");
+  }
+
+  return {
+    title,
+    category,
+    description,
+    useCase,
+    extraNotes: sanitizeOptionalText(payload.extraNotes || payload.extra_notes, 1400),
+    importance,
+    attachmentName,
+    attachmentDataUrl
+  };
+}
+
+async function handleSubmitToolSuggestion(req, res) {
+  requireDatabaseConnection();
+  const auth = await requireAuthenticatedUser(req);
+  const payload = normalizeToolSuggestionPayload(await parseJsonBody(req));
+  if (typeof databaseClient.submitToolSuggestion !== "function") {
+    throw createHttpError(501, "Tool suggestions are not available.");
+  }
+
+  const result = await databaseClient.submitToolSuggestion(auth.user.id, payload);
+  if (result?.type === "rate_limited") {
+    throw createHttpError(429, result.message || "وصلت للحد اليومي من الاقتراحات.");
+  }
+
+  sendJson(req, res, result?.type === "created" ? 201 : 200, {
+    success: true,
+    data: {
+      type: result?.type || "created",
+      message: result?.message || "تم إرسال اقتراحك بنجاح.",
+      suggestion: buildApiToolSuggestion(result?.suggestion || {})
+    }
+  });
+}
+
+async function handleAdminToolSuggestions(req, res) {
+  await requireAdminUser(req);
+  if (typeof databaseClient.listAdminToolSuggestions !== "function") {
+    throw createHttpError(501, "Tool suggestions are not available.");
+  }
+  const url = new URL(req.url, `http://${req.headers.host || "127.0.0.1"}`);
+  const status = sanitizeOptionalText(url.searchParams.get("status"), 40);
+  const items = await databaseClient.listAdminToolSuggestions({
+    status: TOOL_SUGGESTION_STATUSES.has(status) ? status : "",
+    limit: Math.max(1, Math.min(300, Number(url.searchParams.get("limit") || 150) || 150))
+  });
+
+  sendJson(req, res, 200, {
+    success: true,
+    data: {
+      items: items.map(buildApiToolSuggestion)
+    }
+  });
+}
+
+async function handleAdminUpdateToolSuggestionStatus(req, res, suggestionId, forcedStatus = "") {
+  const auth = await requireAdminUser(req);
+  if (typeof databaseClient.updateToolSuggestionStatus !== "function") {
+    throw createHttpError(501, "Tool suggestions are not available.");
+  }
+  const payload = await parseJsonBody(req);
+  const status = String(forcedStatus || payload.status || "").trim().toLowerCase();
+  if (!TOOL_SUGGESTION_STATUSES.has(status)) {
+    throw createHttpError(422, "حالة الاقتراح غير صحيحة.");
+  }
+
+  let result = null;
+  if (status === "implemented") {
+    result = await databaseClient.markToolSuggestionImplemented({
+      suggestion_id: suggestionId,
+      admin_id: auth.user.id
+    });
+    if (!result?.suggestion) {
+      throw createHttpError(404, "Tool suggestion was not found.");
+    }
+    await recordAdminAction(req, auth, "IMPLEMENT_TOOL_SUGGESTION", "tool_suggestion", suggestionId, {
+      rewardedUsers: result.rewardedUsers,
+      xpPerUser: result.xpPerUser
+    });
+    sendJson(req, res, 200, {
+      success: true,
+      data: {
+        item: buildApiToolSuggestion(result.suggestion),
+        rewardedUsers: result.rewardedUsers,
+        xpPerUser: result.xpPerUser
+      }
+    });
+    return;
+  }
+
+  const item = await databaseClient.updateToolSuggestionStatus({
+    suggestion_id: suggestionId,
+    admin_id: auth.user.id,
+    status
+  });
+  if (!item) {
+    throw createHttpError(404, "Tool suggestion was not found.");
+  }
+  await recordAdminAction(req, auth, `${status.toUpperCase()}_TOOL_SUGGESTION`, "tool_suggestion", suggestionId, { status });
+
+  sendJson(req, res, 200, {
+    success: true,
+    data: {
+      item: buildApiToolSuggestion(item)
+    }
+  });
+}
+
 function parseOptionalFutureDate(value, fieldName) {
   const text = sanitizeOptionalText(value, 80);
   if (!text) return null;
@@ -6068,6 +6239,11 @@ async function routeRequest(req, res) {
     return;
   }
 
+  if (req.method === "POST" && requestPath === "/api/tool-suggestions") {
+    await handleSubmitToolSuggestion(req, res);
+    return;
+  }
+
   if (requestPath.startsWith("/api/admin")) {
     await requireAdminUser(req);
   }
@@ -6095,6 +6271,35 @@ async function routeRequest(req, res) {
   if (req.method === "PATCH" && requestPath.startsWith("/api/admin/notifications/")) {
     const notificationId = decodeURIComponent(requestPath.replace("/api/admin/notifications/", ""));
     await handleAdminUpdateNotification(req, res, notificationId);
+    return;
+  }
+
+  if (req.method === "GET" && requestPath === "/api/admin/tool-suggestions") {
+    await handleAdminToolSuggestions(req, res);
+    return;
+  }
+
+  if (req.method === "PATCH" && requestPath.startsWith("/api/admin/tool-suggestions/") && requestPath.endsWith("/status")) {
+    const suggestionId = decodeURIComponent(requestPath.replace("/api/admin/tool-suggestions/", "").replace("/status", ""));
+    await handleAdminUpdateToolSuggestionStatus(req, res, suggestionId);
+    return;
+  }
+
+  if (req.method === "POST" && requestPath.startsWith("/api/admin/tool-suggestions/") && requestPath.endsWith("/approve")) {
+    const suggestionId = decodeURIComponent(requestPath.replace("/api/admin/tool-suggestions/", "").replace("/approve", ""));
+    await handleAdminUpdateToolSuggestionStatus(req, res, suggestionId, "approved");
+    return;
+  }
+
+  if (req.method === "POST" && requestPath.startsWith("/api/admin/tool-suggestions/") && requestPath.endsWith("/reject")) {
+    const suggestionId = decodeURIComponent(requestPath.replace("/api/admin/tool-suggestions/", "").replace("/reject", ""));
+    await handleAdminUpdateToolSuggestionStatus(req, res, suggestionId, "rejected");
+    return;
+  }
+
+  if (req.method === "POST" && requestPath.startsWith("/api/admin/tool-suggestions/") && requestPath.endsWith("/implemented")) {
+    const suggestionId = decodeURIComponent(requestPath.replace("/api/admin/tool-suggestions/", "").replace("/implemented", ""));
+    await handleAdminUpdateToolSuggestionStatus(req, res, suggestionId, "implemented");
     return;
   }
 

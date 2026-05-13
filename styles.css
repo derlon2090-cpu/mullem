@@ -11234,3 +11234,215 @@ body.orlixor-platform .scroll-top-btn {
     grid-template-columns: 1fr;
   }
 }
+
+.admin-tools-live-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 14px;
+  margin-bottom: 18px;
+}
+
+.admin-tool-suggestions {
+  grid-column: 1 / -1;
+  border: 1px solid #eee8ff;
+  border-radius: 24px;
+  background: linear-gradient(180deg, #fff, #fbf9ff);
+  box-shadow: 0 18px 48px rgba(93, 71, 180, 0.08);
+  padding: 20px;
+  direction: rtl;
+}
+
+.admin-tool-suggestions-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  margin-bottom: 16px;
+}
+
+.admin-tool-suggestions-head strong {
+  display: block;
+  color: #111936;
+  font-size: 1.15rem;
+  font-weight: 950;
+}
+
+.admin-tool-suggestions-head span {
+  display: block;
+  margin-top: 6px;
+  color: #8b94b0;
+  font-weight: 800;
+  line-height: 1.6;
+}
+
+.admin-tool-suggestions-head > b {
+  flex: 0 0 auto;
+  color: #6d4cff;
+  background: #f2ecff;
+  border: 1px solid #e4d9ff;
+  border-radius: 999px;
+  padding: 9px 14px;
+}
+
+.admin-suggestion-stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+  gap: 10px;
+  margin-bottom: 16px;
+}
+
+.admin-suggestion-stats span {
+  border: 1px solid #eee8ff;
+  border-radius: 16px;
+  background: #fff;
+  color: #6f7694;
+  padding: 12px;
+  font-weight: 900;
+}
+
+.admin-suggestion-stats b {
+  display: block;
+  color: #111936;
+  font-size: 1.2rem;
+}
+
+.admin-suggestion-list {
+  display: grid;
+  gap: 12px;
+}
+
+.admin-suggestion-card {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 16px;
+  align-items: stretch;
+  border: 1px solid #eee8ff;
+  border-radius: 20px;
+  background: #fff;
+  padding: 16px;
+}
+
+.admin-suggestion-card.is-implemented {
+  border-color: #b9efd5;
+  background: linear-gradient(180deg, #fff, #f5fff9);
+}
+
+.admin-suggestion-card.is-rejected {
+  border-color: #ffd3dd;
+  background: linear-gradient(180deg, #fff, #fff6f8);
+}
+
+.admin-suggestion-main h3 {
+  margin: 8px 0 6px;
+  color: #111936;
+  font-size: 1.08rem;
+  font-weight: 950;
+}
+
+.admin-suggestion-main p,
+.admin-suggestion-main small,
+.admin-suggestion-main blockquote {
+  color: #7f89a8;
+  font-weight: 800;
+  line-height: 1.7;
+}
+
+.admin-suggestion-main p {
+  margin: 0 0 8px;
+}
+
+.admin-suggestion-main small {
+  display: block;
+}
+
+.admin-suggestion-main blockquote {
+  margin: 10px 0 0;
+  border-inline-start: 3px solid #cdbdff;
+  padding-inline-start: 10px;
+}
+
+.admin-suggestion-status {
+  display: inline-flex;
+  align-items: center;
+  width: fit-content;
+  border-radius: 999px;
+  padding: 6px 10px;
+  color: #8a5b00;
+  background: #fff4de;
+  border: 1px solid #ffd89a;
+  font-size: 0.8rem;
+  font-weight: 950;
+}
+
+.admin-suggestion-status.is-approved,
+.admin-suggestion-status.is-implemented {
+  color: #07805a;
+  background: #eafaf2;
+  border-color: #b9efd5;
+}
+
+.admin-suggestion-status.is-rejected {
+  color: #d9365f;
+  background: #fff1f3;
+  border-color: #ffd3dd;
+}
+
+.admin-suggestion-voters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.admin-suggestion-voters span {
+  color: #6d4cff;
+  background: #f2ecff;
+  border-radius: 999px;
+  padding: 5px 9px;
+  font-size: 0.78rem;
+  font-weight: 900;
+}
+
+.admin-suggestion-actions {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 8px;
+  min-width: 170px;
+}
+
+.admin-suggestion-actions button {
+  border: 1px solid #eee8ff;
+  border-radius: 13px;
+  background: #fff;
+  color: #6d4cff;
+  min-height: 38px;
+  font-weight: 950;
+  cursor: pointer;
+}
+
+.admin-suggestion-actions .admin-warning-btn {
+  color: #8a5b00;
+  border-color: #ffd89a;
+  background: #fff8ea;
+}
+
+.admin-suggestion-actions .admin-danger-btn {
+  color: #d9365f;
+  border-color: #ffd3dd;
+  background: #fff6f8;
+}
+
+@media (max-width: 760px) {
+  .admin-tool-suggestions-head,
+  .admin-suggestion-card {
+    grid-template-columns: 1fr;
+  }
+
+  .admin-suggestion-card {
+    display: grid;
+  }
+
+  .admin-suggestion-actions {
+    min-width: 0;
+  }
+}
