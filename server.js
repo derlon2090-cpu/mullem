@@ -4189,7 +4189,7 @@ function normalizeToolSuggestionPayload(payload = {}) {
   if (attachmentDataUrl && !/^data:image\/(?:png|jpe?g|webp);base64,/i.test(attachmentDataUrl)) {
     throw createHttpError(422, "صورة الاقتراح يجب أن تكون PNG أو JPG أو WebP.");
   }
-  if (attachmentDataUrl && attachmentDataUrl.length > 1100000) {
+  if (attachmentDataUrl && attachmentDataUrl.length > 7000000) {
     throw createHttpError(413, "صورة الاقتراح كبيرة جدًا.");
   }
 

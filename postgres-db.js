@@ -1569,7 +1569,7 @@ function createPostgresDatabaseClient(rawConfig = {}) {
     const extraNotes = String(input.extra_notes || input.extraNotes || "").trim().slice(0, 1400);
     const importance = Math.max(1, Math.min(5, Math.round(Number(input.importance || 3) || 3)));
     const attachmentName = String(input.attachment_name || input.attachmentName || "").trim().slice(0, 180) || null;
-    const attachmentDataUrl = String(input.attachment_data_url || input.attachmentDataUrl || "").trim().slice(0, 1100000) || null;
+    const attachmentDataUrl = String(input.attachment_data_url || input.attachmentDataUrl || "").trim().slice(0, 7000000) || null;
 
     const todayRows = await query(
       `

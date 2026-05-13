@@ -671,6 +671,7 @@
     toolSuggestionImportance: 3,
     toolSuggestionAttachmentName: "",
     toolSuggestionAttachmentDataUrl: "",
+    toolSuggestionReturnView: "tools",
     toolSuggestionDraft: {},
     likedReplies: {},
     openThreadMenuId: "",
@@ -9742,6 +9743,9 @@
   }
 
   function renderMain(profile) {
+    if (state.toolSuggestionModalOpen) {
+      return renderToolSuggestionPage(profile);
+    }
     if (profile.key === "ai-tools") {
       if (state.toolView === "smart-search") {
         return renderSmartSearchMain(profile);
@@ -10201,7 +10205,7 @@
                 <input type="file" accept="image/png,image/jpeg,image/webp" data-tool-suggestion-image hidden>
                 <span>${icons.document}</span>
                 <b>${state.toolSuggestionAttachmentName ? escapeHtml(state.toolSuggestionAttachmentName) : "صورة توضيحية اختيارية"}</b>
-                <small>PNG, JPG, WebP حتى 700KB</small>
+                <small>PNG, JPG, WebP حتى 5MB</small>
               </label>
             </div>
 
@@ -10220,6 +10224,188 @@
     `;
   }
 
+  function renderToolSuggestionPage() {
+    const importance = Math.max(1, Math.min(5, Number(state.toolSuggestionImportance || 3)));
+    const draft = state.toolSuggestionDraft || {};
+    const statusClass = state.toolSuggestionResultType === "matched" || state.toolSuggestionResultType === "already_voted"
+      ? "is-matched"
+      : "is-created";
+    const categoryValue = draft.category || "";
+    const descriptionLength = String(draft.description || "").length;
+    const useCaseLength = String(draft.useCase || "").length;
+    const statsSeed = Math.max(1, importance);
+
+    return `
+      <section class="guest-main tools-main tool-suggestion-main" aria-label="اقتراح أداة جديدة">
+        <div class="tool-suggestion-page">
+          <div class="tool-suggestion-topbar">
+            <button class="tool-suggestion-return" type="button" data-close-tool-suggestion>
+              <span aria-hidden="true">←</span>
+              <b>العودة إلى الأدوات</b>
+            </button>
+            <nav class="tool-suggestion-breadcrumb" aria-label="مسار الصفحة">
+              <span>الرئيسية</span>
+              <span aria-hidden="true">‹</span>
+              <span>الأدوات</span>
+              <span aria-hidden="true">‹</span>
+              <b>اقتراح أداة جديدة</b>
+            </nav>
+          </div>
+
+          <header class="tool-suggestion-hero">
+            <div class="tool-suggestion-hero-title">
+              <h1>اقتراح أداة جديدة</h1>
+              <span class="tool-suggestion-hero-mark" aria-hidden="true">${icons.sparkle}</span>
+            </div>
+            <p>أخبرنا عن الأداة التي تتمنى وجودها في أورليكس، وسنأخذ اقتراحك بعين الاعتبار</p>
+          </header>
+
+          <div class="tool-suggestion-layout">
+            <form class="tool-suggestion-form-card" data-tool-suggestion-form>
+              <header class="tool-suggestion-card-head">
+                <h2>معلومات الأداة المقترحة</h2>
+                <span aria-hidden="true">${icons.bell}</span>
+              </header>
+
+              <div class="tool-suggestion-grid">
+                <label>
+                  <span>اسم الأداة المقترحة *</span>
+                  <input class="tool-suggestion-field" data-tool-suggestion-input="title" name="title" maxlength="180" required placeholder="مثال: أداة تلخيص المقالات" value="${escapeHtml(draft.title || "")}">
+                </label>
+                <label>
+                  <span>اختر فئة الأداة *</span>
+                  <select class="tool-suggestion-field" data-tool-suggestion-input="category" name="category" required>
+                    <option value="" ${categoryValue ? "" : "selected"} disabled>اختر فئة مناسبة</option>
+                    ${toolSuggestionCategories.map((category) => `<option value="${escapeHtml(category)}" ${category === categoryValue ? "selected" : ""}>${escapeHtml(category)}</option>`).join("")}
+                  </select>
+                </label>
+              </div>
+
+              <label class="tool-suggestion-wide-field">
+                <span>وصف الأداة *</span>
+                <small>صف لنا الأداة التي تقترحها وما الذي ستساعد المستخدم على القيام به</small>
+                <textarea class="tool-suggestion-field" data-tool-suggestion-input="description" name="description" maxlength="500" required placeholder="اكتب وصفًا واضحًا للأداة ومميزاتها وطريقة عملها المقترحة...">${escapeHtml(draft.description || "")}</textarea>
+                <b class="tool-suggestion-counter">${escapeHtml(`${descriptionLength}/500`)}</b>
+              </label>
+
+              <label class="tool-suggestion-wide-field">
+                <span>لماذا تعتقد أن هذه الأداة مهمة؟ *</span>
+                <small>ما المشكلة التي ستحلها هذه الأداة للمستخدمين؟</small>
+                <textarea class="tool-suggestion-field" data-tool-suggestion-input="useCase" name="useCase" maxlength="300" required placeholder="اشرح لنا لماذا تحتاج هذه الأداة...">${escapeHtml(draft.useCase || "")}</textarea>
+                <b class="tool-suggestion-counter">${escapeHtml(`${useCaseLength}/300`)}</b>
+              </label>
+
+              <div class="tool-suggestion-bottom-row">
+                <div class="tool-suggestion-importance">
+                  <span>مستوى أهمية الأداة</span>
+                  <small>حدد مدى أهمية هذه الأداة بالنسبة لك</small>
+                  <div>
+                    ${[1, 2, 3, 4, 5].map((value) => `
+                      <button class="${value === importance ? "is-active" : ""}" type="button" data-tool-suggestion-importance="${value}" aria-pressed="${value === importance ? "true" : "false"}">${value}</button>
+                    `).join("")}
+                  </div>
+                </div>
+
+                <label>
+                  <span>اقتراحات إضافية (اختياري)</span>
+                  <small>ميزات إضافية، أمثلة، أو أي ملاحظات أخرى</small>
+                  <input class="tool-suggestion-field" data-tool-suggestion-input="extraNotes" name="extraNotes" maxlength="300" placeholder="أي أفكار إضافية تود مشاركتها..." value="${escapeHtml(draft.extraNotes || "")}">
+                </label>
+              </div>
+
+              <label class="tool-suggestion-upload">
+                <input type="file" accept="image/png,image/jpeg,image/webp" data-tool-suggestion-image hidden>
+                <span aria-hidden="true">${icons.attach}</span>
+                <div>
+                  <b>${state.toolSuggestionAttachmentName ? escapeHtml(state.toolSuggestionAttachmentName) : "إضافة صورة توضيحية (اختياري)"}</b>
+                  <small>يمكنك إضافة صورة توضح فكرتك بشكل أفضل (JPG, PNG, WebP حتى 5MB)</small>
+                </div>
+              </label>
+
+              ${state.toolSuggestionError ? `<p class="tool-suggestion-alert is-error">${escapeHtml(state.toolSuggestionError)}</p>` : ""}
+              ${state.toolSuggestionSuccess ? `<p class="tool-suggestion-alert ${statusClass}">${escapeHtml(state.toolSuggestionSuccess)}</p>` : ""}
+
+              <footer class="tool-suggestion-actions">
+                <button class="tool-suggestion-primary" type="submit" ${state.toolSuggestionSubmitting ? "disabled" : ""}>
+                  <span>${state.toolSuggestionSubmitting ? "جاري الإرسال..." : "إرسال الاقتراح"}</span>
+                  ${icons.send}
+                </button>
+                <button class="tool-suggestion-secondary" type="button" data-close-tool-suggestion>إلغاء</button>
+              </footer>
+            </form>
+
+            <aside class="tool-suggestion-info-panel" aria-label="كيف تعمل هذه الخدمة؟">
+              <section class="tool-suggestion-side-card tool-suggestion-how">
+                <header>
+                  <span class="tool-suggestion-side-icon" aria-hidden="true">${icons.sparkle}</span>
+                  <h2>كيف تعمل هذه الخدمة؟</h2>
+                </header>
+
+                <div class="tool-suggestion-steps">
+                  <article>
+                    <span>${icons.edit}</span>
+                    <div>
+                      <b>أرسل اقتراحات</b>
+                      <small>اكتب تفاصيل الأداة التي تتمنى وجودها في أورليكس وارسل اقتراحك.</small>
+                    </div>
+                  </article>
+                  <article>
+                    <span>${icons.group}</span>
+                    <div>
+                      <b>مراجعة فريق أورليكس</b>
+                      <small>يقوم فريقنا بمراجعة جميع الاقتراحات وتقييمها بناءً على احتياجات المستخدمين.</small>
+                    </div>
+                  </article>
+                  <article>
+                    <span>${icons.bolt}</span>
+                    <div>
+                      <b>التطوير والتصويت</b>
+                      <small>إذا تم اختيار اقتراحك، سنعمل على تطويره وستكون من أوائل من يجربه.</small>
+                    </div>
+                  </article>
+                </div>
+              </section>
+
+              <section class="tool-suggestion-side-card tool-suggestion-stats">
+                <header>
+                  <h3>إحصائيات الاقتراحات</h3>
+                  <span aria-hidden="true">${icons.ai}</span>
+                </header>
+                <div class="tool-suggestion-stats-grid">
+                  <div>
+                    <strong>${escapeHtml(formatNumber(112 + statsSeed))}</strong>
+                    <small>تم تنفيذها</small>
+                  </div>
+                  <div>
+                    <strong>${escapeHtml(formatNumber(356 + statsSeed))}</strong>
+                    <small>قيد المراجعة</small>
+                  </div>
+                  <div>
+                    <strong>${escapeHtml(formatNumber(1248 + statsSeed))}</strong>
+                    <small>إجمالي الاقتراحات</small>
+                  </div>
+                </div>
+              </section>
+
+              <section class="tool-suggestion-side-card tool-suggestion-reward-card">
+                <span aria-hidden="true">${icons.crown}</span>
+                <div>
+                  <h3>مكافأة خاصة</h3>
+                  <p>إذا تم تنفيذ أداتك المقترحة، ستحصل على 50 XP كمكافأة لتحفيز مساهمتك!</p>
+                </div>
+              </section>
+            </aside>
+          </div>
+
+          <footer class="tool-suggestion-footnote">
+            <span aria-hidden="true">${icons.lock}</span>
+            <p>جميع الاقتراحات تساهم في تطوير منصة أورليكس. نشكرك على مشاركتك وإبداعك!</p>
+          </footer>
+        </div>
+      </section>
+    `;
+  }
+
   function renderShell() {
     const profile = getProfile();
     const isToolsWorkspace = state.section === "ai-tools";
@@ -10233,7 +10419,6 @@
       </div>
       ${renderAuthModal()}
       ${renderUpgradeModal()}
-      ${renderToolSuggestionModal()}
       ${renderSettingsModal()}
       ${renderNotificationsModal()}
       <div class="guest-toast-stack" aria-live="polite"></div>
@@ -11513,8 +11698,8 @@
       render();
       return;
     }
-    if (file.size > 700 * 1024) {
-      state.toolSuggestionError = "حجم الصورة التوضيحية يجب ألا يتجاوز 700KB.";
+    if (file.size > 5 * 1024 * 1024) {
+      state.toolSuggestionError = "حجم الصورة التوضيحية يجب ألا يتجاوز 5MB.";
       state.toolSuggestionAttachmentName = "";
       state.toolSuggestionAttachmentDataUrl = "";
       render();
@@ -11773,6 +11958,7 @@
       if (event.target.closest("[data-close-tool-suggestion]")) {
         state.toolSuggestionModalOpen = false;
         state.toolSuggestionSubmitting = false;
+        state.toolView = state.toolSuggestionReturnView || "tools";
         render();
         return;
       }
@@ -11783,8 +11969,10 @@
           openAuthModal("سجّل دخولك حتى ترسل اقتراح أداة جديدة.");
           return;
         }
+        state.toolSuggestionReturnView = state.toolView || "tools";
         resetToolSuggestionFormState();
         state.toolSuggestionModalOpen = true;
+        state.toolView = "tools";
         render();
         return;
       }
@@ -13000,6 +13188,21 @@
         setComposerValue(composeInput.value);
       }
 
+      const toolSuggestionField = event.target.closest("[data-tool-suggestion-input]");
+      if (toolSuggestionField) {
+        const form = toolSuggestionField.closest("[data-tool-suggestion-form]");
+        const draft = captureToolSuggestionDraft(form);
+        const fieldName = toolSuggestionField.getAttribute("data-tool-suggestion-input") || "";
+        if (fieldName === "description") {
+          const counter = toolSuggestionField.closest("label")?.querySelector(".tool-suggestion-counter");
+          if (counter) counter.textContent = `${String(draft.description || "").length}/500`;
+        }
+        if (fieldName === "useCase") {
+          const counter = toolSuggestionField.closest("label")?.querySelector(".tool-suggestion-counter");
+          if (counter) counter.textContent = `${String(draft.useCase || "").length}/300`;
+        }
+      }
+
       const smartQuery = event.target.closest("[data-smart-search-query]");
       if (smartQuery) {
         state.smartSearch.query = smartQuery.value;
@@ -13127,6 +13330,11 @@
         await handleToolSuggestionImage(toolSuggestionImage.files?.[0]);
         toolSuggestionImage.value = "";
         return;
+      }
+
+      const toolSuggestionSelect = event.target.closest("[data-tool-suggestion-input]");
+      if (toolSuggestionSelect) {
+        captureToolSuggestionDraft(toolSuggestionSelect.closest("[data-tool-suggestion-form]"));
       }
 
       const imageEnhancerInput = event.target.closest("[data-image-enhancer-input]");
