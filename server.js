@@ -5259,10 +5259,79 @@ async function handleAdminCreatePackage(req, res) {
 }
 
 async function handleAssistantV3(req, res) {
-  sendJson(req, res, 200, {
-    ok: true,
-    answer: "ASSISTANT_V3_ROUTE_WORKING"
-  });
+  const payload = await parseJsonBody(req);
+  const message = String(payload.message || payload.query || payload.prompt || "").trim();
+
+  if (!message) {
+    sendJson(req, res, 400, {
+      ok: false,
+      error: "MISSING_MESSAGE"
+    });
+    return;
+  }
+
+  if (!OPENAI_API_KEY) {
+    sendJson(req, res, 500, {
+      ok: false,
+      error: "MISSING_OPENAI_API_KEY"
+    });
+    return;
+  }
+
+  const endpoint = OPENAI_RESPONSES_ENDPOINT || "https://api.openai.com/v1/responses";
+  const model = "gpt-4o-mini";
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), OPENAI_TIMEOUT_MS);
+
+  try {
+    const response = await fetch(endpoint, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${OPENAI_API_KEY}`,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        model,
+        input: `أجب عن السؤال التالي بشكل مفيد وواضح. إذا كان يحتاج معلومات حديثة، وضح أن الإجابة قد لا تكون محدثة:\n\n${message}`
+      }),
+      signal: controller.signal
+    });
+
+    const contentType = response.headers.get("content-type") || "";
+    const data = contentType.includes("application/json")
+      ? await response.json()
+      : { error: await response.text() };
+
+    if (!response.ok) {
+      sendJson(req, res, response.status || 500, {
+        ok: false,
+        error: "ASSISTANT_V3_FAILED",
+        message: data?.error?.message || data?.message || data?.error || "OpenAI request failed",
+        status: response.status || null,
+        code: data?.error?.code || null,
+        type: data?.error?.type || null
+      });
+      return;
+    }
+
+    sendJson(req, res, 200, {
+      ok: true,
+      provider: "openai",
+      model,
+      answer: data.output_text || "No answer returned"
+    });
+  } catch (error) {
+    sendJson(req, res, error?.name === "AbortError" ? 504 : 500, {
+      ok: false,
+      error: "ASSISTANT_V3_FAILED",
+      message: error?.message || "Unknown error",
+      status: error?.status || null,
+      code: error?.code || null,
+      type: error?.type || null
+    });
+  } finally {
+    clearTimeout(timeoutId);
+  }
 }
 
 async function handleToneTool(req, res) {
@@ -6259,8 +6328,8 @@ async function routeRequest(req, res) {
       ok: true,
       route: "/api/assistant-v3",
       version: ASSISTANT_V3_VERSION,
-      provider: "stub",
-      model: null,
+      provider: "openai",
+      model: "gpt-4o-mini",
       hasOpenAIKey: Boolean(OPENAI_API_KEY),
       keyPrefix: OPENAI_API_KEY ? OPENAI_API_KEY.slice(0, 7) : null,
       timestamp: new Date().toISOString(),
@@ -6292,8 +6361,8 @@ async function routeRequest(req, res) {
   if (req.method === "GET" && requestPath === "/api/debug-version") {
     sendJson(req, res, 200, {
       version: ASSISTANT_V3_VERSION,
-      provider: "stub",
-      model: null,
+      provider: "openai",
+      model: "gpt-4o-mini",
       hasOpenAIKey: Boolean(OPENAI_API_KEY),
       envModel: process.env.MODEL || null,
       aiModel: process.env.AI_MODEL || null,
