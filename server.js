@@ -5281,19 +5281,21 @@ async function handleOpenAiWebSearchV2(req, res) {
 
   let result;
   try {
-    console.log(`OPENAI_WEB_SEARCH_V2_VERSION=${OPENAI_WEB_SEARCH_V2_VERSION}`);
-    console.log("OPENAI_WEB_SEARCH_V2_PROVIDER=openai");
-    console.log("OPENAI_WEB_SEARCH_V2_MODEL=", resolveOpenAiWebSearchV2Model());
+    console.log("OPENAI_SEARCH_FINAL_REQUEST", {
+      hasKey: Boolean(OPENAI_API_KEY),
+      model: "gpt-4.1-mini",
+      queryLength: String(query || "").length
+    });
     result = await callOpenAiWebSearchV2ViaSdk({
       query,
       language,
       sourceType,
       deep
     });
-  } catch (error) {
-    console.error("Smart search error:", {
+ } catch (error) {
+    console.error("OPENAI_SEARCH_FINAL_ERROR", {
       provider: "openai",
-      model: resolveOpenAiWebSearchV2Model(),
+      model: "gpt-4.1-mini",
       message: String(error?.message || error || "Unknown error"),
       status: Number(error?.statusCode || error?.status || 500),
       endpoint: OPENAI_RESPONSES_ENDPOINT || "https://api.openai.com/v1/responses",
@@ -5303,14 +5305,19 @@ async function handleOpenAiWebSearchV2(req, res) {
     });
 
     sendJson(req, res, 500, {
+      ok: false,
       success: false,
       request_id: req.__requestId,
-      message: "تعذر تنفيذ البحث الذكي عبر ChatGPT API"
+      error: "OPENAI_SEARCH_FAILED",
+      message: String(error?.message || "Unknown error"),
+      status: Number(error?.statusCode || error?.status || null) || null,
+      type: error?.type || null,
+      code: error?.code || null
     });
     return;
   }
 
-  const chargedUser = await chargeUserForMessage(
+ const chargedUser = await chargeUserForMessage(
     activeUser,
     xpCost,
     deep ? "استخدم البحث الذكي المتقدم" : "استخدم البحث الذكي"
@@ -6329,6 +6336,8 @@ async function routeRequest(req, res) {
 
   if (req.method === "GET" && requestPath === "/api/openai-search-final/debug") {
     sendJson(req, res, 200, {
+      ok: true,
+      version: OPENAI_SEARCH_FINAL_VERSION,
       provider: "openai",
       model: "gpt-4.1-mini",
       hasOpenAIKey: Boolean(OPENAI_API_KEY),
@@ -6966,8 +6975,6 @@ module.exports = {
   routeRequest,
   getDatabaseState: () => ({ ...databaseState })
 };
-
-
 
 
 
