@@ -6202,6 +6202,20 @@ async function routeRequest(req, res) {
 
   const requestPath = String(req.url || "/").split("?")[0];
 
+  if (req.method === "GET" && requestPath === "/api/assistant-v3/ping") {
+    sendJson(req, res, 200, {
+      ok: true,
+      route: "/api/assistant-v3",
+      message: "PING_OK"
+    });
+    return;
+  }
+
+  if (req.method === "POST" && requestPath === "/api/assistant-v3") {
+    await handleAssistantV3(req, res);
+    return;
+  }
+
   if (applyRateLimit(req, res, requestPath)) {
     return;
   }
@@ -6614,11 +6628,6 @@ async function routeRequest(req, res) {
     return;
   }
 
-  if (req.method === "POST" && requestPath === "/api/assistant-v3") {
-    await handleAssistantV3(req, res);
-    return;
-  }
-
   const removedSearchRoutes = new Set([
     "/api/" + "search",
     "/api/" + "smart-" + "search",
@@ -6886,4 +6895,3 @@ module.exports = {
   routeRequest,
   getDatabaseState: () => ({ ...databaseState })
 };
-
