@@ -8625,7 +8625,7 @@
 
           ${smart.error ? `
             <section class="smart-search-result is-error">
-              <strong>تعذر تنفيذ البحث</strong>
+              <strong>SEARCH_FAILED</strong>
               <p>${escapeHtml(smart.error)}</p>
             </section>
           ` : ""}
@@ -11098,7 +11098,14 @@
       });
 
       if (!result?.ok) {
-        throw new Error(result?.message || "تعذر تنفيذ البحث الذكي الآن.");
+        throw new Error(
+          result?.message ||
+          result?.payload?.message ||
+          result?.payload?.details ||
+          result?.payload?.error ||
+          result?.raw ||
+          `HTTP ${result?.status || 0}`
+        );
       }
 
       if (result.data?.user) {
@@ -11111,7 +11118,7 @@
 
       const historyItem = {
         query,
-        time: "الآن"
+        time: "now"
       };
       state.openAiWebSearchV2 = {
         ...state.openAiWebSearchV2,
@@ -11122,10 +11129,11 @@
       };
       preserveScrollPosition(() => render());
     } catch (error) {
+      console.error("CLIENT_SEARCH_ERROR", error);
       state.openAiWebSearchV2 = {
         ...state.openAiWebSearchV2,
         loading: false,
-        error: error?.message || "تعذر تنفيذ البحث الذكي الآن."
+        error: `SEARCH_FAILED: ${error?.message || "Unknown client error"}`
       };
       preserveScrollPosition(() => render());
     }
@@ -14043,5 +14051,6 @@
     }
   }, 1000);
 })();
+
 
 

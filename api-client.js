@@ -1120,24 +1120,79 @@
   }
 
   async function openAiWebSearchV2(payload) {
-    const result = await request("/openai-search-final", {
-      method: "POST",
-      body: payload,
-      sameOriginOnly: true
-    });
+    const url = buildSameOriginApiUrl("/openai-search-final");
+    const headers = {
+      Accept: "application/json",
+      "Content-Type": "application/json"
+    };
 
-    if (result.ok) {
-      return result;
+    if (hasToken()) {
+      headers.Authorization = `Bearer ${getToken()}`;
     }
 
-    if (isRouteMissingResult(result)) {
+    try {
+      const res = await fetch(url, {
+        method: "POST",
+        credentials: "include",
+        headers,
+        body: JSON.stringify(payload || {})
+      });
+
+      const raw = await res.text();
+      let data;
+      try {
+        data = raw ? JSON.parse(raw) : {};
+      } catch (_) {
+        data = { raw };
+      }
+
+      if (!res.ok) {
+        console.error("SEARCH_FAILED_RESPONSE", {
+          status: res.status,
+          data,
+          raw,
+          url
+        });
+
+        return {
+          ok: false,
+          status: res.status,
+          data: null,
+          payload: data,
+          message: data?.message || data?.details || data?.error || raw || `HTTP ${res.status}`,
+          raw,
+          url,
+          serverUnavailable: res.status === 404 || res.status >= 500,
+          networkError: false
+        };
+      }
+
+      const responseData = data?.data || data || {};
       return {
-        ...result,
-        message: "���� ����� ����� ��� ����� ��� ������ ������. ���� ��� ������ �� ���� �� route /api/openai-search-final."
+        ok: data?.ok === true || data?.success === true || res.ok,
+        status: res.status,
+        data: responseData,
+        payload: data,
+        message: data?.message || data?.error || "OK",
+        raw,
+        url,
+        serverUnavailable: false,
+        networkError: false
+      };
+    } catch (error) {
+      console.error("CLIENT_SEARCH_ERROR", error);
+      return {
+        ok: false,
+        status: 0,
+        data: null,
+        payload: null,
+        message: error?.message || "Unknown client error",
+        raw: "",
+        url,
+        serverUnavailable: true,
+        networkError: true
       };
     }
-
-    return result;
   }
 
   function buildWritingFallbackMessage(payload = {}) {
