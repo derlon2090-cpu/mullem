@@ -10,9 +10,8 @@ const execFileAsync = promisify(execFile);
 
 const ROOT_DIR = __dirname;
 loadEnvFile(path.join(ROOT_DIR, ".env"));
-const OPENAI_WEB_SEARCH_V2_VERSION = "OPENAI_ONLY_FINAL_999";
+const ASSISTANT_V3_VERSION = "ASSISTANT_V3_ROUTE_WORKING";
 const OPENAI_ONLY_FINAL_999 = "OPENAI_ONLY_FINAL_999";
-const OPENAI_SEARCH_FINAL_VERSION = "OPENAI_SEARCH_FINAL";
 const PORT = Number(process.env.PORT || 3000);
 const IS_CLOUD_RUNTIME = Boolean(
   process.env.RENDER ||
@@ -5259,12 +5258,10 @@ async function handleAdminCreatePackage(req, res) {
   });
 }
 
-async function handleOpenAiWebSearchV2(req, res) {
+async function handleAssistantV3(req, res) {
   sendJson(req, res, 200, {
     ok: true,
-    answer: "TEST_OK_ROUTE_WORKING",
-    route: "/api/openai-search-final",
-    time: new Date().toISOString()
+    answer: "ASSISTANT_V3_ROUTE_WORKING"
   });
 }
 
@@ -6244,13 +6241,13 @@ async function routeRequest(req, res) {
     return;
   }
 
-  if (req.method === "GET" && requestPath === "/api/openai-search-final/debug") {
+  if (req.method === "GET" && requestPath === "/api/assistant-v3/debug") {
     sendJson(req, res, 200, {
       ok: true,
-      route: "/api/openai-search-final",
-      version: OPENAI_SEARCH_FINAL_VERSION,
-      provider: "openai",
-      model: "gpt-4o-mini",
+      route: "/api/assistant-v3",
+      version: ASSISTANT_V3_VERSION,
+      provider: "stub",
+      model: null,
       hasOpenAIKey: Boolean(OPENAI_API_KEY),
       keyPrefix: OPENAI_API_KEY ? OPENAI_API_KEY.slice(0, 7) : null,
       timestamp: new Date().toISOString(),
@@ -6259,31 +6256,31 @@ async function routeRequest(req, res) {
         process.env.RAILWAY_GIT_COMMIT_SHA ||
         "local",
       routes: {
-        primary: "/api/openai-search-final",
+        primary: "/api/assistant-v3",
         legacyRemoved: true
       },
       cache: {
-        scripts: "OPENAI_SEARCH_FINAL",
+        scripts: "ASSISTANT_V3",
         serviceWorkerDisabled: true
       }
     });
     return;
   }
 
-  if (req.method === "GET" && requestPath === "/api/openai-web-search-v2/debug") {
+  if (req.method === "GET" && requestPath === "/api/openai-search-final/debug") {
     sendJson(req, res, 410, {
       ok: false,
       error: "OLD_SEARCH_DELETED",
-      message: "Use /api/openai-search-final/debug"
+      message: "Use /api/assistant-v3/debug"
     });
     return;
   }
 
   if (req.method === "GET" && requestPath === "/api/debug-version") {
     sendJson(req, res, 200, {
-      version: OPENAI_WEB_SEARCH_V2_VERSION,
-      provider: "openai",
-      model: resolveOpenAiWebSearchV2Model(),
+      version: ASSISTANT_V3_VERSION,
+      provider: "stub",
+      model: null,
       hasOpenAIKey: Boolean(OPENAI_API_KEY),
       envModel: process.env.MODEL || null,
       aiModel: process.env.AI_MODEL || null,
@@ -6617,8 +6614,8 @@ async function routeRequest(req, res) {
     return;
   }
 
-  if (req.method === "POST" && requestPath === "/api/openai-search-final") {
-    await handleOpenAiWebSearchV2(req, res);
+  if (req.method === "POST" && requestPath === "/api/assistant-v3") {
+    await handleAssistantV3(req, res);
     return;
   }
 
@@ -6628,6 +6625,8 @@ async function routeRequest(req, res) {
     "/api/tools/" + "smart-" + "search",
     "/" + "search",
     "/" + "smart-" + "search",
+    "/api/" + "openai-search-final",
+    "/api/" + "openai-search-final" + "/debug",
     "/api/" + "openai-web-search-v2",
     "/api/" + "openai-web-search-v2" + "/debug",
     "/" + "openai-web-search-v2"
@@ -6644,7 +6643,7 @@ async function routeRequest(req, res) {
         : isApiSmartSearch
           ? "OLD_SMART_SEARCH_REMOVED"
           : "OLD_SEARCH_REMOVED",
-      message: "Use /api/openai-search-final",
+      message: "Use /api/assistant-v3",
       routeType: isPageSearch ? "page" : "api"
     });
     return;
@@ -6887,7 +6886,4 @@ module.exports = {
   routeRequest,
   getDatabaseState: () => ({ ...databaseState })
 };
-
-
-
 

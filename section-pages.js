@@ -11073,8 +11073,8 @@
     }
 
     const apiClient = getApiClient();
-    if (!apiClient?.openAiWebSearchV2) {
-      state.openAiWebSearchV2.error = "خدمة البحث الذكي غير جاهزة الآن.";
+    if (!apiClient?.assistantV3) {
+      state.openAiWebSearchV2.error = "خدمة المساعد غير جاهزة الآن.";
       preserveScrollPosition(() => render());
       return;
     }
@@ -11091,8 +11091,8 @@
     preserveScrollPosition(() => render());
 
     try {
-      const result = await apiClient.openAiWebSearchV2({
-        query,
+      const result = await apiClient.assistantV3({
+        message: query,
         language: state.openAiWebSearchV2.language,
         source_type: state.openAiWebSearchV2.sourceType
       });

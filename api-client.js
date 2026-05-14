@@ -1119,8 +1119,8 @@
     });
   }
 
-  async function openAiWebSearchV2(payload) {
-    const url = buildSameOriginApiUrl("/openai-search-final");
+  async function assistantV3(payload) {
+    const url = buildSameOriginApiUrl("/assistant-v3");
     const headers = {
       Accept: "application/json",
       "Content-Type": "application/json"
@@ -1469,7 +1469,7 @@
     markAllNotificationsRead,
     sendChat,
     sendMessageFeedback,
-    openAiWebSearchV2,
+    assistantV3,
     runWritingAssistant,
     analyzeImage,
     generateImage,
