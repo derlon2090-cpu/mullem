@@ -6205,7 +6205,6 @@ async function routeRequest(req, res) {
   if (req.method === "GET" && requestPath === "/api/assistant-v3/ping") {
     sendJson(req, res, 200, {
       ok: true,
-      route: "/api/assistant-v3",
       message: "PING_OK"
     });
     return;
