@@ -234,6 +234,23 @@
     return String(value || "").trim();
   }
 
+  function getErrorMessage(error) {
+    if (!error) return "Unknown error";
+    if (typeof error === "string") return error;
+    if (error instanceof Error) return error.message;
+
+    if (typeof error === "object") {
+      return (
+        error.message ||
+        error.details ||
+        error.error ||
+        JSON.stringify(error, null, 2)
+      );
+    }
+
+    return String(error);
+  }
+
   function isRouteMissingResult(result) {
     const text = [
       result?.message,
@@ -1159,7 +1176,7 @@
           status: res.status,
           data: null,
           payload: data,
-          message: data?.message || data?.details || data?.error || raw || `HTTP ${res.status}`,
+          message: getErrorMessage(data?.message || data?.details || data?.error || data || raw || `HTTP ${res.status}`),
           raw,
           url,
           serverUnavailable: res.status === 404 || res.status >= 500,
@@ -1186,7 +1203,7 @@
         status: 0,
         data: null,
         payload: null,
-        message: error?.message || "Unknown client error",
+        message: getErrorMessage(error),
         raw: "",
         url,
         serverUnavailable: true,

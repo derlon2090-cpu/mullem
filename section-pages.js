@@ -11098,14 +11098,15 @@
       });
 
       if (!result?.ok) {
-        throw new Error(
+        throw new Error(getErrorMessage(
           result?.message ||
           result?.payload?.message ||
           result?.payload?.details ||
           result?.payload?.error ||
+          result?.payload ||
           result?.raw ||
           `HTTP ${result?.status || 0}`
-        );
+        ));
       }
 
       if (result.data?.user) {
@@ -11129,11 +11130,15 @@
       };
       preserveScrollPosition(() => render());
     } catch (error) {
-      console.error("CLIENT_SEARCH_ERROR", error);
+      const message = getErrorMessage(error);
+      console.error("CLIENT_SEARCH_ERROR", {
+        message,
+        error
+      });
       state.openAiWebSearchV2 = {
         ...state.openAiWebSearchV2,
         loading: false,
-        error: `SEARCH_FAILED: ${error?.message || "Unknown client error"}`
+        error: `SEARCH_FAILED: ${message}`
       };
       preserveScrollPosition(() => render());
     }
@@ -11224,6 +11229,23 @@
       };
       preserveScrollPosition(() => render());
     }
+  }
+
+  function getErrorMessage(error) {
+    if (!error) return "Unknown error";
+    if (typeof error === "string") return error;
+    if (error instanceof Error) return error.message;
+
+    if (typeof error === "object") {
+      return (
+        error.message ||
+        error.details ||
+        error.error ||
+        JSON.stringify(error, null, 2)
+      );
+    }
+
+    return String(error);
   }
 
   async function submitToneTool() {
