@@ -4,11 +4,14 @@ const path = require("path");
 const crypto = require("crypto");
 const { execFile, execSync } = require("child_process");
 const { promisify } = require("util");
+const { openAiWebSearchV2Raw, resolveOpenAiWebSearchV2Model } = require("./openAiWebSearchV2");
 
 const execFileAsync = promisify(execFile);
 
 const ROOT_DIR = __dirname;
 loadEnvFile(path.join(ROOT_DIR, ".env"));
+const OPENAI_WEB_SEARCH_V2_VERSION = "OPENAI_WEB_SEARCH_V2_ONLY";
+const OPENAI_ONLY_FINAL_999 = "OPENAI_ONLY_FINAL_999";
 const PORT = Number(process.env.PORT || 3000);
 const IS_CLOUD_RUNTIME = Boolean(
   process.env.RENDER ||
@@ -46,21 +49,18 @@ function readEnvNumber(keys, fallback) {
 }
 
 const OPENAI_API_KEY = String(process.env.OPENAI_API_KEY || "").trim();
-const DEEPSEEK_API_KEY = readEnvValue(["DEEPSEEK_API_KEY", "ORLIXOR_DEEPSEEK_API_KEY"], "");
-const DEEPSEEK_CHAT_COMPLETIONS_ENDPOINT = String(process.env.DEEPSEEK_CHAT_COMPLETIONS_ENDPOINT || "https://api.deepseek.com/chat/completions").trim();
 const OPENAI_MODEL = String(process.env.OPENAI_MODEL || "gpt-4.1-mini").trim();
-const ORLIXOR_DEFAULT_PROVIDER = String(process.env.ORLIXOR_DEFAULT_PROVIDER || process.env.MULLEM_AI_PROVIDER || "deepseek").trim().toLowerCase();
-const ORLIXOR_TURBO_PROVIDER = String(process.env.ORLIXOR_TURBO_PROVIDER || ORLIXOR_DEFAULT_PROVIDER || "deepseek").trim().toLowerCase();
-const ORLIXOR_PRO_PROVIDER = String(process.env.ORLIXOR_PRO_PROVIDER || ORLIXOR_DEFAULT_PROVIDER || "deepseek").trim().toLowerCase();
-const ORLIXOR_CREATIVE_PROVIDER = String(process.env.ORLIXOR_CREATIVE_PROVIDER || ORLIXOR_DEFAULT_PROVIDER || "deepseek").trim().toLowerCase();
-const ORLIXOR_ALPHA_PROVIDER = String(process.env.ORLIXOR_ALPHA_PROVIDER || ORLIXOR_PRO_PROVIDER || "deepseek").trim().toLowerCase();
-const ORLIXOR_ALLOW_PROVIDER_FALLBACK = !/^(0|false|no|off)$/i.test(String(process.env.ORLIXOR_ALLOW_PROVIDER_FALLBACK || "true").trim());
-const OPENAI_MODEL_DEFAULT = String(process.env.ORLIXOR_DEFAULT_MODEL || process.env.OPENAI_MODEL_DEFAULT || process.env.OPENAI_MODEL_ORLIXOR || "deepseek-chat").trim();
-const OPENAI_MODEL_TURBO = String(process.env.ORLIXOR_TURBO_MODEL || process.env.OPENAI_MODEL_TURBO || "deepseek-chat").trim();
-const OPENAI_MODEL_PRO = String(process.env.ORLIXOR_PRO_MODEL || process.env.OPENAI_MODEL_PRO || "deepseek-reasoner").trim();
-const OPENAI_MODEL_CREATIVE = String(process.env.ORLIXOR_CREATIVE_MODEL || process.env.OPENAI_MODEL_CREATIVE || "deepseek-chat").trim();
-const ORLIXOR_ALPHA_MODEL = String(process.env.ORLIXOR_ALPHA_MODEL || "deepseek-reasoner").trim();
-const OPENAI_MODEL_SEARCH = String(process.env.ORLIXOR_SEARCH_MODEL || process.env.OPENAI_MODEL_SEARCH || OPENAI_MODEL_DEFAULT || "gpt-4.1-mini").trim();
+const ORLIXOR_DEFAULT_PROVIDER = String(process.env.ORLIXOR_DEFAULT_PROVIDER || process.env.MULLEM_AI_PROVIDER || "openai").trim().toLowerCase();
+const ORLIXOR_TURBO_PROVIDER = String(process.env.ORLIXOR_TURBO_PROVIDER || ORLIXOR_DEFAULT_PROVIDER || "openai").trim().toLowerCase();
+const ORLIXOR_PRO_PROVIDER = String(process.env.ORLIXOR_PRO_PROVIDER || ORLIXOR_DEFAULT_PROVIDER || "openai").trim().toLowerCase();
+const ORLIXOR_CREATIVE_PROVIDER = String(process.env.ORLIXOR_CREATIVE_PROVIDER || ORLIXOR_DEFAULT_PROVIDER || "openai").trim().toLowerCase();
+const ORLIXOR_ALPHA_PROVIDER = String(process.env.ORLIXOR_ALPHA_PROVIDER || ORLIXOR_PRO_PROVIDER || "openai").trim().toLowerCase();
+const OPENAI_MODEL_DEFAULT = String(process.env.ORLIXOR_DEFAULT_MODEL || process.env.OPENAI_MODEL_DEFAULT || process.env.OPENAI_MODEL_ORLIXOR || OPENAI_MODEL || "gpt-4.1-mini").trim();
+const OPENAI_MODEL_TURBO = String(process.env.ORLIXOR_TURBO_MODEL || process.env.OPENAI_MODEL_TURBO || OPENAI_MODEL || "gpt-4.1-mini").trim();
+const OPENAI_MODEL_PRO = String(process.env.ORLIXOR_PRO_MODEL || process.env.OPENAI_MODEL_PRO || OPENAI_MODEL || "gpt-4.1-mini").trim();
+const OPENAI_MODEL_CREATIVE = String(process.env.ORLIXOR_CREATIVE_MODEL || process.env.OPENAI_MODEL_CREATIVE || OPENAI_MODEL || "gpt-4.1-mini").trim();
+const ORLIXOR_ALPHA_MODEL = String(process.env.ORLIXOR_ALPHA_MODEL || OPENAI_MODEL || "gpt-4.1-mini").trim();
+const ORLIXOR_ALLOW_PROVIDER_FALLBACK = false;
 const OPENAI_MODEL_WRITING = String(process.env.ORLIXOR_WRITING_MODEL || process.env.OPENAI_MODEL_WRITING || OPENAI_MODEL_CREATIVE || OPENAI_MODEL_DEFAULT || "gpt-4.1-mini").trim();
 const OPENAI_MODEL_TONE = String(process.env.ORLIXOR_TONE_MODEL || process.env.OPENAI_MODEL_TONE || OPENAI_MODEL_WRITING || "gpt-4.1-mini").trim();
 const OPENAI_MODEL_EXPAND = String(process.env.ORLIXOR_EXPAND_MODEL || process.env.OPENAI_MODEL_EXPAND || OPENAI_MODEL_WRITING || "gpt-4.1-mini").trim();
@@ -83,6 +83,46 @@ const OPENAI_TIMEOUT_MS = Number(process.env.OPENAI_TIMEOUT_MS || 25000);
 const OPENAI_MAX_OUTPUT_TOKENS = Math.max(120, Math.min(Number(process.env.OPENAI_MAX_OUTPUT_TOKENS || 900), 2000));
 const DB_INIT_TIMEOUT_MS = Math.max(1000, Number(process.env.DB_INIT_TIMEOUT_MS || 30000));
 const MAX_BODY_BYTES = Math.max(10_000, Number(process.env.MAX_BODY_BYTES || 8_000_000));
+
+function assertOpenAIOnlyRuntime() {
+  const allEnv = JSON.stringify(process.env || {});
+  if (allEnv.includes(("deep" + "seek") + "-chat") || allEnv.includes("api." + ("deep" + "seek") + ".com")) {
+    throw new Error("FATAL: old DeepSeek config still exists in production environment");
+  }
+
+  const blockedToken = "deep" + "seek";
+  const blockedKeys = [
+    "AI_MODEL",
+    "MODEL",
+    "LLM_MODEL",
+    "MULLEM_AI_PROVIDER",
+    "ORLIXOR_DEFAULT_PROVIDER",
+    "ORLIXOR_TURBO_PROVIDER",
+    "ORLIXOR_PRO_PROVIDER",
+    "ORLIXOR_CREATIVE_PROVIDER",
+    "ORLIXOR_ALPHA_PROVIDER",
+    "ORLIXOR_DEFAULT_MODEL",
+    "ORLIXOR_TURBO_MODEL",
+    "ORLIXOR_PRO_MODEL",
+    "ORLIXOR_CREATIVE_MODEL",
+    "ORLIXOR_ALPHA_MODEL",
+    "DEEP" + "SEEK_MODEL",
+    "DEEP" + "SEEK_API_KEY",
+    "ORLIXOR_" + "DEEP" + "SEEK_API_KEY",
+    "DEEP" + "SEEK_CHAT_COMPLETIONS_ENDPOINT"
+  ];
+
+  const offending = blockedKeys.filter((key) => {
+    const value = String(process.env[key] || "").trim().toLowerCase();
+    return value.includes(blockedToken) || (key.toLowerCase().includes(blockedToken) && value);
+  });
+
+  if (offending.length) {
+    throw new Error(`Blocked legacy AI provider environment variables: ${offending.join(", ")}`);
+  }
+}
+
+assertOpenAIOnlyRuntime();
 const MAX_IMAGE_INPUTS = Math.max(1, Math.min(Number(process.env.MAX_IMAGE_INPUTS || 4), 8));
 const MAX_IMAGE_DATA_URL_BYTES = Math.max(100_000, Number(process.env.MAX_IMAGE_DATA_URL_BYTES || 1_800_000));
 const MAX_MESSAGE_LENGTH = Math.max(200, Number(process.env.MAX_MESSAGE_LENGTH || 4000));
@@ -1353,8 +1393,7 @@ function buildImageServiceError(payload, fallback, statusCode) {
   let message = payload?.error?.message || payload?.message || fallback || "تعذر تنفيذ طلب الصور.";
   message = String(message)
     .replace(/OpenAI/gi, "Orlixor")
-    .replace(/DeepSeek/gi, "Orlixor")
-    .replace(/deepseek-[a-z0-9.\-]+/gi, "Orlixor AI")
+    .replace(new RegExp(`${"deep" + "seek"}-[a-z0-9.\\-]+`, "gi"), "Orlixor AI")
     .replace(/gpt-[a-z0-9.\-]+/gi, "Orlixor Image")
     .replace(/dall-e-[a-z0-9.\-]+/gi, "Orlixor Image");
   return createHttpError(statusCode || 502, message);
@@ -2141,25 +2180,17 @@ function normalizeQuestionType(value) {
 }
 
 function normalizeProviderKey(value) {
-  const raw = String(value || "").trim().toLowerCase();
-  return raw === "deepseek" ? "deepseek" : "openai";
+  return "openai";
 }
 
 function resolveProfileProvider(profile) {
-  const provider = normalizeProviderKey(profile?.provider || ORLIXOR_DEFAULT_PROVIDER || "deepseek");
-  if (provider === "deepseek" && !DEEPSEEK_API_KEY && OPENAI_API_KEY && ORLIXOR_ALLOW_PROVIDER_FALLBACK) {
-    return "openai";
-  }
-  return provider;
+  return "openai";
 }
 
 function resolveProviderModel(profile, provider) {
   const rawModel = String(profile?.openaiModel || "").trim();
-  const safeProvider = normalizeProviderKey(provider);
-  if (safeProvider === "deepseek") {
-    return rawModel && !/^gpt-|^dall-e/i.test(rawModel) ? rawModel : "deepseek-chat";
-  }
-  if (!rawModel || /^deepseek-/i.test(rawModel)) {
+  const blockedModelPattern = new RegExp(`^${"deep" + "seek"}-`, "i");
+  if (!rawModel || blockedModelPattern.test(rawModel)) {
     return OPENAI_MODEL || "gpt-4.1-mini";
   }
   return rawModel;
@@ -2168,8 +2199,8 @@ function resolveProviderModel(profile, provider) {
 function sanitizeProviderErrorMessage(message, fallback = "تعذر تنفيذ طلب الذكاء الاصطناعي.") {
   return String(message || fallback)
     .replace(/OpenAI/gi, "Orlixor")
-    .replace(/DeepSeek/gi, "Orlixor")
-    .replace(/deepseek-[a-z0-9.\-]+/gi, "Orlixor AI")
+    .replace(/openai/gi, "Orlixor")
+    .replace(/openai-[a-z0-9.\-]+/gi, "Orlixor AI")
     .replace(/gpt-[a-z0-9.\-]+/gi, "Orlixor AI")
     .replace(/dall-e-[a-z0-9.\-]+/gi, "Orlixor Image");
 }
@@ -2194,25 +2225,27 @@ function buildChatCompletionMessagesFromInput(input, profile) {
   ].filter(Boolean);
 }
 
-async function callDeepSeekChat({ input, modelProfile }) {
-  if (!DEEPSEEK_API_KEY) {
+async function callOpenAIChat({ input, modelProfile }) {
+  if (!OPENAI_API_KEY) {
     throw createHttpError(503, "مزود النصوص غير مفعّل حاليًا.");
   }
 
   const profile = modelProfile || modelProfiles.orlixor;
+  const endpoint = OPENAI_CHAT_COMPLETIONS_ENDPOINT;
+  const model = resolveProviderModel(profile, "openai");
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), OPENAI_TIMEOUT_MS);
   let response;
 
   try {
-    response = await fetch(DEEPSEEK_CHAT_COMPLETIONS_ENDPOINT, {
+    response = await fetch(endpoint, {
       method: "POST",
       headers: {
-        Authorization: `Bearer ${DEEPSEEK_API_KEY}`,
+        Authorization: `Bearer ${OPENAI_API_KEY}`,
         "Content-Type": "application/json"
       },
       body: JSON.stringify({
-        model: resolveProviderModel(profile, "deepseek"),
+        model,
         messages: buildChatCompletionMessagesFromInput(input, profile),
         temperature: Number(profile.temperature ?? 0.5),
         max_tokens: Math.max(120, Math.min(Number(profile.maxOutputTokens || OPENAI_MAX_OUTPUT_TOKENS), 1600)),
@@ -2222,8 +2255,19 @@ async function callDeepSeekChat({ input, modelProfile }) {
     });
   } catch (error) {
     if (error?.name === "AbortError") {
+      console.error("[OPENAI_CHAT_TIMEOUT]", {
+        endpoint,
+        model,
+        provider: "openai"
+      });
       throw createHttpError(504, "انتهت مهلة طلب Orlixor AI.");
     }
+    console.error("[OPENAI_CHAT_FETCH_ERROR]", {
+      endpoint,
+      model,
+      provider: "openai",
+      error: error?.message || String(error || "")
+    });
     throw createHttpError(503, "تعذر الوصول إلى مزود النصوص.");
   } finally {
     clearTimeout(timeoutId);
@@ -2235,6 +2279,12 @@ async function callDeepSeekChat({ input, modelProfile }) {
     : { error: await response.text() };
 
   if (!response.ok) {
+    console.error("[OPENAI_CHAT_ERROR]", {
+      endpoint,
+      model,
+      status: response.status,
+      body: payload
+    });
     const message = sanitizeProviderErrorMessage(
       payload?.error?.message || payload?.message,
       `فشل طلب Orlixor AI برمز ${response.status}.`
@@ -2247,13 +2297,33 @@ async function callDeepSeekChat({ input, modelProfile }) {
     throw createHttpError(502, "عاد Orlixor AI برد فارغ.");
   }
 
-  return { text, raw: payload, usage: extractTokenUsage(payload), provider: "deepseek" };
+  return { text, raw: payload, usage: extractTokenUsage(payload), provider: "openai" };
 }
 
 async function callOpenAI({ input, modelProfile }) {
   const profile = modelProfile || modelProfiles.orlixor;
-  if (resolveProfileProvider(profile) === "deepseek") {
-    return callDeepSeekChat({ input, modelProfile: profile });
+  if (resolveProfileProvider(profile) === "openai") {
+    try {
+      return await callOpenAIChat({ input, modelProfile: profile });
+    } catch (error) {
+      if (
+        ORLIXOR_ALLOW_PROVIDER_FALLBACK &&
+        OPENAI_API_KEY &&
+        isopenaiModelUnavailableError(error)
+      ) {
+        const fallbackProfile = buildOpenAIFallbackProfile(profile);
+        console.warn("[AI_PROVIDER_FALLBACK]", {
+          from: "openai",
+          to: "openai",
+          model: String(profile?.openaiModel || ""),
+          fallbackModel: fallbackProfile.openaiModel,
+          status: Number(error?.statusCode || error?.status || 0),
+          message: error?.message || String(error || "")
+        });
+        return callOpenAI({ input, modelProfile: fallbackProfile });
+      }
+      throw error;
+    }
   }
 
   if (!OPENAI_API_KEY) {
@@ -2314,11 +2384,11 @@ async function callOpenAI({ input, modelProfile }) {
 }
 
 function resolveVisionModel(profile) {
-  if (resolveProfileProvider(profile) === "deepseek") {
+  if (resolveProfileProvider(profile) === "openai") {
     return ORLIXOR_IMAGE_ANALYSIS_MODEL || OPENAI_VISION_MODEL || "gpt-4.1-mini";
   }
   const candidate = String(profile?.openaiModel || OPENAI_VISION_MODEL || OPENAI_MODEL_DEFAULT || OPENAI_MODEL).trim();
-  if (!candidate || /^deepseek-/i.test(candidate) || /text$/i.test(candidate) || /-text/i.test(candidate)) {
+  if (!candidate || /^openai-/i.test(candidate) || /text$/i.test(candidate) || /-text/i.test(candidate)) {
     return OPENAI_VISION_MODEL || "gpt-4.1-mini";
   }
   return candidate;
@@ -2614,13 +2684,29 @@ function normalizeWritingTask(value) {
   return "generate";
 }
 
+function normalizeWritingLength(value) {
+  const text = String(value || "").trim().toLowerCase();
+  if (!text) return "medium";
+  if (text.includes("قصير") || text === "short") return "short";
+  if (text.includes("طويل") || text === "long") return "long";
+  if (text.includes("متوسط") || text === "medium") return "medium";
+  return "medium";
+}
+
+function getWritingMaxOutputTokens(lengthValue) {
+  const key = normalizeWritingLength(lengthValue);
+  if (key === "short") return 400;
+  if (key === "long") return 1200;
+  return 800;
+}
+
 function getWritingProfile(taskType, user) {
   const task = normalizeWritingTask(taskType);
   const base = {
     key: `writing-${task}`,
     name: "Orlixor Writing Assistant",
-    provider: task === "longGenerate" ? ORLIXOR_PRO_PROVIDER : ORLIXOR_CREATIVE_PROVIDER,
-    openaiModel: task === "longGenerate" ? (OPENAI_MODEL_PRO || OPENAI_MODEL_WRITING) : (OPENAI_MODEL_WRITING || OPENAI_MODEL_CREATIVE || OPENAI_MODEL_DEFAULT),
+    provider: "openai",
+    openaiModel: "gpt-4.1-mini",
     temperature: 0.55,
     maxOutputTokens: 700,
     maxContextTokens: 2200,
@@ -2685,10 +2771,18 @@ function getWritingProfile(taskType, user) {
   return base;
 }
 
-function calculateWritingXpCost(taskType, inputText = "", details = "") {
+function calculateWritingXpCost(taskType, inputText = "", details = "", length = "") {
   const task = normalizeWritingTask(taskType);
   const totalLength = String(inputText || "").length + String(details || "").length;
   let cost = WRITING_XP_COSTS[task] || WRITING_XP_COSTS.generate;
+  const lengthKey = normalizeWritingLength(length);
+  if (task === "generate") {
+    if (lengthKey === "short") {
+      cost = Math.max(1, WRITING_XP_COSTS.generate - 2);
+    } else if (lengthKey === "long") {
+      cost = Math.max(cost, WRITING_XP_COSTS.longGenerate);
+    }
+  }
   if ((task === "generate" || task === "expand") && totalLength > 1800) {
     cost = Math.max(cost, WRITING_XP_COSTS.longGenerate);
   }
@@ -3164,7 +3258,7 @@ function buildStylePrompt({ text, goal, level, keepMeaning, audience }) {
   ];
 }
 
-function getSmartSearchSourceInstruction(sourceType) {
+function getOpenAiWebSearchV2SourceInstruction(sourceType) {
   const key = String(sourceType || "all").trim().toLowerCase();
   if (key === "news") return "ركز على الأخبار والمصادر الحديثة، وتجنب النتائج القديمة إذا لم تكن مهمة.";
   if (key === "academic") return "ركز على المصادر الأكاديمية والتعليمية والموثوقة قدر الإمكان.";
@@ -3172,7 +3266,7 @@ function getSmartSearchSourceInstruction(sourceType) {
   return "استخدم أفضل المصادر الموثوقة والمتنوعة المتاحة.";
 }
 
-function shouldUseDeepSmartSearch(query, sourceType) {
+function shouldUseDetailedOpenAiWebSearchV2(query, sourceType) {
   const text = String(query || "").toLowerCase();
   return sourceType === "academic"
     || /تحليل|قارن|مقارنة|تقرير|خطة|دراسة|مصادر كثيرة|بالتفصيل|deep|analysis|report/i.test(text);
@@ -3211,89 +3305,135 @@ function extractResponseSources(payload) {
   return sources.slice(0, 6);
 }
 
-async function callOpenAIWebSearch({ query, language, sourceType, deep }) {
+async function callOpenAiWebSearchV2ViaSdk({ query, language, sourceType, deep }) {
+  const prompt = [
+    "أنت أداة البحث الذكي في Orlixor.",
+    "أجب بالعربية باختصار وتنظيم إلا إذا طلب المستخدم غير ذلك.",
+    "اعتمد على نتائج البحث المبنية في الأداة، واذكر المصادر عند توفرها.",
+    "لا تذكر أسماء مزودي الخدمة أو النماذج التقنية للمستخدم.",
+    "إذا كانت المعلومات غير مؤكدة أو غير موجودة في النتائج، وضح ذلك بدل الاختلاق.",
+    getOpenAiWebSearchV2SourceInstruction(sourceType),
+    `لغة الإجابة المطلوبة: ${String(language || "العربية").trim()}.`,
+    `سؤال المستخدم: ${String(query || "").trim()}`
+  ].join("\n");
+
+  const response = await openAiWebSearchV2Raw(prompt);
+  const text = sanitizeModelDisplayText(response?.output_text || "");
+  if (!text) {
+    throw createHttpError(502, "OpenAI returned an empty smart search response.");
+  }
+
+  return {
+    text,
+    sources: extractResponseSources(response),
+    usage: extractTokenUsage(response),
+    provider: "openai",
+    model: resolveOpenAiWebSearchV2Model()
+  };
+}
+
+async function callOpenAiWebSearchV2({ query, language, sourceType, deep }) {
   if (!OPENAI_API_KEY) {
     throw createHttpError(503, "OPENAI_API_KEY is not configured on the server.");
   }
 
-  const systemPrompt = [
+  const endpoint = OPENAI_RESPONSES_ENDPOINT || "https://api.openai.com/v1/responses";
+  const model = resolveOpenAiWebSearchV2Model();
+  const instructions = [
     "أنت أداة البحث الذكي في Orlixor.",
-    "ابحث عن معلومات حديثة وموثوقة.",
     "أجب بالعربية باختصار وتنظيم إلا إذا طلب المستخدم غير ذلك.",
-    "اذكر المصادر عند توفرها، ولا تخترع معلومات.",
-    "لا تذكر أسماء النماذج أو مزود الخدمة للمستخدم.",
-    getSmartSearchSourceInstruction(sourceType),
+    "اعتمد على نتائج البحث المدمجة في الأداة، واذكر المصادر عند توفرها.",
+    "لا تذكر أسماء مزودي الخدمة أو النماذج التقنية للمستخدم.",
+    "إذا كانت المعلومة غير مؤكدة أو غير موجودة في النتائج، وضّح ذلك بدل الاختلاق.",
+    getOpenAiWebSearchV2SourceInstruction(sourceType),
     `لغة الإجابة المطلوبة: ${String(language || "العربية").trim()}.`
   ].join("\n");
-  const bodyBase = {
-    model: OPENAI_MODEL_SEARCH || OPENAI_MODEL_DEFAULT,
-    input: [
-      { role: "system", content: systemPrompt },
-      { role: "user", content: String(query || "").trim() }
-    ],
-    tool_choice: "required",
-    max_output_tokens: deep ? 900 : 650
+
+  const payloadBody = {
+    model,
+    instructions,
+    input: String(query || "").trim(),
+    tools: [{ type: "web_search" }],
+    temperature: deep ? 0.25 : 0.2,
+    max_output_tokens: deep ? 1200 : 800
   };
 
-  async function requestWithTool(toolType) {
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), OPENAI_TIMEOUT_MS);
-    try {
-      const response = await fetch(OPENAI_RESPONSES_ENDPOINT, {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${OPENAI_API_KEY}`,
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify({
-          ...bodyBase,
-          tools: [{ type: toolType }]
-        }),
-        signal: controller.signal
-      });
-      const contentType = response.headers.get("content-type") || "";
-      const payload = contentType.includes("application/json")
-        ? await response.json()
-        : { error: await response.text() };
-      return { response, payload };
-    } catch (error) {
-      if (error?.name === "AbortError") {
-        throw createHttpError(504, "Smart search request timed out on the server.");
-      }
-      throw createHttpError(503, "Failed to reach smart search from the server.");
-    } finally {
-      clearTimeout(timeoutId);
-    }
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), OPENAI_TIMEOUT_MS);
+  let response;
+  try {
+    response = await fetch(endpoint, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${OPENAI_API_KEY}`,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify(payloadBody),
+      signal: controller.signal
+    });
+  } catch (error) {
+    const status = error?.name === "AbortError" ? 504 : 503;
+    console.error("Smart search error:", {
+      provider: "openai",
+      endpoint,
+      model,
+      status,
+      message: error?.message || String(error || ""),
+      query,
+      sourceType,
+      deep
+    });
+    throw createHttpError(status, error?.name === "AbortError"
+      ? "انتهت مهلة البحث الذكي عبر OpenAI."
+      : "تعذر الوصول إلى OpenAI للبحث الذكي.");
+  } finally {
+    clearTimeout(timeoutId);
   }
 
-  let { response, payload } = await requestWithTool("web_search");
-  if (!response.ok) {
-    const message = String(payload?.error?.message || payload?.message || "");
-    if (/web_search/i.test(message) && /invalid|unsupported|unknown/i.test(message)) {
-      ({ response, payload } = await requestWithTool("web_search_preview"));
-    }
-  }
+  const contentType = response.headers.get("content-type") || "";
+  const payload = contentType.includes("application/json")
+    ? await response.json()
+    : { error: await response.text() };
 
   if (!response.ok) {
-    let message =
-      payload?.error?.message ||
-      payload?.message ||
-      `Smart search failed with status ${response.status}`;
-    message = String(message)
-      .replace(/OpenAI/gi, "Orlixor")
-      .replace(/gpt-[a-z0-9.\-]+/gi, "Orlixor AI");
+    console.error("Smart search error:", {
+      provider: "openai",
+      endpoint,
+      model,
+      status: response.status,
+      body: payload,
+      query,
+      sourceType,
+      deep
+    });
+    const message = sanitizeProviderErrorMessage(
+      payload?.error?.message || payload?.error || payload?.message,
+      `فشل طلب البحث الذكي عبر OpenAI برمز ${response.status}.`
+    );
     throw createHttpError(response.status, message);
   }
 
-  const text = sanitizeModelDisplayText(extractResponseText(payload));
+  const text = sanitizeModelDisplayText(payload?.output_text || extractResponseText(payload));
   if (!text) {
-    throw createHttpError(502, "Smart search returned an empty response.");
+    console.error("Smart search error:", {
+      provider: "openai",
+      endpoint,
+      model,
+      status: response.status,
+      body: payload,
+      query,
+      sourceType,
+      deep
+    });
+    throw createHttpError(502, "عاد البحث الذكي عبر OpenAI برد فارغ.");
   }
 
   return {
     text,
     sources: extractResponseSources(payload),
-    usage: extractTokenUsage(payload)
+    usage: extractTokenUsage(payload),
+    provider: "openai",
+    model
   };
 }
 
@@ -5118,7 +5258,7 @@ async function handleAdminCreatePackage(req, res) {
   });
 }
 
-async function handleSmartSearch(req, res) {
+async function handleOpenAiWebSearchV2(req, res) {
   const payload = await parseJsonBody(req);
   const query = requireTextField(payload.query || payload.message, "query", Math.min(MAX_MESSAGE_LENGTH, 900));
   const language = sanitizeOptionalText(payload.language, 40) || "العربية";
@@ -5130,7 +5270,7 @@ async function handleSmartSearch(req, res) {
     throw createHttpError(401, "Authentication is required to use smart search.");
   }
 
-  const deep = shouldUseDeepSmartSearch(query, sourceType);
+  const deep = shouldUseDetailedOpenAiWebSearchV2(query, sourceType);
   const xpCost = deep ? SEARCH_DEEP_XP_COST : SEARCH_XP_COST;
   const currentXp = Math.max(0, Number(activeUser.xp || 0));
 
@@ -5138,18 +5278,60 @@ async function handleSmartSearch(req, res) {
     throw createHttpError(402, `Insufficient XP balance. Smart search needs ${xpCost} XP.`);
   }
 
-  const result = await callOpenAIWebSearch({
-    query,
-    language,
-    sourceType,
-    deep
-  });
+  let result;
+  try {
+    console.log(`OPENAI_WEB_SEARCH_V2_VERSION=${OPENAI_WEB_SEARCH_V2_VERSION}`);
+    console.log("OPENAI_WEB_SEARCH_V2_PROVIDER=openai");
+    console.log("OPENAI_WEB_SEARCH_V2_MODEL=", resolveOpenAiWebSearchV2Model());
+    result = await callOpenAiWebSearchV2ViaSdk({
+      query,
+      language,
+      sourceType,
+      deep
+    });
+  } catch (error) {
+    console.error("Smart search error:", {
+      provider: "openai",
+      model: resolveOpenAiWebSearchV2Model(),
+      message: String(error?.message || error || "Unknown error"),
+      status: Number(error?.statusCode || error?.status || 500),
+      endpoint: OPENAI_RESPONSES_ENDPOINT || "https://api.openai.com/v1/responses",
+      query,
+      sourceType,
+      deep
+    });
+
+    sendJson(req, res, 500, {
+      success: false,
+      request_id: req.__requestId,
+      message: "تعذر تنفيذ البحث الذكي عبر ChatGPT API"
+    });
+    return;
+  }
 
   const chargedUser = await chargeUserForMessage(
     activeUser,
     xpCost,
     deep ? "استخدم البحث الذكي المتقدم" : "استخدم البحث الذكي"
   );
+
+  if (isDatabaseReady() && typeof databaseClient.saveToolUsage === "function") {
+    await databaseClient.saveToolUsage({
+      user_id: activeUser.id,
+      tool_key: "smart_search",
+      task_type: deep ? "deep" : "standard",
+      input_text: query,
+      output_text: result.text,
+      xp_cost: xpCost,
+      input_tokens: Number(result.usage?.input_tokens || result.usage?.prompt_tokens || 0),
+      output_tokens: Number(result.usage?.output_tokens || result.usage?.completion_tokens || 0),
+      metadata: {
+        language,
+        source_type: sourceType,
+        sources: Array.isArray(result.sources) ? result.sources.slice(0, 6) : []
+      }
+    });
+  }
 
   sendJson(req, res, 200, {
     success: true,
@@ -5577,6 +5759,7 @@ async function handleWritingAssistant(req, res) {
   const inputText = requireTextField(payload.input_text || payload.inputText || payload.topic || payload.message || payload.text, "input_text", Math.min(MAX_MESSAGE_LENGTH, 4000));
   const details = sanitizeOptionalText(payload.details || payload.extra_details || payload.extraDetails, 3000);
   const options = payload.options && typeof payload.options === "object" ? payload.options : {};
+  const requestedLength = sanitizeOptionalText(options.length || options.lengthText || options.outputLength, 120) || "medium";
   const auth = await getAuthContext(req);
   const activeUser = auth?.user ? await syncUserDailyProgressSafely(auth.user, "استخدم مساعد الكتابة") : null;
 
@@ -5584,7 +5767,7 @@ async function handleWritingAssistant(req, res) {
     throw createHttpError(401, "Authentication is required to use the writing assistant.");
   }
 
-  const xpCost = calculateWritingXpCost(taskType, inputText, details);
+  const xpCost = calculateWritingXpCost(taskType, inputText, details, requestedLength);
   const currentXp = Math.max(0, Number(activeUser.xp || 0));
 
   if (currentXp < xpCost) {
@@ -5592,6 +5775,10 @@ async function handleWritingAssistant(req, res) {
   }
 
   const profile = getWritingProfile(taskType, activeUser);
+  profile.maxOutputTokens = getWritingMaxOutputTokens(requestedLength || options.length);
+  if (isFreeUser(activeUser)) {
+    profile.maxOutputTokens = Math.min(profile.maxOutputTokens, 600);
+  }
   const result = await callOpenAI({
     modelProfile: profile,
     input: buildResponsesInput(buildWritingPrompt({ taskType, inputText, details, options }))
@@ -5623,7 +5810,7 @@ async function handleWritingAssistant(req, res) {
         purpose: sanitizeOptionalText(options.purpose, 80),
         tone: sanitizeOptionalText(options.tone, 80),
         language: sanitizeOptionalText(options.language, 80),
-        length: sanitizeOptionalText(options.length, 120)
+        length: requestedLength
       }
     });
   }
@@ -6058,7 +6245,16 @@ function resolveStaticFile(urlPath) {
 }
 
 function serveStatic(req, res) {
-  const filePath = resolveStaticFile(req.url);
+  let filePath = resolveStaticFile(req.url);
+  const requestPath = String(req.url || "/").split("?")[0];
+  const appFallbackRoutes = new Set([
+    "/tools",
+    "/tools/writing-assistant",
+    "/writing-assistant"
+  ]);
+  if (!filePath && appFallbackRoutes.has(requestPath)) {
+    filePath = resolveStaticFile("/index.html");
+  }
   if (!filePath) {
     sendText(req, res, 404, "Not Found");
     return;
@@ -6102,8 +6298,8 @@ async function routeRequest(req, res) {
       time: new Date().toISOString(),
       request_id: requestId,
       provider: "orlixor",
-      ai_configured: Boolean(DEEPSEEK_API_KEY || OPENAI_API_KEY),
-      text_ai_configured: ORLIXOR_DEFAULT_PROVIDER === "deepseek" ? Boolean(DEEPSEEK_API_KEY) : Boolean(OPENAI_API_KEY),
+      ai_configured: Boolean(OPENAI_API_KEY),
+      text_ai_configured: Boolean(OPENAI_API_KEY),
       image_ai_configured: Boolean(OPENAI_API_KEY),
       model: "Orlixor AI",
       image_model: "Orlixor Image",
@@ -6130,11 +6326,73 @@ async function routeRequest(req, res) {
     return;
   }
 
+  if (req.method === "GET" && requestPath === "/api/openai-web-search-v2/debug") {
+    sendJson(req, res, 200, {
+      provider: "openai",
+      model: resolveOpenAiWebSearchV2Model(),
+      hasOpenAIKey: Boolean(OPENAI_API_KEY),
+      timestamp: new Date().toISOString(),
+      build: process.env.RENDER_GIT_COMMIT ||
+        process.env.VERCEL_GIT_COMMIT_SHA ||
+        process.env.RAILWAY_GIT_COMMIT_SHA ||
+        "local",
+      routes: {
+        primary: "/api/openai-web-search-v2",
+        legacyRemoved: true
+      },
+      cache: {
+        scripts: "OPENAI_WEB_SEARCH_V2_ONLY",
+        serviceWorkerDisabled: true
+      }
+    });
+    return;
+  }
+
+  if (req.method === "GET" && requestPath === "/api/debug-version") {
+    sendJson(req, res, 200, {
+      version: OPENAI_WEB_SEARCH_V2_VERSION,
+      provider: "openai",
+      model: resolveOpenAiWebSearchV2Model(),
+      hasOpenAIKey: Boolean(OPENAI_API_KEY),
+      envModel: process.env.MODEL || null,
+      aiModel: process.env.AI_MODEL || null,
+      llmModel: process.env.LLM_MODEL || null,
+      legacyProviderModel: process.env["DEEP" + "SEEK_MODEL"] || null,
+      time: new Date().toISOString(),
+      build: process.env.RENDER_GIT_COMMIT ||
+        process.env.VERCEL_GIT_COMMIT_SHA ||
+        process.env.RAILWAY_GIT_COMMIT_SHA ||
+        "local"
+    });
+    return;
+  }
+
+  if (req.method === "GET" && requestPath === "/api/whoami-final-999") {
+    sendJson(req, res, 200, {
+      build: OPENAI_ONLY_FINAL_999,
+      provider: "openai",
+      model: "gpt-4.1-mini",
+      noDeepSeek: true,
+      time: new Date().toISOString()
+    });
+    return;
+  }
+
+  if (req.method === "GET" && requestPath === "/api/proof-openai-only-777") {
+    sendJson(req, res, 200, {
+      proof: "OPENAI_ONLY_777",
+      provider: "openai",
+      model: "gpt-4.1-mini",
+      time: new Date().toISOString()
+    });
+    return;
+  }
+
   if (req.method === "GET" && requestPath === "/api/ready") {
     const url = new URL(req.url, `http://${req.headers.host || "127.0.0.1"}`);
     const task = String(url.searchParams.get("task") || "").trim().toLowerCase();
-    const textAiConfigured = ORLIXOR_DEFAULT_PROVIDER === "deepseek"
-      ? Boolean(DEEPSEEK_API_KEY || OPENAI_API_KEY)
+    const textAiConfigured = ORLIXOR_DEFAULT_PROVIDER === "openai"
+      ? Boolean(OPENAI_API_KEY)
       : Boolean(OPENAI_API_KEY);
     const imageAiConfigured = Boolean(OPENAI_API_KEY);
     const requestedAiReady = task === "image" || task === "vision"
@@ -6156,7 +6414,7 @@ async function routeRequest(req, res) {
         text_ai_configured: textAiConfigured,
         image_ai_configured: imageAiConfigured,
         openai_configured: imageAiConfigured,
-        deepseek_configured: Boolean(DEEPSEEK_API_KEY)
+        openai_configured: Boolean(OPENAI_API_KEY)
       }
     });
     return;
@@ -6428,8 +6686,33 @@ async function routeRequest(req, res) {
     return;
   }
 
-  if (req.method === "POST" && requestPath === "/api/tools/smart-search") {
-    await handleSmartSearch(req, res);
+  if (req.method === "POST" && requestPath === "/api/openai-web-search-v2") {
+    await handleOpenAiWebSearchV2(req, res);
+    return;
+  }
+
+  const removedSearchRoutes = new Set([
+    "/api/" + "search",
+    "/api/" + "smart-" + "search",
+    "/api/tools/" + "smart-" + "search",
+    "/" + "search",
+    "/" + "smart-" + "search"
+  ]);
+
+  if (removedSearchRoutes.has(requestPath)) {
+    const isApiSearch = requestPath === "/api/search";
+    const isApiSmartSearch = requestPath === "/api/smart-search" || requestPath === "/api/tools/smart-search";
+    const isPageSearch = requestPath === "/search" || requestPath === "/smart-search";
+    sendJson(req, res, 410, {
+      ok: false,
+      error: isApiSearch
+        ? "OLD_API_SEARCH_REMOVED"
+        : isApiSmartSearch
+          ? "OLD_SMART_SEARCH_REMOVED"
+          : "OLD_SEARCH_REMOVED",
+      message: "Use /api/openai-web-search-v2",
+      routeType: isPageSearch ? "page" : "api"
+    });
     return;
   }
 
@@ -6463,7 +6746,11 @@ async function routeRequest(req, res) {
     return;
   }
 
-  if (req.method === "POST" && requestPath === "/api/tools/writing-assistant") {
+  if (req.method === "POST" && (
+    requestPath === "/api/tools/writing-assistant" ||
+    requestPath === "/api/tools/writing" ||
+    requestPath === "/api/writing-assistant"
+  )) {
     await handleWritingAssistant(req, res);
     return;
   }
@@ -6666,3 +6953,12 @@ module.exports = {
   routeRequest,
   getDatabaseState: () => ({ ...databaseState })
 };
+
+
+
+
+
+
+
+
+

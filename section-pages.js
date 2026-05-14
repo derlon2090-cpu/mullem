@@ -436,7 +436,7 @@
     sidebarCollapsed: loadSidebarCollapsed(),
     toolView: "tools",
     recentTools: loadRecentTools(),
-    smartSearch: {
+    openAiWebSearchV2: {
       query: "",
       language: "العربية",
       sourceType: "all",
@@ -8532,8 +8532,8 @@
     `;
   }
 
-  function renderSmartSearchMain(profile) {
-    const smart = state.smartSearch || {};
+  function renderOpenAiWebSearchV2Main(profile) {
+    const smart = state.openAiWebSearchV2 || {};
     const result = smart.result || null;
     const sources = Array.isArray(result?.sources) ? result.sources.slice(0, 5) : [];
     const suggestions = [
@@ -8602,7 +8602,7 @@
                   </select>
                   <span>文</span>
                 </label>
-                <button class="smart-search-submit ${isAuthenticated() ? "" : "requires-auth"}" type="submit" ${smart.loading ? "disabled" : ""}>
+                <button class="smart-search-submit ${isAuthenticated() ? "" : "requires-auth"}" type="button" data-smart-search-submit ${smart.loading ? "disabled" : ""}>
                   <span>${smart.loading ? "جاري البحث..." : "بحث ذكي"}</span>
                   ${icons.sparkle}
                 </button>
@@ -8636,7 +8636,7 @@
                 <strong>نتيجة البحث</strong>
                 <span>${escapeHtml(result.xp_spent ? `${result.xp_spent} XP` : "بحث موثوق")}</span>
               </header>
-              <div class="smart-search-answer">${formatSmartSearchAnswer(result.answer || result.summary || "")}</div>
+              <div class="smart-search-answer">${formatOpenAiWebSearchV2Answer(result.answer || result.summary || "")}</div>
               ${sources.length ? `
                 <div class="smart-search-sources">
                   <b>المصادر</b>
@@ -8681,7 +8681,7 @@
     `;
   }
 
-  function formatSmartSearchAnswer(text) {
+  function formatOpenAiWebSearchV2Answer(text) {
     const cleaned = coerceDisplayText(text).trim();
     if (!cleaned) return "<p>لم تصل نتيجة واضحة بعد.</p>";
     return cleaned
@@ -8803,7 +8803,7 @@
                   </div>
                   ${icons.ai}
                 </header>
-                <div class="tone-output-box ${output ? "" : "is-empty"}">${output ? formatSmartSearchAnswer(output) : "<p>سيظهر النص بعد التعديل هنا.</p>"}</div>
+                <div class="tone-output-box ${output ? "" : "is-empty"}">${output ? formatOpenAiWebSearchV2Answer(output) : "<p>سيظهر النص بعد التعديل هنا.</p>"}</div>
                 <small>${escapeHtml(String(output.length))}/4000</small>
               </section>
 
@@ -8976,7 +8976,7 @@
                   </div>
                   ${icons.ai}
                 </header>
-                <div class="tone-output-box correction-output-box ${output ? "" : "is-empty"}">${output ? formatSmartSearchAnswer(output) : "<p>سيظهر النص المصحح هنا.</p>"}</div>
+                <div class="tone-output-box correction-output-box ${output ? "" : "is-empty"}">${output ? formatOpenAiWebSearchV2Answer(output) : "<p>سيظهر النص المصحح هنا.</p>"}</div>
                 <small>${escapeHtml(String(output.length))}/5000</small>
               </section>
 
@@ -9132,7 +9132,7 @@
                   </div>
                   ${icons.ai}
                 </header>
-                <div class="tone-output-box expand-output-box ${output ? "" : "is-empty"}">${output ? formatSmartSearchAnswer(output) : "<p>سيظهر النص بعد التوسيع هنا.</p>"}</div>
+                <div class="tone-output-box expand-output-box ${output ? "" : "is-empty"}">${output ? formatOpenAiWebSearchV2Answer(output) : "<p>سيظهر النص بعد التوسيع هنا.</p>"}</div>
                 <small>${escapeHtml(String(output.length))}/4000</small>
               </section>
 
@@ -9304,7 +9304,7 @@
                   </div>
                   ${icons.ai}
                 </header>
-                <div class="tone-output-box expand-output-box summary-output-box ${output ? "" : "is-empty"}">${output ? formatSmartSearchAnswer(output) : "<p>سيظهر الملخص هنا بعد تنفيذ العملية.</p>"}</div>
+                <div class="tone-output-box expand-output-box summary-output-box ${output ? "" : "is-empty"}">${output ? formatOpenAiWebSearchV2Answer(output) : "<p>سيظهر الملخص هنا بعد تنفيذ العملية.</p>"}</div>
                 <small>${escapeHtml(String(output.length))}/4000</small>
               </section>
 
@@ -9470,7 +9470,7 @@
                   </div>
                   ${icons.ai}
                 </header>
-                <div class="tone-output-box correction-output-box style-output-box ${output ? "" : "is-empty"}">${output ? formatSmartSearchAnswer(output) : "<p>سيظهر النص المحسّن هنا بعد تنفيذ العملية.</p>"}</div>
+                <div class="tone-output-box correction-output-box style-output-box ${output ? "" : "is-empty"}">${output ? formatOpenAiWebSearchV2Answer(output) : "<p>سيظهر النص المحسّن هنا بعد تنفيذ العملية.</p>"}</div>
                 <small>${escapeHtml(String(output.length))}/5000</small>
               </section>
 
@@ -9600,7 +9600,7 @@
               ${renderSelect("tone", "النبرة", "sparkle")}
               ${renderSelect("language", "اللغة", "internet")}
               ${renderSelect("length", "الطول التقريبي", "settings")}
-              <button class="writing-submit-side ${isAuthenticated() ? "" : "requires-auth"}" type="submit" form="writingAssistantForm" ${writing.loading ? "disabled" : ""}>
+              <button class="writing-submit-side ${isAuthenticated() ? "" : "requires-auth"}" type="button" data-writing-submit ${writing.loading ? "disabled" : ""}>
                 ${writing.loading ? "جاري الإنشاء..." : "إنشاء النص"}
                 ${icons.sparkle}
               </button>
@@ -9634,7 +9634,7 @@
                   ${icons.notes}
                   <span>إضافة نقاط رئيسية</span>
                 </button>
-                <button type="submit" ${writing.loading ? "disabled" : ""}>
+                <button type="button" data-writing-submit ${writing.loading ? "disabled" : ""}>
                   ${writing.loading ? "جاري الإنشاء..." : "إنشاء النص"}
                   ${icons.sparkle}
                 </button>
@@ -9655,7 +9655,7 @@
                 <strong>النص الناتج</strong>
                 <span>${escapeHtml(writing.result.xp_spent ? `${writing.result.xp_spent} XP` : "جاهز")}</span>
               </header>
-              <div class="writing-output">${formatSmartSearchAnswer(writing.result.output || writing.result.answer || "")}</div>
+              <div class="writing-output">${formatOpenAiWebSearchV2Answer(writing.result.output || writing.result.answer || "")}</div>
               <button type="button" data-copy-writing-result>${icons.copy}<span>نسخ النص</span></button>
             </section>
           ` : ""}
@@ -9748,7 +9748,7 @@
     }
     if (profile.key === "ai-tools") {
       if (state.toolView === "smart-search") {
-        return renderSmartSearchMain(profile);
+        return renderOpenAiWebSearchV2Main(profile);
       }
       if (state.toolView === "writing-assistant") {
         return renderWritingAssistantMain(profile);
@@ -11054,47 +11054,47 @@
     }
   }
 
-  async function submitSmartSearch() {
+  async function submitOpenAiWebSearchV2() {
     const queryInput = app.querySelector("[data-smart-search-query]");
     const languageInput = app.querySelector("[data-smart-search-language]");
     const sourceInput = app.querySelector("[data-smart-search-source]");
-    const query = String(queryInput?.value || state.smartSearch.query || "").trim();
+    const query = String(queryInput?.value || state.openAiWebSearchV2.query || "").trim();
 
     if (!query) {
-      state.smartSearch.error = "اكتب سؤال البحث أولًا.";
-      render();
+      state.openAiWebSearchV2.error = "اكتب سؤال البحث أولًا.";
+      preserveScrollPosition(() => render());
       return;
     }
 
     if (!isAuthenticated()) {
-      state.smartSearch.query = query;
+      state.openAiWebSearchV2.query = query;
       openAuthModal("سجّل دخولك لاستخدام البحث الذكي.");
       return;
     }
 
     const apiClient = getApiClient();
-    if (!apiClient?.smartSearch) {
-      state.smartSearch.error = "خدمة البحث الذكي غير جاهزة الآن.";
-      render();
+    if (!apiClient?.openAiWebSearchV2) {
+      state.openAiWebSearchV2.error = "خدمة البحث الذكي غير جاهزة الآن.";
+      preserveScrollPosition(() => render());
       return;
     }
 
-    state.smartSearch = {
-      ...state.smartSearch,
+    state.openAiWebSearchV2 = {
+      ...state.openAiWebSearchV2,
       query,
-      language: String(languageInput?.value || state.smartSearch.language || "العربية"),
-      sourceType: String(sourceInput?.value || state.smartSearch.sourceType || "all"),
+      language: String(languageInput?.value || state.openAiWebSearchV2.language || "العربية"),
+      sourceType: String(sourceInput?.value || state.openAiWebSearchV2.sourceType || "all"),
       loading: true,
       error: "",
       result: null
     };
-    render();
+    preserveScrollPosition(() => render());
 
     try {
-      const result = await apiClient.smartSearch({
+      const result = await apiClient.openAiWebSearchV2({
         query,
-        language: state.smartSearch.language,
-        source_type: state.smartSearch.sourceType
+        language: state.openAiWebSearchV2.language,
+        source_type: state.openAiWebSearchV2.sourceType
       });
 
       if (!result?.ok) {
@@ -11113,21 +11113,21 @@
         query,
         time: "الآن"
       };
-      state.smartSearch = {
-        ...state.smartSearch,
+      state.openAiWebSearchV2 = {
+        ...state.openAiWebSearchV2,
         loading: false,
         error: "",
         result: result.data || {},
-        history: [historyItem, ...(state.smartSearch.history || []).filter((item) => item.query !== query)].slice(0, 6)
+        history: [historyItem, ...(state.openAiWebSearchV2.history || []).filter((item) => item.query !== query)].slice(0, 6)
       };
-      render();
+      preserveScrollPosition(() => render());
     } catch (error) {
-      state.smartSearch = {
-        ...state.smartSearch,
+      state.openAiWebSearchV2 = {
+        ...state.openAiWebSearchV2,
         loading: false,
         error: error?.message || "تعذر تنفيذ البحث الذكي الآن."
       };
-      render();
+      preserveScrollPosition(() => render());
     }
   }
 
@@ -11138,7 +11138,7 @@
 
     if (!topic && !details) {
       state.writingAssistant.error = "اكتب موضوعًا أو نصًا ليعمل مساعد الكتابة.";
-      render();
+      preserveScrollPosition(() => render());
       return;
     }
 
@@ -11156,7 +11156,7 @@
     const apiClient = getApiClient();
     if (!apiClient?.runWritingAssistant) {
       state.writingAssistant.error = "خدمة مساعد الكتابة غير جاهزة الآن.";
-      render();
+      preserveScrollPosition(() => render());
       return;
     }
 
@@ -11173,7 +11173,7 @@
       error: "",
       result: null
     };
-    render();
+    preserveScrollPosition(() => render());
 
     try {
       const result = await apiClient.runWritingAssistant({
@@ -11207,14 +11207,14 @@
         error: "",
         result: result.data || {}
       };
-      render();
+      preserveScrollPosition(() => render());
     } catch (error) {
       state.writingAssistant = {
         ...state.writingAssistant,
         loading: false,
         error: error?.message || "تعذر تشغيل مساعد الكتابة الآن."
       };
-      render();
+      preserveScrollPosition(() => render());
     }
   }
 
@@ -12562,16 +12562,32 @@
 
       if (event.target.closest("[data-tools-back]")) {
         state.toolView = "tools";
-        state.smartSearch.error = "";
+        state.openAiWebSearchV2.error = "";
         state.writingAssistant.error = "";
         render();
         return;
       }
 
+      const openAiWebSearchV2Submit = event.target.closest("[data-smart-search-submit]");
+      if (openAiWebSearchV2Submit) {
+        event.preventDefault();
+        event.stopPropagation();
+        submitOpenAiWebSearchV2();
+        return;
+      }
+
+      const writingSubmit = event.target.closest("[data-writing-submit]");
+      if (writingSubmit) {
+        event.preventDefault();
+        event.stopPropagation();
+        submitWritingAssistant();
+        return;
+      }
+
       const smartSuggestion = event.target.closest("[data-smart-suggestion]");
       if (smartSuggestion) {
-        state.smartSearch.query = smartSuggestion.getAttribute("data-smart-suggestion") || "";
-        state.smartSearch.error = "";
+        state.openAiWebSearchV2.query = smartSuggestion.getAttribute("data-smart-suggestion") || "";
+        state.openAiWebSearchV2.error = "";
         render();
         return;
       }
@@ -13205,8 +13221,8 @@
 
       const smartQuery = event.target.closest("[data-smart-search-query]");
       if (smartQuery) {
-        state.smartSearch.query = smartQuery.value;
-        state.smartSearch.error = "";
+        state.openAiWebSearchV2.query = smartQuery.value;
+        state.openAiWebSearchV2.error = "";
       }
 
       const writingField = event.target.closest("[data-writing-field]");
@@ -13603,13 +13619,13 @@
 
       const smartSource = event.target.closest("[data-smart-search-source]");
       if (smartSource) {
-        state.smartSearch.sourceType = smartSource.value;
+        state.openAiWebSearchV2.sourceType = smartSource.value;
         return;
       }
 
       const smartLanguage = event.target.closest("[data-smart-search-language]");
       if (smartLanguage) {
-        state.smartSearch.language = smartLanguage.value;
+        state.openAiWebSearchV2.language = smartLanguage.value;
         return;
       }
 
@@ -13910,10 +13926,10 @@
         return;
       }
 
-      const smartSearchForm = event.target.closest("[data-smart-search-form]");
-      if (smartSearchForm) {
+      const openAiWebSearchV2Form = event.target.closest("[data-smart-search-form]");
+      if (openAiWebSearchV2Form) {
         event.preventDefault();
-        submitSmartSearch();
+        submitOpenAiWebSearchV2();
         return;
       }
 
@@ -14027,3 +14043,5 @@
     }
   }, 1000);
 })();
+
+
