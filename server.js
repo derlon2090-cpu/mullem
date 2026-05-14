@@ -5260,104 +5260,102 @@ async function handleAdminCreatePackage(req, res) {
 }
 
 async function handleOpenAiWebSearchV2(req, res) {
-  const payload = await parseJsonBody(req);
-  const query = requireTextField(payload.query || payload.message, "query", Math.min(MAX_MESSAGE_LENGTH, 900));
-  const language = sanitizeOptionalText(payload.language, 40) || "العربية";
-  const sourceType = sanitizeOptionalText(payload.source_type || payload.sourceType, 40) || "all";
-  const auth = await getAuthContext(req);
-  const activeUser = auth?.user ? await syncUserDailyProgressSafely(auth.user, "استخدم البحث الذكي") : null;
-
-  if (!activeUser) {
-    throw createHttpError(401, "Authentication is required to use smart search.");
-  }
-
-  const deep = shouldUseDetailedOpenAiWebSearchV2(query, sourceType);
-  const xpCost = deep ? SEARCH_DEEP_XP_COST : SEARCH_XP_COST;
-  const currentXp = Math.max(0, Number(activeUser.xp || 0));
-
-  if (currentXp < xpCost) {
-    throw createHttpError(402, `Insufficient XP balance. Smart search needs ${xpCost} XP.`);
-  }
-
-  let result;
   try {
+    const payload = await parseJsonBody(req);
+    const query = String(payload?.query || payload?.message || "").trim();
+
+    if (!query) {
+      sendJson(req, res, 400, {
+        ok: false,
+        error: "MISSING_QUERY"
+      });
+      return;
+    }
+
+    if (!OPENAI_API_KEY) {
+      sendJson(req, res, 500, {
+        ok: false,
+        error: "MISSING_OPENAI_API_KEY"
+      });
+      return;
+    }
+
     console.log("OPENAI_SEARCH_FINAL_REQUEST", {
       hasKey: Boolean(OPENAI_API_KEY),
-      model: "gpt-4.1-mini",
-      queryLength: String(query || "").length
+      model: "gpt-4o-mini",
+      queryLength: query.length,
+      tools: false
     });
-    if (!OPENAI_API_KEY) {
-      const missingKeyError = new Error("MISSING_OPENAI_API_KEY");
-      missingKeyError.status = 500;
-      missingKeyError.code = "MISSING_OPENAI_API_KEY";
-      throw missingKeyError;
+
+    const response = await fetch(OPENAI_RESPONSES_ENDPOINT || "https://api.openai.com/v1/responses", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${OPENAI_API_KEY}`,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        model: "gpt-4o-mini",
+        input: `Answer the following question clearly and helpfully in Arabic. If the question needs very recent information, mention that the answer may not be fully up to date.\n\n${query}`
+      })
+    });
+
+    const contentType = response.headers.get("content-type") || "";
+    const payloadResponse = contentType.includes("application/json")
+      ? await response.json().catch(() => ({}))
+      : { raw: await response.text().catch(() => "") };
+
+    if (!response.ok) {
+      const providerError = payloadResponse?.error || {};
+      let message = providerError?.message || providerError?.error?.message || payloadResponse?.message || payloadResponse?.raw || JSON.stringify(payloadResponse?.error || payloadResponse || {}) || `HTTP ${response.status}`;
+      if (typeof message === "string" && message.trim().startsWith("{")) {
+        try {
+          const parsedMessage = JSON.parse(message);
+          message = parsedMessage?.error?.message || parsedMessage?.message || message;
+        } catch (_) {}
+      }
+      console.error("OPENAI_SEARCH_FINAL_ERROR", {
+        message,
+        status: response.status,
+        code: providerError?.code || payloadResponse?.code,
+        type: providerError?.type || payloadResponse?.type
+      });
+
+      sendJson(req, res, 500, {
+        ok: false,
+        error: "OPENAI_SEARCH_FAILED",
+        message,
+        status: response.status || null,
+        code: providerError?.code || payloadResponse?.code || null,
+        type: providerError?.type || payloadResponse?.type || null
+      });
+      return;
     }
-    result = await callOpenAiWebSearchV2ViaSdk({
-      query,
-      language,
-      sourceType,
-      deep
+
+    const answer = sanitizeModelDisplayText(payloadResponse?.output_text || extractResponseText(payloadResponse)) || "No answer returned";
+
+    sendJson(req, res, 200, {
+      ok: true,
+      provider: "openai",
+      model: "gpt-4o-mini",
+      answer
     });
- } catch (error) {
-    console.error("OPENAI_SEARCH_FINAL_ERROR_FULL", {
-      name: error?.name,
+  } catch (error) {
+    console.error("OPENAI_SEARCH_FINAL_ERROR", {
       message: error?.message,
       status: error?.status,
       code: error?.code,
-      type: error?.type,
-      stack: error?.stack
+      type: error?.type
     });
 
     sendJson(req, res, 500, {
       ok: false,
-      error: "OPENAI_SEARCH_FINAL_FAILED",
+      error: "OPENAI_SEARCH_FAILED",
       message: error?.message || "Unknown error",
       status: error?.status || null,
       code: error?.code || null,
-      type: error?.type || null,
-    });
-    return;
-  }
-
- const chargedUser = await chargeUserForMessage(
-    activeUser,
-    xpCost,
-    deep ? "استخدم البحث الذكي المتقدم" : "استخدم البحث الذكي"
-  );
-
-  if (isDatabaseReady() && typeof databaseClient.saveToolUsage === "function") {
-    await databaseClient.saveToolUsage({
-      user_id: activeUser.id,
-      tool_key: "smart_search",
-      task_type: deep ? "deep" : "standard",
-      input_text: query,
-      output_text: result.text,
-      xp_cost: xpCost,
-      input_tokens: Number(result.usage?.input_tokens || result.usage?.prompt_tokens || 0),
-      output_tokens: Number(result.usage?.output_tokens || result.usage?.completion_tokens || 0),
-      metadata: {
-        language,
-        source_type: sourceType,
-        sources: Array.isArray(result.sources) ? result.sources.slice(0, 6) : []
-      }
+      type: error?.type || null
     });
   }
-
-  sendJson(req, res, 200, {
-    success: true,
-    data: {
-      answer: result.text,
-      sources: result.sources,
-      search_type: deep ? "deep" : "standard",
-      usage: {
-        xp_spent: xpCost,
-        xp_remaining: Math.max(0, Number(chargedUser?.xp || activeUser.xp || 0))
-      },
-      xp_spent: xpCost,
-      xp_remaining: Math.max(0, Number(chargedUser?.xp || activeUser.xp || 0)),
-      user: chargedUser ? buildApiUser(chargedUser) : buildApiUser(activeUser)
-    }
-  });
 }
 
 async function handleToneTool(req, res) {
@@ -6342,7 +6340,7 @@ async function routeRequest(req, res) {
       route: "/api/openai-search-final",
       version: OPENAI_SEARCH_FINAL_VERSION,
       provider: "openai",
-      model: "gpt-4.1-mini",
+      model: "gpt-4o-mini",
       hasOpenAIKey: Boolean(OPENAI_API_KEY),
       keyPrefix: OPENAI_API_KEY ? OPENAI_API_KEY.slice(0, 7) : null,
       timestamp: new Date().toISOString(),
@@ -6394,7 +6392,7 @@ async function routeRequest(req, res) {
     sendJson(req, res, 200, {
       build: OPENAI_ONLY_FINAL_999,
       provider: "openai",
-      model: "gpt-4.1-mini",
+      model: "gpt-4o-mini",
       noDeepSeek: true,
       time: new Date().toISOString()
     });
@@ -6405,7 +6403,7 @@ async function routeRequest(req, res) {
     sendJson(req, res, 200, {
       proof: "OPENAI_ONLY_777",
       provider: "openai",
-      model: "gpt-4.1-mini",
+      model: "gpt-4o-mini",
       time: new Date().toISOString()
     });
     return;
