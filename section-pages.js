@@ -8625,7 +8625,7 @@
 
           ${smart.error ? `
             <section class="smart-search-result is-error">
-              <strong>SEARCH_FAILED</strong>
+              <strong>تعذر تنفيذ البحث</strong>
               <p>${escapeHtml(smart.error)}</p>
             </section>
           ` : ""}
@@ -11136,7 +11136,7 @@
       state.openAiWebSearchV2 = {
         ...state.openAiWebSearchV2,
         loading: false,
-        error: `SEARCH_FAILED: ${message}`
+        error: message
       };
       preserveScrollPosition(() => render());
     }

@@ -1,3 +1,9 @@
+const OpenAI = require("openai");
+
+const openai = new OpenAI({
+  apiKey: process.env.OPENAI_API_KEY || "",
+});
+
 function readMessage(req) {
   let body = req.body || {};
 
@@ -19,17 +25,6 @@ function readMessage(req) {
   }
 
   return String(body.message || body.query || body.prompt || "").trim();
-}
-
-async function readOpenAiPayload(response) {
-  const text = await response.text();
-  if (!text) return {};
-
-  try {
-    return JSON.parse(text);
-  } catch (_) {
-    return { error: text };
-  }
 }
 
 module.exports = async function handler(req, res) {
@@ -71,43 +66,16 @@ module.exports = async function handler(req, res) {
       });
     }
 
-    if (typeof fetch !== "function") {
-      return res.status(500).json({
-        ok: false,
-        error: "FETCH_NOT_AVAILABLE"
-      });
-    }
-
-    const response = await fetch("https://api.openai.com/v1/responses", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify({
-        model: "gpt-4o-mini",
-        input: `Answer the following user message clearly and helpfully. If the user writes Arabic, answer in Arabic.\n\n${message}`
-      })
+    const response = await openai.responses.create({
+      model: "gpt-4o-mini",
+      input: message
     });
-
-    const data = await readOpenAiPayload(response);
-
-    if (!response.ok) {
-      return res.status(response.status || 500).json({
-        ok: false,
-        error: "ASSISTANT_V3_FAILED",
-        message: data?.error?.message || data?.message || data?.error || "OpenAI request failed",
-        status: response.status || null,
-        code: data?.error?.code || null,
-        type: data?.error?.type || null
-      });
-    }
 
     return res.status(200).json({
       ok: true,
       provider: "openai",
       model: "gpt-4o-mini",
-      answer: data.output_text || "No answer returned"
+      answer: response.output_text || "No response"
     });
   } catch (error) {
     console.error("ASSISTANT_V3_ERROR", {
