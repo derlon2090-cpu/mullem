@@ -11092,9 +11092,7 @@
 
     try {
       const result = await apiClient.assistantV3({
-        message: query,
-        language: state.openAiWebSearchV2.language,
-        source_type: state.openAiWebSearchV2.sourceType
+        message: query
       });
 
       if (!result?.ok) {

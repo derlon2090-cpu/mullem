@@ -1137,7 +1137,7 @@
   }
 
   async function assistantV3(payload) {
-    const url = buildSameOriginApiUrl("/assistant-v3");
+    const url = "/api/assistant-v3";
     const headers = {
       Accept: "application/json",
       "Content-Type": "application/json"
