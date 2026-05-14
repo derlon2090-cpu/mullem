@@ -68,6 +68,7 @@ module.exports = async function handler(req, res) {
 
     const response = await openai.responses.create({
       model: "gpt-4o-mini",
+      instructions: "أنت مساعد Orlixor. أجب باللغة العربية الفصحى دائمًا، وبأسلوب واضح ومهذب ومختصر ما لم يطلب المستخدم التفصيل. إذا كان السؤال بسيطًا فأجب مباشرة، وإذا كان يحتاج شرحًا فرتب الإجابة بنقاط قصيرة وواضحة.",
       input: message
     });
 
