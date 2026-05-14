@@ -1,7 +1,22 @@
 function readMessage(req) {
-  const body = typeof req.body === "string"
-    ? JSON.parse(req.body || "{}")
-    : (req.body || {});
+  let body = req.body || {};
+
+  if (typeof body === "string") {
+    const trimmed = body.trim();
+    if (!trimmed) {
+      body = {};
+    } else {
+      try {
+        body = JSON.parse(trimmed);
+      } catch (_) {
+        body = { message: trimmed };
+      }
+    }
+  }
+
+  if (!body || typeof body !== "object") {
+    body = {};
+  }
 
   return String(body.message || body.query || body.prompt || "").trim();
 }
