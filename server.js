@@ -5286,6 +5286,12 @@ async function handleOpenAiWebSearchV2(req, res) {
       model: "gpt-4.1-mini",
       queryLength: String(query || "").length
     });
+    if (!OPENAI_API_KEY) {
+      const missingKeyError = new Error("MISSING_OPENAI_API_KEY");
+      missingKeyError.status = 500;
+      missingKeyError.code = "MISSING_OPENAI_API_KEY";
+      throw missingKeyError;
+    }
     result = await callOpenAiWebSearchV2ViaSdk({
       query,
       language,
@@ -5293,26 +5299,22 @@ async function handleOpenAiWebSearchV2(req, res) {
       deep
     });
  } catch (error) {
-    console.error("OPENAI_SEARCH_FINAL_ERROR", {
-      provider: "openai",
-      model: "gpt-4.1-mini",
-      message: String(error?.message || error || "Unknown error"),
-      status: Number(error?.statusCode || error?.status || 500),
-      endpoint: OPENAI_RESPONSES_ENDPOINT || "https://api.openai.com/v1/responses",
-      query,
-      sourceType,
-      deep
+    console.error("OPENAI_SEARCH_FINAL_ERROR_FULL", {
+      name: error?.name,
+      message: error?.message,
+      status: error?.status,
+      code: error?.code,
+      type: error?.type,
+      stack: error?.stack
     });
 
     sendJson(req, res, 500, {
       ok: false,
-      success: false,
-      request_id: req.__requestId,
-      error: "OPENAI_SEARCH_FAILED",
-      message: String(error?.message || "Unknown error"),
-      status: Number(error?.statusCode || error?.status || null) || null,
+      error: "OPENAI_SEARCH_FINAL_FAILED",
+      message: error?.message || "Unknown error",
+      status: error?.status || null,
+      code: error?.code || null,
       type: error?.type || null,
-      code: error?.code || null
     });
     return;
   }
@@ -6337,10 +6339,12 @@ async function routeRequest(req, res) {
   if (req.method === "GET" && requestPath === "/api/openai-search-final/debug") {
     sendJson(req, res, 200, {
       ok: true,
+      route: "/api/openai-search-final",
       version: OPENAI_SEARCH_FINAL_VERSION,
       provider: "openai",
       model: "gpt-4.1-mini",
       hasOpenAIKey: Boolean(OPENAI_API_KEY),
+      keyPrefix: OPENAI_API_KEY ? OPENAI_API_KEY.slice(0, 7) : null,
       timestamp: new Date().toISOString(),
       build: process.env.RENDER_GIT_COMMIT ||
         process.env.VERCEL_GIT_COMMIT_SHA ||
@@ -6975,8 +6979,6 @@ module.exports = {
   routeRequest,
   getDatabaseState: () => ({ ...databaseState })
 };
-
-
 
 
 
