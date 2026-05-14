@@ -5260,102 +5260,12 @@ async function handleAdminCreatePackage(req, res) {
 }
 
 async function handleOpenAiWebSearchV2(req, res) {
-  try {
-    const payload = await parseJsonBody(req);
-    const query = String(payload?.query || payload?.message || "").trim();
-
-    if (!query) {
-      sendJson(req, res, 400, {
-        ok: false,
-        error: "MISSING_QUERY"
-      });
-      return;
-    }
-
-    if (!OPENAI_API_KEY) {
-      sendJson(req, res, 500, {
-        ok: false,
-        error: "MISSING_OPENAI_API_KEY"
-      });
-      return;
-    }
-
-    console.log("OPENAI_SEARCH_FINAL_REQUEST", {
-      hasKey: Boolean(OPENAI_API_KEY),
-      model: "gpt-4o-mini",
-      queryLength: query.length,
-      tools: false
-    });
-
-    const response = await fetch(OPENAI_RESPONSES_ENDPOINT || "https://api.openai.com/v1/responses", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${OPENAI_API_KEY}`,
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify({
-        model: "gpt-4o-mini",
-        input: `Answer the following question clearly and helpfully in Arabic. If the question needs very recent information, mention that the answer may not be fully up to date.\n\n${query}`
-      })
-    });
-
-    const contentType = response.headers.get("content-type") || "";
-    const payloadResponse = contentType.includes("application/json")
-      ? await response.json().catch(() => ({}))
-      : { raw: await response.text().catch(() => "") };
-
-    if (!response.ok) {
-      const providerError = payloadResponse?.error || {};
-      let message = providerError?.message || providerError?.error?.message || payloadResponse?.message || payloadResponse?.raw || JSON.stringify(payloadResponse?.error || payloadResponse || {}) || `HTTP ${response.status}`;
-      if (typeof message === "string" && message.trim().startsWith("{")) {
-        try {
-          const parsedMessage = JSON.parse(message);
-          message = parsedMessage?.error?.message || parsedMessage?.message || message;
-        } catch (_) {}
-      }
-      console.error("OPENAI_SEARCH_FINAL_ERROR", {
-        message,
-        status: response.status,
-        code: providerError?.code || payloadResponse?.code,
-        type: providerError?.type || payloadResponse?.type
-      });
-
-      sendJson(req, res, 500, {
-        ok: false,
-        error: "OPENAI_SEARCH_FAILED",
-        message,
-        status: response.status || null,
-        code: providerError?.code || payloadResponse?.code || null,
-        type: providerError?.type || payloadResponse?.type || null
-      });
-      return;
-    }
-
-    const answer = sanitizeModelDisplayText(payloadResponse?.output_text || extractResponseText(payloadResponse)) || "No answer returned";
-
-    sendJson(req, res, 200, {
-      ok: true,
-      provider: "openai",
-      model: "gpt-4o-mini",
-      answer
-    });
-  } catch (error) {
-    console.error("OPENAI_SEARCH_FINAL_ERROR", {
-      message: error?.message,
-      status: error?.status,
-      code: error?.code,
-      type: error?.type
-    });
-
-    sendJson(req, res, 500, {
-      ok: false,
-      error: "OPENAI_SEARCH_FAILED",
-      message: error?.message || "Unknown error",
-      status: error?.status || null,
-      code: error?.code || null,
-      type: error?.type || null
-    });
-  }
+  sendJson(req, res, 200, {
+    ok: true,
+    answer: "TEST_OK_ROUTE_WORKING",
+    route: "/api/openai-search-final",
+    time: new Date().toISOString()
+  });
 }
 
 async function handleToneTool(req, res) {
