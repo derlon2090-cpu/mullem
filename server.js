@@ -10,7 +10,7 @@ const execFileAsync = promisify(execFile);
 
 const ROOT_DIR = __dirname;
 loadEnvFile(path.join(ROOT_DIR, ".env"));
-const OPENAI_WEB_SEARCH_V2_VERSION = "OPENAI_WEB_SEARCH_V2_ONLY";
+const OPENAI_WEB_SEARCH_V2_VERSION = "OPENAI_ONLY_FINAL_999";
 const OPENAI_ONLY_FINAL_999 = "OPENAI_ONLY_FINAL_999";
 const OPENAI_SEARCH_FINAL_VERSION = "OPENAI_SEARCH_FINAL";
 const PORT = Number(process.env.PORT || 3000);
@@ -6975,7 +6975,6 @@ module.exports = {
   routeRequest,
   getDatabaseState: () => ({ ...databaseState })
 };
-
 
 
 
