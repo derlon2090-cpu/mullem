@@ -12,6 +12,7 @@ const ROOT_DIR = __dirname;
 loadEnvFile(path.join(ROOT_DIR, ".env"));
 const OPENAI_WEB_SEARCH_V2_VERSION = "OPENAI_WEB_SEARCH_V2_ONLY";
 const OPENAI_ONLY_FINAL_999 = "OPENAI_ONLY_FINAL_999";
+const OPENAI_SEARCH_FINAL_VERSION = "OPENAI_SEARCH_FINAL";
 const PORT = Number(process.env.PORT || 3000);
 const IS_CLOUD_RUNTIME = Boolean(
   process.env.RENDER ||
@@ -6326,10 +6327,10 @@ async function routeRequest(req, res) {
     return;
   }
 
-  if (req.method === "GET" && requestPath === "/api/openai-web-search-v2/debug") {
+  if (req.method === "GET" && requestPath === "/api/openai-search-final/debug") {
     sendJson(req, res, 200, {
       provider: "openai",
-      model: resolveOpenAiWebSearchV2Model(),
+      model: "gpt-4.1-mini",
       hasOpenAIKey: Boolean(OPENAI_API_KEY),
       timestamp: new Date().toISOString(),
       build: process.env.RENDER_GIT_COMMIT ||
@@ -6337,13 +6338,22 @@ async function routeRequest(req, res) {
         process.env.RAILWAY_GIT_COMMIT_SHA ||
         "local",
       routes: {
-        primary: "/api/openai-web-search-v2",
+        primary: "/api/openai-search-final",
         legacyRemoved: true
       },
       cache: {
-        scripts: "OPENAI_WEB_SEARCH_V2_ONLY",
+        scripts: "OPENAI_SEARCH_FINAL",
         serviceWorkerDisabled: true
       }
+    });
+    return;
+  }
+
+  if (req.method === "GET" && requestPath === "/api/openai-web-search-v2/debug") {
+    sendJson(req, res, 410, {
+      ok: false,
+      error: "OLD_SEARCH_DELETED",
+      message: "Use /api/openai-search-final/debug"
     });
     return;
   }
@@ -6686,7 +6696,7 @@ async function routeRequest(req, res) {
     return;
   }
 
-  if (req.method === "POST" && requestPath === "/api/openai-web-search-v2") {
+  if (req.method === "POST" && requestPath === "/api/openai-search-final") {
     await handleOpenAiWebSearchV2(req, res);
     return;
   }
@@ -6696,7 +6706,10 @@ async function routeRequest(req, res) {
     "/api/" + "smart-" + "search",
     "/api/tools/" + "smart-" + "search",
     "/" + "search",
-    "/" + "smart-" + "search"
+    "/" + "smart-" + "search",
+    "/api/" + "openai-web-search-v2",
+    "/api/" + "openai-web-search-v2" + "/debug",
+    "/" + "openai-web-search-v2"
   ]);
 
   if (removedSearchRoutes.has(requestPath)) {
@@ -6710,7 +6723,7 @@ async function routeRequest(req, res) {
         : isApiSmartSearch
           ? "OLD_SMART_SEARCH_REMOVED"
           : "OLD_SEARCH_REMOVED",
-      message: "Use /api/openai-web-search-v2",
+      message: "Use /api/openai-search-final",
       routeType: isPageSearch ? "page" : "api"
     });
     return;
