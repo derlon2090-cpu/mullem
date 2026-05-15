@@ -924,7 +924,7 @@
   function isCompactViewport() {
     return typeof window !== "undefined"
       && window.matchMedia
-      && window.matchMedia("(max-width: 1024px)").matches;
+      && window.matchMedia("(max-width: 768px)").matches;
   }
 
   function setSidebarCollapsed(value) {
@@ -5133,10 +5133,6 @@
     `;
 
     return `
-      <div class="mobile-viewport-pill" aria-label="وضع الجوال">
-        <span class="mobile-viewport-pill-icon" aria-hidden="true">${icons.phone}</span>
-        <span class="mobile-viewport-pill-text">جوال</span>
-      </div>
       <header class="mobile-header" aria-label="شريط الجوال">
         <button class="mobile-menu-btn" type="button" data-toggle-sidebar aria-label="${state.mobileSidebarOpen ? "إغلاق القائمة" : "فتح القائمة"}" aria-expanded="${state.mobileSidebarOpen ? "true" : "false"}">
           <span></span>
@@ -5154,6 +5150,44 @@
           ${accountButton}
         </div>
       </header>
+      <div class="mobile-viewport-pill" aria-label="وضع الجوال">
+        <span class="mobile-viewport-pill-text">جوال</span>
+        <span class="mobile-viewport-pill-icon" aria-hidden="true">${icons.phone}</span>
+      </div>
+    `;
+  }
+
+  function renderMobileDrawer() {
+    const drawerItems = [
+      ["messages", "المحادثات", icons.chat],
+      ["files", "الملفات", icons.projects],
+      ["tools", "الأدوات", icons.ai],
+      ["models", "النماذج", icons.library],
+      ["settings", "الإعدادات", icons.settings],
+      ["help", "المساعدة", icons.eye],
+      ["logout", "تسجيل الخروج", icons.login]
+    ];
+
+    return `
+      <aside class="mobile-menu-drawer" aria-hidden="${state.mobileSidebarOpen ? "false" : "true"}">
+        <header class="mobile-menu-head">
+          <button class="mobile-menu-btn mobile-menu-head-btn" type="button" data-toggle-sidebar aria-label="القائمة">
+            <span></span>
+            <span></span>
+            <span></span>
+          </button>
+          <span class="mobile-menu-brand" aria-hidden="true">${icons.logo}</span>
+          <button class="mobile-drawer-close" type="button" data-toggle-sidebar aria-label="إغلاق القائمة">×</button>
+        </header>
+        <nav class="mobile-menu-list" aria-label="قائمة الجوال">
+          ${drawerItems.map(([key, label, icon]) => `
+            <button class="mobile-menu-item" type="button" data-mobile-nav="${escapeHtml(key)}">
+              <span class="mobile-menu-item-icon" aria-hidden="true">${icon}</span>
+              <span>${escapeHtml(label)}</span>
+            </button>
+          `).join("")}
+        </nav>
+      </aside>
     `;
   }
 
@@ -9726,8 +9760,6 @@
 
   function renderMobileHomePanel() {
     const cards = [
-      ["تحليل البيانات", "تحليل وتصور البيانات", "ai"],
-      ["تلخيص المحتوى", "تلخيص النصوص والمقالات", "document"],
       ["كتابة المحتوى", "إنشاء محتوى احترافي", "sparkle"],
       ["أفكار وإبداع", "الحصول على أفكار جديدة", "star"],
       ["مساعدة برمجية", "حل المشكلات البرمجية", "code"],
@@ -9737,8 +9769,7 @@
     return `
       <section class="ov-mobile-home" aria-label="واجهة Orlixor للجوال">
         <section class="ov-mobile-hero">
-          <span class="ov-mobile-logo" aria-hidden="true">${icons.logo}</span>
-          <h1>مرحبًا بك <span>👋</span></h1>
+          <h1><span>👋</span> مرحباً بك</h1>
           <p>كيف يمكنني مساعدتك اليوم؟</p>
         </section>
         <nav class="ov-mobile-actions" aria-label="اختصارات Orlixor">
@@ -9826,7 +9857,7 @@
       <div class="mobile-app ${getEffectiveTheme() === "dark" ? "theme-dark" : ""} ${state.mobileSidebarOpen ? "is-mobile-sidebar-open" : ""}">
         ${renderMobileHeader()}
         <div class="mobile-drawer-backdrop" data-toggle-sidebar aria-hidden="${state.mobileSidebarOpen ? "false" : "true"}"></div>
-        ${renderSidebar()}
+        ${renderMobileDrawer()}
         <main class="mobile-home" aria-label="الواجهة الرئيسية">
           ${renderMobileHomePanel()}
           ${renderConversation(profile)}
@@ -10533,7 +10564,7 @@
           <div class="mobile-app ${getEffectiveTheme() === "dark" ? "theme-dark" : ""} ${state.mobileSidebarOpen ? "is-mobile-sidebar-open" : ""}">
             ${renderMobileHeader()}
             <div class="mobile-drawer-backdrop" data-toggle-sidebar aria-hidden="${state.mobileSidebarOpen ? "false" : "true"}"></div>
-            ${renderSidebar()}
+            ${renderMobileDrawer()}
             <main class="mobile-home" aria-label="الواجهة الرئيسية">
               ${renderMain(profile)}
             </main>
@@ -11967,6 +11998,7 @@
         state.mobileSidebarOpen
         && isCompactViewport()
         && !event.target.closest(".guest-sidebar")
+        && !event.target.closest(".mobile-menu-drawer")
         && !event.target.closest("[data-toggle-sidebar]")
       ) {
         state.mobileSidebarOpen = false;
@@ -12004,6 +12036,59 @@
         state.openThreadMenuId = "";
         setSection(navButton.getAttribute("data-nav"));
         return;
+      }
+
+      const mobileNavButton = event.target.closest("[data-mobile-nav]");
+      if (mobileNavButton) {
+        event.preventDefault();
+        event.stopPropagation();
+        const target = mobileNavButton.getAttribute("data-mobile-nav") || "";
+        state.mobileSidebarOpen = false;
+        if (target === "messages") {
+          setSection("messages");
+          return;
+        }
+        if (target === "files") {
+          setSection("library");
+          return;
+        }
+        if (target === "tools") {
+          setSection("ai-tools");
+          return;
+        }
+        if (target === "models") {
+          state.modelMenuOpen = true;
+          render();
+          return;
+        }
+        if (target === "settings") {
+          state.settingsModalOpen = true;
+          render();
+          return;
+        }
+        if (target === "help") {
+          showToast("فريق Orlixor قريب منك. اكتب سؤالك وسنساعدك.");
+          render();
+          return;
+        }
+        if (target === "logout") {
+          const apiClient = getApiClient();
+          const finishLogout = () => {
+            resetAccountConversationThreads();
+            localStorage.removeItem(legacyStorageKeys.currentUser);
+            state.currentUser = getActiveUser();
+            state.balancePanelOpen = false;
+            state.settingsModalOpen = false;
+            state.notificationsOpen = false;
+            render();
+          };
+          if (apiClient?.logout) {
+            apiClient.logout().finally(finishLogout);
+          } else {
+            finishLogout();
+          }
+          return;
+        }
       }
 
       const menuButton = event.target.closest("[data-thread-menu]");
