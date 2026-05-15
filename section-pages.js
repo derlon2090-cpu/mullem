@@ -42,6 +42,7 @@
 
   const icons = {
     logo: '<img src="orlixor-mark.png" alt="" aria-hidden="true">',
+    phone: '<svg viewBox="0 0 24 24"><rect x="7" y="2.5" width="10" height="19" rx="2.4"/><path d="M10 5.5h4"/><circle cx="12" cy="18" r="0.9"/></svg>',
     plus: '<svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>',
     home: '<svg viewBox="0 0 24 24"><path d="M4 10.5 12 4l8 6.5V20a1 1 0 0 1-1 1h-4.5v-5.5h-5V21H5a1 1 0 0 1-1-1z"/></svg>',
     user: '<svg viewBox="0 0 24 24"><path d="M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8Z"/><path d="M4.5 21a7.5 7.5 0 0 1 15 0"/></svg>',
@@ -434,6 +435,7 @@
     modelMenuOpen: false,
     selectedModel: loadSelectedModel(),
     sidebarCollapsed: loadSidebarCollapsed(),
+    mobileSidebarOpen: false,
     toolView: "tools",
     recentTools: loadRecentTools(),
     openAiWebSearchV2: {
@@ -917,6 +919,12 @@
     } catch (_) {
       return false;
     }
+  }
+
+  function isCompactViewport() {
+    return typeof window !== "undefined"
+      && window.matchMedia
+      && window.matchMedia("(max-width: 1024px)").matches;
   }
 
   function setSidebarCollapsed(value) {
@@ -5094,6 +5102,11 @@
 
     return `
       <div class="home-top-actions">
+        <button class="home-sidebar-toggle" type="button" data-toggle-sidebar aria-label="${state.mobileSidebarOpen ? "إغلاق الشريط الجانبي" : "فتح الشريط الجانبي"}" aria-expanded="${state.mobileSidebarOpen ? "true" : "false"}">
+          <span></span>
+          <span></span>
+          <span></span>
+        </button>
         <div class="balance-menu-wrap">
           <button class="ghost-balance ${isAuthenticated() ? "" : "requires-auth"}" type="button" data-balance aria-expanded="${state.balancePanelOpen ? "true" : "false"}">
             <span class="balance-caret">⌄</span>
@@ -5109,6 +5122,38 @@
         <button class="circle-control" type="button" aria-label="تبديل الثيم" data-theme-toggle>${icons.moon}</button>
         ${accountButton}
       </div>
+    `;
+  }
+
+  function renderMobileHeader() {
+    const accountButton = `
+      <button class="mobile-login-btn${isAuthenticated() ? " is-auth" : ""}" type="button" data-open-account aria-label="${isAuthenticated() ? "الحساب" : "تسجيل الدخول"}">
+        <span aria-hidden="true">${icons.user}</span>
+      </button>
+    `;
+
+    return `
+      <div class="mobile-viewport-pill" aria-label="وضع الجوال">
+        <span class="mobile-viewport-pill-icon" aria-hidden="true">${icons.phone}</span>
+        <span class="mobile-viewport-pill-text">جوال</span>
+      </div>
+      <header class="mobile-header" aria-label="شريط الجوال">
+        <button class="mobile-menu-btn" type="button" data-toggle-sidebar aria-label="${state.mobileSidebarOpen ? "إغلاق القائمة" : "فتح القائمة"}" aria-expanded="${state.mobileSidebarOpen ? "true" : "false"}">
+          <span></span>
+          <span></span>
+          <span></span>
+        </button>
+        <div class="mobile-brand" aria-label="Orlixor">
+          <span class="mobile-brand-mark" aria-hidden="true">${icons.logo}</span>
+        </div>
+        <div class="mobile-header-actions">
+          <button class="mobile-icon-btn" type="button" aria-label="الإشعارات" data-open-notifications>
+            ${icons.bell}
+            ${renderNotificationBellBadge()}
+          </button>
+          ${accountButton}
+        </div>
+      </header>
     `;
   }
 
@@ -9679,6 +9724,38 @@
     `;
   }
 
+  function renderMobileHomePanel() {
+    const cards = [
+      ["تحليل البيانات", "تحليل وتصور البيانات", "ai"],
+      ["تلخيص المحتوى", "تلخيص النصوص والمقالات", "document"],
+      ["كتابة المحتوى", "إنشاء محتوى احترافي", "sparkle"],
+      ["أفكار وإبداع", "الحصول على أفكار جديدة", "star"],
+      ["مساعدة برمجية", "حل المشكلات البرمجية", "code"],
+      ["ترجمة", "ترجمة النصوص بدقة", "internet"]
+    ];
+
+    return `
+      <section class="ov-mobile-home" aria-label="واجهة Orlixor للجوال">
+        <section class="ov-mobile-hero">
+          <span class="ov-mobile-logo" aria-hidden="true">${icons.logo}</span>
+          <h1>مرحبًا بك <span>👋</span></h1>
+          <p>كيف يمكنني مساعدتك اليوم؟</p>
+        </section>
+        <nav class="ov-mobile-actions" aria-label="اختصارات Orlixor">
+          ${cards.map(([title, desc, icon]) => `
+            <button class="ov-mobile-action ${isAuthenticated() ? "" : "requires-auth"}" type="button" data-card="${escapeHtml(title)}">
+              <i class="ov-mobile-action-icon" aria-hidden="true">${icons[icon]}</i>
+              <span class="ov-mobile-action-copy">
+                <strong>${escapeHtml(title)}</strong>
+                <small>${escapeHtml(desc)}</small>
+              </span>
+            </button>
+          `).join("")}
+        </nav>
+      </section>
+    `;
+  }
+
   function renderHomeMain(profile) {
     const firstName = isAuthenticated()
       ? String(state.currentUser?.name || "أحمد").trim().split(/\s+/)[0] || "أحمد"
@@ -9697,17 +9774,19 @@
       <section class="${mainClass}">
         <header class="guest-main-topbar home-main-topbar">
           ${renderModelSwitcher()}
+          <span class="home-mobile-logo" aria-hidden="true">${icons.logo}</span>
           ${renderHomeTopActions()}
         </header>
 
         ${isChatting ? "" : `
-          <section class="home-hero-panel">
+          ${renderMobileHomePanel()}
+          <section class="home-hero-panel home-desktop-hero">
             <span class="home-hero-mark" aria-hidden="true">${icons.logo}</span>
             <h1>${greeting} <span>👋</span></h1>
             <p>كيف يمكنني مساعدتك اليوم؟</p>
           </section>
 
-          <section class="guest-quick-grid home-quick-grid">
+          <section class="guest-quick-grid home-quick-grid home-desktop-actions">
             ${renderQuickCards(profile)}
           </section>
         `}
@@ -9739,6 +9818,42 @@
         </form>
         <p class="guest-compose-note home-compose-note">قد يخطئ Orlixor في بعض المعلومات. تحقّق من المعلومات المهمة.</p>
       </section>
+    `;
+  }
+
+  function renderMobileHomeShell(profile) {
+    return `
+      <div class="mobile-app ${getEffectiveTheme() === "dark" ? "theme-dark" : ""} ${state.mobileSidebarOpen ? "is-mobile-sidebar-open" : ""}">
+        ${renderMobileHeader()}
+        <div class="mobile-drawer-backdrop" data-toggle-sidebar aria-hidden="${state.mobileSidebarOpen ? "false" : "true"}"></div>
+        ${renderSidebar()}
+        <main class="mobile-home" aria-label="الواجهة الرئيسية">
+          ${renderMobileHomePanel()}
+          ${renderConversation(profile)}
+          ${renderAttachmentPills()}
+        </main>
+        <form class="guest-compose home-compose mobile-composer" data-compose-form>
+          <input
+            class="compose-input"
+            data-compose-input
+            value="${escapeHtml(getComposerValue())}"
+            placeholder="اكتب رسالتك هنا..."
+            ${state.sending ? "disabled" : ""}
+          >
+          ${renderComposeStatus()}
+          <div class="home-compose-actions">
+            <button class="home-compose-tool ${isAuthenticated() ? "" : "requires-auth"}" type="button" data-pick-file>
+              ${icons.attach}
+              <span>إرفاق ملف</span>
+            </button>
+            <button class="home-compose-tool" type="button" data-open-tools>
+              ${icons.settings}
+              <span>أدوات</span>
+            </button>
+          </div>
+          ${renderComposeSendButton()}
+        </form>
+      </div>
     `;
   }
 
@@ -9920,7 +10035,7 @@
         </div>
       `;
     return `
-      <aside class="guest-sidebar">
+      <aside class="guest-sidebar mobile-drawer"${isCompactViewport() && !state.mobileSidebarOpen ? " hidden aria-hidden=\"true\"" : ""}>
         <div class="guest-sidebar-head">
           <a class="guest-brand" href="${shellBaseUrl}" aria-label="Orlixor">
             <span class="guest-brand-full guest-brand-combo">
@@ -10410,12 +10525,39 @@
     const profile = getProfile();
     const isToolsWorkspace = state.section === "ai-tools";
     const isSubscriberTools = isToolsWorkspace && ["image-enhancer", "image-clarifier", "png-to-pdf", "pdf-to-png", "pdf-unlock", "image-converter", "image-compressor", "image-rotator", "image-cropper"].includes(state.toolView);
-    app.innerHTML = `
-      <div class="guest-shell ${getEffectiveTheme() === "dark" ? "theme-dark" : ""} ${isHomeWorkspace ? "is-home-workspace" : ""} ${isToolsWorkspace ? "is-tools-workspace" : ""} ${isSubscriberTools ? "is-subscriber-tools" : ""} ${state.sidebarCollapsed ? "is-sidebar-collapsed" : ""}">
-        ${renderSidebar()}
-        ${renderMain(profile)}
-        ${isHomeWorkspace ? "" : renderRightPanel(profile)}
+    const compactViewport = isCompactViewport();
+    document.body.classList.toggle("is-mobile-app", compactViewport);
+    if (compactViewport) {
+      app.innerHTML = `
+        ${isHomeWorkspace ? renderMobileHomeShell(profile) : `
+          <div class="mobile-app ${getEffectiveTheme() === "dark" ? "theme-dark" : ""} ${state.mobileSidebarOpen ? "is-mobile-sidebar-open" : ""}">
+            ${renderMobileHeader()}
+            <div class="mobile-drawer-backdrop" data-toggle-sidebar aria-hidden="${state.mobileSidebarOpen ? "false" : "true"}"></div>
+            ${renderSidebar()}
+            <main class="mobile-home" aria-label="الواجهة الرئيسية">
+              ${renderMain(profile)}
+            </main>
+          </div>
+        `}
+        ${renderAuthModal()}
+        ${renderUpgradeModal()}
+        ${renderSettingsModal()}
+        ${renderNotificationsModal()}
         <input type="file" id="guestFilePicker" hidden multiple accept=".pdf,.doc,.docx,.png,.jpg,.jpeg,.txt,.md,.ppt,.pptx">
+        <div class="guest-toast-stack" aria-live="polite"></div>
+      `;
+      return;
+    }
+    app.innerHTML = `
+      <div class="desktop-app">
+        <div class="guest-shell ${getEffectiveTheme() === "dark" ? "theme-dark" : ""} ${isHomeWorkspace ? "is-home-workspace" : ""} ${isToolsWorkspace ? "is-tools-workspace" : ""} ${isSubscriberTools ? "is-subscriber-tools" : ""} ${state.sidebarCollapsed ? "is-sidebar-collapsed" : ""} ${state.mobileSidebarOpen ? "is-mobile-sidebar-open" : ""}">
+          ${renderMobileHeader()}
+          <div class="mobile-drawer-backdrop" data-toggle-sidebar aria-hidden="${state.mobileSidebarOpen ? "false" : "true"}"${isCompactViewport() && !state.mobileSidebarOpen ? " hidden" : ""}></div>
+          ${renderSidebar()}
+          ${renderMain(profile)}
+          ${isHomeWorkspace ? "" : renderRightPanel(profile)}
+          <input type="file" id="guestFilePicker" hidden multiple accept=".pdf,.doc,.docx,.png,.jpg,.jpeg,.txt,.md,.ppt,.pptx">
+        </div>
       </div>
       ${renderAuthModal()}
       ${renderUpgradeModal()}
@@ -10648,6 +10790,7 @@
   function setSection(sectionKey, replace = false) {
     if (!sectionProfiles[sectionKey]) return;
     state.section = sectionKey;
+    state.mobileSidebarOpen = false;
     if (sectionKey !== "ai-tools") {
       state.toolView = "tools";
     }
@@ -11820,6 +11963,16 @@
       if (shouldCloseModelMenu) {
         state.modelMenuOpen = false;
       }
+      if (
+        state.mobileSidebarOpen
+        && isCompactViewport()
+        && !event.target.closest(".guest-sidebar")
+        && !event.target.closest("[data-toggle-sidebar]")
+      ) {
+        state.mobileSidebarOpen = false;
+        render();
+        return;
+      }
 
       const modelMenuButton = event.target.closest("[data-model-menu]");
       if (modelMenuButton) {
@@ -12163,7 +12316,12 @@
 
       if (event.target.closest("[data-toggle-sidebar]")) {
         event.preventDefault();
-        setSidebarCollapsed(!state.sidebarCollapsed);
+        if (isCompactViewport()) {
+          state.mobileSidebarOpen = !state.mobileSidebarOpen;
+        } else {
+          state.mobileSidebarOpen = false;
+          setSidebarCollapsed(!state.sidebarCollapsed);
+        }
         render();
         return;
       }
