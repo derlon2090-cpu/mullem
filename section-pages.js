@@ -5133,6 +5133,10 @@
     `;
 
     return `
+      <div class="mobile-viewport-pill" aria-label="وضع الجوال">
+        <span class="mobile-viewport-pill-text">جوال</span>
+        <span class="mobile-viewport-pill-icon" aria-hidden="true">${icons.phone}</span>
+      </div>
       <header class="mobile-header" aria-label="شريط الجوال">
         <button class="mobile-menu-btn" type="button" data-toggle-sidebar aria-label="${state.mobileSidebarOpen ? "إغلاق القائمة" : "فتح القائمة"}" aria-expanded="${state.mobileSidebarOpen ? "true" : "false"}">
           <span></span>
@@ -5150,10 +5154,6 @@
           ${accountButton}
         </div>
       </header>
-      <div class="mobile-viewport-pill" aria-label="وضع الجوال">
-        <span class="mobile-viewport-pill-text">جوال</span>
-        <span class="mobile-viewport-pill-icon" aria-hidden="true">${icons.phone}</span>
-      </div>
     `;
   }
 
