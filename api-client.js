@@ -103,7 +103,21 @@
       lastActiveDate: user.lastActiveDate || user.last_active_date || "",
       lastReset: user.lastReset || user.last_reset || user.lastActiveDate || user.last_active_date || "",
       last_reset: user.last_reset || user.lastReset || user.lastActiveDate || user.last_active_date || "",
-      xp: Number.isFinite(Number(user.xp)) ? Number(user.xp) : 0
+      balance: Number.isFinite(Number(user.balance ?? user.xp)) ? Number(user.balance ?? user.xp) : 0,
+      xp: Number.isFinite(Number(user.xp ?? user.balance)) ? Number(user.xp ?? user.balance) : 0,
+      lastDailyRewardAt: user.lastDailyRewardAt || user.last_daily_reward_at || user.lastDailyXpGrantedAt || user.last_daily_xp_granted_at || null,
+      dailyRewardAmount: Number.isFinite(Number(user.dailyRewardAmount ?? user.daily_reward_amount ?? user.packageDailyXp ?? user.package_daily_xp))
+        ? Number(user.dailyRewardAmount ?? user.daily_reward_amount ?? user.packageDailyXp ?? user.package_daily_xp)
+        : 80,
+      nextDailyRewardInMs: Number.isFinite(Number(user.nextDailyRewardInMs ?? user.next_daily_reward_in_ms))
+        ? Number(user.nextDailyRewardInMs ?? user.next_daily_reward_in_ms)
+        : 0,
+      nextDailyRewardAt: Number.isFinite(Number(user.nextDailyRewardAt ?? user.next_daily_reward_at))
+        ? Number(user.nextDailyRewardAt ?? user.next_daily_reward_at)
+        : 0,
+      dailyRewardSyncedAt: Number.isFinite(Number(user.dailyRewardSyncedAt || user.daily_reward_synced_at || 0))
+        ? Number(user.dailyRewardSyncedAt || user.daily_reward_synced_at || 0)
+        : 0
     };
   }
 
@@ -152,7 +166,7 @@
   function debugApiFailure(path, result) {
     if (!shouldDebugApiFailures()) return;
     const cleanPath = String(path || "");
-    if (!/\/auth\/login|\/auth\/register|\/auth\/me/i.test(cleanPath)) return;
+    if (!/\/auth\/login|\/auth\/register|\/auth\/me|\/me/i.test(cleanPath)) return;
     console.warn("[Orlixor API]", cleanPath, {
       status: result?.status,
       message: result?.message,
@@ -481,7 +495,23 @@
       packageDaysRemaining: Number.isFinite(Number(user?.packageDaysRemaining))
         ? Number(user.packageDaysRemaining)
         : (Number.isFinite(Number(existing.packageDaysRemaining)) ? Number(existing.packageDaysRemaining) : null),
-      xp: Number.isFinite(Number(user?.xp)) ? Number(user.xp) : (Number.isFinite(Number(existing.xp)) ? Number(existing.xp) : 50),
+      balance: Number.isFinite(Number(user?.balance ?? user?.xp))
+        ? Number(user.balance ?? user.xp)
+        : (Number.isFinite(Number(existing.balance ?? existing.xp)) ? Number(existing.balance ?? existing.xp) : 50),
+      xp: Number.isFinite(Number(user?.xp ?? user?.balance)) ? Number(user.xp ?? user.balance) : (Number.isFinite(Number(existing.xp ?? existing.balance)) ? Number(existing.xp ?? existing.balance) : 50),
+      lastDailyRewardAt: user?.lastDailyRewardAt || user?.last_daily_reward_at || user?.lastDailyXpGrantedAt || user?.last_daily_xp_granted_at || existing.lastDailyRewardAt || existing.last_daily_reward_at || null,
+      dailyRewardAmount: Number.isFinite(Number(user?.dailyRewardAmount ?? user?.daily_reward_amount ?? user?.packageDailyXp ?? user?.package_daily_xp))
+        ? Number(user.dailyRewardAmount ?? user.daily_reward_amount ?? user.packageDailyXp ?? user.package_daily_xp)
+        : (Number.isFinite(Number(existing.dailyRewardAmount ?? existing.daily_reward_amount ?? existing.packageDailyXp ?? existing.package_daily_xp)) ? Number(existing.dailyRewardAmount ?? existing.daily_reward_amount ?? existing.packageDailyXp ?? existing.package_daily_xp) : 80),
+      nextDailyRewardInMs: Number.isFinite(Number(user?.nextDailyRewardInMs ?? user?.next_daily_reward_in_ms))
+        ? Number(user.nextDailyRewardInMs ?? user.next_daily_reward_in_ms)
+        : (Number.isFinite(Number(existing.nextDailyRewardInMs ?? existing.next_daily_reward_in_ms)) ? Number(existing.nextDailyRewardInMs ?? existing.next_daily_reward_in_ms) : 0),
+      nextDailyRewardAt: Number.isFinite(Number(user?.nextDailyRewardAt ?? user?.next_daily_reward_at))
+        ? Number(user.nextDailyRewardAt ?? user.next_daily_reward_at)
+        : (Number.isFinite(Number(existing.nextDailyRewardAt ?? existing.next_daily_reward_at)) ? Number(existing.nextDailyRewardAt ?? existing.next_daily_reward_at) : 0),
+      dailyRewardSyncedAt: Number.isFinite(Number(user?.dailyRewardSyncedAt ?? user?.daily_reward_synced_at))
+        ? Number(user.dailyRewardSyncedAt ?? user.daily_reward_synced_at)
+        : (Number.isFinite(Number(existing.dailyRewardSyncedAt ?? existing.daily_reward_synced_at)) ? Number(existing.dailyRewardSyncedAt ?? existing.daily_reward_synced_at) : 0),
       streakDays: Number.isFinite(Number(user?.streakDays)) ? Number(user.streakDays) : (Number.isFinite(Number(existing.streakDays)) ? Number(existing.streakDays) : 0),
       motivationScore: Number.isFinite(Number(user?.motivationScore)) ? Number(user.motivationScore) : Number(existing.motivationScore || 0),
       lastActiveDate: user?.lastActiveDate || user?.last_active_date || existing.lastActiveDate || existing.last_active_date || "",
@@ -793,7 +823,7 @@
       user: session.user
     });
 
-    const verified = await request("/auth/me", {
+    const verified = await request("/me", {
       method: "GET",
       timeoutMs: 15000
     });
@@ -877,7 +907,7 @@
   }
 
   async function me() {
-    const result = await request("/auth/me");
+    const result = await request("/me");
     if (result.ok && result.data?.user && hasToken()) {
       setSession({
         token: getToken(),

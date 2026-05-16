@@ -1006,10 +1006,53 @@ function parseTimestampMs(value) {
   return Number.isFinite(time) ? time : 0;
 }
 
-function canGrantDailyXp(lastGrantedAt) {
-  const lastGrantedMs = parseTimestampMs(lastGrantedAt);
-  if (!lastGrantedMs) return true;
-  return Date.now() - lastGrantedMs >= 24 * 60 * 60 * 1000;
+function isNewUtcDay(lastDate, now = new Date()) {
+  if (!lastDate) return true;
+  const last = lastDate instanceof Date ? lastDate : new Date(lastDate);
+  if (Number.isNaN(last.getTime())) return true;
+  return (
+    now.getUTCFullYear() !== last.getUTCFullYear() ||
+    now.getUTCMonth() !== last.getUTCMonth() ||
+    now.getUTCDate() !== last.getUTCDate()
+  );
+}
+
+function canGrantDailyXp(lastGrantedAt, now = new Date()) {
+  return isNewUtcDay(lastGrantedAt, now);
+}
+
+function msUntilNextUtcMidnight(now = new Date()) {
+  const next = new Date(Date.UTC(
+    now.getUTCFullYear(),
+    now.getUTCMonth(),
+    now.getUTCDate() + 1,
+    0,
+    0,
+    0,
+    0
+  ));
+  return Math.max(0, next.getTime() - now.getTime());
+}
+
+function getUserBalanceValue(user = {}) {
+  const balance = Number(user.balance ?? user.xp ?? user.total_xp ?? 0);
+  return Number.isFinite(balance) ? Math.max(0, balance) : 0;
+}
+
+function getUserLastDailyRewardAt(user = {}) {
+  return user.last_daily_reward_at || user.lastDailyRewardAt || user.last_daily_xp_granted_at || user.lastDailyXpGrantedAt || null;
+}
+
+function getUserDailyRewardAmount(user = {}) {
+  const packageAmount = Number(user.package_daily_xp ?? user.packageDailyXp ?? 0);
+  if (Number.isFinite(packageAmount) && packageAmount > 0) {
+    return Math.max(0, Math.round(packageAmount));
+  }
+  const explicitAmount = Number(user.daily_reward_amount ?? user.dailyRewardAmount);
+  if (Number.isFinite(explicitAmount) && explicitAmount > 0) {
+    return Math.max(0, Math.round(explicitAmount));
+  }
+  return getDailyXpForUserPlan(user);
 }
 
 function getDailyXpPlanKey(user = {}) {
@@ -1100,6 +1143,9 @@ async function syncUserDailyProgress(user, activityText = "") {
   }
 
   const effectiveUser = await ensureUserPackageLifecycle(user) || user;
+  const lastDailyRewardAt = getUserLastDailyRewardAt(effectiveUser);
+  const dailyRewardAmount = getUserDailyRewardAmount(effectiveUser);
+  const shouldGrantDailyXp = canGrantDailyXp(lastDailyRewardAt);
 
   if (typeof databaseClient.grantDailyXpIfNeeded === "function") {
     return databaseClient.grantDailyXpIfNeeded(effectiveUser.id, {
@@ -1107,15 +1153,23 @@ async function syncUserDailyProgress(user, activityText = "") {
       firstSignupXp: FIRST_SIGNUP_XP,
       defaultDailyXp: DAILY_LOGIN_XP_REWARD,
       dailyXpByPlan: DAILY_XP_BY_PLAN,
+      dailyRewardAmount,
       motivationBonus: DAILY_MOTIVATION_BONUS
     });
   }
 
   const today = getTodayStamp();
   const lastActiveDate = String(effectiveUser.last_active_date || "");
-  const lastDailyGrantedAt = effectiveUser.last_daily_xp_granted_at || null;
   const signupBonusClaimed = effectiveUser.signup_bonus_claimed !== false;
-  const shouldGrantDailyXp = canGrantDailyXp(lastDailyGrantedAt);
+  const dailyXpAward = shouldGrantDailyXp ? dailyRewardAmount : 0;
+
+  console.log("DAILY_REWARD_CHECK", {
+    userId: effectiveUser.id,
+    balance: getUserBalanceValue(effectiveUser),
+    lastDailyRewardAt,
+    dailyRewardAmount,
+    shouldReward: shouldGrantDailyXp
+  });
 
   if (!shouldGrantDailyXp && signupBonusClaimed) {
     if (activityText) {
@@ -1141,22 +1195,25 @@ async function syncUserDailyProgress(user, activityText = "") {
   if (streakDays >= 5 && !achievements.includes("5_days_streak")) achievements.push("5_days_streak");
   if (streakDays >= 30 && !achievements.includes("30_days_streak")) achievements.push("30_days_streak");
 
-  const dailyXpAward = shouldGrantDailyXp ? getDailyXpForUserPlan(effectiveUser) : 0;
-  const currentXp = Number(effectiveUser.xp || 0);
+  const currentXp = getUserBalanceValue(effectiveUser);
   const baseXp = signupBonusClaimed ? currentXp : currentXp + FIRST_SIGNUP_XP;
   const nextXp = baseXp + dailyXpAward;
   const packageLabel = String(effectiveUser.package_name || effectiveUser.package || "التمهيدية").trim() || "التمهيدية";
 
+  const nowIso = new Date().toISOString();
   const updatedUser = await databaseClient.updateUser(effectiveUser.id, {
     last_active_date: today,
     last_reset: today,
     last_daily_xp_claimed_date: today,
-    last_daily_xp_granted_at: shouldGrantDailyXp ? new Date().toISOString() : lastDailyGrantedAt,
+    last_daily_xp_granted_at: shouldGrantDailyXp ? nowIso : lastDailyRewardAt,
+    last_daily_reward_at: shouldGrantDailyXp ? nowIso : lastDailyRewardAt,
     signup_bonus_claimed: true,
     streak_days: streakDays,
     motivation_score: Number(effectiveUser.motivation_score || 0) + DAILY_MOTIVATION_BONUS,
     xp: nextXp,
+    balance: nextXp,
     total_xp: nextXp,
+    daily_reward_amount: dailyRewardAmount,
     plan_type: String(effectiveUser.package_key || effectiveUser.plan_type || effectiveUser.package_name || "starter").trim() || "starter",
     achievements,
     activity: activityText || `تجددت باقته اليومية (${packageLabel}) وحصل على ${dailyXpAward} XP`
@@ -1551,6 +1608,13 @@ function generateApiToken() {
 
 function buildApiUser(user) {
   if (!user) return null;
+  const balance = getUserBalanceValue(user);
+  const totalXp = Number.isFinite(Number(user.total_xp ?? user.totalXp ?? balance))
+    ? Number(user.total_xp ?? user.totalXp ?? balance)
+    : balance;
+  const lastDailyRewardAt = getUserLastDailyRewardAt(user);
+  const dailyRewardAmount = getUserDailyRewardAmount(user);
+  const nextDailyRewardInMs = msUntilNextUtcMidnight();
   return {
     id: String(user.id),
     name: String(user.name || "").trim(),
@@ -1570,9 +1634,10 @@ function buildApiUser(user) {
     packageExpiresAt: user.package_expires_at || null,
     packageDaysRemaining: calculateRemainingDays(user.package_expires_at),
     package: String(user.package_name || user.package || "مجاني محدود").trim() || "مجاني محدود",
-    xp: Number.isFinite(Number(user.xp)) ? Number(user.xp) : 0,
-    total_xp: Number.isFinite(Number(user.total_xp ?? user.xp)) ? Number(user.total_xp ?? user.xp) : 0,
-    totalXp: Number.isFinite(Number(user.total_xp ?? user.xp)) ? Number(user.total_xp ?? user.xp) : 0,
+    balance,
+    xp: balance,
+    total_xp: totalXp,
+    totalXp,
     plan_type: String(user.plan_type || user.package_key || user.package_name || user.package || "starter").trim() || "starter",
     planType: String(user.plan_type || user.package_key || user.package_name || user.package || "starter").trim() || "starter",
     streakDays: Number.isFinite(Number(user.streak_days)) ? Number(user.streak_days) : 0,
@@ -1584,6 +1649,12 @@ function buildApiUser(user) {
     lastDailyXpClaimedDate: user.last_daily_xp_claimed_date || user.last_reset || user.last_active_date || null,
     last_daily_xp_granted_at: user.last_daily_xp_granted_at || null,
     lastDailyXpGrantedAt: user.last_daily_xp_granted_at || null,
+    last_daily_reward_at: lastDailyRewardAt,
+    lastDailyRewardAt,
+    daily_reward_amount: dailyRewardAmount,
+    dailyRewardAmount,
+    next_daily_reward_in_ms: nextDailyRewardInMs,
+    nextDailyRewardInMs,
     signup_bonus_claimed: user.signup_bonus_claimed !== false,
     signupBonusClaimed: user.signup_bonus_claimed !== false,
     achievements: Array.isArray(user.achievements) ? user.achievements : [],
@@ -3758,6 +3829,7 @@ async function handleLogin(req, res) {
     data: {
       token,
       user: buildApiUser(updatedUser || user),
+      nextDailyRewardInMs: msUntilNextUtcMidnight(),
       recent_conversations: recentConversations.map(buildConversationSummary).filter(Boolean)
     }
   });
@@ -3768,8 +3840,75 @@ async function handleAuthMe(req, res) {
   const syncedUser = await syncUserDailyProgressSafely(auth.user, "تم تحديث جلسة المستخدم");
   sendJson(req, res, 200, {
     success: true,
+    ok: true,
     data: {
-      user: buildApiUser(syncedUser || auth.user)
+      user: buildApiUser(syncedUser || auth.user),
+      nextDailyRewardInMs: msUntilNextUtcMidnight()
+    }
+  });
+}
+
+async function handleDailyRewardClaim(req, res) {
+  const auth = await requireAuthenticatedUser(req);
+  const user = auth.user;
+  const lastDailyRewardAt = getUserLastDailyRewardAt(user);
+  const dailyRewardAmount = getUserDailyRewardAmount(user);
+  const shouldReward = isNewUtcDay(lastDailyRewardAt);
+  const balance = getUserBalanceValue(user);
+
+  console.log("DAILY_REWARD_CHECK", {
+    userId: user.id,
+    balance,
+    lastDailyRewardAt,
+    dailyRewardAmount,
+    shouldReward
+  });
+
+  if (!shouldReward) {
+    sendJson(req, res, 200, {
+      success: true,
+      ok: true,
+      data: {
+        claimed: false,
+        balance,
+        message: "ALREADY_CLAIMED_TODAY",
+        nextDailyRewardInMs: msUntilNextUtcMidnight(),
+        user: buildApiUser(user)
+      }
+    });
+    return;
+  }
+
+  const nextBalance = balance + dailyRewardAmount;
+  const nowIso = new Date().toISOString();
+  const updatedUser = await databaseClient.updateUser(user.id, {
+    balance: nextBalance,
+    xp: nextBalance,
+    total_xp: nextBalance,
+    daily_reward_amount: dailyRewardAmount,
+    last_daily_reward_at: nowIso,
+    last_daily_xp_granted_at: nowIso,
+    last_daily_xp_claimed_date: nowIso.slice(0, 10)
+  });
+
+  sendJson(req, res, 200, {
+    success: true,
+    ok: true,
+    data: {
+      claimed: true,
+      added: dailyRewardAmount,
+      balance: nextBalance,
+      nextDailyRewardInMs: msUntilNextUtcMidnight(),
+      user: buildApiUser(updatedUser || {
+        ...user,
+        balance: nextBalance,
+        xp: nextBalance,
+        total_xp: nextBalance,
+        daily_reward_amount: dailyRewardAmount,
+        last_daily_reward_at: nowIso,
+        last_daily_xp_granted_at: nowIso,
+        last_daily_xp_claimed_date: nowIso.slice(0, 10)
+      })
     }
   });
 }
@@ -6440,8 +6579,13 @@ async function routeRequest(req, res) {
     return;
   }
 
-  if (req.method === "GET" && requestPath === "/api/auth/me") {
+  if (req.method === "GET" && (requestPath === "/api/auth/me" || requestPath === "/api/me")) {
     await handleAuthMe(req, res);
+    return;
+  }
+
+  if (req.method === "POST" && requestPath === "/api/daily-reward/claim") {
+    await handleDailyRewardClaim(req, res);
     return;
   }
 

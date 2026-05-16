@@ -1,6 +1,18 @@
-(() => {
+﻿(() => {
   const app = document.getElementById("sectionApp");
   if (!app) return;
+  const mobileV2Root = document.getElementById("orlixor-mobile-v2") || (() => {
+    const node = document.createElement("div");
+    node.id = "orlixor-mobile-v2";
+    document.body.insertBefore(node, app);
+    return node;
+  })();
+  const uiRoots = [app, mobileV2Root].filter(Boolean);
+  function bindUiEvent(type, listener, options) {
+    for (const root of uiRoots) {
+      root.addEventListener(type, listener, options);
+    }
+  }
 
   const LOGIN_FRAME_URL = "login.html?embed=1&mode=login";
   const LOGIN_PAGE_URL = "login.html";
@@ -12,6 +24,8 @@
   const workspaceMode = document.body?.dataset.workspaceMode === "home" ? "home" : "sections";
   const isHomeWorkspace = workspaceMode === "home";
   const shellBaseUrl = isHomeWorkspace ? HOME_URL : GUEST_URL;
+  const assetVersion = "20260515-mobile-v2-009";
+  const brandMarkUrl = `orlixor-mark.png?v=${assetVersion}`;
   const themeKey = "orlixor_guest_theme";
   const modelStorageKey = "orlixor_selected_model";
   const sidebarStorageKey = "orlixor_sidebar_collapsed";
@@ -41,7 +55,7 @@
   let sessionRefreshPromise = null;
 
   const icons = {
-    logo: '<img src="orlixor-mark.png" alt="" aria-hidden="true">',
+    logo: `<img src="${brandMarkUrl}" alt="" aria-hidden="true">`,
     phone: '<svg viewBox="0 0 24 24"><rect x="7" y="2.5" width="10" height="19" rx="2.4"/><path d="M10 5.5h4"/><circle cx="12" cy="18" r="0.9"/></svg>',
     plus: '<svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>',
     home: '<svg viewBox="0 0 24 24"><path d="M4 10.5 12 4l8 6.5V20a1 1 0 0 1-1 1h-4.5v-5.5h-5V21H5a1 1 0 0 1-1-1z"/></svg>',
@@ -658,6 +672,8 @@
     },
     upgradeModalOpen: false,
     balancePanelOpen: false,
+    dailyRewardRefreshInFlight: false,
+    dailyRewardRefreshLastAttemptAt: 0,
     notificationsOpen: false,
     notificationsTab: "all",
     notificationsLoading: false,
@@ -1174,7 +1190,21 @@
       lastActiveDate: user.lastActiveDate || user.last_active_date || null,
       lastReset: user.lastReset || user.last_reset || user.lastActiveDate || user.last_active_date || null,
       packageDailyXp: Number.isFinite(Number(user.packageDailyXp || user.package_daily_xp)) ? Number(user.packageDailyXp || user.package_daily_xp) : 0,
-      xp: Number.isFinite(Number(user.xp)) ? Number(user.xp) : 50
+      balance: Number.isFinite(Number(user.balance ?? user.xp)) ? Number(user.balance ?? user.xp) : 50,
+      xp: Number.isFinite(Number(user.xp ?? user.balance)) ? Number(user.xp ?? user.balance) : 50,
+      lastDailyRewardAt: user.lastDailyRewardAt || user.last_daily_reward_at || user.lastDailyXpGrantedAt || user.last_daily_xp_granted_at || null,
+      dailyRewardAmount: Number.isFinite(Number(user.dailyRewardAmount ?? user.daily_reward_amount ?? user.packageDailyXp ?? user.package_daily_xp))
+        ? Number(user.dailyRewardAmount ?? user.daily_reward_amount ?? user.packageDailyXp ?? user.package_daily_xp)
+        : 80,
+      nextDailyRewardInMs: Number.isFinite(Number(user.nextDailyRewardInMs ?? user.next_daily_reward_in_ms))
+        ? Number(user.nextDailyRewardInMs ?? user.next_daily_reward_in_ms)
+        : 0,
+      nextDailyRewardAt: Number.isFinite(Number(user.nextDailyRewardAt ?? user.next_daily_reward_at))
+        ? Number(user.nextDailyRewardAt ?? user.next_daily_reward_at)
+        : 0,
+      dailyRewardSyncedAt: Number.isFinite(Number(user.dailyRewardSyncedAt || 0))
+        ? Number(user.dailyRewardSyncedAt || 0)
+        : 0
     };
   }
 
@@ -1184,6 +1214,13 @@
 
     const normalized = normalizeUser(user);
     if (!normalized?.id) return null;
+    const serverCountdownMs = Number(user.nextDailyRewardInMs ?? user.next_daily_reward_in_ms);
+    if (Number.isFinite(serverCountdownMs)) {
+      const syncedAt = Date.now();
+      normalized.nextDailyRewardInMs = Math.max(0, serverCountdownMs);
+      normalized.dailyRewardSyncedAt = syncedAt;
+      normalized.nextDailyRewardAt = syncedAt + normalized.nextDailyRewardInMs;
+    }
     if (isAdminRole(normalized.role)) {
       redirectToAdminDashboard();
       return null;
@@ -1377,6 +1414,8 @@
   }
 
   function getCurrentXpDailyReward() {
+    const explicit = Number(state.currentUser?.dailyRewardAmount || state.currentUser?.daily_reward_amount || 0);
+    if (explicit > 0) return explicit;
     const paidDaily = Number(state.currentUser?.packageDailyXp || state.currentUser?.package_daily_xp || 0);
     return paidDaily > 0 ? paidDaily : 5;
   }
@@ -1386,33 +1425,11 @@
       return { claimedAt: 0, nextAt: 0, remainingMs: 0 };
     }
 
-    const key = getXpClaimStorageKey();
-    const today = getTodayIsoDate();
-    const lastReset = String(state.currentUser?.lastReset || state.currentUser?.last_reset || state.currentUser?.lastActiveDate || "").slice(0, 10);
-    const resetDate = lastReset || today;
-    let saved = null;
-    try {
-      saved = JSON.parse(localStorage.getItem(key) || "null");
-    } catch (_) {
-      saved = null;
-    }
-
-    if (!saved || saved.resetDate !== resetDate) {
-      saved = {
-        resetDate,
-        claimedAt: Date.now()
-      };
-      try {
-        localStorage.setItem(key, JSON.stringify(saved));
-      } catch (_) {
-        // Keep countdown best-effort if storage is unavailable.
-      }
-    }
-
-    const claimedAt = Number(saved.claimedAt || Date.now());
-    const nextAt = claimedAt + 24 * 60 * 60 * 1000;
+    const serverCountdownMs = Number(state.currentUser?.nextDailyRewardInMs || state.currentUser?.next_daily_reward_in_ms || 0);
+    const syncedAt = Number(state.currentUser?.dailyRewardSyncedAt || state.currentUser?.daily_reward_synced_at || 0);
+    const nextAt = Number(state.currentUser?.nextDailyRewardAt || state.currentUser?.next_daily_reward_at || 0) || (syncedAt && serverCountdownMs ? syncedAt + serverCountdownMs : Date.now() + Math.max(0, serverCountdownMs));
     return {
-      claimedAt,
+      claimedAt: syncedAt || Date.now(),
       nextAt,
       remainingMs: Math.max(0, nextAt - Date.now())
     };
@@ -1430,30 +1447,71 @@
     };
   }
 
+  function maybeRefreshDailyRewardIfNeeded() {
+    if (!isAuthenticated()) {
+      state.dailyRewardRefreshInFlight = false;
+      state.dailyRewardRefreshLastAttemptAt = 0;
+      return;
+    }
+
+    const remainingMs = getXpClaimInfo().remainingMs;
+    if (remainingMs > 0) {
+      state.dailyRewardRefreshLastAttemptAt = 0;
+      return;
+    }
+
+    if (state.dailyRewardRefreshInFlight) return;
+    const now = Date.now();
+    if (now - Number(state.dailyRewardRefreshLastAttemptAt || 0) < 15000) return;
+
+    state.dailyRewardRefreshInFlight = true;
+    state.dailyRewardRefreshLastAttemptAt = now;
+    Promise.resolve(refreshSessionUser())
+      .catch(() => {
+        // Keep the panel usable even if the refresh request fails.
+      })
+      .finally(() => {
+        state.dailyRewardRefreshInFlight = false;
+      });
+  }
+
   function renderBalancePanel() {
     if (!isAuthenticated() || !state.balancePanelOpen) return "";
     const balance = getPreviewBalance();
     const dailyReward = getCurrentXpDailyReward();
-    const countdown = formatCountdown(getXpClaimInfo().remainingMs);
+    const claimInfo = getXpClaimInfo();
+    const expired = claimInfo.remainingMs <= 0;
+    const countdown = formatCountdown(claimInfo.remainingMs);
+    if (expired) maybeRefreshDailyRewardIfNeeded();
 
     return `
       <div class="balance-popover" data-balance-panel>
         <span class="balance-popover-label">رصيدك الحالي</span>
         <strong>${formatNumber(balance)} نقطة</strong>
-        <span class="balance-popover-hint">يتجدد رصيدك اليومي بعد</span>
-        <div class="balance-timer" aria-label="وقت تجدد الرصيد">
-          <b>${countdown.hours}</b>
-          <i>:</i>
-          <b>${countdown.minutes}</b>
-          <i>:</i>
-          <b>${countdown.seconds}</b>
-        </div>
+        <span class="balance-popover-hint">${expired ? "جارٍ تحديث رصيدك من الخادم" : "يتجدد رصيدك اليومي بعد"}</span>
+        ${
+          expired
+            ? `<div class="balance-timer balance-timer--pending" aria-label="جارٍ تحديث الرصيد">
+                <b>--</b>
+                <i>:</i>
+                <b>--</b>
+                <i>:</i>
+                <b>--</b>
+              </div>`
+            : `<div class="balance-timer" aria-label="وقت تجدد الرصيد">
+                <b>${countdown.hours}</b>
+                <i>:</i>
+                <b>${countdown.minutes}</b>
+                <i>:</i>
+                <b>${countdown.seconds}</b>
+              </div>`
+        }
         <div class="balance-timer-labels">
           <span>ساعة</span>
           <span>دقيقة</span>
           <span>ثانية</span>
         </div>
-        <p>يتم تجديد ${formatNumber(dailyReward)} XP عند دخولك اليومي. لا يتراكم الرصيد أثناء غيابك.</p>
+        <p>${expired ? "سيتم جلب الرصيد المحدث الآن من الخادم." : `يتم تجديد ${formatNumber(dailyReward)} XP عند دخولك اليومي. لا يتراكم الرصيد أثناء غيابك.`}</p>
       </div>
     `;
   }
@@ -1693,7 +1751,7 @@
   }
 
   function getPreviewBalance() {
-    return isAuthenticated() ? Math.max(0, Number(state.currentUser.xp || 0)) : 2450;
+    return isAuthenticated() ? Math.max(0, Number(state.currentUser.balance ?? state.currentUser.xp ?? 0)) : 2450;
   }
 
   function estimateTokens(text) {
@@ -5188,6 +5246,84 @@
           `).join("")}
         </nav>
       </aside>
+    `;
+  }
+
+  function renderMobileV2(profile) {
+    const cards = [
+      ["كتابة المحتوى", "إنشاء محتوى احترافي", "sparkle"],
+      ["أفكار وإبداع", "الحصول على أفكار جديدة", "star"],
+      ["مساعدة برمجية", "حل المشكلات البرمجية", "code"],
+      ["ترجمة", "ترجمة النصوص بدقة", "internet"]
+    ];
+
+    const accountButton = isAuthenticated()
+      ? `<button class="omv2-icon-btn" type="button" data-open-account aria-label="الحساب">${icons.user}</button>`
+      : `<button class="omv2-icon-btn" type="button" data-open-account aria-label="تسجيل الدخول">${icons.user}</button>`;
+
+    return `
+      <div class="omv2-shell ${state.mobileSidebarOpen ? "is-open" : ""}">
+        <aside class="omv2-drawer" aria-hidden="${state.mobileSidebarOpen ? "false" : "true"}">
+          <header class="omv2-drawer-head">
+            <button class="omv2-menu omv2-menu-head" type="button" data-toggle-sidebar aria-label="القائمة">☰</button>
+            <img src="${brandMarkUrl}" alt="Orlixor" class="omv2-drawer-logo">
+            <button class="omv2-close" type="button" data-toggle-sidebar aria-label="إغلاق القائمة">×</button>
+          </header>
+          <nav class="omv2-drawer-list" aria-label="قائمة الجوال">
+            <button type="button" class="omv2-drawer-item" data-mobile-nav="messages"><span>💬</span><b>المحادثات</b></button>
+            <button type="button" class="omv2-drawer-item" data-mobile-nav="files"><span>📁</span><b>الملفات</b></button>
+            <button type="button" class="omv2-drawer-item" data-mobile-nav="tools"><span>🔳</span><b>الأدوات</b></button>
+            <button type="button" class="omv2-drawer-item" data-mobile-nav="models"><span>🔳</span><b>النماذج</b></button>
+            <button type="button" class="omv2-drawer-item" data-mobile-nav="settings"><span>⚙</span><b>الإعدادات</b></button>
+            <button type="button" class="omv2-drawer-item" data-mobile-nav="help"><span>?</span><b>المساعدة</b></button>
+            <button type="button" class="omv2-drawer-item" data-mobile-nav="logout"><span>↩</span><b>تسجيل الخروج</b></button>
+          </nav>
+        </aside>
+        <div class="omv2-backdrop" data-toggle-sidebar aria-hidden="${state.mobileSidebarOpen ? "false" : "true"}"></div>
+        <header class="omv2-header">
+          <button class="omv2-menu" type="button" data-toggle-sidebar aria-label="${state.mobileSidebarOpen ? "إغلاق القائمة" : "فتح القائمة"}">☰</button>
+          <img src="${brandMarkUrl}" alt="Orlixor" class="omv2-logo">
+          <div class="omv2-icons">
+            <button class="omv2-icon-btn" type="button" data-open-notifications aria-label="الإشعارات">${icons.bell}${renderNotificationBellBadge()}</button>
+            ${accountButton}
+          </div>
+        </header>
+        <main class="omv2-main">
+          <div class="omv2-badge"><span aria-hidden="true">${icons.phone}</span><span>جوال</span></div>
+          <section class="omv2-hero">
+            <h1>👋 مرحباً بك</h1>
+            <p>كيف يمكنني مساعدتك اليوم؟</p>
+          </section>
+          <section class="omv2-cards" aria-label="اختصارات Orlixor">
+            ${cards.map(([title, desc, icon]) => `
+              <button class="omv2-card ${isAuthenticated() ? "" : "requires-auth"}" type="button" data-card="${escapeHtml(title)}">
+                <span class="omv2-card-icon" aria-hidden="true">${icons[icon]}</span>
+                <span class="omv2-card-copy">
+                  <b>${escapeHtml(title)}</b>
+                  <small>${escapeHtml(desc)}</small>
+                </span>
+              </button>
+            `).join("")}
+          </section>
+        ${renderConversation(profile)}
+        ${renderAttachmentPills()}
+        </main>
+        <form class="omv2-composer guest-compose home-compose" data-compose-form>
+          <input class="compose-input omv2-input" type="text" data-compose-input value="${escapeHtml(getComposerValue())}" placeholder="اكتب رسالتك هنا..." ${state.sending ? "disabled" : ""}>
+          ${renderComposeStatus()}
+          <div class="omv2-actions">
+            <button class="omv2-send" type="submit" aria-label="إرسال">${icons.send}</button>
+            <button class="omv2-tool" type="button" data-open-tools>أدوات</button>
+            <button class="omv2-tool ${isAuthenticated() ? "" : "requires-auth"}" type="button" data-pick-file>إرفاق ملف</button>
+          </div>
+        </form>
+        ${renderAuthModal()}
+        ${renderUpgradeModal()}
+        ${renderSettingsModal()}
+        ${renderNotificationsModal()}
+        <input type="file" id="guestFilePicker" hidden multiple accept=".pdf,.doc,.docx,.png,.jpg,.jpeg,.txt,.md,.ppt,.pptx">
+        <div class="guest-toast-stack" aria-live="polite"></div>
+      </div>
     `;
   }
 
@@ -10070,10 +10206,10 @@
         <div class="guest-sidebar-head">
           <a class="guest-brand" href="${shellBaseUrl}" aria-label="Orlixor">
             <span class="guest-brand-full guest-brand-combo">
-              <img class="guest-brand-symbol" src="orlixor-mark.png" alt="" aria-hidden="true">
+              <img class="guest-brand-symbol" src="${brandMarkUrl}" alt="" aria-hidden="true">
               <span class="guest-brand-word">Orlixor</span>
             </span>
-            <img class="guest-brand-mark" src="orlixor-mark.png" alt="" aria-hidden="true">
+            <img class="guest-brand-mark" src="${brandMarkUrl}" alt="" aria-hidden="true">
           </a>
           <button class="guest-sidebar-toggle" type="button" data-toggle-sidebar aria-label="${state.sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}" aria-expanded="${state.sidebarCollapsed ? "false" : "true"}">
             <span class="toggle-expanded" aria-hidden="true">&lsaquo;&lsaquo;</span>
@@ -10559,26 +10695,11 @@
     const compactViewport = isCompactViewport();
     document.body.classList.toggle("is-mobile-app", compactViewport);
     if (compactViewport) {
-      app.innerHTML = `
-        ${isHomeWorkspace ? renderMobileHomeShell(profile) : `
-          <div class="mobile-app ${getEffectiveTheme() === "dark" ? "theme-dark" : ""} ${state.mobileSidebarOpen ? "is-mobile-sidebar-open" : ""}">
-            ${renderMobileHeader()}
-            <div class="mobile-drawer-backdrop" data-toggle-sidebar aria-hidden="${state.mobileSidebarOpen ? "false" : "true"}"></div>
-            ${renderMobileDrawer()}
-            <main class="mobile-home" aria-label="الواجهة الرئيسية">
-              ${renderMain(profile)}
-            </main>
-          </div>
-        `}
-        ${renderAuthModal()}
-        ${renderUpgradeModal()}
-        ${renderSettingsModal()}
-        ${renderNotificationsModal()}
-        <input type="file" id="guestFilePicker" hidden multiple accept=".pdf,.doc,.docx,.png,.jpg,.jpeg,.txt,.md,.ppt,.pptx">
-        <div class="guest-toast-stack" aria-live="polite"></div>
-      `;
+      mobileV2Root.innerHTML = renderMobileV2(profile);
+      app.innerHTML = "";
       return;
     }
+    mobileV2Root.innerHTML = "";
     app.innerHTML = `
       <div class="desktop-app">
         <div class="guest-shell ${getEffectiveTheme() === "dark" ? "theme-dark" : ""} ${isHomeWorkspace ? "is-home-workspace" : ""} ${isToolsWorkspace ? "is-tools-workspace" : ""} ${isSubscriberTools ? "is-subscriber-tools" : ""} ${state.sidebarCollapsed ? "is-sidebar-collapsed" : ""} ${state.mobileSidebarOpen ? "is-mobile-sidebar-open" : ""}">
@@ -10599,7 +10720,7 @@
   }
 
   function showToast(message, duration = 4000) {
-    const stack = app.querySelector(".guest-toast-stack");
+    const stack = mobileV2Root.querySelector(".guest-toast-stack") || app.querySelector(".guest-toast-stack");
     if (!stack) return;
     const node = document.createElement("div");
     node.className = "guest-toast";
@@ -10656,8 +10777,8 @@
 
   function getScrollSnapshot() {
     const pageScroller = document.scrollingElement || document.documentElement;
-    const mainScroller = app.querySelector(".guest-main");
-    const conversationScroller = app.querySelector(".guest-conversation-card");
+    const mainScroller = mobileV2Root.querySelector(".guest-main") || app.querySelector(".guest-main");
+    const conversationScroller = mobileV2Root.querySelector(".guest-conversation-card") || app.querySelector(".guest-conversation-card");
     return {
       windowX: window.scrollX || 0,
       windowY: window.scrollY || 0,
@@ -10673,8 +10794,8 @@
   function restoreScrollSnapshot(snapshot) {
     if (!snapshot) return;
     const pageScroller = document.scrollingElement || document.documentElement;
-    const mainScroller = app.querySelector(".guest-main");
-    const conversationScroller = app.querySelector(".guest-conversation-card");
+    const mainScroller = mobileV2Root.querySelector(".guest-main") || app.querySelector(".guest-main");
+    const conversationScroller = mobileV2Root.querySelector(".guest-conversation-card") || app.querySelector(".guest-conversation-card");
     if (pageScroller) {
       pageScroller.scrollTop = snapshot.pageTop;
       pageScroller.scrollLeft = snapshot.pageLeft;
@@ -10700,7 +10821,7 @@
 
   function focusComposerSoon() {
     window.requestAnimationFrame(() => {
-      const composeInput = app.querySelector("[data-compose-input]");
+      const composeInput = mobileV2Root.querySelector("[data-compose-input]") || app.querySelector("[data-compose-input]");
       if (composeInput && typeof composeInput.focus === "function") {
         composeInput.focus({ preventScroll: true });
       }
@@ -10722,7 +10843,7 @@
 
   function scrollConversationToLatest() {
     window.requestAnimationFrame(() => {
-      const conversation = app.querySelector(".guest-conversation-card");
+      const conversation = mobileV2Root.querySelector(".guest-conversation-card") || app.querySelector(".guest-conversation-card");
       if (!conversation) return;
       conversation.scrollTop = conversation.scrollHeight;
     });
@@ -10835,7 +10956,7 @@
   }
 
   function getFileInput() {
-    return app.querySelector("#guestFilePicker");
+    return mobileV2Root.querySelector("#guestFilePicker") || app.querySelector("#guestFilePicker");
   }
 
   function createNewThreadFromDraft(title = "محادثة جديدة") {
@@ -11975,7 +12096,7 @@
       });
     });
 
-    app.addEventListener("click", async (event) => {
+    bindUiEvent("click", async (event) => {
       const shouldCloseBalance = state.balancePanelOpen
         && !event.target.closest("[data-balance]")
         && !event.target.closest("[data-balance-panel]");
@@ -13458,7 +13579,7 @@
       }
     });
 
-    app.addEventListener("input", (event) => {
+    bindUiEvent("input", (event) => {
       const searchInput = event.target.closest("[data-history-search]");
       if (searchInput) {
         state.historySearch[state.section] = searchInput.value;
@@ -13611,7 +13732,7 @@
       }
     });
 
-    app.addEventListener("change", async (event) => {
+    bindUiEvent("change", async (event) => {
       const toolSuggestionImage = event.target.closest("[data-tool-suggestion-image]");
       if (toolSuggestionImage) {
         await handleToolSuggestionImage(toolSuggestionImage.files?.[0]);
@@ -14068,7 +14189,7 @@
       render();
     });
 
-    app.addEventListener("dragstart", (event) => {
+    bindUiEvent("dragstart", (event) => {
       const item = event.target.closest?.("[data-png-pdf-item]");
       if (!item) return;
       const id = item.getAttribute("data-png-pdf-item") || "";
@@ -14077,14 +14198,14 @@
       item.classList.add("is-dragging");
     });
 
-    app.addEventListener("dragend", (event) => {
+    bindUiEvent("dragend", (event) => {
       const item = event.target.closest?.("[data-png-pdf-item]");
       if (!item) return;
       item.classList.remove("is-dragging");
       state.pngToPdf.draggedId = "";
     });
 
-    app.addEventListener("pointerdown", (event) => {
+    bindUiEvent("pointerdown", (event) => {
       const canvas = event.target.closest?.("[data-image-cropper-canvas]");
       if (!canvas || !state.imageCropper.bitmap) return;
       const point = getImageCropperCanvasPoint(event, canvas);
@@ -14097,7 +14218,7 @@
       drawImageCropperPreview();
     });
 
-    app.addEventListener("pointermove", (event) => {
+    bindUiEvent("pointermove", (event) => {
       if (!state.imageCropper.dragging) return;
       const canvas = app.querySelector("[data-image-cropper-canvas]");
       if (!canvas) return;
@@ -14127,10 +14248,10 @@
       render();
     }
 
-    app.addEventListener("pointerup", stopImageCropperDrag);
-    app.addEventListener("pointercancel", stopImageCropperDrag);
+    bindUiEvent("pointerup", stopImageCropperDrag);
+    bindUiEvent("pointercancel", stopImageCropperDrag);
 
-    app.addEventListener("dragover", (event) => {
+    bindUiEvent("dragover", (event) => {
       const sortItem = event.target.closest?.("[data-png-pdf-item]");
       if (sortItem) {
         event.preventDefault();
@@ -14142,13 +14263,13 @@
       dropZone.classList.add("is-drag-over");
     });
 
-    app.addEventListener("dragleave", (event) => {
+    bindUiEvent("dragleave", (event) => {
       const dropZone = event.target.closest?.("[data-image-enhancer-dropzone], [data-image-clarifier-dropzone], [data-png-pdf-dropzone], [data-pdf-png-dropzone], [data-pdf-unlock-dropzone], [data-image-converter-dropzone], [data-image-compressor-dropzone], [data-image-rotator-dropzone], [data-image-cropper-dropzone]");
       if (!dropZone) return;
       dropZone.classList.remove("is-drag-over");
     });
 
-    app.addEventListener("drop", async (event) => {
+    bindUiEvent("drop", async (event) => {
       const sortItem = event.target.closest?.("[data-png-pdf-item]");
       if (sortItem) {
         event.preventDefault();
@@ -14183,13 +14304,13 @@
       }
     });
 
-    app.addEventListener("focusin", (event) => {
+    bindUiEvent("focusin", (event) => {
       if (event.target.closest("[data-auth-focus]") && !isAuthenticated()) {
         openAuthModal("هذه الأداة تحتاج إلى تسجيل الدخول أولًا.");
       }
     });
 
-    app.addEventListener("submit", (event) => {
+    bindUiEvent("submit", (event) => {
       const toolSuggestionForm = event.target.closest("[data-tool-suggestion-form]");
       if (toolSuggestionForm) {
         event.preventDefault();
@@ -14309,11 +14430,13 @@
     }
   }, 700);
   window.setInterval(() => {
+    maybeRefreshDailyRewardIfNeeded();
     if (state.balancePanelOpen) {
       render();
     }
   }, 1000);
 })();
+
 
 
 

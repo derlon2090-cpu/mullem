@@ -159,10 +159,19 @@ function parseTimestampMs(value) {
   return Number.isFinite(time) ? time : 0;
 }
 
+function isNewUtcDay(lastDate, now = new Date()) {
+  if (!lastDate) return true;
+  const last = lastDate instanceof Date ? lastDate : new Date(lastDate);
+  if (Number.isNaN(last.getTime())) return true;
+  return (
+    now.getUTCFullYear() !== last.getUTCFullYear() ||
+    now.getUTCMonth() !== last.getUTCMonth() ||
+    now.getUTCDate() !== last.getUTCDate()
+  );
+}
+
 function canGrantDailyXp(lastGrantedAt, now = new Date()) {
-  const lastGrantedMs = parseTimestampMs(lastGrantedAt);
-  if (!lastGrantedMs) return true;
-  return now.getTime() - lastGrantedMs >= 24 * 60 * 60 * 1000;
+  return isNewUtcDay(lastGrantedAt, now);
 }
 
 function parseDateStampMs(value) {
@@ -239,7 +248,9 @@ function hydrateUserRow(row) {
     package_is_default: normalizeBoolean(row.package_is_default),
     package_sort_order: Number(row.package_sort_order || 0),
     package_name: String(row.package_display_name || row.package_name || "").trim(),
-    xp: Number(row.xp || 0),
+    balance: Number(row.balance ?? row.xp ?? 0),
+    xp: Number(row.xp ?? row.balance ?? 0),
+    daily_reward_amount: Number(row.daily_reward_amount || 0),
     streak_days: Number(row.streak_days || 0),
     motivation_score: Number(row.motivation_score || 0),
     package_started_at: row.package_started_at || null,
@@ -249,6 +260,7 @@ function hydrateUserRow(row) {
     last_reset: row.last_reset || row.last_active_date || null,
     last_daily_xp_claimed_date: row.last_daily_xp_claimed_date || row.last_reset || row.last_active_date || null,
     last_daily_xp_granted_at: row.last_daily_xp_granted_at || null,
+    last_daily_reward_at: row.last_daily_reward_at || row.last_daily_xp_granted_at || null,
     signup_bonus_claimed: normalizeBoolean(row.signup_bonus_claimed)
   };
 }
@@ -268,7 +280,7 @@ function buildAssignments(changes = {}, mappings = {}) {
     } else if (key === "is_active" || key === "is_default" || key === "is_archived" || key === "signup_bonus_claimed") {
       sets.push(`${column} = $${values.length + 1}`);
       values.push(Boolean(changes[key]));
-    } else if (key === "package_started_at" || key === "package_expires_at" || key === "last_daily_xp_granted_at") {
+    } else if (key === "package_started_at" || key === "package_expires_at" || key === "last_daily_xp_granted_at" || key === "last_daily_reward_at") {
       sets.push(`${column} = $${values.length + 1}`);
       values.push(toSqlDateTime(changes[key]));
     } else {
@@ -427,12 +439,15 @@ function createPostgresDatabaseClient(rawConfig = {}) {
         plan_type VARCHAR(80) NOT NULL DEFAULT 'starter',
         package_started_at TIMESTAMPTZ NULL,
         package_expires_at TIMESTAMPTZ NULL,
+        balance INTEGER NOT NULL DEFAULT 0,
         xp INTEGER NOT NULL DEFAULT 0,
         total_xp INTEGER NOT NULL DEFAULT 0,
+        daily_reward_amount INTEGER NOT NULL DEFAULT 80,
         streak_days INTEGER NOT NULL DEFAULT 0,
         motivation_score INTEGER NOT NULL DEFAULT 0,
         last_active_date DATE NULL,
         last_reset DATE NULL,
+        last_daily_reward_at TIMESTAMPTZ NULL,
         last_daily_xp_claimed_date DATE NULL,
         last_daily_xp_granted_at TIMESTAMPTZ NULL,
         signup_bonus_claimed BOOLEAN NOT NULL DEFAULT FALSE,
@@ -452,10 +467,15 @@ function createPostgresDatabaseClient(rawConfig = {}) {
     await ensureColumn("app_users", "plan_type", "plan_type VARCHAR(80) NOT NULL DEFAULT 'starter'");
     await ensureColumn("app_users", "package_started_at", "package_started_at TIMESTAMPTZ NULL");
     await ensureColumn("app_users", "package_expires_at", "package_expires_at TIMESTAMPTZ NULL");
+    await ensureColumn("app_users", "balance", "balance INTEGER NOT NULL DEFAULT 0");
     await ensureColumn("app_users", "total_xp", "total_xp INTEGER NOT NULL DEFAULT 0");
+    await ensureColumn("app_users", "daily_reward_amount", "daily_reward_amount INTEGER NOT NULL DEFAULT 80");
     await pool.query("ALTER TABLE app_users ALTER COLUMN xp SET DEFAULT 0");
+    await pool.query("ALTER TABLE app_users ALTER COLUMN balance SET DEFAULT 0");
     await pool.query("ALTER TABLE app_users ALTER COLUMN total_xp SET DEFAULT 0");
+    await pool.query("ALTER TABLE app_users ALTER COLUMN daily_reward_amount SET DEFAULT 80");
     await ensureColumn("app_users", "last_reset", "last_reset DATE NULL");
+    await ensureColumn("app_users", "last_daily_reward_at", "last_daily_reward_at TIMESTAMPTZ NULL");
     await ensureColumn("app_users", "last_daily_xp_claimed_date", "last_daily_xp_claimed_date DATE NULL");
     await ensureColumn("app_users", "last_daily_xp_granted_at", "last_daily_xp_granted_at TIMESTAMPTZ NULL");
     await ensureColumn("app_users", "signup_bonus_claimed", "signup_bonus_claimed BOOLEAN NOT NULL DEFAULT FALSE");
@@ -465,6 +485,26 @@ function createPostgresDatabaseClient(rawConfig = {}) {
       SET last_daily_xp_granted_at = last_daily_xp_claimed_date::timestamp AT TIME ZONE 'Asia/Riyadh'
       WHERE last_daily_xp_granted_at IS NULL
         AND last_daily_xp_claimed_date IS NOT NULL
+    `);
+    await pool.query(`
+      UPDATE app_users
+      SET last_daily_reward_at = last_daily_xp_granted_at
+      WHERE last_daily_reward_at IS NULL
+        AND last_daily_xp_granted_at IS NOT NULL
+    `);
+    await pool.query(`
+      UPDATE app_users
+      SET balance = COALESCE(xp, balance, 0)
+      WHERE balance IS NULL
+         OR balance <> COALESCE(xp, 0)
+    `);
+    await pool.query(`
+      UPDATE app_users u
+      SET daily_reward_amount = p.daily_xp
+      FROM app_packages p
+      WHERE p.id = u.package_id
+        AND COALESCE(p.daily_xp, 0) > 0
+        AND u.daily_reward_amount <> p.daily_xp
     `);
     await ensureColumn("app_users", "motivation_score", "motivation_score INTEGER NOT NULL DEFAULT 0");
     await ensureColumn("app_packages", "duration_days", "duration_days INTEGER NOT NULL DEFAULT 0");
@@ -1800,7 +1840,7 @@ function createPostgresDatabaseClient(rawConfig = {}) {
         if (!rewardRows.rows.length) continue;
         rewardedUsers += 1;
         await client.query(
-          "UPDATE app_users SET xp = COALESCE(xp, 0) + 50, total_xp = COALESCE(total_xp, 0) + 50, updated_at = NOW() WHERE id = $1",
+          "UPDATE app_users SET balance = COALESCE(balance, xp, 0) + 50, xp = COALESCE(balance, xp, 0) + 50, total_xp = COALESCE(balance, xp, 0) + 50, updated_at = NOW() WHERE id = $1",
           [userId]
         );
         await client.query(
@@ -2083,10 +2123,21 @@ function createPostgresDatabaseClient(rawConfig = {}) {
       const motivationBonus = Math.max(0, Math.round(Number(options.motivationBonus || 0) || 0));
       const signupBonusClaimed = user.signup_bonus_claimed !== false;
       const shouldGrantSignup = canReceiveXp && !signupBonusClaimed && firstSignupXp > 0;
-      const shouldGrantDaily = canReceiveXp && canGrantDailyXp(user.last_daily_xp_granted_at, now);
-      const dailyXpAward = shouldGrantDaily ? getDailyXpForUserPlan(user, options) : 0;
+      const lastDailyRewardAt = user.last_daily_reward_at || user.last_daily_xp_granted_at || null;
+      const shouldGrantDaily = canReceiveXp && canGrantDailyXp(lastDailyRewardAt, now);
+      const requestedDailyRewardAmount = Math.max(0, Math.round(Number(options.dailyRewardAmount || 0) || 0));
+      const dailyRewardAmount = requestedDailyRewardAmount || getDailyXpForUserPlan(user, options);
+      const dailyXpAward = shouldGrantDaily ? dailyRewardAmount : 0;
 
-      let nextXp = Math.max(0, Number(user.xp || 0));
+      console.log("DAILY_REWARD_CHECK", {
+        userId: user.id,
+        balance: Number(user.balance ?? user.xp ?? 0),
+        lastDailyRewardAt,
+        dailyRewardAmount,
+        shouldReward: shouldGrantDaily
+      });
+
+      let nextXp = Math.max(0, Number(user.balance ?? user.xp ?? 0));
       const ledgerEntries = [];
 
       if (shouldGrantSignup) {
@@ -2130,8 +2181,10 @@ function createPostgresDatabaseClient(rawConfig = {}) {
           signup_bonus_claimed: shouldGrantSignup ? true : signupBonusClaimed,
           streak_days: streakDays,
           motivation_score: Number(user.motivation_score || 0) + motivationBonus,
+          balance: nextXp,
           xp: nextXp,
           total_xp: nextXp,
+          daily_reward_amount: dailyRewardAmount,
           plan_type: String(user.package_key || user.plan_type || user.package_name || "starter").trim() || "starter",
           achievements,
           activity: activity || `Daily XP grant: +${dailyXpAward} XP`
@@ -2140,6 +2193,7 @@ function createPostgresDatabaseClient(rawConfig = {}) {
         if (dailyXpAward > 0) {
           changes.last_daily_xp_claimed_date = today;
           changes.last_daily_xp_granted_at = now.toISOString();
+          changes.last_daily_reward_at = now.toISOString();
         }
       } else if (activity) {
         changes.last_active_date = today;
@@ -2147,13 +2201,16 @@ function createPostgresDatabaseClient(rawConfig = {}) {
       }
 
       const mappings = {
+        balance: "balance",
         xp: "xp",
         total_xp: "total_xp",
+        daily_reward_amount: "daily_reward_amount",
         plan_type: "plan_type",
         streak_days: "streak_days",
         motivation_score: "motivation_score",
         last_active_date: "last_active_date",
         last_reset: "last_reset",
+        last_daily_reward_at: "last_daily_reward_at",
         last_daily_xp_claimed_date: "last_daily_xp_claimed_date",
         last_daily_xp_granted_at: "last_daily_xp_granted_at",
         signup_bonus_claimed: "signup_bonus_claimed",
@@ -2499,8 +2556,8 @@ function createPostgresDatabaseClient(rawConfig = {}) {
       const userResult = await client.query("SELECT * FROM app_users WHERE id = $1 FOR UPDATE", [userId]);
       const user = userResult.rows[0] || null;
       if (!user) throw new Error("User not found");
-      const nextXp = Math.max(0, Number(user.xp || 0) + amount);
-      await client.query("UPDATE app_users SET xp = $1, total_xp = $1, activity = $2, updated_at = NOW() WHERE id = $3", [
+      const nextXp = Math.max(0, Number(user.balance ?? user.xp ?? 0) + amount);
+      await client.query("UPDATE app_users SET balance = $1, xp = $1, total_xp = $1, activity = $2, updated_at = NOW() WHERE id = $3", [
         nextXp,
         reason.slice(0, 255),
         userId
@@ -2628,14 +2685,17 @@ function createPostgresDatabaseClient(rawConfig = {}) {
       plan_type: String(selectedPackage?.package_key || payload.plan_type || payload.package_key || "starter").trim() || "starter",
       package_started_at: assignmentWindow.package_started_at,
       package_expires_at: assignmentWindow.package_expires_at,
-      xp: Number.isFinite(Number(payload.xp)) ? Number(payload.xp) : 0,
-      total_xp: Number.isFinite(Number(payload.total_xp ?? payload.xp)) ? Number(payload.total_xp ?? payload.xp) : 0,
+      balance: Number.isFinite(Number(payload.balance ?? payload.xp)) ? Number(payload.balance ?? payload.xp) : 0,
+      xp: Number.isFinite(Number(payload.xp ?? payload.balance)) ? Number(payload.xp ?? payload.balance) : 0,
+      total_xp: Number.isFinite(Number(payload.total_xp ?? payload.xp ?? payload.balance)) ? Number(payload.total_xp ?? payload.xp ?? payload.balance) : 0,
+      daily_reward_amount: Math.max(0, Math.round(Number(payload.daily_reward_amount ?? payload.dailyRewardAmount ?? selectedPackage?.daily_xp ?? 80) || 80)),
       streak_days: Number.isFinite(Number(payload.streak_days)) ? Number(payload.streak_days) : 0,
       motivation_score: Number.isFinite(Number(payload.motivation_score)) ? Number(payload.motivation_score) : 0,
       last_active_date: payload.last_active_date || null,
       last_reset: payload.last_reset || payload.last_active_date || null,
       last_daily_xp_claimed_date: payload.last_daily_xp_claimed_date || payload.last_reset || payload.last_active_date || null,
-      last_daily_xp_granted_at: payload.last_daily_xp_granted_at || null,
+      last_daily_xp_granted_at: payload.last_daily_xp_granted_at || payload.lastDailyXpGrantedAt || null,
+      last_daily_reward_at: payload.last_daily_reward_at || payload.lastDailyRewardAt || payload.last_daily_xp_granted_at || null,
       signup_bonus_claimed: "signup_bonus_claimed" in payload ? normalizeBoolean(payload.signup_bonus_claimed) : false,
       achievements: JSON.stringify(normalizeAchievements(payload.achievements)),
       status: String(payload.status || "active").trim().toLowerCase() || "active",
@@ -2646,10 +2706,10 @@ function createPostgresDatabaseClient(rawConfig = {}) {
       `
         INSERT INTO app_users (
           name, email, password_hash, role, stage, grade, subject, package_id, package_name, plan_type, package_started_at, package_expires_at,
-          xp, total_xp, streak_days, motivation_score, last_active_date, last_reset, last_daily_xp_claimed_date, last_daily_xp_granted_at, signup_bonus_claimed, achievements, status, activity
+          balance, xp, total_xp, daily_reward_amount, streak_days, motivation_score, last_active_date, last_reset, last_daily_reward_at, last_daily_xp_claimed_date, last_daily_xp_granted_at, signup_bonus_claimed, achievements, status, activity
         ) VALUES (
           $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12,
-          $13, $14, $15, $16, $17, $18, $19, $20, $21, $22::jsonb, $23, $24
+          $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25::jsonb, $26, $27
         )
         RETURNING id
       `,
@@ -2666,12 +2726,15 @@ function createPostgresDatabaseClient(rawConfig = {}) {
         insertPayload.plan_type,
         insertPayload.package_started_at,
         insertPayload.package_expires_at,
+        insertPayload.balance,
         insertPayload.xp,
         insertPayload.total_xp,
+        insertPayload.daily_reward_amount,
         insertPayload.streak_days,
         insertPayload.motivation_score,
         insertPayload.last_active_date,
         insertPayload.last_reset,
+        insertPayload.last_daily_reward_at,
         insertPayload.last_daily_xp_claimed_date,
         insertPayload.last_daily_xp_granted_at,
         insertPayload.signup_bonus_claimed,
@@ -2704,11 +2767,19 @@ function createPostgresDatabaseClient(rawConfig = {}) {
     if ("status" in nextChanges) nextChanges.status = String(nextChanges.status || "active").trim().toLowerCase() || "active";
     if ("last_active_date" in nextChanges) nextChanges.last_active_date = nextChanges.last_active_date || null;
     if ("last_reset" in nextChanges) nextChanges.last_reset = nextChanges.last_reset || null;
+    if ("lastDailyRewardAt" in nextChanges && !("last_daily_reward_at" in nextChanges)) nextChanges.last_daily_reward_at = nextChanges.lastDailyRewardAt;
+    if ("dailyRewardAmount" in nextChanges && !("daily_reward_amount" in nextChanges)) nextChanges.daily_reward_amount = nextChanges.dailyRewardAmount;
+    if ("balance" in nextChanges) nextChanges.balance = Math.max(0, Math.round(Number(nextChanges.balance || 0) || 0));
+    if ("daily_reward_amount" in nextChanges) nextChanges.daily_reward_amount = Math.max(0, Math.round(Number(nextChanges.daily_reward_amount || 0) || 0));
+    if ("last_daily_reward_at" in nextChanges) nextChanges.last_daily_reward_at = nextChanges.last_daily_reward_at || null;
     if ("last_daily_xp_claimed_date" in nextChanges) nextChanges.last_daily_xp_claimed_date = nextChanges.last_daily_xp_claimed_date || null;
     if ("last_daily_xp_granted_at" in nextChanges) nextChanges.last_daily_xp_granted_at = nextChanges.last_daily_xp_granted_at || null;
     if ("signup_bonus_claimed" in nextChanges) nextChanges.signup_bonus_claimed = normalizeBoolean(nextChanges.signup_bonus_claimed);
+    if ("xp" in nextChanges && !("balance" in nextChanges)) nextChanges.balance = nextChanges.xp;
+    if ("balance" in nextChanges && !("xp" in nextChanges)) nextChanges.xp = nextChanges.balance;
     if ("xp" in nextChanges && !("total_xp" in nextChanges)) nextChanges.total_xp = nextChanges.xp;
     if ("total_xp" in nextChanges && !("xp" in nextChanges)) nextChanges.xp = nextChanges.total_xp;
+    if ("total_xp" in nextChanges && !("balance" in nextChanges)) nextChanges.balance = nextChanges.total_xp;
     if (("package_id" in nextChanges || "package_key" in nextChanges || "package_name" in nextChanges) && !("plan_type" in nextChanges)) {
       nextChanges.plan_type = String(nextChanges.package_key || current.package_key || current.plan_type || "starter").trim() || "starter";
     }
@@ -2725,13 +2796,16 @@ function createPostgresDatabaseClient(rawConfig = {}) {
       package_name: "package_name",
       package_started_at: "package_started_at",
       package_expires_at: "package_expires_at",
+      balance: "balance",
       xp: "xp",
       total_xp: "total_xp",
+      daily_reward_amount: "daily_reward_amount",
       plan_type: "plan_type",
       streak_days: "streak_days",
       motivation_score: "motivation_score",
       last_active_date: "last_active_date",
       last_reset: "last_reset",
+      last_daily_reward_at: "last_daily_reward_at",
       last_daily_xp_claimed_date: "last_daily_xp_claimed_date",
       last_daily_xp_granted_at: "last_daily_xp_granted_at",
       signup_bonus_claimed: "signup_bonus_claimed",

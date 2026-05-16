@@ -649,7 +649,8 @@ function isLoggedIn() {
 }
 
 function getCurrentPoints() {
-  return getActiveUser()?.xp ?? 0;
+  const user = getActiveUser();
+  return user ? Number(user.balance ?? user.xp ?? 0) : 0;
 }
 
 function getTodayStamp() {
@@ -2345,7 +2346,7 @@ function updateSelectionSummary() {
 function updateXpBalance() {
   const user = getActiveUser();
   xpBalanceNodes.forEach((node) => {
-    node.textContent = user ? String(user.xp ?? 100) : "0";
+    node.textContent = user ? String(user.balance ?? user.xp ?? 100) : "0";
   });
 }
 

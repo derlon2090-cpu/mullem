@@ -97,10 +97,19 @@ function parseTimestampMs(value) {
   return Number.isFinite(time) ? time : 0;
 }
 
+function isNewUtcDay(lastDate, now = new Date()) {
+  if (!lastDate) return true;
+  const last = lastDate instanceof Date ? lastDate : new Date(lastDate);
+  if (Number.isNaN(last.getTime())) return true;
+  return (
+    now.getUTCFullYear() !== last.getUTCFullYear() ||
+    now.getUTCMonth() !== last.getUTCMonth() ||
+    now.getUTCDate() !== last.getUTCDate()
+  );
+}
+
 function canGrantDailyXp(lastGrantedAt, now = new Date()) {
-  const lastGrantedMs = parseTimestampMs(lastGrantedAt);
-  if (!lastGrantedMs) return true;
-  return now.getTime() - lastGrantedMs >= 24 * 60 * 60 * 1000;
+  return isNewUtcDay(lastGrantedAt, now);
 }
 
 function parseDateStampMs(value) {
@@ -204,6 +213,7 @@ function createFallbackDatabaseClient() {
         counters: { ...createEmptyState().counters, ...(parsed.counters || {}) }
       };
       syncDefaultPackages();
+      syncUserRewardFields();
     } catch (_) {
       data = createEmptyState();
       persist();
@@ -239,6 +249,22 @@ function createFallbackDatabaseClient() {
       Number(data.counters.packages || 1),
       ...data.packages.map((item) => Number(item.id || 0) + 1)
     );
+    persist();
+  }
+
+  function syncUserRewardFields() {
+    data.users = (Array.isArray(data.users) ? data.users : []).map((user) => {
+      const balance = Math.max(0, Number(user.balance ?? user.xp ?? user.total_xp ?? 0) || 0);
+      const dailyRewardAmount = Math.max(0, Math.round(Number(user.package_daily_xp || user.daily_reward_amount || user.dailyRewardAmount || 80) || 80));
+      return {
+        ...user,
+        balance,
+        xp: Math.max(0, Number(user.xp ?? balance) || 0),
+        total_xp: Math.max(0, Number(user.total_xp ?? user.xp ?? balance) || 0),
+        daily_reward_amount: dailyRewardAmount,
+        last_daily_reward_at: user.last_daily_reward_at || user.lastDailyRewardAt || user.last_daily_xp_granted_at || null
+      };
+    });
     persist();
   }
 
@@ -441,14 +467,17 @@ function createFallbackDatabaseClient() {
       stage: String(payload.stage || "").trim(),
       grade: String(payload.grade || "").trim(),
       subject: String(payload.subject || "").trim(),
-      xp: Number.isFinite(Number(payload.xp)) ? Number(payload.xp) : 0,
-      total_xp: Number.isFinite(Number(payload.total_xp ?? payload.xp)) ? Number(payload.total_xp ?? payload.xp) : 0,
+      balance: Number.isFinite(Number(payload.balance ?? payload.xp)) ? Number(payload.balance ?? payload.xp) : 0,
+      xp: Number.isFinite(Number(payload.xp ?? payload.balance)) ? Number(payload.xp ?? payload.balance) : 0,
+      total_xp: Number.isFinite(Number(payload.total_xp ?? payload.xp ?? payload.balance)) ? Number(payload.total_xp ?? payload.xp ?? payload.balance) : 0,
+      daily_reward_amount: Math.max(0, Math.round(Number(payload.daily_reward_amount ?? payload.dailyRewardAmount ?? pkg?.daily_xp ?? 80) || 80)),
       streak_days: Number(payload.streak_days || 0),
       motivation_score: Number(payload.motivation_score || 0),
       last_active_date: payload.last_active_date || null,
       last_reset: payload.last_reset || payload.last_active_date || null,
       last_daily_xp_claimed_date: payload.last_daily_xp_claimed_date || payload.last_reset || payload.last_active_date || null,
-      last_daily_xp_granted_at: payload.last_daily_xp_granted_at || null,
+      last_daily_xp_granted_at: payload.last_daily_xp_granted_at || payload.lastDailyXpGrantedAt || null,
+      last_daily_reward_at: payload.last_daily_reward_at || payload.lastDailyRewardAt || payload.last_daily_xp_granted_at || null,
       signup_bonus_claimed: "signup_bonus_claimed" in payload ? normalizeBoolean(payload.signup_bonus_claimed) : false,
       achievements: Array.isArray(payload.achievements) ? payload.achievements : [],
       status: String(payload.status || "active").trim().toLowerCase() || "active",
@@ -474,22 +503,34 @@ function createFallbackDatabaseClient() {
     const index = data.users.findIndex((item) => String(item.id) === String(id));
     if (index === -1) return null;
     let current = data.users[index];
+    const normalizedChanges = { ...changes };
+    if ("lastDailyRewardAt" in normalizedChanges && !("last_daily_reward_at" in normalizedChanges)) {
+      normalizedChanges.last_daily_reward_at = normalizedChanges.lastDailyRewardAt;
+    }
+    if ("dailyRewardAmount" in normalizedChanges && !("daily_reward_amount" in normalizedChanges)) {
+      normalizedChanges.daily_reward_amount = normalizedChanges.dailyRewardAmount;
+    }
+    if ("balance" in normalizedChanges) normalizedChanges.balance = Math.max(0, Math.round(Number(normalizedChanges.balance || 0) || 0));
+    if ("daily_reward_amount" in normalizedChanges) normalizedChanges.daily_reward_amount = Math.max(0, Math.round(Number(normalizedChanges.daily_reward_amount || 0) || 0));
+    if ("xp" in normalizedChanges && !("balance" in normalizedChanges)) normalizedChanges.balance = normalizedChanges.xp;
+    if ("balance" in normalizedChanges && !("xp" in normalizedChanges)) normalizedChanges.xp = normalizedChanges.balance;
+    if ("xp" in normalizedChanges && !("total_xp" in normalizedChanges)) normalizedChanges.total_xp = normalizedChanges.xp;
+    if ("total_xp" in normalizedChanges && !("xp" in normalizedChanges)) normalizedChanges.xp = normalizedChanges.total_xp;
+    if ("total_xp" in normalizedChanges && !("balance" in normalizedChanges)) normalizedChanges.balance = normalizedChanges.total_xp;
     let next = {
       ...current,
-      ...changes,
+      ...normalizedChanges,
       updated_at: nowIso()
     };
-    if ("xp" in changes && !("total_xp" in changes)) next.total_xp = changes.xp;
-    if ("total_xp" in changes && !("xp" in changes)) next.xp = changes.total_xp;
-    if ("last_active_date" in changes && !("last_reset" in changes)) next.last_reset = changes.last_active_date;
-    if ("package_id" in changes || "package_key" in changes || "package_name" in changes) {
-      const pkg = changes.package_id
-        ? findPackageByIdSync(changes.package_id)
-        : findPackageByKeyOrNameSync(changes.package_key || changes.package_name || "");
+    if ("last_active_date" in normalizedChanges && !("last_reset" in normalizedChanges)) next.last_reset = normalizedChanges.last_active_date;
+    if ("package_id" in normalizedChanges || "package_key" in normalizedChanges || "package_name" in normalizedChanges) {
+      const pkg = normalizedChanges.package_id
+        ? findPackageByIdSync(normalizedChanges.package_id)
+        : findPackageByKeyOrNameSync(normalizedChanges.package_key || normalizedChanges.package_name || "");
       next = mergePackageIntoUser(next, pkg);
-      if ("package_started_at" in changes) next.package_started_at = changes.package_started_at;
-      if ("package_expires_at" in changes) next.package_expires_at = changes.package_expires_at;
-      if ("package_name" in changes && !pkg) next.package_name = String(changes.package_name || "").trim();
+      if ("package_started_at" in normalizedChanges) next.package_started_at = normalizedChanges.package_started_at;
+      if ("package_expires_at" in normalizedChanges) next.package_expires_at = normalizedChanges.package_expires_at;
+      if ("package_name" in normalizedChanges && !pkg) next.package_name = String(normalizedChanges.package_name || "").trim();
     }
     data.users[index] = next;
     persist();
@@ -1026,8 +1067,10 @@ function createFallbackDatabaseClient() {
     if (index === -1 || !amount) return null;
     const reason = String(payload.reason || "Admin XP adjustment").trim();
     const adminId = payload.admin_id || payload.adminId ? Number(payload.admin_id || payload.adminId) : null;
-    data.users[index].xp = Math.max(0, Number(data.users[index].xp || 0) + amount);
-    data.users[index].total_xp = data.users[index].xp;
+    const nextBalance = Math.max(0, Number(data.users[index].balance ?? data.users[index].xp ?? 0) + amount);
+    data.users[index].balance = nextBalance;
+    data.users[index].xp = nextBalance;
+    data.users[index].total_xp = nextBalance;
     data.users[index].activity = reason;
     data.users[index].updated_at = nowIso();
     await recordXpLedger({
@@ -1099,10 +1142,21 @@ function createFallbackDatabaseClient() {
     const motivationBonus = Math.max(0, Math.round(Number(options.motivationBonus || 0) || 0));
     const signupBonusClaimed = user.signup_bonus_claimed !== false;
     const shouldGrantSignup = canReceiveXp && !signupBonusClaimed && firstSignupXp > 0;
-    const shouldGrantDaily = canReceiveXp && canGrantDailyXp(user.last_daily_xp_granted_at, now);
-    const dailyXpAward = shouldGrantDaily ? getDailyXpForUserPlan(user, options) : 0;
+    const lastDailyRewardAt = user.last_daily_reward_at || user.last_daily_xp_granted_at || null;
+    const shouldGrantDaily = canReceiveXp && canGrantDailyXp(lastDailyRewardAt, now);
+    const requestedDailyRewardAmount = Math.max(0, Math.round(Number(options.dailyRewardAmount || 0) || 0));
+    const dailyRewardAmount = requestedDailyRewardAmount || getDailyXpForUserPlan(user, options);
+    const dailyXpAward = shouldGrantDaily ? dailyRewardAmount : 0;
 
-    let nextXp = Math.max(0, Number(user.xp || 0));
+    console.log("DAILY_REWARD_CHECK", {
+      userId: user.id,
+      balance: Number(user.balance ?? user.xp ?? 0),
+      lastDailyRewardAt,
+      dailyRewardAmount,
+      shouldReward: shouldGrantDaily
+    });
+
+    let nextXp = Math.max(0, Number(user.balance ?? user.xp ?? 0));
     const ledgerEntries = [];
 
     if (shouldGrantSignup) {
@@ -1145,8 +1199,10 @@ function createFallbackDatabaseClient() {
         signup_bonus_claimed: shouldGrantSignup ? true : signupBonusClaimed,
         streak_days: streakDays,
         motivation_score: Number(user.motivation_score || 0) + motivationBonus,
+        balance: nextXp,
         xp: nextXp,
         total_xp: nextXp,
+        daily_reward_amount: dailyRewardAmount,
         plan_type: String(user.package_key || user.plan_type || user.package_name || "starter").trim() || "starter",
         achievements,
         activity: activity || `Daily XP grant: +${dailyXpAward} XP`,
@@ -1156,6 +1212,7 @@ function createFallbackDatabaseClient() {
       if (dailyXpAward > 0) {
         user.last_daily_xp_claimed_date = today;
         user.last_daily_xp_granted_at = nowStamp;
+        user.last_daily_reward_at = nowStamp;
       }
     } else if (activity) {
       user.last_active_date = today;
