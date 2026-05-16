@@ -41,6 +41,7 @@
     users: "mlm_users",
     currentUser: "mlm_current_user"
   };
+  const DAILY_REWARD_INTERVAL_MS = 24 * 60 * 60 * 1000;
   const defaultAppPreferences = {
     language: "العربية",
     timezone: "Asia/Riyadh",
@@ -54,6 +55,7 @@
   };
   let sessionRefreshPromise = null;
   let dailyRewardLoadedForUserId = "";
+  let dailyRewardInitStarted = false;
   let dailyRewardTimer = null;
 
   const icons = {
@@ -1534,10 +1536,22 @@
     if (textNode) textNode.textContent = message;
   }
 
+  function safeText(value, fallback = "") {
+    if (value === null || value === undefined) return fallback;
+    if (typeof value === "object") return fallback;
+    return String(value);
+  }
+
+  function safeNumber(value, fallback = 0) {
+    const n = Number(value);
+    return Number.isFinite(n) ? n : fallback;
+  }
+
   function resetDailyRewardState() {
     clearInterval(dailyRewardTimer);
     dailyRewardTimer = null;
     dailyRewardLoadedForUserId = "";
+    dailyRewardInitStarted = false;
     state.dailyReward = {
       initialized: false,
       plan: "free",
@@ -1558,16 +1572,14 @@
 
   function showBalanceError(message) {
     console.error("BALANCE_ERROR", message);
-    clearInterval(dailyRewardTimer);
-    dailyRewardTimer = null;
-    setDailyCountdownText("00", "00", "00");
     setDailyRewardStatus(message || "تعذر التحقق من المكافأة");
   }
 
   function startDailyCountdown(remainingMs) {
     clearInterval(dailyRewardTimer);
 
-    let endAt = Date.now() + Number(remainingMs || 0);
+    const safeRemainingMs = Math.max(0, safeNumber(remainingMs, DAILY_REWARD_INTERVAL_MS));
+    const endAt = Date.now() + safeRemainingMs;
 
     function render() {
       const ms = Math.max(0, endAt - Date.now());
@@ -1587,12 +1599,6 @@
       }
     }
 
-    if (!Number.isFinite(endAt)) {
-      showBalanceError("INVALID_REMAINING_MS");
-      return;
-    }
-
-    setDailyRewardStatus("يتجدد رصيدك بعد انتهاء العدّاد");
     render();
     dailyRewardTimer = setInterval(render, 1000);
   }
@@ -1616,75 +1622,74 @@
     if (!isAuthenticated()) return null;
     const userId = String(state.currentUser?.id || "");
     if (!userId) return state.currentUser;
-    if (dailyRewardLoadedForUserId === userId && state.dailyReward.initialized) return state.currentUser;
+    if (dailyRewardInitStarted && dailyRewardLoadedForUserId === userId) return state.currentUser;
 
+    dailyRewardInitStarted = true;
+    dailyRewardLoadedForUserId = userId;
     state.dailyRewardRefreshInFlight = true;
     state.dailyRewardRefreshLastAttemptAt = Date.now();
-    setDailyRewardStatus("جاري التحقق من المكافأة...");
+    setDailyRewardStatus("جاري التحقق...");
 
     const apiClient = getApiClient();
     const headers = { Accept: "application/json" };
     const token = apiClient?.getToken?.();
     if (token) headers.Authorization = `Bearer ${token}`;
 
-    const response = await fetch("/api/daily-reward/claim", {
-      method: "POST",
-      credentials: "include",
-      headers
-    });
-
     try {
-      const payload = await response.json().catch(() => null);
-      const data = payload?.data && typeof payload.data === "object"
-        ? { ...payload, ...payload.data }
-        : payload;
+      const statusRes = await fetch("/api/daily-reward/status", {
+        credentials: "include",
+        headers
+      });
+      const status = await statusRes.json().catch(() => null);
 
-      console.log("DAILY_REWARD_RESPONSE", data);
+      console.log("DAILY_STATUS", status);
 
-      if (!response.ok || !data?.ok) {
-        console.error("DAILY_REWARD_FAILED", data);
-        showBalanceError(data?.message || data?.error || "DAILY_REWARD_FAILED");
-        return null;
+      if (!statusRes.ok || !status?.ok) {
+        throw new Error(safeText(status?.message || status?.error, "STATUS_FAILED"));
       }
 
-      const rewardAmount = Number(data.rewardAmount ?? data.dailyReward?.amount ?? data.user?.dailyRewardAmount ?? 0);
-      const plan = String(data.plan || data.user?.plan || data.user?.planType || data.user?.plan_type || "free").trim() || "free";
-      const remainingMs = Number(data.remainingMs ?? data.dailyReward?.remainingMs ?? data.dailyReward?.nextRewardInMs ?? data.nextDailyRewardInMs ?? data.user?.nextDailyRewardInMs ?? 0);
-      const dailyReward = data.dailyReward || data.daily_reward || data.user?.dailyReward || {
+      let data = status;
+      if (Boolean(status.canClaim)) {
+        const claimRes = await fetch("/api/daily-reward/claim", {
+          method: "POST",
+          credentials: "include",
+          headers
+        });
+        data = await claimRes.json().catch(() => null);
+
+        console.log("DAILY_CLAIM", data);
+
+        if (!claimRes.ok || !data?.ok) {
+          throw new Error(safeText(data?.message || data?.error, "CLAIM_FAILED"));
+        }
+      }
+
+      const rewardAmount = safeNumber(data.rewardAmount, 0);
+      const plan = safeText(data.plan, "free").trim() || "free";
+      const remainingMs = safeNumber(data.remainingMs, DAILY_REWARD_INTERVAL_MS);
+      const balance = safeNumber(data.balance, getPreviewBalance());
+      const nextClaimAt = safeText(data.nextClaimAt, "");
+      const dailyReward = {
         amount: rewardAmount,
         plan,
-        canClaim: data.canClaim,
-        lastClaimedAt: data.lastClaimedAt,
-        nextClaimAt: data.nextClaimAt,
-        nextRewardAt: data.nextClaimAt,
+        canClaim: Boolean(data.canClaim),
+        lastClaimedAt: null,
+        nextClaimAt: nextClaimAt || null,
+        nextRewardAt: nextClaimAt || null,
         remainingMs,
         nextRewardInMs: remainingMs
       };
-      const nextUser = data.user
-        ? {
-            ...data.user,
-            plan,
-            balance: data.balance ?? data.user.balance,
-            xp: data.balance ?? data.user.xp ?? data.user.balance,
-            dailyReward,
-            dailyRewardAmount: rewardAmount ?? dailyReward.amount ?? data.user.dailyRewardAmount,
-            nextDailyRewardAt: dailyReward.nextRewardAt || dailyReward.nextClaimAt || data.nextDailyRewardAt || data.user.nextDailyRewardAt,
-            nextDailyRewardInMs: remainingMs ?? dailyReward.remainingMs ?? dailyReward.nextRewardInMs ?? data.nextDailyRewardInMs ?? data.user.nextDailyRewardInMs,
-            lastDailyRewardClaimedAt: dailyReward.lastClaimedAt ?? data.lastClaimedAt ?? data.user.lastDailyRewardClaimedAt,
-            dailyRewardSyncedAt: Date.now()
-          }
-        : {
-            ...(state.currentUser || {}),
-            plan,
-            balance: data.balance ?? state.currentUser?.balance ?? 0,
-            xp: data.balance ?? state.currentUser?.xp ?? 0,
-            dailyReward,
-            dailyRewardAmount: rewardAmount ?? dailyReward.amount ?? state.currentUser?.dailyRewardAmount,
-            nextDailyRewardAt: dailyReward.nextRewardAt || dailyReward.nextClaimAt || data.nextDailyRewardAt || state.currentUser?.nextDailyRewardAt,
-            nextDailyRewardInMs: remainingMs ?? dailyReward.remainingMs ?? dailyReward.nextRewardInMs ?? data.nextDailyRewardInMs ?? state.currentUser?.nextDailyRewardInMs,
-            lastDailyRewardClaimedAt: dailyReward.lastClaimedAt ?? data.lastClaimedAt ?? state.currentUser?.lastDailyRewardClaimedAt,
-            dailyRewardSyncedAt: Date.now()
-          };
+      const nextUser = {
+        ...(state.currentUser || {}),
+        plan,
+        balance,
+        xp: balance,
+        dailyReward,
+        dailyRewardAmount: rewardAmount,
+        nextDailyRewardAt: nextClaimAt || null,
+        nextDailyRewardInMs: remainingMs,
+        dailyRewardSyncedAt: Date.now()
+      };
 
       if (apiClient?.hasToken?.() && typeof apiClient.setSession === "function" && nextUser?.id) {
         apiClient.setSession({
@@ -1697,27 +1702,25 @@
       state.dailyReward = {
         initialized: true,
         plan,
-        rewardAmount: Number.isFinite(rewardAmount) ? rewardAmount : 0,
-        remainingMs: Number.isFinite(remainingMs) ? Math.max(0, remainingMs) : 0,
+        rewardAmount,
+        remainingMs: Math.max(0, remainingMs),
         canClaim: Boolean(data.canClaim),
-        lastClaimedAt: dailyReward.lastClaimedAt || data.lastClaimedAt || null,
-        nextClaimAt: dailyReward.nextClaimAt || data.nextClaimAt || null,
-        nextRewardAt: dailyReward.nextRewardAt || data.nextDailyRewardAt || data.nextClaimAt || null
+        lastClaimedAt: null,
+        nextClaimAt: nextClaimAt || null,
+        nextRewardAt: nextClaimAt || null
       };
       render();
 
-      updateBalanceUI(data.balance ?? state.currentUser?.balance ?? 0);
-      setDailyRewardText(`يتم تجديد ${formatNumber(state.dailyReward.rewardAmount)} XP حسب باقتك كل 24 ساعة من آخر استلام.`);
-
-      if (!Number.isFinite(remainingMs) || remainingMs < 0) {
-        resetDailyRewardState();
-        showBalanceError("INVALID_REMAINING_MS");
-        return state.currentUser;
-      }
-
+      updateBalanceUI(balance);
+      setDailyRewardStatus("تم التحقق من المكافأة");
+      setDailyRewardText(`يتم تجديد ${rewardAmount} XP حسب باقتك كل 24 ساعة من آخر استلام.`);
       startDailyCountdown(remainingMs);
-      dailyRewardLoadedForUserId = userId;
       return state.currentUser;
+    } catch (error) {
+      console.error("DAILY_REWARD_INIT_ERROR", error);
+      setDailyRewardStatus("تعذر تحديث المكافأة الآن.");
+      setDailyRewardText("سيتم تحديث المكافأة تلقائيًا عند توفر الاتصال.");
+      return null;
     } finally {
       state.dailyRewardRefreshInFlight = false;
     }

@@ -1051,8 +1051,14 @@ function getUserDailyRewardAmount(user = {}) {
   return getDailyRewardAmount(user);
 }
 
+function getScalarText(value, fallback = "") {
+  if (value === null || value === undefined) return fallback;
+  if (typeof value === "object") return fallback;
+  return String(value).trim() || fallback;
+}
+
 function getRewardPlan(user = {}) {
-  return String(user.plan || normalizeDailyRewardPlan(user) || "free").trim() || "free";
+  return getScalarText(user.plan, "") || normalizeDailyRewardPlan(user) || "free";
 }
 
 function getDailyRewardState(user = {}, nowDate = new Date()) {
@@ -3981,10 +3987,7 @@ async function handleDailyRewardStatus(req, res) {
   let user = typeof databaseClient.findUserById === "function"
     ? (await databaseClient.findUserById(auth.user.id)) || auth.user
     : auth.user;
-  const state = getDailyRewardState(user);
-  const rewardAmount = getUserDailyRewardAmount(user);
-  const balance = getUserBalanceValue(user);
-  const plan = getRewardPlan(user);
+  let state = getDailyRewardState(user);
 
   if (state.correctedLastClaimedAt && typeof databaseClient.updateUser === "function") {
     user = await databaseClient.updateUser(user.id, {
@@ -3992,35 +3995,21 @@ async function handleDailyRewardStatus(req, res) {
       last_daily_reward_at: state.correctedLastClaimedAt,
       last_daily_xp_granted_at: state.correctedLastClaimedAt
     }) || user;
+    state = getDailyRewardState(user);
   }
 
-  const dailyReward = buildDailyRewardPayload(user);
-  const apiUser = buildApiUser(user);
+  const rewardAmount = Number(getUserDailyRewardAmount(user) || 0);
+  const balance = Number(getUserBalanceValue(user) || 0);
+  const plan = getRewardPlan(user);
 
   sendJson(req, res, 200, {
-    success: true,
     ok: true,
     balance,
     rewardAmount,
-    plan,
-    canClaim: state.canClaim,
-    lastClaimedAt: state.lastClaimedAt,
-    nextClaimAt: state.nextClaimAt,
-    remainingMs: state.remainingMs,
-    dailyReward,
-    user: apiUser,
-    data: {
-      ok: true,
-      balance,
-      rewardAmount,
-      plan,
-      canClaim: state.canClaim,
-      lastClaimedAt: state.lastClaimedAt,
-      nextClaimAt: state.nextClaimAt,
-      remainingMs: state.remainingMs,
-      dailyReward,
-      user: apiUser
-    }
+    plan: String(plan || "free"),
+    remainingMs: Number(state.remainingMs || 0),
+    canClaim: Boolean(state.canClaim),
+    nextClaimAt: state.nextClaimAt || null
   });
 }
 
@@ -4055,34 +4044,20 @@ async function handleDailyRewardClaim(req, res) {
       throw createHttpError(404, "User not found.");
     }
 
-    const apiUser = buildApiUser(claimResult.user);
-    const dailyReward = buildDailyRewardPayload(apiUser || claimResult.user);
+    const claimedUser = claimResult.user;
+    const claimState = getDailyRewardState(claimedUser);
     const nextBalance = Number.isFinite(Number(claimResult.balance))
       ? Number(claimResult.balance)
-      : getUserBalanceValue(apiUser || claimResult.user);
-    const responsePayload = {
-      success: true,
-      ok: true,
-      claimed: Boolean(claimResult.claimed),
-      ...(claimResult.claimed ? { added: Number(claimResult.added ?? dailyRewardAmount) } : {}),
-      balance: nextBalance,
-      rewardAmount: dailyRewardAmount,
-      plan,
-      canClaim: dailyReward.canClaim,
-      lastClaimedAt: dailyReward.lastClaimedAt,
-      nextClaimAt: dailyReward.nextClaimAt,
-      remainingMs: dailyReward.remainingMs,
-      dailyReward,
-      user: apiUser
-    };
+      : getUserBalanceValue(claimedUser);
 
     sendJson(req, res, 200, {
-      ...responsePayload,
-      data: {
-        ...responsePayload,
-        nextDailyRewardAt: dailyReward.nextRewardAt,
-        nextDailyRewardInMs: dailyReward.nextRewardInMs
-      }
+      ok: true,
+      claimed: Boolean(claimResult.claimed),
+      balance: nextBalance,
+      plan: String(getRewardPlan(claimedUser) || plan || "free"),
+      rewardAmount: Number(getUserDailyRewardAmount(claimedUser) || dailyRewardAmount || 0),
+      remainingMs: Number(claimState.remainingMs || 0),
+      nextClaimAt: claimState.nextClaimAt || null
     });
     return;
   }
@@ -4095,36 +4070,15 @@ async function handleDailyRewardClaim(req, res) {
           last_daily_xp_granted_at: rewardState.correctedLastClaimedAt
         })
       : user;
-    const apiUser = buildApiUser(normalizedUser || user);
-    const dailyReward = buildDailyRewardPayload(apiUser || user);
+    const dailyReward = getDailyRewardState(normalizedUser || user);
     sendJson(req, res, 200, {
-      success: true,
       ok: true,
       claimed: false,
       balance,
-      rewardAmount: dailyRewardAmount,
-      plan,
-      canClaim: dailyReward.canClaim,
-      lastClaimedAt: dailyReward.lastClaimedAt,
-      nextClaimAt: dailyReward.nextClaimAt,
-      remainingMs: dailyReward.remainingMs,
-      dailyReward,
-      data: {
-        ok: true,
-        claimed: false,
-        balance,
-        rewardAmount: dailyRewardAmount,
-        plan,
-        canClaim: dailyReward.canClaim,
-        lastClaimedAt: dailyReward.lastClaimedAt,
-        nextClaimAt: dailyReward.nextClaimAt,
-        remainingMs: dailyReward.remainingMs,
-        message: "ALREADY_CLAIMED_TODAY",
-        dailyReward,
-        nextDailyRewardAt: dailyReward.nextRewardAt,
-        nextDailyRewardInMs: dailyReward.nextRewardInMs,
-        user: apiUser
-      }
+      plan: String(getRewardPlan(normalizedUser || user) || plan || "free"),
+      rewardAmount: Number(dailyRewardAmount || 0),
+      remainingMs: Number(dailyReward.remainingMs || 0),
+      nextClaimAt: dailyReward.nextClaimAt || null
     });
     return;
   }
@@ -4155,7 +4109,7 @@ async function handleDailyRewardClaim(req, res) {
     }
   }
 
-  const apiUser = buildApiUser(updatedUser || {
+  const claimedUser = updatedUser || {
     ...user,
     balance: nextBalance,
     xp: nextBalance,
@@ -4165,38 +4119,17 @@ async function handleDailyRewardClaim(req, res) {
     last_daily_reward_at: nowIso,
     last_daily_xp_granted_at: nowIso,
     last_daily_xp_claimed_date: nowIso.slice(0, 10)
-  });
-  const dailyReward = buildDailyRewardPayload(apiUser);
+  };
+  const dailyReward = getDailyRewardState(claimedUser);
 
   sendJson(req, res, 200, {
-    success: true,
     ok: true,
     claimed: true,
-    added: dailyRewardAmount,
     balance: nextBalance,
-    rewardAmount: dailyRewardAmount,
-    plan,
-    canClaim: dailyReward.canClaim,
-    lastClaimedAt: dailyReward.lastClaimedAt,
-    nextClaimAt: dailyReward.nextClaimAt,
-    remainingMs: dailyReward.remainingMs,
-    dailyReward,
-    data: {
-      ok: true,
-      claimed: true,
-      added: dailyRewardAmount,
-      balance: nextBalance,
-      rewardAmount: dailyRewardAmount,
-      plan,
-      canClaim: dailyReward.canClaim,
-      lastClaimedAt: dailyReward.lastClaimedAt,
-      nextClaimAt: dailyReward.nextClaimAt,
-      remainingMs: dailyReward.remainingMs,
-      dailyReward,
-      nextDailyRewardAt: dailyReward.nextRewardAt,
-      nextDailyRewardInMs: dailyReward.nextRewardInMs,
-      user: apiUser
-    }
+    plan: String(getRewardPlan(claimedUser) || plan || "free"),
+    rewardAmount: Number(dailyRewardAmount || 0),
+    remainingMs: Number(dailyReward.remainingMs || 0),
+    nextClaimAt: dailyReward.nextClaimAt || null
   });
 }
 
