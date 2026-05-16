@@ -1547,6 +1547,50 @@
     return Number.isFinite(n) ? n : fallback;
   }
 
+  function getDailyRewardSessionKey(apiClient = getApiClient()) {
+    const token = safeText(apiClient?.getToken?.(), "");
+    if (token) return `token:${token.slice(0, 24)}`;
+    const userId = safeText(state.currentUser?.id || apiClient?.getSessionUser?.()?.id, "");
+    return userId ? `user:${userId}` : "";
+  }
+
+  function hasDailyRewardAuthSession() {
+    syncSessionFromCookies();
+    const apiClient = getApiClient();
+    return Boolean(apiClient?.hasToken?.());
+  }
+
+  function primeDailyRewardFromCachedSession() {
+    const apiClient = getApiClient();
+    const cachedUser = state.currentUser || normalizeUser(apiClient?.getSessionUser?.());
+    if (!cachedUser?.id) return false;
+    if (!state.currentUser) state.currentUser = cachedUser;
+
+    const claimInfo = getXpClaimInfo();
+    if (!claimInfo.hasTimer) return false;
+
+    const rewardAmount = safeNumber(cachedUser.dailyRewardAmount || getDailyRewardMeta(cachedUser).amount, 0);
+    const plan = safeText(cachedUser.plan || cachedUser.planType || cachedUser.plan_type, "free").trim() || "free";
+    const remainingMs = Math.max(0, safeNumber(claimInfo.remainingMs, DAILY_REWARD_INTERVAL_MS));
+
+    state.dailyReward = {
+      initialized: true,
+      plan,
+      rewardAmount,
+      remainingMs,
+      canClaim: remainingMs <= 0,
+      lastClaimedAt: cachedUser.lastDailyRewardClaimedAt || null,
+      nextClaimAt: cachedUser.nextDailyRewardAt || null,
+      nextRewardAt: cachedUser.nextDailyRewardAt || null
+    };
+
+    render();
+    updateBalanceUI(cachedUser.balance ?? cachedUser.xp ?? 0);
+    setDailyRewardText(`يتم تجديد ${rewardAmount} XP حسب باقتك كل 24 ساعة من آخر استلام.`);
+    startDailyCountdown(remainingMs);
+    return true;
+  }
+
   function resetDailyRewardState() {
     clearInterval(dailyRewardTimer);
     dailyRewardTimer = null;
@@ -1604,14 +1648,13 @@
   }
 
   function maybeRefreshDailyRewardIfNeeded() {
-    if (!isAuthenticated()) {
+    if (!hasDailyRewardAuthSession()) {
       state.dailyRewardRefreshInFlight = false;
       state.dailyRewardRefreshLastAttemptAt = 0;
       resetDailyRewardState();
       return;
     }
 
-    if (sessionRefreshPromise) return;
     if (state.dailyRewardRefreshInFlight) return;
     Promise.resolve(initDailyReward()).catch(() => {
       // Keep the panel usable even if the reward request fails.
@@ -1619,18 +1662,27 @@
   }
 
   async function initDailyReward() {
-    if (!isAuthenticated()) return null;
-    const userId = String(state.currentUser?.id || "");
-    if (!userId) return state.currentUser;
-    if (dailyRewardInitStarted && dailyRewardLoadedForUserId === userId) return state.currentUser;
+    syncSessionFromCookies();
+    const apiClient = getApiClient();
+    if (!apiClient?.hasToken?.()) return null;
+
+    const sessionUser = normalizeUser(apiClient.getSessionUser?.());
+    if (!state.currentUser && sessionUser?.id) {
+      state.currentUser = sessionUser;
+    }
+
+    const sessionKey = getDailyRewardSessionKey(apiClient);
+    if (!sessionKey) return state.currentUser;
+    if (dailyRewardInitStarted && dailyRewardLoadedForUserId === sessionKey) return state.currentUser;
+    if (state.dailyRewardRefreshInFlight) return state.currentUser;
 
     dailyRewardInitStarted = true;
-    dailyRewardLoadedForUserId = userId;
     state.dailyRewardRefreshInFlight = true;
     state.dailyRewardRefreshLastAttemptAt = Date.now();
     setDailyRewardStatus("جاري التحقق...");
 
-    const apiClient = getApiClient();
+    primeDailyRewardFromCachedSession();
+
     const headers = { Accept: "application/json" };
     const token = apiClient?.getToken?.();
     if (token) headers.Authorization = `Bearer ${token}`;
@@ -1698,7 +1750,12 @@
         });
       }
 
-      state.currentUser = persistEmbeddedUser(nextUser) || normalizeUser(nextUser) || state.currentUser;
+      const normalizedNextUser = nextUser.id
+        ? (persistEmbeddedUser(nextUser) || normalizeUser(nextUser))
+        : null;
+      if (normalizedNextUser?.id) {
+        state.currentUser = normalizedNextUser;
+      }
       state.dailyReward = {
         initialized: true,
         plan,
@@ -1715,9 +1772,12 @@
       setDailyRewardStatus("تم التحقق من المكافأة");
       setDailyRewardText(`يتم تجديد ${rewardAmount} XP حسب باقتك كل 24 ساعة من آخر استلام.`);
       startDailyCountdown(remainingMs);
+      dailyRewardLoadedForUserId = sessionKey;
       return state.currentUser;
     } catch (error) {
       console.error("DAILY_REWARD_INIT_ERROR", error);
+      dailyRewardInitStarted = false;
+      dailyRewardLoadedForUserId = "";
       setDailyRewardStatus("تعذر تحديث المكافأة الآن.");
       setDailyRewardText("سيتم تحديث المكافأة تلقائيًا عند توفر الاتصال.");
       return null;
@@ -14674,6 +14734,7 @@
   applyAppPreferences();
   bindEvents();
   render();
+  initDailyReward().catch(() => {});
   refreshSessionUser();
   if (document.readyState === "loading") {
     document.addEventListener("DOMContentLoaded", () => {
