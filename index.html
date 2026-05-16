@@ -5,14 +5,20 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="theme-color" content="#6f4cff">
   <title>Orlixor AI — مساحة العمل الذكية</title>
+  <script>
+    if (window.innerWidth <= 768) {
+      window.location.href = "/mobile.html";
+    }
+  </script>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800;900&display=swap" rel="stylesheet">
-  <link rel="icon" type="image/png" href="orlixor-icon.png">
-  <link rel="stylesheet" href="section-preview-mobile.css?v=20260515-mobile-exact-1917">
-  <link rel="stylesheet" href="mobile-shell.css?v=20260515-mobile-exact-1917">
+  <link rel="icon" type="image/png" href="orlixor-icon.png?v=20260515-mobile-v2-009">
+  <link rel="stylesheet" href="section-preview-mobile.css?v=20260515-mobile-v2-009">
+  <link rel="stylesheet" href="mobile-shell.css?v=20260515-mobile-v2-009">
 </head>
 <body class="orlixor-guest-page" data-workspace-mode="home">
+  <div id="orlixor-mobile-v2"></div>
   <main id="sectionApp" class="guest-root"></main>
   <script src="mullem-config.js?v=20260502-01"></script>
   <script>
@@ -30,7 +36,7 @@
     })();
   </script>
   <script src="api-client.js?v=ASSISTANT_V3_ROUTE_WORKING_2"></script>
-  <script src="section-pages.js?v=20260515-mobile-exact-1917"></script>
+  <script src="section-pages.js?v=20260515-mobile-v2-009"></script>
 </body>
 </html>
 

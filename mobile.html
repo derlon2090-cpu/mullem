@@ -1,0 +1,712 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="theme-color" content="#ffffff">
+  <title>Orlixor Mobile</title>
+  <style>
+    :root {
+      --primary: #6d4aff;
+      --primary-2: #7c52ff;
+      --primary-soft: #f4f0ff;
+      --text: #15152f;
+      --muted: #8b91ad;
+      --line: rgba(109, 74, 255, 0.13);
+      --shadow: 0 18px 50px rgba(35, 30, 68, 0.08);
+      --soft-shadow: 0 10px 28px rgba(35, 30, 68, 0.055);
+      font-family: "Cairo", "Tajawal", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    html,
+    body {
+      width: 100%;
+      min-width: 0;
+      margin: 0;
+      overflow-x: hidden;
+      background: #ffffff;
+      color: var(--text);
+    }
+
+    body {
+      min-height: 100dvh;
+      direction: rtl;
+    }
+
+    button,
+    input {
+      font: inherit;
+    }
+
+    button {
+      cursor: pointer;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    .mobile-page {
+      width: 100%;
+      max-width: 430px;
+      min-height: 100dvh;
+      margin: 0 auto;
+      padding: 0 16px 158px;
+      background:
+        radial-gradient(circle at 50% -8%, rgba(109, 74, 255, 0.08), transparent 34%),
+        #ffffff;
+      position: relative;
+    }
+
+    .mobile-header {
+      height: 86px;
+      display: grid;
+      grid-template-columns: 48px 1fr 96px;
+      align-items: center;
+      gap: 8px;
+      direction: ltr;
+      border-bottom: 1px solid rgba(109, 74, 255, 0.08);
+      background: rgba(255, 255, 255, 0.96);
+      position: sticky;
+      top: 0;
+      z-index: 20;
+      backdrop-filter: blur(18px);
+    }
+
+    .icon-btn {
+      width: 42px;
+      height: 42px;
+      border: 0;
+      border-radius: 15px;
+      background: #ffffff;
+      color: #0f1530;
+      display: grid;
+      place-items: center;
+      padding: 0;
+      box-shadow: 0 10px 24px rgba(21, 21, 47, 0.07);
+    }
+
+    .icon-btn svg {
+      width: 22px;
+      height: 22px;
+      stroke-width: 2.15;
+    }
+
+    .header-logo {
+      justify-self: center;
+      width: 52px;
+      height: 52px;
+      display: grid;
+      place-items: center;
+    }
+
+    .header-logo img {
+      width: 48px;
+      height: 48px;
+      object-fit: contain;
+      display: block;
+      filter: drop-shadow(0 8px 18px rgba(109, 74, 255, 0.15));
+    }
+
+    .header-actions {
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+      gap: 16px;
+      direction: ltr;
+    }
+
+    .plain-icon-btn,
+    .drawer-btn {
+      border: 0;
+      background: transparent;
+      color: #141833;
+      display: grid;
+      place-items: center;
+      padding: 0;
+    }
+
+    .plain-icon-btn svg,
+    .drawer-btn svg {
+      width: 24px;
+      height: 24px;
+      stroke-width: 2.08;
+    }
+
+    .device-pill {
+      width: fit-content;
+      height: 52px;
+      min-width: 108px;
+      margin: 20px auto 34px;
+      padding: 0 22px;
+      border: 0;
+      border-radius: 14px;
+      background: linear-gradient(135deg, var(--primary-2), #6133ed);
+      color: #ffffff;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      font-size: 17px;
+      font-weight: 900;
+      box-shadow: 0 18px 36px rgba(109, 74, 255, 0.3);
+      direction: ltr;
+    }
+
+    .device-pill svg {
+      width: 17px;
+      height: 17px;
+      stroke-width: 2.4;
+    }
+
+    .hero {
+      text-align: center;
+      margin-bottom: 28px;
+    }
+
+    .hero h1 {
+      margin: 0 0 10px;
+      color: var(--text);
+      font-size: 32px;
+      line-height: 1.14;
+      font-weight: 900;
+      letter-spacing: 0;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      flex-direction: row-reverse;
+      direction: ltr;
+    }
+
+    .hero-text {
+      direction: rtl;
+      unicode-bidi: plaintext;
+    }
+
+    .hero-emoji {
+      font-size: 30px;
+      line-height: 1;
+    }
+
+    .hero p {
+      margin: 0;
+      color: #58617f;
+      font-size: 16px;
+      line-height: 1.4;
+      font-weight: 700;
+    }
+
+    .cards {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 12px;
+      width: 100%;
+    }
+
+    .action-card {
+      width: 100%;
+      min-height: 84px;
+      border: 1px solid var(--line);
+      border-radius: 20px;
+      background: #ffffff;
+      box-shadow: var(--soft-shadow);
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 52px;
+      gap: 16px;
+      align-items: center;
+      padding: 16px 18px;
+      direction: ltr;
+      text-align: right;
+    }
+
+    .card-icon {
+      width: 44px;
+      height: 44px;
+      border-radius: 15px;
+      background: var(--primary-soft);
+      color: var(--primary);
+      display: grid;
+      place-items: center;
+      grid-column: 2;
+      justify-self: end;
+    }
+
+    .card-icon svg {
+      width: 22px;
+      height: 22px;
+      stroke-width: 2.35;
+    }
+
+    .card-copy {
+      min-width: 0;
+      direction: ltr;
+      grid-column: 1;
+      justify-self: stretch;
+      display: flex;
+      flex-direction: column;
+      align-items: flex-end;
+      gap: 4px;
+      padding-inline-end: 6px;
+    }
+
+    .card-copy b {
+      display: block;
+      margin: 0;
+      color: var(--text);
+      font-size: 16px;
+      line-height: 1.2;
+      font-weight: 900;
+      direction: rtl;
+      unicode-bidi: plaintext;
+    }
+
+    .card-copy small {
+      display: block;
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.35;
+      font-weight: 700;
+      direction: rtl;
+      unicode-bidi: plaintext;
+    }
+
+    .composer {
+      position: fixed;
+      left: 16px;
+      right: 16px;
+      bottom: calc(14px + env(safe-area-inset-bottom));
+      width: auto;
+      max-width: 398px;
+      min-height: 148px;
+      margin: 0 auto;
+      border: 1px solid var(--line);
+      border-radius: 26px;
+      background: #ffffff;
+      box-shadow: 0 16px 38px rgba(35, 30, 68, 0.08);
+      padding: 16px;
+      display: grid;
+      gap: 14px;
+      z-index: 30;
+    }
+
+    .composer input {
+      width: 100%;
+      height: 42px;
+      border: 0;
+      outline: 0;
+      background: transparent;
+      color: var(--text);
+      text-align: right;
+      font-size: 16px;
+      font-weight: 700;
+      padding: 0;
+    }
+
+    .composer input::placeholder {
+      color: #a3a8bb;
+    }
+
+    .composer-actions {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      direction: ltr;
+    }
+
+    .send-btn {
+      width: 58px;
+      height: 58px;
+      min-width: 58px;
+      border: 0;
+      border-radius: 999px;
+      background: linear-gradient(135deg, #784dff, #6035f0);
+      color: #ffffff;
+      box-shadow: 0 15px 34px rgba(109, 74, 255, 0.34);
+      display: grid;
+      place-items: center;
+      padding: 0;
+      margin-inline-end: auto;
+    }
+
+    .send-btn svg {
+      width: 25px;
+      height: 25px;
+      stroke-width: 2.1;
+    }
+
+    .chip-btn {
+      min-height: 42px;
+      border: 1px solid rgba(109, 74, 255, 0.12);
+      border-radius: 999px;
+      background: #ffffff;
+      color: #535b78;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 7px;
+      padding: 9px 14px;
+      font-size: 14px;
+      font-weight: 850;
+      white-space: nowrap;
+    }
+
+    .chip-btn svg {
+      width: 18px;
+      height: 18px;
+      color: var(--primary);
+      stroke-width: 2.2;
+    }
+
+    .drawer-backdrop {
+      position: fixed;
+      inset: 0;
+      background: rgba(17, 18, 34, 0.42);
+      backdrop-filter: blur(2px);
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.22s ease;
+      z-index: 70;
+    }
+
+    .drawer {
+      position: fixed;
+      inset: 0 auto 0 0;
+      width: min(82vw, 342px);
+      background: #ffffff;
+      box-shadow: 24px 0 60px rgba(21, 21, 47, 0.18);
+      border-radius: 0 28px 28px 0;
+      transform: translateX(-105%);
+      transition: transform 0.24s ease;
+      z-index: 80;
+      overflow: hidden;
+      direction: rtl;
+    }
+
+    body.is-drawer-open {
+      overflow: hidden;
+    }
+
+    body.is-drawer-open .drawer-backdrop {
+      opacity: 1;
+      pointer-events: auto;
+    }
+
+    body.is-drawer-open .drawer {
+      transform: translateX(0);
+    }
+
+    .drawer-head {
+      height: 78px;
+      padding: 0 18px;
+      display: grid;
+      grid-template-columns: 42px 1fr 42px;
+      align-items: center;
+      direction: ltr;
+      border-bottom: 1px solid rgba(109, 74, 255, 0.08);
+    }
+
+    .drawer-logo {
+      width: 42px;
+      height: 42px;
+      object-fit: contain;
+      justify-self: center;
+    }
+
+    .drawer-btn {
+      width: 24px;
+      height: 24px;
+      justify-self: center;
+    }
+
+    .drawer-nav {
+      display: grid;
+      gap: 26px;
+      padding: 28px 28px 28px 24px;
+    }
+
+    .drawer-link {
+      border: 0;
+      background: transparent;
+      padding: 0;
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      text-align: right;
+      direction: ltr;
+      color: #2a2f48;
+      font-size: 17px;
+      font-weight: 700;
+    }
+
+    .drawer-link span {
+      direction: rtl;
+      unicode-bidi: plaintext;
+    }
+
+    .drawer-link svg {
+      width: 23px;
+      height: 23px;
+      color: var(--primary);
+      stroke-width: 2.1;
+      flex: 0 0 23px;
+    }
+
+    @media (max-width: 390px) {
+      .mobile-page {
+        padding-inline: 14px;
+        padding-bottom: 148px;
+      }
+
+      .mobile-header {
+        height: 72px;
+        grid-template-columns: 38px 1fr auto;
+      }
+
+      .menu-btn {
+        width: 38px;
+        height: 38px;
+        border-radius: 13px;
+      }
+
+      .header-logo img {
+        width: 40px;
+        height: 40px;
+      }
+
+      .device-pill {
+        height: 42px;
+        min-width: 94px;
+        margin: 16px auto 22px;
+        padding-inline: 17px;
+        font-size: 15px;
+      }
+
+      .hero {
+        margin-bottom: 18px;
+      }
+
+      .hero h1 {
+        font-size: 28px;
+        margin-bottom: 7px;
+      }
+
+      .hero-emoji {
+        font-size: 26px;
+      }
+
+      .hero p {
+        font-size: 14px;
+      }
+
+      .cards {
+        gap: 10px;
+      }
+
+      .action-card {
+        min-height: 72px;
+        grid-template-columns: minmax(0, 1fr) 44px;
+        gap: 12px;
+        border-radius: 18px;
+        padding: 12px 14px;
+      }
+
+      .card-icon {
+        width: 40px;
+        height: 40px;
+        border-radius: 14px;
+      }
+
+      .card-icon svg {
+        width: 20px;
+        height: 20px;
+      }
+
+      .card-copy b {
+        font-size: 15px;
+        margin-bottom: 3px;
+      }
+
+      .card-copy small {
+        font-size: 12px;
+      }
+
+      .composer {
+        left: 14px;
+        right: 14px;
+        bottom: calc(12px + env(safe-area-inset-bottom));
+        min-height: 126px;
+        padding: 13px;
+        border-radius: 23px;
+        gap: 10px;
+      }
+
+      .composer input {
+        height: 38px;
+        font-size: 15px;
+      }
+
+      .send-btn {
+        width: 50px;
+        height: 50px;
+        min-width: 50px;
+      }
+
+      .chip-btn {
+        min-height: 38px;
+        padding: 8px 12px;
+        font-size: 13px;
+      }
+
+      .drawer {
+        width: min(83vw, 332px);
+      }
+
+      .drawer-head {
+        height: 74px;
+        padding: 0 16px;
+      }
+
+      .drawer-nav {
+        gap: 22px;
+        padding: 24px 24px 24px 22px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="drawer-backdrop" data-drawer-backdrop></div>
+  <aside class="drawer" aria-label="القائمة الجانبية">
+    <header class="drawer-head">
+      <button class="drawer-btn" type="button" data-drawer-close aria-label="القائمة">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
+      </button>
+      <img class="drawer-logo" src="orlixor-mark.png?v=mobile-standalone-001" alt="Orlixor">
+      <button class="drawer-btn" type="button" data-drawer-close aria-label="إغلاق">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M6 6l12 12M18 6 6 18"/></svg>
+      </button>
+    </header>
+    <nav class="drawer-nav" aria-label="التنقل">
+      <button class="drawer-link" type="button"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M21 15a4 4 0 0 1-4 4H8l-5 3V7a4 4 0 0 1 4-4h10a4 4 0 0 1 4 4z"/></svg><span>المحادثات</span></button>
+      <button class="drawer-link" type="button"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M3 6h7l2 2h9v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg><span>الملفات</span></button>
+      <button class="drawer-link" type="button"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect x="4" y="4" width="6" height="6" rx="1.5"/><rect x="14" y="4" width="6" height="6" rx="1.5"/><rect x="4" y="14" width="6" height="6" rx="1.5"/><rect x="14" y="14" width="6" height="6" rx="1.5"/></svg><span>الأدوات</span></button>
+      <button class="drawer-link" type="button"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect x="4" y="4" width="6" height="6" rx="1.5"/><rect x="14" y="4" width="6" height="6" rx="1.5"/><rect x="4" y="14" width="6" height="6" rx="1.5"/><rect x="14" y="14" width="6" height="6" rx="1.5"/></svg><span>النماذج</span></button>
+      <button class="drawer-link" type="button"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M12 15.5A3.5 3.5 0 1 0 12 8a3.5 3.5 0 0 0 0 7.5z"/><path d="M19.4 15a1.7 1.7 0 0 0 .34 1.88l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06A1.7 1.7 0 0 0 15 19.4a1.7 1.7 0 0 0-1 .6l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.7 1.7 0 0 0 8.6 15a1.7 1.7 0 0 0-1.88-.34l-.08.03a2 2 0 1 1-1.53-3.7l.08-.03A1.7 1.7 0 0 0 5.6 9a1.7 1.7 0 0 0-.6-1l-.06-.06A2 2 0 1 1 7.77 5.1l.06.06A1.7 1.7 0 0 0 9 5.6a1.7 1.7 0 0 0 1-.6l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.7 1.7 0 0 0 15 8.6c.4 0 .78-.12 1.1-.36l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.7 1.7 0 0 0 18.4 13c0 .4.12.78.36 1.1z"/></svg><span>الإعدادات</span></button>
+      <button class="drawer-link" type="button"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="12" cy="12" r="9"/><path d="M9.8 9a2.4 2.4 0 0 1 4.6 1.2c0 1.8-2.4 2.1-2.4 3.8M12 17h.01"/></svg><span>المساعدة</span></button>
+      <button class="drawer-link" type="button"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M10 17l-5-5 5-5M5 12h13M19 4v16"/></svg><span>تسجيل الخروج</span></button>
+    </nav>
+  </aside>
+
+  <div class="mobile-page">
+    <header class="mobile-header">
+      <button class="icon-btn" type="button" data-drawer-open aria-label="القائمة" aria-expanded="false">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
+      </button>
+      <a class="header-logo" href="mobile.html" aria-label="Orlixor">
+        <img src="orlixor-mark.png?v=mobile-standalone-001" alt="Orlixor">
+      </a>
+      <div class="header-actions">
+        <button class="plain-icon-btn" type="button" aria-label="الإشعارات">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M18 8a6 6 0 1 0-12 0c0 7-3 7-3 7h18s-3 0-3-7"/><path d="M10 19a2 2 0 0 0 4 0"/></svg>
+        </button>
+        <button class="plain-icon-btn" type="button" aria-label="الحساب">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M20 21a8 8 0 0 0-16 0"/><circle cx="12" cy="7" r="4"/></svg>
+        </button>
+      </div>
+    </header>
+
+    <main>
+      <div class="device-pill">
+        <span>جوال</span>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect x="7" y="2.5" width="10" height="19" rx="2.4"/><path d="M10 5.5h4"/><circle cx="12" cy="18" r=".8"/></svg>
+      </div>
+
+      <section class="hero">
+        <h1><span class="hero-text">مرحباً بك</span><span class="hero-emoji">👋</span></h1>
+        <p>كيف يمكنني مساعدتك اليوم؟</p>
+      </section>
+
+      <section class="cards" aria-label="اختصارات">
+        <button class="action-card" type="button">
+          <span class="card-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M12 5v14M5 12h14"/><path d="M18 3l1 3 3 1-3 1-1 3-1-3-3-1 3-1z"/></svg></span>
+          <span class="card-copy"><b>كتابة المحتوى</b><small>إنشاء محتوى احترافي</small></span>
+        </button>
+        <button class="action-card" type="button">
+          <span class="card-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="m12 3 2.8 5.7 6.2.9-4.5 4.4 1.1 6.2L12 17.3l-5.6 2.9 1.1-6.2L3 9.6l6.2-.9z"/></svg></span>
+          <span class="card-copy"><b>أفكار وإبداع</b><small>الحصول على أفكار جديدة</small></span>
+        </button>
+        <button class="action-card" type="button">
+          <span class="card-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="m8 9-4 3 4 3M16 9l4 3-4 3M14 5l-4 14"/></svg></span>
+          <span class="card-copy"><b>مساعدة برمجية</b><small>حل المشكلات البرمجية</small></span>
+        </button>
+        <button class="action-card" type="button">
+          <span class="card-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/></svg></span>
+          <span class="card-copy"><b>ترجمة</b><small>ترجمة النصوص بدقة</small></span>
+        </button>
+      </section>
+    </main>
+
+    <form class="composer" id="mobileComposer">
+      <input type="text" name="message" placeholder="اكتب رسالتك هنا..." autocomplete="off">
+      <div class="composer-actions">
+        <button class="send-btn" type="submit" aria-label="إرسال">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M22 2 11 13"/><path d="m22 2-7 20-4-9-9-4z"/></svg>
+        </button>
+        <button class="chip-btn" type="button">أدوات</button>
+        <button class="chip-btn" type="button">
+          <span>إرفاق ملف</span>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="m21.4 11.6-8.5 8.5a6 6 0 0 1-8.5-8.5l9.2-9.2a4 4 0 0 1 5.7 5.7l-9.2 9.2a2 2 0 1 1-2.8-2.8l8.5-8.5"/></svg>
+        </button>
+      </div>
+    </form>
+  </div>
+
+  <script>
+    (function () {
+      var composer = document.getElementById("mobileComposer");
+      var body = document.body;
+      var openButtons = document.querySelectorAll("[data-drawer-open]");
+      var closeButtons = document.querySelectorAll("[data-drawer-close]");
+      var backdrop = document.querySelector("[data-drawer-backdrop]");
+
+      function setDrawerOpen(isOpen) {
+        body.classList.toggle("is-drawer-open", isOpen);
+        openButtons.forEach(function (button) {
+          button.setAttribute("aria-expanded", isOpen ? "true" : "false");
+        });
+      }
+
+      openButtons.forEach(function (button) {
+        button.addEventListener("click", function () {
+          setDrawerOpen(!body.classList.contains("is-drawer-open"));
+        });
+      });
+
+      closeButtons.forEach(function (button) {
+        button.addEventListener("click", function () {
+          setDrawerOpen(false);
+        });
+      });
+
+      if (backdrop) {
+        backdrop.addEventListener("click", function () {
+          setDrawerOpen(false);
+        });
+      }
+
+      document.addEventListener("keydown", function (event) {
+        if (event.key === "Escape") {
+          setDrawerOpen(false);
+        }
+      });
+
+      if (composer) {
+        composer.addEventListener("submit", function (event) {
+          event.preventDefault();
+        });
+      }
+    })();
+  </script>
+</body>
+</html>
