@@ -1527,16 +1527,16 @@
 
   async function refreshBalanceFromServer() {
     const apiClient = getApiClient();
-    if (!apiClient?.hasToken?.()) return null;
 
     let result = null;
-    if (typeof apiClient.getBalance === "function") {
+    if (apiClient?.hasToken?.() && typeof apiClient.getBalance === "function") {
       result = await apiClient.getBalance();
-    } else if (typeof apiClient.request === "function") {
+    } else if (apiClient?.hasToken?.() && typeof apiClient.request === "function") {
       result = await apiClient.request("/balance");
     } else {
       const headers = { Accept: "application/json" };
-      if (apiClient.getToken?.()) headers.Authorization = `Bearer ${apiClient.getToken()}`;
+      const token = apiClient?.getToken?.();
+      if (token) headers.Authorization = `Bearer ${token}`;
       const response = await fetch("/api/balance", {
         credentials: "include",
         headers
@@ -1590,35 +1590,29 @@
     const balance = getPreviewBalance();
     const dailyReward = getCurrentXpDailyReward();
     const claimInfo = getXpClaimInfo();
-    const loadingTimer = !claimInfo.hasTimer;
+    const needsServerTimer = !claimInfo.hasTimer;
     const expired = claimInfo.hasTimer && claimInfo.remainingMs <= 0;
     const countdown = formatCountdown(claimInfo.remainingMs);
-    if (loadingTimer || expired) maybeRefreshDailyRewardIfNeeded();
+    if (needsServerTimer || expired) maybeRefreshDailyRewardIfNeeded();
 
     return `
       <div class="balance-popover" data-balance-panel>
         <span class="balance-popover-label">رصيدك الحالي</span>
         <strong><span data-user-balance>${formatNumber(balance)}</span> نقطة</strong>
-        <span class="balance-popover-hint">${loadingTimer ? "جاري تحميل وقت التجديد..." : expired ? "جارٍ تحديث رصيدك من الخادم" : "يتجدد رصيدك اليومي بعد"}</span>
-        ${
-          loadingTimer
-            ? `<div class="balance-timer balance-timer--loading" aria-label="جاري تحميل وقت التجديد">
-                <span style="grid-column:1/-1">جاري تحميل وقت التجديد...</span>
-              </div>`
-            : `<div class="balance-timer" aria-label="وقت تجدد الرصيد">
-                <b data-daily-hours>${countdown.hours}</b>
-                <i>:</i>
-                <b data-daily-minutes>${countdown.minutes}</b>
-                <i>:</i>
-                <b data-daily-seconds>${countdown.seconds}</b>
-              </div>`
-        }
+        <span class="balance-popover-hint">${needsServerTimer || expired ? "جارٍ تحديث رصيدك من الخادم" : "يتجدد رصيدك اليومي بعد"}</span>
+        <div class="balance-timer" aria-label="وقت تجدد الرصيد">
+          <b data-daily-hours>${countdown.hours}</b>
+          <i>:</i>
+          <b data-daily-minutes>${countdown.minutes}</b>
+          <i>:</i>
+          <b data-daily-seconds>${countdown.seconds}</b>
+        </div>
         <div class="balance-timer-labels">
           <span>ساعة</span>
           <span>دقيقة</span>
           <span>ثانية</span>
         </div>
-        <p>${loadingTimer ? "جاري تحميل وقت التجديد من الخادم." : expired ? "سيتم تحديث الرصيد من الخادم مرة واحدة." : `يتم تجديد ${formatNumber(dailyReward)} XP حسب باقتك عند انتهاء 24 ساعة من آخر استلام.`}</p>
+        <p>${needsServerTimer || expired ? "سيتم تحديث الرصيد من الخادم مرة واحدة." : `يتم تجديد ${formatNumber(dailyReward)} XP حسب باقتك عند انتهاء 24 ساعة من آخر استلام.`}</p>
       </div>
     `;
   }
