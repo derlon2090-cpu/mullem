@@ -219,15 +219,8 @@ const IMAGE_XP_COSTS = Object.freeze({
   generate_high: Math.max(1, Number(process.env.IMAGE_GENERATE_HIGH_XP_COST || 35)),
   edit: Math.max(1, Number(process.env.IMAGE_EDIT_XP_COST || 25))
 });
-const DAILY_REWARD = Math.max(0, Number(process.env.DAILY_REWARD || process.env.DAILY_REWARD_AMOUNT || 80));
-const DAILY_LOGIN_XP_REWARD = Math.max(0, Number(process.env.DAILY_LOGIN_XP_REWARD || DAILY_REWARD));
+const DAILY_REWARD_INTERVAL_MS = 24 * 60 * 60 * 1000;
 const FIRST_SIGNUP_XP = Math.max(0, Number(process.env.FIRST_SIGNUP_XP || 50));
-const DAILY_XP_BY_PLAN = Object.freeze({
-  free: DAILY_LOGIN_XP_REWARD,
-  spark: 80,
-  tuwaiq: 250,
-  pioneer: 600
-});
 const FREE_MAX_OUTPUT_TOKENS = Math.max(120, Math.min(Number(process.env.FREE_MAX_OUTPUT_TOKENS || 500), 1200));
 const FREE_MAX_CONTEXT_TOKENS = Math.max(500, Math.min(Number(process.env.FREE_MAX_CONTEXT_TOKENS || 1500), 6000));
 const DAILY_MOTIVATION_BONUS = Math.max(1, Number(process.env.DAILY_MOTIVATION_BONUS || 5));
@@ -1007,81 +1000,69 @@ function parseTimestampMs(value) {
   return Number.isFinite(time) ? time : 0;
 }
 
-function startOfUtcDay(date = new Date()) {
-  return new Date(Date.UTC(
-    date.getUTCFullYear(),
-    date.getUTCMonth(),
-    date.getUTCDate(),
-    0,
-    0,
-    0,
-    0
-  ));
-}
-
-function nextUtcMidnight(date = new Date()) {
-  return new Date(Date.UTC(
-    date.getUTCFullYear(),
-    date.getUTCMonth(),
-    date.getUTCDate() + 1,
-    0,
-    0,
-    0,
-    0
-  ));
-}
-
-function isBeforeTodayUtc(date, now = new Date()) {
-  if (!date) return true;
-  const timestamp = parseTimestampMs(date);
-  if (!timestamp) return true;
-  return timestamp < startOfUtcDay(now).getTime();
-}
-
-function isNewUtcDay(lastDate, now = new Date()) {
-  return isBeforeTodayUtc(lastDate, now);
-}
-
-function canGrantDailyXp(lastGrantedAt, now = new Date()) {
-  return isBeforeTodayUtc(lastGrantedAt, now);
-}
-
-function msUntilNextUtcMidnight(now = new Date()) {
-  const next = nextUtcMidnight(now);
-  return Math.max(0, next.getTime() - now.getTime());
-}
-
 function getUserBalanceValue(user = {}) {
   const balance = Number(user.balance ?? user.xp ?? user.total_xp ?? 0);
   return Number.isFinite(balance) ? Math.max(0, balance) : 0;
 }
 
+function getUserLastDailyRewardClaimedAt(user = {}) {
+  return user.last_daily_reward_claimed_at || user.lastDailyRewardClaimedAt || null;
+}
+
 function getUserLastDailyRewardAt(user = {}) {
-  return user.last_daily_reward_at || user.lastDailyRewardAt || user.last_daily_xp_granted_at || user.lastDailyXpGrantedAt || null;
+  return getUserLastDailyRewardClaimedAt(user);
 }
 
 function getUserDailyRewardAmount(user = {}) {
-  const explicitAmount = Number(user.daily_reward_amount ?? user.dailyRewardAmount);
-  if (Number.isFinite(explicitAmount) && explicitAmount > 0) {
-    return Math.max(0, Math.round(explicitAmount));
-  }
   const packageAmount = Number(user.package_daily_xp ?? user.packageDailyXp ?? 0);
   if (Number.isFinite(packageAmount) && packageAmount > 0) {
     return Math.max(0, Math.round(packageAmount));
   }
-  return Math.max(0, Math.round(Number(getDailyXpForUserPlan(user) || DAILY_REWARD)));
+  const explicitAmount = Number(user.daily_reward_amount ?? user.dailyRewardAmount);
+  if (Number.isFinite(explicitAmount) && explicitAmount > 0) {
+    return Math.max(0, Math.round(explicitAmount));
+  }
+  return Math.max(0, Math.round(Number(getDailyXpForUserPlan(user) || 0)));
+}
+
+function getDailyRewardState(user = {}, nowDate = new Date()) {
+  const now = nowDate.getTime();
+  const rawLastClaim = getUserLastDailyRewardClaimedAt(user);
+  let lastClaim = parseTimestampMs(rawLastClaim);
+  let correctedLastClaimedAt = null;
+
+  if (rawLastClaim && (!lastClaim || lastClaim > now)) {
+    lastClaim = now;
+    correctedLastClaimedAt = nowDate.toISOString();
+  }
+
+  const elapsed = lastClaim ? now - lastClaim : DAILY_REWARD_INTERVAL_MS;
+  const canClaim = !lastClaim || elapsed >= DAILY_REWARD_INTERVAL_MS;
+  const nextRewardAt = canClaim ? now : lastClaim + DAILY_REWARD_INTERVAL_MS;
+  const remainingMs = canClaim ? 0 : Math.max(0, nextRewardAt - now);
+
+  return {
+    canClaim,
+    nextRewardAt: new Date(nextRewardAt).toISOString(),
+    remainingMs,
+    lastClaimedAt: lastClaim ? new Date(lastClaim).toISOString() : null,
+    correctedLastClaimedAt
+  };
 }
 
 function buildDailyRewardPayload(user = {}, now = new Date()) {
-  const nextRewardAt = nextUtcMidnight(now);
-  const nextRewardInMs = Math.max(0, nextRewardAt.getTime() - now.getTime());
+  const state = getDailyRewardState(user, now);
   return {
     amount: getUserDailyRewardAmount(user),
-    claimedToday: !isBeforeTodayUtc(getUserLastDailyRewardAt(user), now),
-    nextRewardAt: nextRewardAt.toISOString(),
-    nextRewardInMs,
-    nextDailyRewardAt: nextRewardAt.toISOString(),
-    nextDailyRewardInMs: nextRewardInMs
+    intervalMs: DAILY_REWARD_INTERVAL_MS,
+    canClaim: state.canClaim,
+    claimedToday: !state.canClaim,
+    lastClaimedAt: state.lastClaimedAt,
+    nextRewardAt: state.nextRewardAt,
+    remainingMs: state.remainingMs,
+    nextRewardInMs: state.remainingMs,
+    nextDailyRewardAt: state.nextRewardAt,
+    nextDailyRewardInMs: state.remainingMs
   };
 }
 
@@ -1104,13 +1085,8 @@ function getDailyXpPlanKey(user = {}) {
 }
 
 function getDailyXpForUserPlan(user = {}) {
-  const planKey = getDailyXpPlanKey(user);
-  if (Object.prototype.hasOwnProperty.call(DAILY_XP_BY_PLAN, planKey)) {
-    return Math.max(0, Number(DAILY_XP_BY_PLAN[planKey] || 0));
-  }
-
   const packageDailyXp = Math.max(0, Number(user.package_daily_xp || user.packageDailyXp || 0));
-  return packageDailyXp > 0 ? packageDailyXp : DAILY_XP_BY_PLAN.free;
+  return packageDailyXp > 0 ? packageDailyXp : 0;
 }
 
 function addDays(date, days) {
@@ -1173,17 +1149,17 @@ async function syncUserDailyProgress(user, activityText = "") {
   }
 
   const effectiveUser = await ensureUserPackageLifecycle(user) || user;
-  const lastDailyRewardAt = getUserLastDailyRewardAt(effectiveUser);
+  const lastDailyRewardClaimedAt = getUserLastDailyRewardClaimedAt(effectiveUser);
   const dailyRewardAmount = getUserDailyRewardAmount(effectiveUser);
-  const shouldGrantDailyXp = canGrantDailyXp(lastDailyRewardAt);
+  const rewardState = getDailyRewardState(effectiveUser);
+  const shouldGrantDailyXp = rewardState.canClaim;
 
   if (typeof databaseClient.grantDailyXpIfNeeded === "function") {
     return databaseClient.grantDailyXpIfNeeded(effectiveUser.id, {
       activity: activityText,
       firstSignupXp: FIRST_SIGNUP_XP,
-      defaultDailyXp: DAILY_LOGIN_XP_REWARD,
-      dailyXpByPlan: DAILY_XP_BY_PLAN,
       dailyRewardAmount,
+      dailyRewardIntervalMs: DAILY_REWARD_INTERVAL_MS,
       motivationBonus: DAILY_MOTIVATION_BONUS
     });
   }
@@ -1196,12 +1172,13 @@ async function syncUserDailyProgress(user, activityText = "") {
   console.log("DAILY_REWARD_CHECK", {
     userId: effectiveUser.id,
     balance: getUserBalanceValue(effectiveUser),
-    lastDailyRewardAt,
+    lastDailyRewardClaimedAt,
     dailyRewardAmount,
+    remainingMs: rewardState.remainingMs,
     shouldReward: shouldGrantDailyXp
   });
 
-  if (!shouldGrantDailyXp && signupBonusClaimed) {
+  if (!shouldGrantDailyXp && signupBonusClaimed && !rewardState.correctedLastClaimedAt) {
     if (activityText) {
       return databaseClient.updateUser(effectiveUser.id, {
         last_active_date: today,
@@ -1235,8 +1212,9 @@ async function syncUserDailyProgress(user, activityText = "") {
     last_active_date: today,
     last_reset: today,
     last_daily_xp_claimed_date: today,
-    last_daily_xp_granted_at: shouldGrantDailyXp ? nowIso : lastDailyRewardAt,
-    last_daily_reward_at: shouldGrantDailyXp ? nowIso : lastDailyRewardAt,
+    last_daily_xp_granted_at: shouldGrantDailyXp ? nowIso : lastDailyRewardClaimedAt,
+    last_daily_reward_at: shouldGrantDailyXp ? nowIso : lastDailyRewardClaimedAt,
+    last_daily_reward_claimed_at: shouldGrantDailyXp ? nowIso : (rewardState.correctedLastClaimedAt || lastDailyRewardClaimedAt),
     signup_bonus_claimed: true,
     streak_days: streakDays,
     motivation_score: Number(effectiveUser.motivation_score || 0) + DAILY_MOTIVATION_BONUS,
@@ -1642,7 +1620,7 @@ function buildApiUser(user) {
   const totalXp = Number.isFinite(Number(user.total_xp ?? user.totalXp ?? balance))
     ? Number(user.total_xp ?? user.totalXp ?? balance)
     : balance;
-  const lastDailyRewardAt = getUserLastDailyRewardAt(user);
+  const lastDailyRewardClaimedAt = getUserLastDailyRewardClaimedAt(user);
   const dailyRewardAmount = getUserDailyRewardAmount(user);
   const dailyReward = buildDailyRewardPayload(user);
   return {
@@ -1679,8 +1657,10 @@ function buildApiUser(user) {
     lastDailyXpClaimedDate: user.last_daily_xp_claimed_date || user.last_reset || user.last_active_date || null,
     last_daily_xp_granted_at: user.last_daily_xp_granted_at || null,
     lastDailyXpGrantedAt: user.last_daily_xp_granted_at || null,
-    last_daily_reward_at: lastDailyRewardAt,
-    lastDailyRewardAt,
+    last_daily_reward_claimed_at: lastDailyRewardClaimedAt,
+    lastDailyRewardClaimedAt,
+    last_daily_reward_at: lastDailyRewardClaimedAt,
+    lastDailyRewardAt: lastDailyRewardClaimedAt,
     daily_reward_amount: dailyRewardAmount,
     dailyRewardAmount,
     next_daily_reward_at: dailyReward.nextRewardAt,
@@ -3906,25 +3886,33 @@ async function handleAuthMe(req, res) {
     ok: true,
     data: {
       user: buildApiUser(syncedUser || auth.user),
-      nextDailyRewardInMs: msUntilNextUtcMidnight()
+      nextDailyRewardInMs: 0
     }
   });
 }
 
 async function handleBalance(req, res) {
   const auth = await requireAuthenticatedUser(req);
+  const beforeState = getDailyRewardState(auth.user);
+  const previousClaimedAt = getUserLastDailyRewardClaimedAt(auth.user);
   const syncedUser = await syncUserDailyProgressSafely(auth.user, "BALANCE_REFRESH");
   const apiUser = buildApiUser(syncedUser || auth.user);
   const dailyReward = buildDailyRewardPayload(apiUser || syncedUser || auth.user);
+  const claimed = Boolean(beforeState.canClaim && apiUser?.lastDailyRewardClaimedAt && apiUser.lastDailyRewardClaimedAt !== previousClaimedAt);
+  const added = claimed ? dailyReward.amount : 0;
 
   sendJson(req, res, 200, {
     success: true,
     ok: true,
     balance: apiUser?.balance ?? 0,
+    claimed,
+    added,
     dailyReward,
     user: apiUser,
     data: {
       balance: apiUser?.balance ?? 0,
+      claimed,
+      added,
       dailyReward,
       user: apiUser,
       nextDailyRewardAt: dailyReward.nextRewardAt,
@@ -3936,21 +3924,30 @@ async function handleBalance(req, res) {
 async function handleDailyRewardClaim(req, res) {
   const auth = await requireAuthenticatedUser(req);
   const user = auth.user;
-  const lastDailyRewardAt = getUserLastDailyRewardAt(user);
+  const lastDailyRewardClaimedAt = getUserLastDailyRewardClaimedAt(user);
   const dailyRewardAmount = getUserDailyRewardAmount(user);
-  const shouldReward = isBeforeTodayUtc(lastDailyRewardAt);
+  const rewardState = getDailyRewardState(user);
+  const shouldReward = rewardState.canClaim;
   const balance = getUserBalanceValue(user);
 
   console.log("DAILY_REWARD_CHECK", {
     userId: user.id,
     balance,
-    lastDailyRewardAt,
+    lastDailyRewardClaimedAt,
     dailyRewardAmount,
+    remainingMs: rewardState.remainingMs,
     shouldReward
   });
 
   if (!shouldReward) {
-    const apiUser = buildApiUser(user);
+    const normalizedUser = rewardState.correctedLastClaimedAt
+      ? await databaseClient.updateUser(user.id, {
+          last_daily_reward_claimed_at: rewardState.correctedLastClaimedAt,
+          last_daily_reward_at: rewardState.correctedLastClaimedAt,
+          last_daily_xp_granted_at: rewardState.correctedLastClaimedAt
+        })
+      : user;
+    const apiUser = buildApiUser(normalizedUser || user);
     const dailyReward = buildDailyRewardPayload(apiUser || user);
     sendJson(req, res, 200, {
       success: true,
@@ -3978,6 +3975,7 @@ async function handleDailyRewardClaim(req, res) {
     xp: nextBalance,
     total_xp: nextBalance,
     daily_reward_amount: dailyRewardAmount,
+    last_daily_reward_claimed_at: nowIso,
     last_daily_reward_at: nowIso,
     last_daily_xp_granted_at: nowIso,
     last_daily_xp_claimed_date: nowIso.slice(0, 10)
@@ -3989,6 +3987,7 @@ async function handleDailyRewardClaim(req, res) {
     xp: nextBalance,
     total_xp: nextBalance,
     daily_reward_amount: dailyRewardAmount,
+    last_daily_reward_claimed_at: nowIso,
     last_daily_reward_at: nowIso,
     last_daily_xp_granted_at: nowIso,
     last_daily_xp_claimed_date: nowIso.slice(0, 10)

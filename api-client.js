@@ -95,8 +95,13 @@
     return {
       amount: Number.isFinite(Number(meta.amount ?? user.dailyRewardAmount ?? user.daily_reward_amount ?? user.packageDailyXp ?? user.package_daily_xp))
         ? Number(meta.amount ?? user.dailyRewardAmount ?? user.daily_reward_amount ?? user.packageDailyXp ?? user.package_daily_xp)
-        : 80,
+        : 0,
       nextRewardAt: meta.nextRewardAt || meta.nextDailyRewardAt || user.nextDailyRewardAt || user.next_daily_reward_at || null,
+      lastClaimedAt: meta.lastClaimedAt || meta.last_daily_reward_claimed_at || user.lastDailyRewardClaimedAt || user.last_daily_reward_claimed_at || null,
+      intervalMs: Number.isFinite(Number(meta.intervalMs || meta.interval_ms)) ? Number(meta.intervalMs || meta.interval_ms) : 0,
+      remainingMs: Number.isFinite(Number(meta.remainingMs ?? meta.remaining_ms ?? meta.nextRewardInMs ?? meta.nextDailyRewardInMs ?? user.nextDailyRewardInMs ?? user.next_daily_reward_in_ms))
+        ? Number(meta.remainingMs ?? meta.remaining_ms ?? meta.nextRewardInMs ?? meta.nextDailyRewardInMs ?? user.nextDailyRewardInMs ?? user.next_daily_reward_in_ms)
+        : 0,
       nextRewardInMs: Number.isFinite(Number(meta.nextRewardInMs ?? meta.nextDailyRewardInMs ?? user.nextDailyRewardInMs ?? user.next_daily_reward_in_ms))
         ? Number(meta.nextRewardInMs ?? meta.nextDailyRewardInMs ?? user.nextDailyRewardInMs ?? user.next_daily_reward_in_ms)
         : 0,
@@ -113,8 +118,10 @@
       daily_reward_amount: dailyReward.amount ?? user.daily_reward_amount ?? user.dailyRewardAmount,
       nextDailyRewardAt: dailyReward.nextRewardAt ?? dailyReward.nextDailyRewardAt ?? user.nextDailyRewardAt,
       next_daily_reward_at: dailyReward.nextRewardAt ?? dailyReward.nextDailyRewardAt ?? user.next_daily_reward_at,
-      nextDailyRewardInMs: dailyReward.nextRewardInMs ?? dailyReward.nextDailyRewardInMs ?? user.nextDailyRewardInMs,
-      next_daily_reward_in_ms: dailyReward.nextRewardInMs ?? dailyReward.nextDailyRewardInMs ?? user.next_daily_reward_in_ms
+      nextDailyRewardInMs: dailyReward.remainingMs ?? dailyReward.nextRewardInMs ?? dailyReward.nextDailyRewardInMs ?? user.nextDailyRewardInMs,
+      next_daily_reward_in_ms: dailyReward.remainingMs ?? dailyReward.nextRewardInMs ?? dailyReward.nextDailyRewardInMs ?? user.next_daily_reward_in_ms,
+      lastDailyRewardClaimedAt: dailyReward.lastClaimedAt ?? user.lastDailyRewardClaimedAt ?? user.last_daily_reward_claimed_at,
+      last_daily_reward_claimed_at: dailyReward.lastClaimedAt ?? user.last_daily_reward_claimed_at ?? user.lastDailyRewardClaimedAt
     };
   }
 
@@ -142,10 +149,11 @@
       last_reset: user.last_reset || user.lastReset || user.lastActiveDate || user.last_active_date || "",
       balance: Number.isFinite(Number(user.balance ?? user.xp)) ? Number(user.balance ?? user.xp) : 0,
       xp: Number.isFinite(Number(user.xp ?? user.balance)) ? Number(user.xp ?? user.balance) : 0,
-      lastDailyRewardAt: user.lastDailyRewardAt || user.last_daily_reward_at || user.lastDailyXpGrantedAt || user.last_daily_xp_granted_at || null,
+      lastDailyRewardClaimedAt: dailyReward.lastClaimedAt || user.lastDailyRewardClaimedAt || user.last_daily_reward_claimed_at || null,
+      lastDailyRewardAt: dailyReward.lastClaimedAt || user.lastDailyRewardAt || user.last_daily_reward_at || null,
       dailyRewardAmount: Number.isFinite(Number(dailyReward.amount))
         ? Number(dailyReward.amount)
-        : 80,
+        : 0,
       nextDailyRewardInMs: Number.isFinite(Number(dailyReward.nextRewardInMs))
         ? Number(dailyReward.nextRewardInMs)
         : 0,
@@ -155,7 +163,11 @@
       dailyRewardSyncedAt: Number.isFinite(Number(user.dailyRewardSyncedAt || user.daily_reward_synced_at || 0))
         ? Number(user.dailyRewardSyncedAt || user.daily_reward_synced_at || 0)
         : 0,
-      dailyReward
+      dailyReward: {
+        ...dailyReward,
+        nextRewardInMs: dailyReward.remainingMs,
+        nextDailyRewardInMs: dailyReward.remainingMs
+      }
     };
   }
 
@@ -540,10 +552,11 @@
         ? Number(user.balance ?? user.xp)
         : (Number.isFinite(Number(existing.balance ?? existing.xp)) ? Number(existing.balance ?? existing.xp) : 50),
       xp: Number.isFinite(Number(user?.xp ?? user?.balance)) ? Number(user.xp ?? user.balance) : (Number.isFinite(Number(existing.xp ?? existing.balance)) ? Number(existing.xp ?? existing.balance) : 50),
-      lastDailyRewardAt: user?.lastDailyRewardAt || user?.last_daily_reward_at || user?.lastDailyXpGrantedAt || user?.last_daily_xp_granted_at || existing.lastDailyRewardAt || existing.last_daily_reward_at || null,
+      lastDailyRewardClaimedAt: dailyReward.lastClaimedAt || user?.lastDailyRewardClaimedAt || user?.last_daily_reward_claimed_at || existing.lastDailyRewardClaimedAt || existing.last_daily_reward_claimed_at || null,
+      lastDailyRewardAt: dailyReward.lastClaimedAt || user?.lastDailyRewardAt || user?.last_daily_reward_at || existing.lastDailyRewardAt || existing.last_daily_reward_at || null,
       dailyRewardAmount: Number.isFinite(Number(dailyReward.amount))
         ? Number(dailyReward.amount)
-        : (Number.isFinite(Number(existingDailyReward.amount)) ? Number(existingDailyReward.amount) : 80),
+        : (Number.isFinite(Number(existingDailyReward.amount)) ? Number(existingDailyReward.amount) : 0),
       nextDailyRewardInMs: Number.isFinite(Number(dailyReward.nextRewardInMs))
         ? Number(dailyReward.nextRewardInMs)
         : (Number.isFinite(Number(existingDailyReward.nextRewardInMs)) ? Number(existingDailyReward.nextRewardInMs) : 0),

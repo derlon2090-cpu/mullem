@@ -345,7 +345,7 @@ const questionBankItems = [
 ];
 
 const packagePlans = [
-  { name: "الباقة المجانية", points: 50, price: "0 ريال", note: "50 XP عند التسجيل و5 XP يوميًا عند الدخول" },
+  { name: "الباقة المجانية", points: 50, price: "0 ريال", note: "50 XP عند التسجيل ورصيد يومي حسب الباقة" },
   { name: "نانو", points: 80, price: "9 ريال", note: "بداية ذكية وسعر بسيط" },
   { name: "بلس", points: 250, price: "29 ريال", note: "للمذاكرة اليومية والملفات المتوسطة" },
   { name: "برو", points: 600, price: "59 ريال", note: "للاستخدام المكثف والمشروعات" }
@@ -356,7 +356,7 @@ const usageCosts = {
   image: 15
 };
 
-const LOGIN_REQUIRED_DAILY_XP = 5;
+const LOGIN_REQUIRED_DAILY_XP_LABEL = "رصيد يومي حسب باقتك";
 
 const subjectKeywordMap = {
   الرياضيات: ["رياضيات", "احسب", "مساحة", "محيط", "معادلة", "دائرة", "مثلث", "كسور", "جبر", "هندسة", "تفاضل"],
@@ -1033,7 +1033,7 @@ function createCasualResponse(message) {
 }
 
 function createHelpResponse() {
-  return `ابدأ باختيار الصف والمادة، ثم سجّل دخولك لفتح الشات. بعد الدخول يبدأ لك ${LOGIN_REQUIRED_DAILY_XP} XP يوميًا على الخطة المجانية، ويمكنك بعدها كتابة السؤال أو رفع صورة أو ملف.`;
+  return `ابدأ باختيار الصف والمادة، ثم سجّل دخولك لفتح الشات. بعد الدخول يبدأ لك ${LOGIN_REQUIRED_DAILY_XP_LABEL}، ويمكنك بعدها كتابة السؤال أو رفع صورة أو ملف.`;
 }
 
 function createClarificationResponse(message, intent) {
@@ -2367,7 +2367,7 @@ function openImageUpload() {
     addMessage(
       "assistant",
       "ملم يحل",
-      formatSimpleReply(`الشات متاح بعد تسجيل الدخول فقط. بعد الدخول يتجدد لك ${LOGIN_REQUIRED_DAILY_XP} XP يوميًا على الخطة المجانية. <a class="top-link" href="login.html">سجّل دخولك من هنا</a>.`)
+      formatSimpleReply(`الشات متاح بعد تسجيل الدخول فقط. بعد الدخول يتجدد لك ${LOGIN_REQUIRED_DAILY_XP_LABEL}. <a class="top-link" href="login.html">سجّل دخولك من هنا</a>.`)
     );
     return;
   }
@@ -2381,7 +2381,7 @@ function openGenericUpload() {
     addMessage(
       "assistant",
       "ملم يحل",
-      formatSimpleReply(`الشات والمرفقات متاحة بعد تسجيل الدخول فقط. بعد الدخول يتجدد لك ${LOGIN_REQUIRED_DAILY_XP} XP يوميًا على الخطة المجانية. <a class="top-link" href="login.html">تسجيل الدخول</a> لفتح المحادثة.`)
+      formatSimpleReply(`الشات والمرفقات متاحة بعد تسجيل الدخول فقط. بعد الدخول يتجدد لك ${LOGIN_REQUIRED_DAILY_XP_LABEL}. <a class="top-link" href="login.html">تسجيل الدخول</a> لفتح المحادثة.`)
     );
     return;
   }
@@ -2430,7 +2430,7 @@ async function handleSubmit(event) {
     addMessage(
       "assistant",
       "ملم يحل",
-      formatSimpleReply(`الشات متاح بعد تسجيل الدخول فقط. بعد الدخول يتجدد لك ${LOGIN_REQUIRED_DAILY_XP} XP يوميًا على الخطة المجانية. <a class="top-link" href="login.html">سجّل دخولك من هنا</a>.`)
+      formatSimpleReply(`الشات متاح بعد تسجيل الدخول فقط. بعد الدخول يتجدد لك ${LOGIN_REQUIRED_DAILY_XP_LABEL}. <a class="top-link" href="login.html">سجّل دخولك من هنا</a>.`)
     );
     return;
   }
