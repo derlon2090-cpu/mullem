@@ -1644,6 +1644,83 @@
     setDailyRewardStatus(message || "جاري التحقق من المكافأة...");
   }
 
+  function getDailyRewardClaimUrls(apiClient = getApiClient()) {
+    const candidates = typeof apiClient?.buildApiCandidates === "function"
+      ? apiClient.buildApiCandidates("/daily-reward/claim")
+      : typeof apiClient?.buildApiUrl === "function"
+        ? [apiClient.buildApiUrl("/daily-reward/claim")]
+        : ["/api/daily-reward/claim"];
+    return [...new Set(candidates.filter(Boolean))];
+  }
+
+  async function fetchDailyRewardClaim(headers) {
+    const urls = getDailyRewardClaimUrls();
+    let lastFailure = null;
+    let preferredFailure = null;
+
+    for (const url of urls) {
+      try {
+        const response = await fetch(url, {
+          method: "POST",
+          credentials: "include",
+          headers
+        });
+        const rawText = await response.text();
+        let data;
+        try {
+          data = JSON.parse(rawText);
+        } catch (_) {
+          data = { raw: rawText };
+        }
+
+        const result = {
+          response,
+          status: response.status,
+          ok: response.ok,
+          data,
+          rawText,
+          url
+        };
+
+        console.log("DAILY_REWARD_HTTP", {
+          status: response.status,
+          ok: response.ok,
+          url,
+          data,
+          rawText
+        });
+
+        if (response.ok && data?.ok) return result;
+
+        lastFailure = result;
+        if (response.status !== 404 && !preferredFailure) {
+          preferredFailure = result;
+        }
+      } catch (error) {
+        lastFailure = {
+          status: 0,
+          ok: false,
+          data: { error: "NETWORK_ERROR", message: error?.message || String(error) },
+          rawText: "",
+          url
+        };
+        console.error("DAILY_REWARD_HTTP_NETWORK_ERROR", lastFailure);
+      }
+    }
+
+    const failure = preferredFailure || lastFailure || {
+      status: 0,
+      data: { error: "NO_DAILY_REWARD_ENDPOINT" },
+      rawText: "",
+      url: ""
+    };
+    const message = safeText(
+      failure.data?.message || failure.data?.error || failure.data?.raw || failure.rawText,
+      ""
+    ) || `HTTP_${failure.status || 0}`;
+    throw new Error(`${message}${failure.url ? ` @ ${failure.url}` : ""}`);
+  }
+
   function getDailyRewardPanelStatus(claimInfo = getXpClaimInfo()) {
     if (claimInfo.hasTimer && claimInfo.remainingMs <= 0) {
       return "جاري استلام المكافأة...";
@@ -1793,31 +1870,12 @@
     headers["Content-Type"] = "application/json";
 
     try {
-      const claimRes = await fetch("/api/daily-reward/claim", {
-        method: "POST",
-        credentials: "include",
-        headers
-      });
-      const rawText = await claimRes.text();
-      let data;
-      try {
-        data = JSON.parse(rawText);
-      } catch (_) {
-        data = { raw: rawText };
-      }
+      const { data } = await fetchDailyRewardClaim(headers);
 
-      console.log("DAILY_REWARD_HTTP", {
-        status: claimRes.status,
-        ok: claimRes.ok,
-        data,
-        rawText
-      });
-
-      if (!claimRes.ok || !data?.ok) {
-        throw new Error(
-          safeText(data?.message || data?.error || data?.raw, "")
-          || `HTTP_${claimRes.status}`
-        );
+      if (data.test === "DAILY_REWARD_ROUTE_WORKING") {
+        setDailyRewardStatus("DAILY_REWARD_ROUTE_WORKING");
+        setDailyRewardText("تم الوصول إلى مسار المكافأة اليومي بنجاح.");
+        return state.currentUser;
       }
 
       const rewardAmount = safeNumber(data.rewardAmount, 0);
