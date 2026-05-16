@@ -2688,33 +2688,40 @@ body[data-workspace-mode="home"] .guest-root {
   margin-top: 13px;
 }
 
-.balance-timer {
-  display: grid;
-  grid-template-columns: 1fr auto 1fr auto 1fr;
+.balance-timer,
+.daily-timer {
+  direction: ltr;
+  display: flex;
+  justify-content: center;
   align-items: center;
-  gap: 5px;
+  gap: 14px;
   margin-top: 8px;
   padding: 9px 10px 7px;
   border-radius: 13px;
   background: linear-gradient(135deg, rgba(111, 76, 255, 0.12), rgba(111, 76, 255, 0.05));
   color: #684cff;
+  font-weight: 800;
+  font-size: 22px;
 }
 
 .balance-timer b,
-.balance-timer i {
-  font-size: 1.02rem;
-  font-weight: 950;
+.balance-timer i,
+.daily-timer span {
+  font: inherit;
+  font-weight: inherit;
   font-style: normal;
 }
 
-.balance-timer-labels {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 5px;
+.balance-timer-labels,
+.daily-labels {
+  direction: ltr;
+  display: flex;
+  justify-content: center;
+  gap: 34px;
   margin-top: 4px;
   color: #9aa0bd;
-  font-size: 0.58rem;
-  font-weight: 800;
+  font-size: 13px;
+  font-weight: 700;
 }
 
 .balance-popover p {

@@ -54,7 +54,7 @@
   };
   let sessionRefreshPromise = null;
   let dailyRewardLoadedForUserId = "";
-  let rewardTimer = null;
+  let dailyRewardTimer = null;
 
   const icons = {
     logo: `<img src="${brandMarkUrl}" alt="" aria-hidden="true">`,
@@ -674,6 +674,16 @@
     },
     upgradeModalOpen: false,
     balancePanelOpen: false,
+    dailyReward: {
+      initialized: false,
+      plan: "free",
+      rewardAmount: 0,
+      remainingMs: 0,
+      canClaim: false,
+      lastClaimedAt: null,
+      nextClaimAt: null,
+      nextRewardAt: null
+    },
     dailyRewardRefreshInFlight: false,
     dailyRewardRefreshLastAttemptAt: 0,
     dailyRewardExpiredRefreshDone: false,
@@ -1218,6 +1228,7 @@
       packageKey: String(user.packageKey || user.package_key || user.planType || user.plan_type || "").trim(),
       planType: String(user.planType || user.plan_type || user.packageKey || user.package_key || "").trim(),
       plan_type: String(user.plan_type || user.planType || user.package_key || user.packageKey || "").trim(),
+      plan: String(user.plan || user.planType || user.plan_type || user.packageKey || user.package_key || "").trim() || "free",
       avatar: String(user.avatar || user.avatar_url || user.avatarUrl || user.photo || user.picture || "").trim(),
       lastActiveDate: user.lastActiveDate || user.last_active_date || null,
       lastReset: user.lastReset || user.last_reset || user.lastActiveDate || user.last_active_date || null,
@@ -1376,6 +1387,7 @@
           apiClient.clearSession?.();
           state.currentUser = null;
           state.balancePanelOpen = false;
+          resetDailyRewardState();
           ensureAccountConversationState();
           render();
         }
@@ -1459,10 +1471,14 @@
   }
 
   function getCurrentXpDailyReward() {
-    const explicit = Number(state.currentUser?.dailyRewardAmount || state.currentUser?.daily_reward_amount || 0);
+    const explicit = Number(state.dailyReward?.rewardAmount || state.currentUser?.dailyRewardAmount || state.currentUser?.daily_reward_amount || 0);
     if (explicit > 0) return explicit;
     const paidDaily = Number(state.currentUser?.packageDailyXp || state.currentUser?.package_daily_xp || 0);
     return paidDaily > 0 ? paidDaily : 0;
+  }
+
+  function getCurrentDailyRewardPlan() {
+    return String(state.dailyReward?.plan || state.currentUser?.plan || state.currentUser?.planType || state.currentUser?.plan_type || "free").trim() || "free";
   }
 
   function getXpClaimInfo() {
@@ -1513,6 +1529,27 @@
     if (statusNode) statusNode.textContent = message;
   }
 
+  function setDailyRewardText(message) {
+    const textNode = document.querySelector("[data-daily-reward-text]");
+    if (textNode) textNode.textContent = message;
+  }
+
+  function resetDailyRewardState() {
+    clearInterval(dailyRewardTimer);
+    dailyRewardTimer = null;
+    dailyRewardLoadedForUserId = "";
+    state.dailyReward = {
+      initialized: false,
+      plan: "free",
+      rewardAmount: 0,
+      remainingMs: 0,
+      canClaim: false,
+      lastClaimedAt: null,
+      nextClaimAt: null,
+      nextRewardAt: null
+    };
+  }
+
   function updateBalanceUI(balance) {
     document.querySelectorAll("[data-user-balance]").forEach((node) => {
       node.textContent = formatNumber(balance ?? 0);
@@ -1521,47 +1558,50 @@
 
   function showBalanceError(message) {
     console.error("BALANCE_ERROR", message);
-    clearInterval(rewardTimer);
+    clearInterval(dailyRewardTimer);
+    dailyRewardTimer = null;
     setDailyCountdownText("00", "00", "00");
     setDailyRewardStatus(message || "تعذر التحقق من المكافأة");
   }
 
-  function startRewardCountdown(initialRemainingMs) {
-    clearInterval(rewardTimer);
+  function startDailyCountdown(remainingMs) {
+    clearInterval(dailyRewardTimer);
 
-    const safeRemainingMs = Number(initialRemainingMs);
-    if (!Number.isFinite(safeRemainingMs) || safeRemainingMs < 0) {
-      showBalanceError("INVALID_REMAINING_MS");
-      return;
-    }
+    let endAt = Date.now() + Number(remainingMs || 0);
 
-    const endAt = Date.now() + safeRemainingMs;
-    setDailyRewardStatus("يتجدد رصيدك بعد انتهاء العدّاد");
+    function render() {
+      const ms = Math.max(0, endAt - Date.now());
+      const totalSeconds = Math.floor(ms / 1000);
 
-    function tick() {
-      const remaining = Math.max(0, endAt - Date.now());
-      const totalSeconds = Math.floor(remaining / 1000);
       const hours = String(Math.floor(totalSeconds / 3600)).padStart(2, "0");
       const minutes = String(Math.floor((totalSeconds % 3600) / 60)).padStart(2, "0");
       const seconds = String(totalSeconds % 60).padStart(2, "0");
 
       setDailyCountdownText(hours, minutes, seconds);
 
-      if (remaining <= 0) {
-        clearInterval(rewardTimer);
-        setDailyRewardStatus("ادخل أو حدّث الصفحة لاستلام رصيدك الجديد");
+      if (ms <= 0) {
+        clearInterval(dailyRewardTimer);
+        dailyRewardTimer = null;
+
+        setDailyRewardStatus("انتهى الوقت. سيتم استلام المكافأة عند تحديث الصفحة أو دخولك من جديد.");
       }
     }
 
-    tick();
-    rewardTimer = setInterval(tick, 1000);
+    if (!Number.isFinite(endAt)) {
+      showBalanceError("INVALID_REMAINING_MS");
+      return;
+    }
+
+    setDailyRewardStatus("يتجدد رصيدك بعد انتهاء العدّاد");
+    render();
+    dailyRewardTimer = setInterval(render, 1000);
   }
 
   function maybeRefreshDailyRewardIfNeeded() {
     if (!isAuthenticated()) {
       state.dailyRewardRefreshInFlight = false;
       state.dailyRewardRefreshLastAttemptAt = 0;
-      dailyRewardLoadedForUserId = "";
+      resetDailyRewardState();
       return;
     }
 
@@ -1575,9 +1615,9 @@
   async function initDailyReward() {
     if (!isAuthenticated()) return null;
     const userId = String(state.currentUser?.id || "");
-    if (!userId || dailyRewardLoadedForUserId === userId) return state.currentUser;
+    if (!userId) return state.currentUser;
+    if (dailyRewardLoadedForUserId === userId && state.dailyReward.initialized) return state.currentUser;
 
-    dailyRewardLoadedForUserId = userId;
     state.dailyRewardRefreshInFlight = true;
     state.dailyRewardRefreshLastAttemptAt = Date.now();
     setDailyRewardStatus("جاري التحقق من المكافأة...");
@@ -1599,42 +1639,49 @@
         ? { ...payload, ...payload.data }
         : payload;
 
-      console.log("DAILY_REWARD_CLAIM_RESPONSE", data);
+      console.log("DAILY_REWARD_RESPONSE", data);
 
       if (!response.ok || !data?.ok) {
+        console.error("DAILY_REWARD_FAILED", data);
         showBalanceError(data?.message || data?.error || "DAILY_REWARD_FAILED");
         return null;
       }
 
+      const rewardAmount = Number(data.rewardAmount ?? data.dailyReward?.amount ?? data.user?.dailyRewardAmount ?? 0);
+      const plan = String(data.plan || data.user?.plan || data.user?.planType || data.user?.plan_type || "free").trim() || "free";
+      const remainingMs = Number(data.remainingMs ?? data.dailyReward?.remainingMs ?? data.dailyReward?.nextRewardInMs ?? data.nextDailyRewardInMs ?? data.user?.nextDailyRewardInMs ?? 0);
       const dailyReward = data.dailyReward || data.daily_reward || data.user?.dailyReward || {
-        amount: data.rewardAmount,
+        amount: rewardAmount,
+        plan,
         canClaim: data.canClaim,
         lastClaimedAt: data.lastClaimedAt,
         nextClaimAt: data.nextClaimAt,
         nextRewardAt: data.nextClaimAt,
-        remainingMs: data.remainingMs,
-        nextRewardInMs: data.remainingMs
+        remainingMs,
+        nextRewardInMs: remainingMs
       };
       const nextUser = data.user
         ? {
             ...data.user,
+            plan,
             balance: data.balance ?? data.user.balance,
             xp: data.balance ?? data.user.xp ?? data.user.balance,
             dailyReward,
-            dailyRewardAmount: data.rewardAmount ?? dailyReward.amount ?? data.user.dailyRewardAmount,
+            dailyRewardAmount: rewardAmount ?? dailyReward.amount ?? data.user.dailyRewardAmount,
             nextDailyRewardAt: dailyReward.nextRewardAt || dailyReward.nextClaimAt || data.nextDailyRewardAt || data.user.nextDailyRewardAt,
-            nextDailyRewardInMs: data.remainingMs ?? dailyReward.remainingMs ?? dailyReward.nextRewardInMs ?? data.nextDailyRewardInMs ?? data.user.nextDailyRewardInMs,
+            nextDailyRewardInMs: remainingMs ?? dailyReward.remainingMs ?? dailyReward.nextRewardInMs ?? data.nextDailyRewardInMs ?? data.user.nextDailyRewardInMs,
             lastDailyRewardClaimedAt: dailyReward.lastClaimedAt ?? data.lastClaimedAt ?? data.user.lastDailyRewardClaimedAt,
             dailyRewardSyncedAt: Date.now()
           }
         : {
             ...(state.currentUser || {}),
+            plan,
             balance: data.balance ?? state.currentUser?.balance ?? 0,
             xp: data.balance ?? state.currentUser?.xp ?? 0,
             dailyReward,
-            dailyRewardAmount: data.rewardAmount ?? dailyReward.amount ?? state.currentUser?.dailyRewardAmount,
+            dailyRewardAmount: rewardAmount ?? dailyReward.amount ?? state.currentUser?.dailyRewardAmount,
             nextDailyRewardAt: dailyReward.nextRewardAt || dailyReward.nextClaimAt || data.nextDailyRewardAt || state.currentUser?.nextDailyRewardAt,
-            nextDailyRewardInMs: data.remainingMs ?? dailyReward.remainingMs ?? dailyReward.nextRewardInMs ?? data.nextDailyRewardInMs ?? state.currentUser?.nextDailyRewardInMs,
+            nextDailyRewardInMs: remainingMs ?? dailyReward.remainingMs ?? dailyReward.nextRewardInMs ?? data.nextDailyRewardInMs ?? state.currentUser?.nextDailyRewardInMs,
             lastDailyRewardClaimedAt: dailyReward.lastClaimedAt ?? data.lastClaimedAt ?? state.currentUser?.lastDailyRewardClaimedAt,
             dailyRewardSyncedAt: Date.now()
           };
@@ -1647,17 +1694,29 @@
       }
 
       state.currentUser = persistEmbeddedUser(nextUser) || normalizeUser(nextUser) || state.currentUser;
+      state.dailyReward = {
+        initialized: true,
+        plan,
+        rewardAmount: Number.isFinite(rewardAmount) ? rewardAmount : 0,
+        remainingMs: Number.isFinite(remainingMs) ? Math.max(0, remainingMs) : 0,
+        canClaim: Boolean(data.canClaim),
+        lastClaimedAt: dailyReward.lastClaimedAt || data.lastClaimedAt || null,
+        nextClaimAt: dailyReward.nextClaimAt || data.nextClaimAt || null,
+        nextRewardAt: dailyReward.nextRewardAt || data.nextDailyRewardAt || data.nextClaimAt || null
+      };
       render();
 
       updateBalanceUI(data.balance ?? state.currentUser?.balance ?? 0);
+      setDailyRewardText(`يتم تجديد ${formatNumber(state.dailyReward.rewardAmount)} XP حسب باقتك كل 24 ساعة من آخر استلام.`);
 
-      const remainingMs = Number(data.remainingMs ?? dailyReward?.remainingMs ?? dailyReward?.nextRewardInMs ?? 0);
       if (!Number.isFinite(remainingMs) || remainingMs < 0) {
+        resetDailyRewardState();
         showBalanceError("INVALID_REMAINING_MS");
         return state.currentUser;
       }
 
-      startRewardCountdown(remainingMs);
+      startDailyCountdown(remainingMs);
+      dailyRewardLoadedForUserId = userId;
       return state.currentUser;
     } finally {
       state.dailyRewardRefreshInFlight = false;
@@ -1667,7 +1726,9 @@
   function renderBalancePanel() {
     if (!isAuthenticated() || !state.balancePanelOpen) return "";
     const balance = getPreviewBalance();
-    const dailyReward = getCurrentXpDailyReward();
+    const rewardAmount = state.dailyReward.initialized
+      ? Number(state.dailyReward.rewardAmount || getCurrentXpDailyReward() || 0)
+      : 0;
     const claimInfo = getXpClaimInfo();
     const needsServerTimer = !claimInfo.hasTimer;
     const expired = claimInfo.hasTimer && claimInfo.remainingMs <= 0;
@@ -1678,27 +1739,30 @@
     const statusText = needsServerTimer
       ? "جاري التحقق من المكافأة..."
       : expired
-        ? "ادخل أو حدّث الصفحة لاستلام رصيدك الجديد"
+        ? "انتهى الوقت. سيتم استلام المكافأة عند تحديث الصفحة أو دخولك من جديد."
         : "يتجدد رصيدك بعد انتهاء العدّاد";
+    const rewardText = rewardAmount > 0
+      ? `يتم تجديد ${formatNumber(rewardAmount)} XP حسب باقتك كل 24 ساعة من آخر استلام.`
+      : "يتم تجديد XP حسب باقتك كل 24 ساعة من آخر استلام.";
 
     return `
       <div class="balance-popover" data-balance-panel>
         <span class="balance-popover-label">رصيدك الحالي</span>
         <strong><span data-user-balance>${formatNumber(balance)}</span> نقطة</strong>
         <div class="balance-popover-hint" data-daily-status>${statusText}</div>
-        <div class="balance-timer" aria-label="وقت تجدد الرصيد">
-          <b data-daily-hours>${countdown.hours}</b>
-          <i>:</i>
-          <b data-daily-minutes>${countdown.minutes}</b>
-          <i>:</i>
-          <b data-daily-seconds>${countdown.seconds}</b>
+        <div class="daily-timer balance-timer" dir="ltr" aria-label="وقت تجدد الرصيد">
+          <span data-daily-hours>${countdown.hours}</span>
+          <span>:</span>
+          <span data-daily-minutes>${countdown.minutes}</span>
+          <span>:</span>
+          <span data-daily-seconds>${countdown.seconds}</span>
         </div>
-        <div class="balance-timer-labels">
+        <div class="daily-labels balance-timer-labels">
           <span>ساعة</span>
           <span>دقيقة</span>
           <span>ثانية</span>
         </div>
-        <p>يتم تجديد ${formatNumber(dailyReward)} XP حسب باقتك عند انتهاء 24 ساعة من آخر استلام.</p>
+        <p data-daily-reward-text>${escapeHtml(rewardText)}</p>
       </div>
     `;
   }
@@ -11440,6 +11504,7 @@
           // Ignore cleanup issues.
         }
         state.currentUser = null;
+        resetDailyRewardState();
         setComposerValue(input);
         state.authReason = "انتهت الجلسة أو لم تكتمل. سجّل دخولك مرة أخرى حتى يعمل الشات من حسابك.";
         state.authModalOpen = true;
@@ -14607,6 +14672,13 @@
   bindEvents();
   render();
   refreshSessionUser();
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", () => {
+      initDailyReward().catch(() => {});
+    }, { once: true });
+  } else {
+    initDailyReward().catch(() => {});
+  }
   window.setTimeout(() => {
     if (isAuthenticated()) {
       loadNotifications({ silent: true, force: true });

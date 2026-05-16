@@ -1051,6 +1051,10 @@ function getUserDailyRewardAmount(user = {}) {
   return getDailyRewardAmount(user);
 }
 
+function getRewardPlan(user = {}) {
+  return String(user.plan || normalizeDailyRewardPlan(user) || "free").trim() || "free";
+}
+
 function getDailyRewardState(user = {}, nowDate = new Date()) {
   const now = nowDate.getTime();
   const rawLastClaim = getUserLastDailyRewardClaimedAt(user);
@@ -1081,6 +1085,7 @@ function buildDailyRewardPayload(user = {}, now = new Date()) {
   const state = getDailyRewardState(user, now);
   return {
     amount: getUserDailyRewardAmount(user),
+    plan: getRewardPlan(user),
     intervalMs: DAILY_REWARD_INTERVAL_MS,
     canClaim: state.canClaim,
     claimedToday: !state.canClaim,
@@ -1687,6 +1692,7 @@ function buildApiUser(user) {
     totalXp,
     plan_type: String(user.plan_type || user.package_key || user.package_name || user.package || "starter").trim() || "starter",
     planType: String(user.plan_type || user.package_key || user.package_name || user.package || "starter").trim() || "starter",
+    plan: getRewardPlan(user),
     streakDays: Number.isFinite(Number(user.streak_days)) ? Number(user.streak_days) : 0,
     motivationScore: Number.isFinite(Number(user.motivation_score)) ? Number(user.motivation_score) : 0,
     lastActiveDate: user.last_active_date || null,
@@ -3978,6 +3984,7 @@ async function handleDailyRewardStatus(req, res) {
   const state = getDailyRewardState(user);
   const rewardAmount = getUserDailyRewardAmount(user);
   const balance = getUserBalanceValue(user);
+  const plan = getRewardPlan(user);
 
   if (state.correctedLastClaimedAt && typeof databaseClient.updateUser === "function") {
     user = await databaseClient.updateUser(user.id, {
@@ -3995,6 +4002,7 @@ async function handleDailyRewardStatus(req, res) {
     ok: true,
     balance,
     rewardAmount,
+    plan,
     canClaim: state.canClaim,
     lastClaimedAt: state.lastClaimedAt,
     nextClaimAt: state.nextClaimAt,
@@ -4005,6 +4013,7 @@ async function handleDailyRewardStatus(req, res) {
       ok: true,
       balance,
       rewardAmount,
+      plan,
       canClaim: state.canClaim,
       lastClaimedAt: state.lastClaimedAt,
       nextClaimAt: state.nextClaimAt,
@@ -4024,6 +4033,7 @@ async function handleDailyRewardClaim(req, res) {
   const rewardState = getDailyRewardState(user);
   const shouldReward = rewardState.canClaim;
   const balance = getUserBalanceValue(user);
+  const plan = getRewardPlan(user);
 
   console.log("DAILY_REWARD_CHECK", {
     userId: user.id,
@@ -4057,6 +4067,7 @@ async function handleDailyRewardClaim(req, res) {
       ...(claimResult.claimed ? { added: Number(claimResult.added ?? dailyRewardAmount) } : {}),
       balance: nextBalance,
       rewardAmount: dailyRewardAmount,
+      plan,
       canClaim: dailyReward.canClaim,
       lastClaimedAt: dailyReward.lastClaimedAt,
       nextClaimAt: dailyReward.nextClaimAt,
@@ -4092,6 +4103,7 @@ async function handleDailyRewardClaim(req, res) {
       claimed: false,
       balance,
       rewardAmount: dailyRewardAmount,
+      plan,
       canClaim: dailyReward.canClaim,
       lastClaimedAt: dailyReward.lastClaimedAt,
       nextClaimAt: dailyReward.nextClaimAt,
@@ -4102,6 +4114,7 @@ async function handleDailyRewardClaim(req, res) {
         claimed: false,
         balance,
         rewardAmount: dailyRewardAmount,
+        plan,
         canClaim: dailyReward.canClaim,
         lastClaimedAt: dailyReward.lastClaimedAt,
         nextClaimAt: dailyReward.nextClaimAt,
@@ -4162,6 +4175,7 @@ async function handleDailyRewardClaim(req, res) {
     added: dailyRewardAmount,
     balance: nextBalance,
     rewardAmount: dailyRewardAmount,
+    plan,
     canClaim: dailyReward.canClaim,
     lastClaimedAt: dailyReward.lastClaimedAt,
     nextClaimAt: dailyReward.nextClaimAt,
@@ -4173,6 +4187,7 @@ async function handleDailyRewardClaim(req, res) {
       added: dailyRewardAmount,
       balance: nextBalance,
       rewardAmount: dailyRewardAmount,
+      plan,
       canClaim: dailyReward.canClaim,
       lastClaimedAt: dailyReward.lastClaimedAt,
       nextClaimAt: dailyReward.nextClaimAt,
