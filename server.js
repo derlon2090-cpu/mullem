@@ -4042,7 +4042,11 @@ async function handleDailyRewardClaim(req, res) {
 
     sendJson(req, res, 200, {
       ok: true,
-      test: "DAILY_REWARD_ROUTE_WORKING"
+      claimed: false,
+      balance: 319,
+      rewardAmount: 80,
+      remainingMs: 24 * 60 * 60 * 1000,
+      test: "DAILY_REWARD_CLAIM_ROUTE_WORKING"
     });
   } catch (error) {
     console.error("DAILY_REWARD_CLAIM_ERROR_FULL", {
@@ -6558,6 +6562,19 @@ async function routeRequest(req, res) {
 
   const requestPath = String(req.url || "/").split("?")[0];
 
+  if (req.method === "GET" && requestPath === "/api/daily-reward/ping") {
+    sendJson(req, res, 200, {
+      ok: true,
+      message: "DAILY_REWARD_PING_OK"
+    });
+    return;
+  }
+
+  if (req.method === "POST" && requestPath === "/api/daily-reward/claim") {
+    await handleDailyRewardClaim(req, res);
+    return;
+  }
+
   if (req.method === "GET" && requestPath === "/api/assistant-v3/ping") {
     sendJson(req, res, 200, {
       ok: true,
@@ -6737,21 +6754,8 @@ async function routeRequest(req, res) {
     return;
   }
 
-  if (req.method === "GET" && requestPath === "/api/daily-reward/ping") {
-    sendJson(req, res, 200, {
-      ok: true,
-      message: "DAILY_REWARD_PING_OK"
-    });
-    return;
-  }
-
   if (req.method === "GET" && requestPath === "/api/daily-reward/status") {
     await handleDailyRewardStatus(req, res);
-    return;
-  }
-
-  if (req.method === "POST" && requestPath === "/api/daily-reward/claim") {
-    await handleDailyRewardClaim(req, res);
     return;
   }
 

@@ -1872,8 +1872,8 @@
     try {
       const { data } = await fetchDailyRewardClaim(headers);
 
-      if (data.test === "DAILY_REWARD_ROUTE_WORKING") {
-        setDailyRewardStatus("DAILY_REWARD_ROUTE_WORKING");
+      if (data.test === "DAILY_REWARD_ROUTE_WORKING" || data.test === "DAILY_REWARD_CLAIM_ROUTE_WORKING") {
+        setDailyRewardStatus(data.test);
         setDailyRewardText("تم الوصول إلى مسار المكافأة اليومي بنجاح.");
         return state.currentUser;
       }
