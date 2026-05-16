@@ -6562,6 +6562,14 @@ async function routeRequest(req, res) {
 
   const requestPath = String(req.url || "/").split("?")[0];
 
+  if (req.method === "GET" && requestPath === "/api/_proof") {
+    sendJson(req, res, 200, {
+      ok: true,
+      proof: "SERVER_FILE_IS_ACTIVE"
+    });
+    return;
+  }
+
   if (req.method === "GET" && requestPath === "/api/daily-reward/ping") {
     sendJson(req, res, 200, {
       ok: true,
