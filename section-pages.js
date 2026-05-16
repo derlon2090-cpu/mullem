@@ -684,7 +684,8 @@
       canClaim: false,
       lastClaimedAt: null,
       nextClaimAt: null,
-      nextRewardAt: null
+      nextRewardAt: null,
+      syncedAt: 0
     },
     dailyRewardRefreshInFlight: false,
     dailyRewardRefreshLastAttemptAt: 0,
@@ -1488,12 +1489,28 @@
       return { claimedAt: 0, nextAt: 0, remainingMs: 0, hasTimer: false };
     }
 
+    if (state.dailyReward?.initialized) {
+      const syncedAt = safeNumber(state.dailyReward.syncedAt, Date.now());
+      const remainingAtSync = Math.max(0, safeNumber(state.dailyReward.remainingMs, DAILY_REWARD_INTERVAL_MS));
+      const nextAt = parseRewardTimeMs(state.dailyReward.nextClaimAt || state.dailyReward.nextRewardAt)
+        || (syncedAt + remainingAtSync);
+      return {
+        claimedAt: syncedAt,
+        nextAt,
+        remainingMs: Math.max(0, nextAt - Date.now()),
+        hasTimer: true
+      };
+    }
+
     const dailyReward = getDailyRewardMeta(state.currentUser || {});
     const hasServerCountdown = dailyReward.nextRewardInMs != null && Number.isFinite(Number(dailyReward.nextRewardInMs));
     const serverCountdownMs = hasServerCountdown ? Number(dailyReward.nextRewardInMs) : 0;
     const syncedAt = Number(state.currentUser?.dailyRewardSyncedAt || state.currentUser?.daily_reward_synced_at || 0);
     const parsedNextAt = parseRewardTimeMs(dailyReward.nextRewardAt) || parseRewardTimeMs(state.currentUser?.nextDailyRewardAt || state.currentUser?.next_daily_reward_at);
-    const nextAt = parsedNextAt || (syncedAt && hasServerCountdown ? syncedAt + Math.max(0, serverCountdownMs) : 0);
+    const lastClaimAt = parseRewardTimeMs(dailyReward.lastClaimedAt || state.currentUser?.lastDailyRewardClaimedAt || state.currentUser?.last_daily_reward_claimed_at);
+    const nextAt = parsedNextAt
+      || (syncedAt && hasServerCountdown ? syncedAt + Math.max(0, serverCountdownMs) : 0)
+      || (lastClaimAt ? lastClaimAt + DAILY_REWARD_INTERVAL_MS : 0);
     if (!nextAt) {
       return { claimedAt: syncedAt || Date.now(), nextAt: 0, remainingMs: 0, hasTimer: false };
     }
@@ -1567,11 +1584,13 @@
     if (!state.currentUser) state.currentUser = cachedUser;
 
     const claimInfo = getXpClaimInfo();
-    if (!claimInfo.hasTimer) return false;
 
     const rewardAmount = safeNumber(cachedUser.dailyRewardAmount || getDailyRewardMeta(cachedUser).amount, 0);
     const plan = safeText(cachedUser.plan || cachedUser.planType || cachedUser.plan_type, "free").trim() || "free";
-    const remainingMs = Math.max(0, safeNumber(claimInfo.remainingMs, DAILY_REWARD_INTERVAL_MS));
+    const remainingMs = Math.max(0, safeNumber(claimInfo.hasTimer ? claimInfo.remainingMs : null, DAILY_REWARD_INTERVAL_MS));
+    const nextClaimAt = claimInfo.hasTimer && claimInfo.nextAt
+      ? new Date(claimInfo.nextAt).toISOString()
+      : new Date(Date.now() + remainingMs).toISOString();
 
     state.dailyReward = {
       initialized: true,
@@ -1580,8 +1599,9 @@
       remainingMs,
       canClaim: remainingMs <= 0,
       lastClaimedAt: cachedUser.lastDailyRewardClaimedAt || null,
-      nextClaimAt: cachedUser.nextDailyRewardAt || null,
-      nextRewardAt: cachedUser.nextDailyRewardAt || null
+      nextClaimAt,
+      nextRewardAt: nextClaimAt,
+      syncedAt: Date.now()
     };
 
     render();
@@ -1604,7 +1624,8 @@
       canClaim: false,
       lastClaimedAt: null,
       nextClaimAt: null,
-      nextRewardAt: null
+      nextRewardAt: null,
+      syncedAt: 0
     };
   }
 
@@ -1764,7 +1785,8 @@
         canClaim: Boolean(data.canClaim),
         lastClaimedAt: null,
         nextClaimAt: nextClaimAt || null,
-        nextRewardAt: nextClaimAt || null
+        nextRewardAt: nextClaimAt || null,
+        syncedAt: Date.now()
       };
       render();
 
@@ -1778,8 +1800,15 @@
       console.error("DAILY_REWARD_INIT_ERROR", error);
       dailyRewardInitStarted = false;
       dailyRewardLoadedForUserId = "";
-      setDailyRewardStatus("تعذر تحديث المكافأة الآن.");
-      setDailyRewardText("سيتم تحديث المكافأة تلقائيًا عند توفر الاتصال.");
+      if (!state.dailyReward?.initialized) {
+        primeDailyRewardFromCachedSession();
+      }
+      if (state.dailyReward?.initialized) {
+        setDailyRewardStatus("يتجدد رصيدك بعد انتهاء العدّاد");
+      } else {
+        setDailyRewardStatus("جاري التحقق من المكافأة...");
+        setDailyRewardText("يتم تجديد XP حسب باقتك كل 24 ساعة من آخر استلام.");
+      }
       return null;
     } finally {
       state.dailyRewardRefreshInFlight = false;
