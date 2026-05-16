@@ -57,6 +57,7 @@
   let dailyRewardLoadedForUserId = "";
   let dailyRewardInitStarted = false;
   let dailyRewardTimer = null;
+  let dailyRewardCountdownEndAt = 0;
 
   const icons = {
     logo: `<img src="${brandMarkUrl}" alt="" aria-hidden="true">`,
@@ -1493,6 +1494,7 @@
       const syncedAt = safeNumber(state.dailyReward.syncedAt, Date.now());
       const remainingAtSync = Math.max(0, safeNumber(state.dailyReward.remainingMs, DAILY_REWARD_INTERVAL_MS));
       const nextAt = parseRewardTimeMs(state.dailyReward.nextClaimAt || state.dailyReward.nextRewardAt)
+        || dailyRewardCountdownEndAt
         || (syncedAt + remainingAtSync);
       return {
         claimedAt: syncedAt,
@@ -1523,7 +1525,7 @@
   }
 
   function formatCountdown(ms) {
-    const totalSeconds = Math.max(0, Math.ceil(Number(ms || 0) / 1000));
+    const totalSeconds = Math.max(0, Math.floor(Number(ms || 0) / 1000));
     const hours = Math.floor(totalSeconds / 3600);
     const minutes = Math.floor((totalSeconds % 3600) / 60);
     const seconds = totalSeconds % 60;
@@ -1604,7 +1606,7 @@
       syncedAt: Date.now()
     };
 
-    render();
+    if (state.balancePanelOpen) render();
     updateBalanceUI(cachedUser.balance ?? cachedUser.xp ?? 0);
     setDailyRewardText(`يتم تجديد ${rewardAmount} XP حسب باقتك كل 24 ساعة من آخر استلام.`);
     startDailyCountdown(remainingMs);
@@ -1614,6 +1616,7 @@
   function resetDailyRewardState() {
     clearInterval(dailyRewardTimer);
     dailyRewardTimer = null;
+    dailyRewardCountdownEndAt = 0;
     dailyRewardLoadedForUserId = "";
     dailyRewardInitStarted = false;
     state.dailyReward = {
@@ -1637,7 +1640,48 @@
 
   function showBalanceError(message) {
     console.error("BALANCE_ERROR", message);
-    setDailyRewardStatus(message || "تعذر التحقق من المكافأة");
+    setDailyRewardStatus(message || "جاري التحقق من المكافأة...");
+  }
+
+  function getDailyRewardPanelStatus(claimInfo = getXpClaimInfo()) {
+    if (claimInfo.hasTimer && claimInfo.remainingMs <= 0) {
+      return "انتهى الوقت. سيتم استلام المكافأة عند تحديث الصفحة أو دخولك من جديد.";
+    }
+    return "يتجدد رصيدك بعد انتهاء العدّاد";
+  }
+
+  function getDailyRewardPanelText(rewardAmount) {
+    const amount = safeNumber(rewardAmount, 0);
+    if (amount > 0) {
+      return `يتم تجديد ${formatNumber(amount)} XP حسب باقتك كل 24 ساعة من آخر استلام.`;
+    }
+    return "يتم تجديد XP حسب باقتك كل 24 ساعة من آخر استلام.";
+  }
+
+  function syncDailyRewardPanel({ restartTimer = false } = {}) {
+    if (!state.balancePanelOpen) return;
+
+    updateBalanceUI(getPreviewBalance());
+
+    const rewardAmount = state.dailyReward?.initialized
+      ? safeNumber(state.dailyReward.rewardAmount || getCurrentXpDailyReward(), 0)
+      : safeNumber(getCurrentXpDailyReward(), 0);
+    setDailyRewardText(getDailyRewardPanelText(rewardAmount));
+
+    const claimInfo = getXpClaimInfo();
+    if (!claimInfo.hasTimer) {
+      setDailyCountdownText("24", "00", "00");
+      setDailyRewardStatus("جاري التحقق من المكافأة...");
+      return;
+    }
+
+    const countdown = formatCountdown(claimInfo.remainingMs);
+    setDailyCountdownText(countdown.hours, countdown.minutes, countdown.seconds);
+    setDailyRewardStatus(getDailyRewardPanelStatus(claimInfo));
+
+    if (claimInfo.remainingMs > 0 && (!dailyRewardTimer || restartTimer)) {
+      startDailyCountdown(claimInfo.remainingMs);
+    }
   }
 
   function startDailyCountdown(remainingMs) {
@@ -1645,6 +1689,7 @@
 
     const safeRemainingMs = Math.max(0, safeNumber(remainingMs, DAILY_REWARD_INTERVAL_MS));
     const endAt = Date.now() + safeRemainingMs;
+    dailyRewardCountdownEndAt = endAt;
 
     function render() {
       const ms = Math.max(0, endAt - Date.now());
@@ -1655,10 +1700,24 @@
       const seconds = String(totalSeconds % 60).padStart(2, "0");
 
       setDailyCountdownText(hours, minutes, seconds);
+      if (state.dailyReward?.initialized) {
+        state.dailyReward.remainingMs = ms;
+        state.dailyReward.syncedAt = Date.now();
+        if (!state.dailyReward.nextClaimAt && endAt) {
+          const nextAtIso = new Date(endAt).toISOString();
+          state.dailyReward.nextClaimAt = nextAtIso;
+          state.dailyReward.nextRewardAt = nextAtIso;
+        }
+      }
 
       if (ms <= 0) {
         clearInterval(dailyRewardTimer);
         dailyRewardTimer = null;
+        dailyRewardCountdownEndAt = 0;
+        if (state.dailyReward?.initialized) {
+          state.dailyReward.canClaim = true;
+          state.dailyReward.remainingMs = 0;
+        }
 
         setDailyRewardStatus("انتهى الوقت. سيتم استلام المكافأة عند تحديث الصفحة أو دخولك من جديد.");
       }
@@ -1672,11 +1731,22 @@
     if (!hasDailyRewardAuthSession()) {
       state.dailyRewardRefreshInFlight = false;
       state.dailyRewardRefreshLastAttemptAt = 0;
-      resetDailyRewardState();
+      if (!isAuthenticated()) resetDailyRewardState();
       return;
     }
 
     if (state.dailyRewardRefreshInFlight) return;
+    const claimInfo = getXpClaimInfo();
+    const sessionKey = getDailyRewardSessionKey();
+    const alreadyLoaded = Boolean(sessionKey && dailyRewardLoadedForUserId === sessionKey);
+    if (state.dailyReward?.initialized && alreadyLoaded && claimInfo.hasTimer && claimInfo.remainingMs > 1000) return;
+    if (
+      state.dailyRewardRefreshLastAttemptAt
+      && Date.now() - state.dailyRewardRefreshLastAttemptAt < 10000
+      && (!claimInfo.hasTimer || claimInfo.remainingMs > 1000)
+    ) {
+      return;
+    }
     Promise.resolve(initDailyReward()).catch(() => {
       // Keep the panel usable even if the reward request fails.
     });
@@ -1700,9 +1770,13 @@
     dailyRewardInitStarted = true;
     state.dailyRewardRefreshInFlight = true;
     state.dailyRewardRefreshLastAttemptAt = Date.now();
-    setDailyRewardStatus("جاري التحقق...");
+    if (!state.dailyReward?.initialized) {
+      setDailyRewardStatus("جاري التحقق...");
+    }
 
-    primeDailyRewardFromCachedSession();
+    if (!state.dailyReward?.initialized) {
+      primeDailyRewardFromCachedSession();
+    }
 
     const headers = { Accept: "application/json" };
     const token = apiClient?.getToken?.();
@@ -1791,9 +1865,10 @@
       render();
 
       updateBalanceUI(balance);
-      setDailyRewardStatus("تم التحقق من المكافأة");
-      setDailyRewardText(`يتم تجديد ${rewardAmount} XP حسب باقتك كل 24 ساعة من آخر استلام.`);
+      setDailyRewardStatus(getDailyRewardPanelStatus(getXpClaimInfo()));
+      setDailyRewardText(getDailyRewardPanelText(rewardAmount));
       startDailyCountdown(remainingMs);
+      syncDailyRewardPanel();
       dailyRewardLoadedForUserId = sessionKey;
       return state.currentUser;
     } catch (error) {
@@ -1804,7 +1879,7 @@
         primeDailyRewardFromCachedSession();
       }
       if (state.dailyReward?.initialized) {
-        setDailyRewardStatus("يتجدد رصيدك بعد انتهاء العدّاد");
+        syncDailyRewardPanel();
       } else {
         setDailyRewardStatus("جاري التحقق من المكافأة...");
         setDailyRewardText("يتم تجديد XP حسب باقتك كل 24 ساعة من آخر استلام.");
@@ -1824,18 +1899,14 @@
     const claimInfo = getXpClaimInfo();
     const needsServerTimer = !claimInfo.hasTimer;
     const expired = claimInfo.hasTimer && claimInfo.remainingMs <= 0;
-    const countdown = (needsServerTimer || expired)
+    const countdown = needsServerTimer
       ? { hours: "24", minutes: "00", seconds: "00" }
       : formatCountdown(claimInfo.remainingMs);
-    if (needsServerTimer || expired) maybeRefreshDailyRewardIfNeeded();
+    if (needsServerTimer || expired) window.setTimeout(() => maybeRefreshDailyRewardIfNeeded(), 0);
     const statusText = needsServerTimer
       ? "جاري التحقق من المكافأة..."
-      : expired
-        ? "انتهى الوقت. سيتم استلام المكافأة عند تحديث الصفحة أو دخولك من جديد."
-        : "يتجدد رصيدك بعد انتهاء العدّاد";
-    const rewardText = rewardAmount > 0
-      ? `يتم تجديد ${formatNumber(rewardAmount)} XP حسب باقتك كل 24 ساعة من آخر استلام.`
-      : "يتم تجديد XP حسب باقتك كل 24 ساعة من آخر استلام.";
+      : getDailyRewardPanelStatus(claimInfo);
+    const rewardText = getDailyRewardPanelText(rewardAmount);
 
     return `
       <div class="balance-popover" data-balance-panel>
@@ -12767,6 +12838,10 @@
         }
         state.balancePanelOpen = !state.balancePanelOpen;
         render();
+        if (state.balancePanelOpen) {
+          syncDailyRewardPanel({ restartTimer: !dailyRewardTimer });
+          initDailyReward().catch(() => {});
+        }
         return;
       }
 
@@ -14749,6 +14824,7 @@
     ensureAccountConversationState();
     ensureThreadState();
     renderShell();
+    syncDailyRewardPanel();
     drawImageCropperPreview();
     scheduleSavedConversationSync();
   }
@@ -14785,7 +14861,7 @@
   window.setInterval(() => {
     maybeRefreshDailyRewardIfNeeded();
     if (state.balancePanelOpen) {
-      render();
+      syncDailyRewardPanel();
     }
   }, 1000);
 })();
