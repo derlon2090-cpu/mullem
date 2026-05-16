@@ -4015,13 +4015,42 @@ async function handleDailyRewardStatus(req, res) {
 
 async function handleDailyRewardClaim(req, res) {
   try {
-    const auth = await requireAuthenticatedUser(req);
+    console.log("DAILY_REWARD_CLAIM_HIT", {
+      userId: null,
+      hasAuthorization: Boolean(req.headers.authorization),
+      hasCookie: Boolean(req.headers.cookie),
+      time: new Date().toISOString()
+    });
+
+    requireDatabaseConnection();
+    const auth = await getAuthContext(req);
+
+    console.log("DAILY_REWARD_CLAIM_AUTH", {
+      userId: auth?.user?.id || null,
+      hasUser: Boolean(auth?.user),
+      time: new Date().toISOString()
+    });
+
+    if (!auth?.user?.id) {
+      sendJson(req, res, 401, {
+        ok: false,
+        error: "AUTH_REQUIRED",
+        message: "User is not authenticated"
+      });
+      return;
+    }
+
     const user = typeof databaseClient.findUserById === "function"
       ? (await databaseClient.findUserById(auth.user.id)) || auth.user
       : auth.user;
 
     if (!user?.id) {
-      throw createHttpError(404, "User not found.");
+      sendJson(req, res, 404, {
+        ok: false,
+        error: "USER_NOT_FOUND",
+        message: "User not found"
+      });
+      return;
     }
 
     const nowMs = Date.now();
@@ -4089,15 +4118,18 @@ async function handleDailyRewardClaim(req, res) {
       remainingMs: Number(remainingMs || 1000)
     });
   } catch (error) {
-    console.error("DAILY_REWARD_CLAIM_ERROR", {
+    console.error("DAILY_REWARD_CLAIM_ERROR_FULL", {
       message: error?.message,
-      stack: error?.stack
+      stack: error?.stack,
+      name: error?.name,
+      code: error?.code
     });
 
     sendJson(req, res, error?.statusCode || error?.status || 500, {
       ok: false,
-      error: "DAILY_REWARD_CLAIM_ERROR",
-      message: error?.message || "Unknown error"
+      error: "DAILY_REWARD_CLAIM_FAILED",
+      message: error?.message || "Unknown server error",
+      code: error?.code || null
     });
   }
 }

@@ -1758,7 +1758,10 @@
     const force = Boolean(options.force);
     syncSessionFromCookies();
     const apiClient = getApiClient();
-    if (!apiClient?.hasToken?.()) return null;
+    if (!apiClient?.hasToken?.()) {
+      setDailyRewardStatus("DAILY_REWARD_ERROR: AUTH_REQUIRED_CLIENT_NO_TOKEN");
+      return null;
+    }
 
     const sessionUser = normalizeUser(apiClient.getSessionUser?.());
     if (!state.currentUser && sessionUser?.id) {
@@ -1795,12 +1798,26 @@
         credentials: "include",
         headers
       });
-      const data = await claimRes.json().catch(() => null);
+      const rawText = await claimRes.text();
+      let data;
+      try {
+        data = JSON.parse(rawText);
+      } catch (_) {
+        data = { raw: rawText };
+      }
 
-      console.log("DAILY_REWARD_CLAIM_RESPONSE", data);
+      console.log("DAILY_REWARD_HTTP", {
+        status: claimRes.status,
+        ok: claimRes.ok,
+        data,
+        rawText
+      });
 
       if (!claimRes.ok || !data?.ok) {
-        throw new Error(safeText(data?.message || data?.error, "DAILY_REWARD_FAILED"));
+        throw new Error(
+          safeText(data?.message || data?.error || data?.raw, "")
+          || `HTTP_${claimRes.status}`
+        );
       }
 
       const rewardAmount = safeNumber(data.rewardAmount, 0);
@@ -1870,18 +1887,14 @@
       dailyRewardLoadedForUserId = sessionKey;
       return state.currentUser;
     } catch (error) {
-      console.error("DAILY_REWARD_INIT_ERROR", error);
+      console.error("DAILY_REWARD_INIT_ERROR_FULL", error);
       dailyRewardInitStarted = false;
       dailyRewardLoadedForUserId = "";
       if (!state.dailyReward?.initialized) {
         primeDailyRewardFromCachedSession();
       }
-      if (state.dailyReward?.initialized) {
-        syncDailyRewardPanel();
-      } else {
-        setDailyRewardStatus("تعذر تحديث المكافأة الآن. حاول لاحقًا.");
-        setDailyRewardText("يتم تجديد XP حسب باقتك كل 24 ساعة من آخر استلام.");
-      }
+      setDailyRewardStatus(`DAILY_REWARD_ERROR: ${error?.message || String(error)}`);
+      setDailyRewardText("يتم تجديد XP حسب باقتك كل 24 ساعة من آخر استلام.");
       return null;
     } finally {
       state.dailyRewardRefreshInFlight = false;
