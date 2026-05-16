@@ -1013,16 +1013,42 @@ function getUserLastDailyRewardAt(user = {}) {
   return getUserLastDailyRewardClaimedAt(user);
 }
 
+function normalizeDailyRewardPlan(user = {}) {
+  const planText = [
+    user.plan,
+    user.subscriptionPlan,
+    user.subscription_plan,
+    user.plan_key,
+    user.planKey,
+    user.plan_type,
+    user.planType,
+    user.package_key,
+    user.packageKey,
+    user.package_name,
+    user.packageName,
+    user.package
+  ].map((item) => String(item || "").trim().toLowerCase()).filter(Boolean).join(" ");
+
+  if (/(^|\s)(premium|pro_max|pioneer|elite|ultra)(\s|$)/.test(planText)) return "premium";
+  if (/(^|\s)(pro|pro_plus|tuwaiq|plus)(\s|$)/.test(planText)) return "pro";
+  if (/(^|\s)(basic|spark)(\s|$)/.test(planText)) return "basic";
+  return "free";
+}
+
+function getDailyRewardAmount(user = {}) {
+  const plan = normalizeDailyRewardPlan(user);
+  const rewards = {
+    free: 80,
+    basic: 120,
+    pro: 250,
+    premium: 500
+  };
+
+  return rewards[plan] || rewards.free;
+}
+
 function getUserDailyRewardAmount(user = {}) {
-  const packageAmount = Number(user.package_daily_xp ?? user.packageDailyXp ?? 0);
-  if (Number.isFinite(packageAmount) && packageAmount > 0) {
-    return Math.max(0, Math.round(packageAmount));
-  }
-  const explicitAmount = Number(user.daily_reward_amount ?? user.dailyRewardAmount);
-  if (Number.isFinite(explicitAmount) && explicitAmount > 0) {
-    return Math.max(0, Math.round(explicitAmount));
-  }
-  return Math.max(0, Math.round(Number(getDailyXpForUserPlan(user) || 0)));
+  return getDailyRewardAmount(user);
 }
 
 function getDailyRewardState(user = {}, nowDate = new Date()) {
@@ -3892,33 +3918,133 @@ async function handleAuthMe(req, res) {
 }
 
 async function handleBalance(req, res) {
-  const auth = await requireAuthenticatedUser(req);
-  const beforeState = getDailyRewardState(auth.user);
-  const previousClaimedAt = getUserLastDailyRewardClaimedAt(auth.user);
-  const syncedUser = await syncUserDailyProgressSafely(auth.user, "BALANCE_REFRESH");
-  const apiUser = buildApiUser(syncedUser || auth.user);
-  const dailyReward = buildDailyRewardPayload(apiUser || syncedUser || auth.user);
-  const claimed = Boolean(beforeState.canClaim && apiUser?.lastDailyRewardClaimedAt && apiUser.lastDailyRewardClaimedAt !== previousClaimedAt);
-  const added = claimed ? dailyReward.amount : 0;
+  try {
+    const auth = await requireAuthenticatedUser(req);
+    const user = typeof databaseClient.findUserById === "function"
+      ? (await databaseClient.findUserById(auth.user.id)) || auth.user
+      : auth.user;
 
-  sendJson(req, res, 200, {
-    success: true,
-    ok: true,
-    balance: apiUser?.balance ?? 0,
-    claimed,
-    added,
-    dailyReward,
-    user: apiUser,
-    data: {
-      balance: apiUser?.balance ?? 0,
+    let balance = Number(user.balance ?? user.xp ?? 0);
+    if (!Number.isFinite(balance)) balance = 0;
+    balance = Math.max(0, Math.round(balance));
+
+    let lastClaimedAt = getUserLastDailyRewardClaimedAt(user)
+      ? new Date(getUserLastDailyRewardClaimedAt(user)).getTime()
+      : null;
+    if (!Number.isFinite(Number(lastClaimedAt)) || Number(lastClaimedAt) > Date.now()) {
+      lastClaimedAt = null;
+    }
+
+    const now = Date.now();
+    const rewardAmount = getDailyRewardAmount(user);
+    const shouldClaim = !lastClaimedAt || now - lastClaimedAt >= DAILY_REWARD_INTERVAL_MS;
+    let claimed = false;
+    let updatedUser = user;
+
+    if (shouldClaim) {
+      balance += rewardAmount;
+      lastClaimedAt = now;
+      claimed = true;
+
+      updatedUser = await databaseClient.updateUser(user.id, {
+        balance,
+        xp: balance,
+        total_xp: balance,
+        daily_reward_amount: rewardAmount,
+        last_daily_reward_claimed_at: new Date(lastClaimedAt).toISOString(),
+        last_daily_reward_at: new Date(lastClaimedAt).toISOString(),
+        last_daily_xp_granted_at: new Date(lastClaimedAt).toISOString(),
+        last_daily_xp_claimed_date: new Date(lastClaimedAt).toISOString().slice(0, 10)
+      }) || {
+        ...user,
+        balance,
+        xp: balance,
+        total_xp: balance,
+        daily_reward_amount: rewardAmount,
+        last_daily_reward_claimed_at: new Date(lastClaimedAt).toISOString()
+      };
+
+      if (typeof databaseClient.recordXpLedger === "function" && rewardAmount > 0) {
+        try {
+          await databaseClient.recordXpLedger({
+            user_id: user.id,
+            amount: rewardAmount,
+            type: "daily_grant",
+            reason: "Daily reward from /api/balance"
+          });
+        } catch (ledgerError) {
+          console.warn("XP ledger write failed:", ledgerError?.message || ledgerError);
+        }
+      }
+    }
+
+    const nextRewardAtMs = lastClaimedAt + DAILY_REWARD_INTERVAL_MS;
+    const remainingMs = Math.max(0, nextRewardAtMs - now);
+    const dailyReward = {
+      amount: rewardAmount,
+      intervalMs: DAILY_REWARD_INTERVAL_MS,
+      lastClaimedAt: new Date(lastClaimedAt).toISOString(),
+      nextRewardAt: new Date(nextRewardAtMs).toISOString(),
+      remainingMs,
+      nextRewardInMs: remainingMs,
+      nextDailyRewardAt: new Date(nextRewardAtMs).toISOString(),
+      nextDailyRewardInMs: remainingMs,
+      canClaim: false,
+      claimedToday: true
+    };
+    const apiUser = buildApiUser({
+      ...updatedUser,
+      balance,
+      xp: balance,
+      total_xp: balance,
+      daily_reward_amount: rewardAmount,
+      last_daily_reward_claimed_at: new Date(lastClaimedAt).toISOString(),
+      last_daily_reward_at: new Date(lastClaimedAt).toISOString(),
+      last_daily_xp_granted_at: new Date(lastClaimedAt).toISOString()
+    });
+    if (apiUser) {
+      apiUser.dailyReward = dailyReward;
+      apiUser.daily_reward_amount = rewardAmount;
+      apiUser.dailyRewardAmount = rewardAmount;
+      apiUser.next_daily_reward_at = dailyReward.nextRewardAt;
+      apiUser.nextDailyRewardAt = dailyReward.nextRewardAt;
+      apiUser.next_daily_reward_in_ms = remainingMs;
+      apiUser.nextDailyRewardInMs = remainingMs;
+    }
+
+    sendJson(req, res, 200, {
+      success: true,
+      ok: true,
+      balance,
       claimed,
-      added,
+      added: claimed ? rewardAmount : 0,
       dailyReward,
       user: apiUser,
-      nextDailyRewardAt: dailyReward.nextRewardAt,
-      nextDailyRewardInMs: dailyReward.nextRewardInMs
-    }
-  });
+      data: {
+        ok: true,
+        balance,
+        claimed,
+        added: claimed ? rewardAmount : 0,
+        dailyReward,
+        user: apiUser,
+        nextDailyRewardAt: dailyReward.nextRewardAt,
+        nextDailyRewardInMs: remainingMs
+      }
+    });
+  } catch (error) {
+    console.error("BALANCE_ERROR", {
+      message: error?.message,
+      stack: error?.stack
+    });
+
+    const statusCode = Number(error?.statusCode) || 500;
+    sendJson(req, res, statusCode, {
+      ok: false,
+      success: false,
+      error: "BALANCE_ERROR",
+      message: error?.message || "Unknown error"
+    });
+  }
 }
 
 async function handleDailyRewardClaim(req, res) {

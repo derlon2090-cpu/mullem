@@ -53,6 +53,7 @@
     parentMonitoring: false
   };
   let sessionRefreshPromise = null;
+  let rewardTimer = null;
 
   const icons = {
     logo: `<img src="${brandMarkUrl}" alt="" aria-hidden="true">`,
@@ -1483,7 +1484,7 @@
   }
 
   function formatCountdown(ms) {
-    const totalSeconds = Math.max(0, Math.floor(Number(ms || 0) / 1000));
+    const totalSeconds = Math.max(0, Math.ceil(Number(ms || 0) / 1000));
     const hours = Math.floor(totalSeconds / 3600);
     const minutes = Math.floor((totalSeconds % 3600) / 60);
     const seconds = totalSeconds % 60;
@@ -1492,6 +1493,55 @@
       minutes: String(minutes).padStart(2, "0"),
       seconds: String(seconds).padStart(2, "0")
     };
+  }
+
+  function setDailyCountdownText(hours, minutes, seconds) {
+    const hoursNode = document.querySelector("[data-daily-hours]");
+    const minutesNode = document.querySelector("[data-daily-minutes]");
+    const secondsNode = document.querySelector("[data-daily-seconds]");
+    if (hoursNode) hoursNode.textContent = hours;
+    if (minutesNode) minutesNode.textContent = minutes;
+    if (secondsNode) secondsNode.textContent = seconds;
+  }
+
+  function showBalanceError(message) {
+    console.error("BALANCE_ERROR", message);
+    clearInterval(rewardTimer);
+    setDailyCountdownText("--", "--", "--");
+  }
+
+  function startRewardCountdown(initialRemainingMs) {
+    clearInterval(rewardTimer);
+
+    const safeRemainingMs = Number(initialRemainingMs);
+    if (!Number.isFinite(safeRemainingMs) || safeRemainingMs <= 0) {
+      showBalanceError("INVALID_REMAINING_MS");
+      return;
+    }
+
+    const endAt = Date.now() + safeRemainingMs;
+
+    function tick() {
+      const remaining = Math.max(0, endAt - Date.now());
+
+      if (remaining <= 0) {
+        clearInterval(rewardTimer);
+        Promise.resolve(refreshBalanceFromServer()).catch((error) => {
+          showBalanceError(error?.message || "BALANCE_FAILED");
+        });
+        return;
+      }
+
+      const totalSeconds = Math.ceil(remaining / 1000);
+      const hours = String(Math.floor(totalSeconds / 3600)).padStart(2, "0");
+      const minutes = String(Math.floor((totalSeconds % 3600) / 60)).padStart(2, "0");
+      const seconds = String(totalSeconds % 60).padStart(2, "0");
+
+      setDailyCountdownText(hours, minutes, seconds);
+    }
+
+    tick();
+    rewardTimer = setInterval(tick, 1000);
   }
 
   function maybeRefreshDailyRewardIfNeeded() {
@@ -1527,31 +1577,24 @@
 
   async function refreshBalanceFromServer() {
     const apiClient = getApiClient();
+    const headers = { Accept: "application/json" };
+    const token = apiClient?.getToken?.();
+    if (token) headers.Authorization = `Bearer ${token}`;
 
-    let result = null;
-    if (apiClient?.hasToken?.() && typeof apiClient.getBalance === "function") {
-      result = await apiClient.getBalance();
-    } else if (apiClient?.hasToken?.() && typeof apiClient.request === "function") {
-      result = await apiClient.request("/balance");
-    } else {
-      const headers = { Accept: "application/json" };
-      const token = apiClient?.getToken?.();
-      if (token) headers.Authorization = `Bearer ${token}`;
-      const response = await fetch("/api/balance", {
-        credentials: "include",
-        headers
-      });
-      const payload = await response.json().catch(() => null);
-      result = {
-        ok: response.ok && Boolean(payload?.ok ?? payload?.success ?? true),
-        data: payload?.data || payload || null,
-        payload
-      };
-    }
+    const response = await fetch("/api/balance", {
+      credentials: "include",
+      headers
+    });
 
-    const data = result?.data || result?.payload?.data || result?.payload || {};
-    if (!result?.ok || !data) {
-      console.error("BALANCE_FETCH_FAILED", result?.payload || result);
+    const payload = await response.json().catch(() => null);
+    const data = payload?.data && typeof payload.data === "object"
+      ? { ...payload, ...payload.data }
+      : payload;
+
+    console.log("BALANCE_RESPONSE", data);
+
+    if (!response.ok || !data?.ok) {
+      showBalanceError(data?.message || data?.error || "BALANCE_FAILED");
       return null;
     }
 
@@ -1565,7 +1608,8 @@
           dailyRewardAmount: dailyReward.amount ?? data.user.dailyRewardAmount,
           nextDailyRewardAt: dailyReward.nextRewardAt || data.nextDailyRewardAt || data.user.nextDailyRewardAt,
           nextDailyRewardInMs: dailyReward.remainingMs ?? dailyReward.nextRewardInMs ?? data.nextDailyRewardInMs ?? data.user.nextDailyRewardInMs,
-          lastDailyRewardClaimedAt: dailyReward.lastClaimedAt ?? data.user.lastDailyRewardClaimedAt
+          lastDailyRewardClaimedAt: dailyReward.lastClaimedAt ?? data.user.lastDailyRewardClaimedAt,
+          dailyRewardSyncedAt: Date.now()
         }
       : {
           ...(state.currentUser || {}),
@@ -1575,13 +1619,31 @@
           dailyRewardAmount: dailyReward.amount ?? state.currentUser?.dailyRewardAmount,
           nextDailyRewardAt: dailyReward.nextRewardAt || data.nextDailyRewardAt || state.currentUser?.nextDailyRewardAt,
           nextDailyRewardInMs: dailyReward.remainingMs ?? dailyReward.nextRewardInMs ?? data.nextDailyRewardInMs ?? state.currentUser?.nextDailyRewardInMs,
-          lastDailyRewardClaimedAt: dailyReward.lastClaimedAt ?? state.currentUser?.lastDailyRewardClaimedAt
+          lastDailyRewardClaimedAt: dailyReward.lastClaimedAt ?? state.currentUser?.lastDailyRewardClaimedAt,
+          dailyRewardSyncedAt: Date.now()
         };
 
+    if (apiClient?.hasToken?.() && typeof apiClient.setSession === "function" && nextUser?.id) {
+      apiClient.setSession({
+        token: apiClient.getToken(),
+        user: nextUser
+      });
+    }
+
     state.currentUser = persistEmbeddedUser(nextUser) || normalizeUser(nextUser) || state.currentUser;
-    const balanceNode = document.querySelector("[data-user-balance]");
-    if (balanceNode) balanceNode.textContent = formatNumber(state.currentUser?.balance ?? data.balance ?? 0);
     render();
+
+    const balanceNode = document.querySelector("[data-user-balance]");
+    if (balanceNode) balanceNode.textContent = formatNumber(data.balance ?? state.currentUser?.balance ?? 0);
+
+    const remainingMs = Number(dailyReward?.remainingMs);
+    if (!Number.isFinite(remainingMs) || remainingMs <= 0) {
+      console.error("INVALID_REMAINING_MS", data);
+      setDailyCountdownText("--", "--", "--");
+      return state.currentUser;
+    }
+
+    startRewardCountdown(remainingMs);
     return state.currentUser;
   }
 
@@ -1592,7 +1654,9 @@
     const claimInfo = getXpClaimInfo();
     const needsServerTimer = !claimInfo.hasTimer;
     const expired = claimInfo.hasTimer && claimInfo.remainingMs <= 0;
-    const countdown = formatCountdown(claimInfo.remainingMs);
+    const countdown = (needsServerTimer || expired)
+      ? { hours: "--", minutes: "--", seconds: "--" }
+      : formatCountdown(claimInfo.remainingMs);
     if (needsServerTimer || expired) maybeRefreshDailyRewardIfNeeded();
 
     return `
