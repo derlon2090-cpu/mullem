@@ -1171,8 +1171,32 @@
     }
   }
 
+  function parseRewardTimeMs(value) {
+    if (value == null || value === "") return 0;
+    if (Number.isFinite(Number(value))) return Number(value);
+    const time = new Date(value).getTime();
+    return Number.isFinite(time) ? time : 0;
+  }
+
+  function getDailyRewardMeta(user = {}) {
+    const meta = user?.dailyReward || user?.daily_reward || {};
+    return {
+      amount: Number.isFinite(Number(meta.amount ?? user?.dailyRewardAmount ?? user?.daily_reward_amount ?? user?.packageDailyXp ?? user?.package_daily_xp))
+        ? Number(meta.amount ?? user.dailyRewardAmount ?? user.daily_reward_amount ?? user.packageDailyXp ?? user.package_daily_xp)
+        : 80,
+      claimedToday: Boolean(meta.claimedToday ?? meta.claimed_today ?? false),
+      nextRewardAt: meta.nextRewardAt || meta.nextDailyRewardAt || user?.nextDailyRewardAt || user?.next_daily_reward_at || null,
+      nextRewardInMs: Number.isFinite(Number(meta.nextRewardInMs ?? meta.nextDailyRewardInMs ?? user?.nextDailyRewardInMs ?? user?.next_daily_reward_in_ms))
+        ? Number(meta.nextRewardInMs ?? meta.nextDailyRewardInMs ?? user.nextDailyRewardInMs ?? user.next_daily_reward_in_ms)
+        : null
+    };
+  }
+
   function normalizeUser(user) {
     if (!user || typeof user !== "object") return null;
+    const dailyReward = getDailyRewardMeta(user);
+    const nextRewardAtMs = parseRewardTimeMs(dailyReward.nextRewardAt);
+    const nextRewardInMs = Number(dailyReward.nextRewardInMs);
     return {
       id: String(user.id || ""),
       name: String(user.name || "").trim() || "مستخدم",
@@ -1193,18 +1217,15 @@
       balance: Number.isFinite(Number(user.balance ?? user.xp)) ? Number(user.balance ?? user.xp) : 50,
       xp: Number.isFinite(Number(user.xp ?? user.balance)) ? Number(user.xp ?? user.balance) : 50,
       lastDailyRewardAt: user.lastDailyRewardAt || user.last_daily_reward_at || user.lastDailyXpGrantedAt || user.last_daily_xp_granted_at || null,
-      dailyRewardAmount: Number.isFinite(Number(user.dailyRewardAmount ?? user.daily_reward_amount ?? user.packageDailyXp ?? user.package_daily_xp))
-        ? Number(user.dailyRewardAmount ?? user.daily_reward_amount ?? user.packageDailyXp ?? user.package_daily_xp)
+      dailyRewardAmount: Number.isFinite(Number(dailyReward.amount))
+        ? Number(dailyReward.amount)
         : 80,
-      nextDailyRewardInMs: Number.isFinite(Number(user.nextDailyRewardInMs ?? user.next_daily_reward_in_ms))
-        ? Number(user.nextDailyRewardInMs ?? user.next_daily_reward_in_ms)
-        : 0,
-      nextDailyRewardAt: Number.isFinite(Number(user.nextDailyRewardAt ?? user.next_daily_reward_at))
-        ? Number(user.nextDailyRewardAt ?? user.next_daily_reward_at)
-        : 0,
+      nextDailyRewardInMs: Number.isFinite(nextRewardInMs) ? nextRewardInMs : null,
+      nextDailyRewardAt: nextRewardAtMs || 0,
       dailyRewardSyncedAt: Number.isFinite(Number(user.dailyRewardSyncedAt || 0))
         ? Number(user.dailyRewardSyncedAt || 0)
-        : 0
+        : 0,
+      dailyReward
     };
   }
 
@@ -1214,12 +1235,15 @@
 
     const normalized = normalizeUser(user);
     if (!normalized?.id) return null;
-    const serverCountdownMs = Number(user.nextDailyRewardInMs ?? user.next_daily_reward_in_ms);
-    if (Number.isFinite(serverCountdownMs)) {
+    const dailyReward = getDailyRewardMeta(user);
+    const serverCountdownMs = Number(dailyReward.nextRewardInMs);
+    const serverNextAt = parseRewardTimeMs(dailyReward.nextRewardAt);
+    if (serverNextAt || Number.isFinite(serverCountdownMs)) {
       const syncedAt = Date.now();
-      normalized.nextDailyRewardInMs = Math.max(0, serverCountdownMs);
+      normalized.nextDailyRewardInMs = Number.isFinite(serverCountdownMs) ? Math.max(0, serverCountdownMs) : Math.max(0, serverNextAt - syncedAt);
       normalized.dailyRewardSyncedAt = syncedAt;
-      normalized.nextDailyRewardAt = syncedAt + normalized.nextDailyRewardInMs;
+      normalized.nextDailyRewardAt = serverNextAt || (syncedAt + normalized.nextDailyRewardInMs);
+      normalized.dailyReward = dailyReward;
     }
     if (isAdminRole(normalized.role)) {
       redirectToAdminDashboard();
@@ -1322,11 +1346,18 @@
     sessionRefreshPromise = apiClient.me()
       .then((result) => {
         if (result?.ok && result.data?.user) {
-          if (isAdminRole(result.data.user.role)) {
+          const refreshedUser = {
+            ...result.data.user,
+            dailyReward: result.data.dailyReward || result.data.user.dailyReward,
+            nextDailyRewardAt: result.data.dailyReward?.nextRewardAt || result.data.nextDailyRewardAt || result.data.user.nextDailyRewardAt,
+            nextDailyRewardInMs: result.data.dailyReward?.nextRewardInMs ?? result.data.nextDailyRewardInMs ?? result.data.user.nextDailyRewardInMs,
+            dailyRewardAmount: result.data.dailyReward?.amount ?? result.data.user.dailyRewardAmount
+          };
+          if (isAdminRole(refreshedUser.role)) {
             redirectToAdminDashboard();
             return;
           }
-          state.currentUser = persistEmbeddedUser(result.data.user) || getActiveUser();
+          state.currentUser = persistEmbeddedUser(refreshedUser) || getActiveUser();
           ensureAccountConversationState();
           render();
           scheduleSavedConversationSync();
@@ -1422,16 +1453,22 @@
 
   function getXpClaimInfo() {
     if (!isAuthenticated()) {
-      return { claimedAt: 0, nextAt: 0, remainingMs: 0 };
+      return { claimedAt: 0, nextAt: 0, remainingMs: 0, hasTimer: false };
     }
 
-    const serverCountdownMs = Number(state.currentUser?.nextDailyRewardInMs || state.currentUser?.next_daily_reward_in_ms || 0);
+    const dailyReward = getDailyRewardMeta(state.currentUser || {});
+    const serverCountdownMs = Number(dailyReward.nextRewardInMs);
     const syncedAt = Number(state.currentUser?.dailyRewardSyncedAt || state.currentUser?.daily_reward_synced_at || 0);
-    const nextAt = Number(state.currentUser?.nextDailyRewardAt || state.currentUser?.next_daily_reward_at || 0) || (syncedAt && serverCountdownMs ? syncedAt + serverCountdownMs : Date.now() + Math.max(0, serverCountdownMs));
+    const parsedNextAt = parseRewardTimeMs(dailyReward.nextRewardAt) || parseRewardTimeMs(state.currentUser?.nextDailyRewardAt || state.currentUser?.next_daily_reward_at);
+    const nextAt = parsedNextAt || (syncedAt && Number.isFinite(serverCountdownMs) ? syncedAt + Math.max(0, serverCountdownMs) : 0);
+    if (!nextAt) {
+      return { claimedAt: syncedAt || Date.now(), nextAt: 0, remainingMs: 0, hasTimer: false };
+    }
     return {
       claimedAt: syncedAt || Date.now(),
       nextAt,
-      remainingMs: Math.max(0, nextAt - Date.now())
+      remainingMs: Math.max(0, nextAt - Date.now()),
+      hasTimer: true
     };
   }
 
@@ -1454,8 +1491,8 @@
       return;
     }
 
-    const remainingMs = getXpClaimInfo().remainingMs;
-    if (remainingMs > 0) {
+    const claimInfo = getXpClaimInfo();
+    if (claimInfo.hasTimer && claimInfo.remainingMs > 0) {
       state.dailyRewardRefreshLastAttemptAt = 0;
       return;
     }
@@ -1466,7 +1503,7 @@
 
     state.dailyRewardRefreshInFlight = true;
     state.dailyRewardRefreshLastAttemptAt = now;
-    Promise.resolve(refreshSessionUser())
+    Promise.resolve(refreshBalanceFromServer())
       .catch(() => {
         // Keep the panel usable even if the refresh request fails.
       })
@@ -1475,35 +1512,90 @@
       });
   }
 
+  async function refreshBalanceFromServer() {
+    const apiClient = getApiClient();
+    if (!apiClient?.hasToken?.()) return null;
+
+    let result = null;
+    if (typeof apiClient.getBalance === "function") {
+      result = await apiClient.getBalance();
+    } else if (typeof apiClient.request === "function") {
+      result = await apiClient.request("/balance");
+    } else {
+      const headers = { Accept: "application/json" };
+      if (apiClient.getToken?.()) headers.Authorization = `Bearer ${apiClient.getToken()}`;
+      const response = await fetch("/api/balance", {
+        credentials: "include",
+        headers
+      });
+      const payload = await response.json().catch(() => null);
+      result = {
+        ok: response.ok && Boolean(payload?.ok ?? payload?.success ?? true),
+        data: payload?.data || payload || null,
+        payload
+      };
+    }
+
+    const data = result?.data || result?.payload?.data || result?.payload || {};
+    if (!result?.ok || !data) {
+      console.error("BALANCE_FETCH_FAILED", result?.payload || result);
+      return null;
+    }
+
+    const dailyReward = data.dailyReward || data.daily_reward || data.user?.dailyReward || {};
+    const nextUser = data.user
+      ? {
+          ...data.user,
+          balance: data.balance ?? data.user.balance,
+          xp: data.balance ?? data.user.xp ?? data.user.balance,
+          dailyReward,
+          dailyRewardAmount: dailyReward.amount ?? data.user.dailyRewardAmount,
+          nextDailyRewardAt: dailyReward.nextRewardAt || data.nextDailyRewardAt || data.user.nextDailyRewardAt,
+          nextDailyRewardInMs: dailyReward.nextRewardInMs ?? data.nextDailyRewardInMs ?? data.user.nextDailyRewardInMs
+        }
+      : {
+          ...(state.currentUser || {}),
+          balance: data.balance ?? state.currentUser?.balance ?? 0,
+          xp: data.balance ?? state.currentUser?.xp ?? 0,
+          dailyReward,
+          dailyRewardAmount: dailyReward.amount ?? state.currentUser?.dailyRewardAmount,
+          nextDailyRewardAt: dailyReward.nextRewardAt || data.nextDailyRewardAt || state.currentUser?.nextDailyRewardAt,
+          nextDailyRewardInMs: dailyReward.nextRewardInMs ?? data.nextDailyRewardInMs ?? state.currentUser?.nextDailyRewardInMs
+        };
+
+    state.currentUser = persistEmbeddedUser(nextUser) || normalizeUser(nextUser) || state.currentUser;
+    const balanceNode = document.querySelector("[data-user-balance]");
+    if (balanceNode) balanceNode.textContent = formatNumber(state.currentUser?.balance ?? data.balance ?? 0);
+    render();
+    return state.currentUser;
+  }
+
   function renderBalancePanel() {
     if (!isAuthenticated() || !state.balancePanelOpen) return "";
     const balance = getPreviewBalance();
     const dailyReward = getCurrentXpDailyReward();
     const claimInfo = getXpClaimInfo();
-    const expired = claimInfo.remainingMs <= 0;
+    const loadingTimer = !claimInfo.hasTimer;
+    const expired = claimInfo.hasTimer && claimInfo.remainingMs <= 0;
     const countdown = formatCountdown(claimInfo.remainingMs);
-    if (expired) maybeRefreshDailyRewardIfNeeded();
+    if (loadingTimer || expired) maybeRefreshDailyRewardIfNeeded();
 
     return `
       <div class="balance-popover" data-balance-panel>
         <span class="balance-popover-label">رصيدك الحالي</span>
-        <strong>${formatNumber(balance)} نقطة</strong>
-        <span class="balance-popover-hint">${expired ? "جارٍ تحديث رصيدك من الخادم" : "يتجدد رصيدك اليومي بعد"}</span>
+        <strong><span data-user-balance>${formatNumber(balance)}</span> نقطة</strong>
+        <span class="balance-popover-hint">${loadingTimer ? "جاري تحميل وقت التجديد..." : expired ? "جارٍ تحديث رصيدك من الخادم" : "يتجدد رصيدك اليومي بعد"}</span>
         ${
-          expired
-            ? `<div class="balance-timer balance-timer--pending" aria-label="جارٍ تحديث الرصيد">
-                <b>--</b>
-                <i>:</i>
-                <b>--</b>
-                <i>:</i>
-                <b>--</b>
+          loadingTimer || expired
+            ? `<div class="balance-timer balance-timer--loading" aria-label="جاري تحميل وقت التجديد">
+                <span style="grid-column:1/-1">جاري تحميل وقت التجديد...</span>
               </div>`
             : `<div class="balance-timer" aria-label="وقت تجدد الرصيد">
-                <b>${countdown.hours}</b>
+                <b data-daily-hours>${countdown.hours}</b>
                 <i>:</i>
-                <b>${countdown.minutes}</b>
+                <b data-daily-minutes>${countdown.minutes}</b>
                 <i>:</i>
-                <b>${countdown.seconds}</b>
+                <b data-daily-seconds>${countdown.seconds}</b>
               </div>`
         }
         <div class="balance-timer-labels">
@@ -1511,7 +1603,7 @@
           <span>دقيقة</span>
           <span>ثانية</span>
         </div>
-        <p>${expired ? "سيتم جلب الرصيد المحدث الآن من الخادم." : `يتم تجديد ${formatNumber(dailyReward)} XP عند دخولك اليومي. لا يتراكم الرصيد أثناء غيابك.`}</p>
+        <p>${loadingTimer ? "جاري تحميل وقت التجديد من الخادم." : expired ? "سيتم جلب الرصيد المحدث الآن من الخادم." : `يتم تجديد ${formatNumber(dailyReward)} XP عند دخولك اليومي. لا يتراكم الرصيد أثناء غيابك.`}</p>
       </div>
     `;
   }

@@ -159,19 +159,31 @@ function parseTimestampMs(value) {
   return Number.isFinite(time) ? time : 0;
 }
 
+function startOfUtcDay(date = new Date()) {
+  return new Date(Date.UTC(
+    date.getUTCFullYear(),
+    date.getUTCMonth(),
+    date.getUTCDate(),
+    0,
+    0,
+    0,
+    0
+  ));
+}
+
+function isBeforeTodayUtc(date, now = new Date()) {
+  if (!date) return true;
+  const timestamp = parseTimestampMs(date);
+  if (!timestamp) return true;
+  return timestamp < startOfUtcDay(now).getTime();
+}
+
 function isNewUtcDay(lastDate, now = new Date()) {
-  if (!lastDate) return true;
-  const last = lastDate instanceof Date ? lastDate : new Date(lastDate);
-  if (Number.isNaN(last.getTime())) return true;
-  return (
-    now.getUTCFullYear() !== last.getUTCFullYear() ||
-    now.getUTCMonth() !== last.getUTCMonth() ||
-    now.getUTCDate() !== last.getUTCDate()
-  );
+  return isBeforeTodayUtc(lastDate, now);
 }
 
 function canGrantDailyXp(lastGrantedAt, now = new Date()) {
-  return isNewUtcDay(lastGrantedAt, now);
+  return isBeforeTodayUtc(lastGrantedAt, now);
 }
 
 function parseDateStampMs(value) {
@@ -216,7 +228,7 @@ function getDailyXpForUserPlan(user = {}, options = {}) {
   const packageDailyXp = Math.max(0, Number(user.package_daily_xp || user.packageDailyXp || 0));
   return packageDailyXp > 0
     ? Math.round(packageDailyXp)
-    : Math.max(0, Math.round(Number(options.defaultDailyXp || 5)));
+    : Math.max(0, Math.round(Number(options.defaultDailyXp || 80)));
 }
 
 function normalizePackageRow(row) {

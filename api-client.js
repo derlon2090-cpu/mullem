@@ -83,8 +83,45 @@
     return `.${parts.slice(-2).join(".")}`;
   }
 
+  function parseRewardTimeMs(value) {
+    if (value == null || value === "") return 0;
+    if (Number.isFinite(Number(value))) return Number(value);
+    const time = new Date(value).getTime();
+    return Number.isFinite(time) ? time : 0;
+  }
+
+  function getDailyRewardMeta(user = {}) {
+    const meta = user.dailyReward || user.daily_reward || {};
+    return {
+      amount: Number.isFinite(Number(meta.amount ?? user.dailyRewardAmount ?? user.daily_reward_amount ?? user.packageDailyXp ?? user.package_daily_xp))
+        ? Number(meta.amount ?? user.dailyRewardAmount ?? user.daily_reward_amount ?? user.packageDailyXp ?? user.package_daily_xp)
+        : 80,
+      nextRewardAt: meta.nextRewardAt || meta.nextDailyRewardAt || user.nextDailyRewardAt || user.next_daily_reward_at || null,
+      nextRewardInMs: Number.isFinite(Number(meta.nextRewardInMs ?? meta.nextDailyRewardInMs ?? user.nextDailyRewardInMs ?? user.next_daily_reward_in_ms))
+        ? Number(meta.nextRewardInMs ?? meta.nextDailyRewardInMs ?? user.nextDailyRewardInMs ?? user.next_daily_reward_in_ms)
+        : 0,
+      claimedToday: Boolean(meta.claimedToday ?? meta.claimed_today ?? false)
+    };
+  }
+
+  function mergeDailyRewardIntoUser(user, dailyReward) {
+    if (!user || typeof user !== "object" || !dailyReward) return user;
+    return {
+      ...user,
+      dailyReward,
+      dailyRewardAmount: dailyReward.amount ?? user.dailyRewardAmount ?? user.daily_reward_amount,
+      daily_reward_amount: dailyReward.amount ?? user.daily_reward_amount ?? user.dailyRewardAmount,
+      nextDailyRewardAt: dailyReward.nextRewardAt ?? dailyReward.nextDailyRewardAt ?? user.nextDailyRewardAt,
+      next_daily_reward_at: dailyReward.nextRewardAt ?? dailyReward.nextDailyRewardAt ?? user.next_daily_reward_at,
+      nextDailyRewardInMs: dailyReward.nextRewardInMs ?? dailyReward.nextDailyRewardInMs ?? user.nextDailyRewardInMs,
+      next_daily_reward_in_ms: dailyReward.nextRewardInMs ?? dailyReward.nextDailyRewardInMs ?? user.next_daily_reward_in_ms
+    };
+  }
+
   function normalizeCookieUser(user) {
     if (!user || typeof user !== "object") return null;
+    const dailyReward = getDailyRewardMeta(user);
+    const nextRewardAtMs = parseRewardTimeMs(dailyReward.nextRewardAt);
     return {
       id: user.id ?? null,
       name: user.name || "",
@@ -106,18 +143,19 @@
       balance: Number.isFinite(Number(user.balance ?? user.xp)) ? Number(user.balance ?? user.xp) : 0,
       xp: Number.isFinite(Number(user.xp ?? user.balance)) ? Number(user.xp ?? user.balance) : 0,
       lastDailyRewardAt: user.lastDailyRewardAt || user.last_daily_reward_at || user.lastDailyXpGrantedAt || user.last_daily_xp_granted_at || null,
-      dailyRewardAmount: Number.isFinite(Number(user.dailyRewardAmount ?? user.daily_reward_amount ?? user.packageDailyXp ?? user.package_daily_xp))
-        ? Number(user.dailyRewardAmount ?? user.daily_reward_amount ?? user.packageDailyXp ?? user.package_daily_xp)
+      dailyRewardAmount: Number.isFinite(Number(dailyReward.amount))
+        ? Number(dailyReward.amount)
         : 80,
-      nextDailyRewardInMs: Number.isFinite(Number(user.nextDailyRewardInMs ?? user.next_daily_reward_in_ms))
-        ? Number(user.nextDailyRewardInMs ?? user.next_daily_reward_in_ms)
+      nextDailyRewardInMs: Number.isFinite(Number(dailyReward.nextRewardInMs))
+        ? Number(dailyReward.nextRewardInMs)
         : 0,
-      nextDailyRewardAt: Number.isFinite(Number(user.nextDailyRewardAt ?? user.next_daily_reward_at))
-        ? Number(user.nextDailyRewardAt ?? user.next_daily_reward_at)
+      nextDailyRewardAt: nextRewardAtMs
+        ? nextRewardAtMs
         : 0,
       dailyRewardSyncedAt: Number.isFinite(Number(user.dailyRewardSyncedAt || user.daily_reward_synced_at || 0))
         ? Number(user.dailyRewardSyncedAt || user.daily_reward_synced_at || 0)
-        : 0
+        : 0,
+      dailyReward
     };
   }
 
@@ -464,6 +502,9 @@
   function normalizeLegacyUser(user, existingUser = null) {
     const existing = existingUser || {};
     const status = String(user?.status || existing.status || "active").toLowerCase();
+    const dailyReward = getDailyRewardMeta(user || {});
+    const existingDailyReward = getDailyRewardMeta(existing || {});
+    const nextRewardAtMs = parseRewardTimeMs(dailyReward.nextRewardAt) || parseRewardTimeMs(existingDailyReward.nextRewardAt);
 
     return {
       id: String(user?.id ?? existing.id ?? `api-${Date.now()}`),
@@ -500,18 +541,17 @@
         : (Number.isFinite(Number(existing.balance ?? existing.xp)) ? Number(existing.balance ?? existing.xp) : 50),
       xp: Number.isFinite(Number(user?.xp ?? user?.balance)) ? Number(user.xp ?? user.balance) : (Number.isFinite(Number(existing.xp ?? existing.balance)) ? Number(existing.xp ?? existing.balance) : 50),
       lastDailyRewardAt: user?.lastDailyRewardAt || user?.last_daily_reward_at || user?.lastDailyXpGrantedAt || user?.last_daily_xp_granted_at || existing.lastDailyRewardAt || existing.last_daily_reward_at || null,
-      dailyRewardAmount: Number.isFinite(Number(user?.dailyRewardAmount ?? user?.daily_reward_amount ?? user?.packageDailyXp ?? user?.package_daily_xp))
-        ? Number(user.dailyRewardAmount ?? user.daily_reward_amount ?? user.packageDailyXp ?? user.package_daily_xp)
-        : (Number.isFinite(Number(existing.dailyRewardAmount ?? existing.daily_reward_amount ?? existing.packageDailyXp ?? existing.package_daily_xp)) ? Number(existing.dailyRewardAmount ?? existing.daily_reward_amount ?? existing.packageDailyXp ?? existing.package_daily_xp) : 80),
-      nextDailyRewardInMs: Number.isFinite(Number(user?.nextDailyRewardInMs ?? user?.next_daily_reward_in_ms))
-        ? Number(user.nextDailyRewardInMs ?? user.next_daily_reward_in_ms)
-        : (Number.isFinite(Number(existing.nextDailyRewardInMs ?? existing.next_daily_reward_in_ms)) ? Number(existing.nextDailyRewardInMs ?? existing.next_daily_reward_in_ms) : 0),
-      nextDailyRewardAt: Number.isFinite(Number(user?.nextDailyRewardAt ?? user?.next_daily_reward_at))
-        ? Number(user.nextDailyRewardAt ?? user.next_daily_reward_at)
-        : (Number.isFinite(Number(existing.nextDailyRewardAt ?? existing.next_daily_reward_at)) ? Number(existing.nextDailyRewardAt ?? existing.next_daily_reward_at) : 0),
+      dailyRewardAmount: Number.isFinite(Number(dailyReward.amount))
+        ? Number(dailyReward.amount)
+        : (Number.isFinite(Number(existingDailyReward.amount)) ? Number(existingDailyReward.amount) : 80),
+      nextDailyRewardInMs: Number.isFinite(Number(dailyReward.nextRewardInMs))
+        ? Number(dailyReward.nextRewardInMs)
+        : (Number.isFinite(Number(existingDailyReward.nextRewardInMs)) ? Number(existingDailyReward.nextRewardInMs) : 0),
+      nextDailyRewardAt: nextRewardAtMs || 0,
       dailyRewardSyncedAt: Number.isFinite(Number(user?.dailyRewardSyncedAt ?? user?.daily_reward_synced_at))
         ? Number(user.dailyRewardSyncedAt ?? user.daily_reward_synced_at)
         : (Number.isFinite(Number(existing.dailyRewardSyncedAt ?? existing.daily_reward_synced_at)) ? Number(existing.dailyRewardSyncedAt ?? existing.daily_reward_synced_at) : 0),
+      dailyReward: dailyReward.nextRewardAt ? dailyReward : existingDailyReward,
       streakDays: Number.isFinite(Number(user?.streakDays)) ? Number(user.streakDays) : (Number.isFinite(Number(existing.streakDays)) ? Number(existing.streakDays) : 0),
       motivationScore: Number.isFinite(Number(user?.motivationScore)) ? Number(user.motivationScore) : Number(existing.motivationScore || 0),
       lastActiveDate: user?.lastActiveDate || user?.last_active_date || existing.lastActiveDate || existing.last_active_date || "",
@@ -829,16 +869,18 @@
     });
 
     if (verified.ok && verified.data?.user) {
+      const verifiedUser = mergeDailyRewardIntoUser(verified.data.user, verified.data.dailyReward);
       setSession({
         token: session.token,
-        user: verified.data.user
+        user: verifiedUser
       });
 
       return {
         ...result,
         data: {
           ...(result.data || {}),
-          user: verified.data.user,
+          user: verifiedUser,
+          dailyReward: verified.data.dailyReward,
           token: session.token
         },
         sessionVerified: true
@@ -909,9 +951,24 @@
   async function me() {
     const result = await request("/me");
     if (result.ok && result.data?.user && hasToken()) {
+      const user = mergeDailyRewardIntoUser(result.data.user, result.data.dailyReward);
+      result.data.user = user;
       setSession({
         token: getToken(),
-        user: result.data.user
+        user
+      });
+    }
+    return result;
+  }
+
+  async function getBalance() {
+    const result = await request("/balance");
+    if (result.ok && result.data?.user && hasToken()) {
+      const user = mergeDailyRewardIntoUser(result.data.user, result.data.dailyReward);
+      result.data.user = user;
+      setSession({
+        token: getToken(),
+        user
       });
     }
     return result;
@@ -1481,6 +1538,7 @@
     register,
     logout,
     me,
+    getBalance,
     getPackages,
     getStudentDashboard,
     getGuestStatus,

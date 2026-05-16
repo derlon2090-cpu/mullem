@@ -248,8 +248,31 @@ function inferStageFromGrade(grade) {
   return "";
 }
 
+function parseRewardTimeMs(value) {
+  if (value == null || value === "") return 0;
+  if (Number.isFinite(Number(value))) return Number(value);
+  const time = new Date(value).getTime();
+  return Number.isFinite(time) ? time : 0;
+}
+
+function getDailyRewardMeta(user = {}) {
+  const meta = user?.dailyReward || user?.daily_reward || {};
+  return {
+    amount: Number.isFinite(Number(meta.amount ?? user?.dailyRewardAmount ?? user?.daily_reward_amount ?? user?.packageDailyXp ?? user?.package_daily_xp))
+      ? Number(meta.amount ?? user.dailyRewardAmount ?? user.daily_reward_amount ?? user.packageDailyXp ?? user.package_daily_xp)
+      : 80,
+    nextRewardAt: meta.nextRewardAt || meta.nextDailyRewardAt || user?.nextDailyRewardAt || user?.next_daily_reward_at || null,
+    nextRewardInMs: Number.isFinite(Number(meta.nextRewardInMs ?? meta.nextDailyRewardInMs ?? user?.nextDailyRewardInMs ?? user?.next_daily_reward_in_ms))
+      ? Number(meta.nextRewardInMs ?? meta.nextDailyRewardInMs ?? user.nextDailyRewardInMs ?? user.next_daily_reward_in_ms)
+      : 0
+  };
+}
+
 function normalizeApiUserForLocal(user) {
   const existing = loadUsers().find((entry) => String(entry.id) === String(user?.id));
+  const dailyReward = getDailyRewardMeta(user || {});
+  const existingDailyReward = getDailyRewardMeta(existing || {});
+  const nextRewardAtMs = parseRewardTimeMs(dailyReward.nextRewardAt) || parseRewardTimeMs(existingDailyReward.nextRewardAt);
   return {
     ...(existing || {}),
     id: String(user?.id ?? existing?.id ?? `student-${Date.now()}`),
@@ -264,18 +287,17 @@ function normalizeApiUserForLocal(user) {
     balance: Number.isFinite(Number(user?.balance ?? user?.xp)) ? Number(user.balance ?? user.xp) : (Number.isFinite(Number(existing?.balance ?? existing?.xp)) ? Number(existing.balance ?? existing.xp) : 50),
     xp: Number.isFinite(Number(user?.xp ?? user?.balance)) ? Number(user.xp ?? user.balance) : (Number.isFinite(Number(existing?.xp ?? existing?.balance)) ? Number(existing.xp ?? existing.balance) : 50),
     lastDailyRewardAt: user?.lastDailyRewardAt || user?.last_daily_reward_at || user?.lastDailyXpGrantedAt || user?.last_daily_xp_granted_at || existing?.lastDailyRewardAt || existing?.last_daily_reward_at || "",
-    dailyRewardAmount: Number.isFinite(Number(user?.dailyRewardAmount ?? user?.daily_reward_amount ?? user?.packageDailyXp ?? user?.package_daily_xp))
-      ? Number(user.dailyRewardAmount ?? user.daily_reward_amount ?? user.packageDailyXp ?? user.package_daily_xp)
-      : (Number.isFinite(Number(existing?.dailyRewardAmount ?? existing?.daily_reward_amount ?? existing?.packageDailyXp ?? existing?.package_daily_xp)) ? Number(existing.dailyRewardAmount ?? existing.daily_reward_amount ?? existing.packageDailyXp ?? existing.package_daily_xp) : 80),
-    nextDailyRewardInMs: Number.isFinite(Number(user?.nextDailyRewardInMs ?? user?.next_daily_reward_in_ms))
-      ? Number(user.nextDailyRewardInMs ?? user.next_daily_reward_in_ms)
-      : (Number.isFinite(Number(existing?.nextDailyRewardInMs ?? existing?.next_daily_reward_in_ms)) ? Number(existing.nextDailyRewardInMs ?? existing.next_daily_reward_in_ms) : 0),
-    nextDailyRewardAt: Number.isFinite(Number(user?.nextDailyRewardAt ?? user?.next_daily_reward_at))
-      ? Number(user.nextDailyRewardAt ?? user.next_daily_reward_at)
-      : (Number.isFinite(Number(existing?.nextDailyRewardAt ?? existing?.next_daily_reward_at)) ? Number(existing.nextDailyRewardAt ?? existing.next_daily_reward_at) : 0),
+    dailyRewardAmount: Number.isFinite(Number(dailyReward.amount))
+      ? Number(dailyReward.amount)
+      : (Number.isFinite(Number(existingDailyReward.amount)) ? Number(existingDailyReward.amount) : 80),
+    nextDailyRewardInMs: Number.isFinite(Number(dailyReward.nextRewardInMs))
+      ? Number(dailyReward.nextRewardInMs)
+      : (Number.isFinite(Number(existingDailyReward.nextRewardInMs)) ? Number(existingDailyReward.nextRewardInMs) : 0),
+    nextDailyRewardAt: nextRewardAtMs || 0,
     dailyRewardSyncedAt: Number.isFinite(Number(user?.dailyRewardSyncedAt ?? user?.daily_reward_synced_at))
       ? Number(user.dailyRewardSyncedAt ?? user.daily_reward_synced_at)
       : (Number.isFinite(Number(existing?.dailyRewardSyncedAt ?? existing?.daily_reward_synced_at)) ? Number(existing.dailyRewardSyncedAt ?? existing.daily_reward_synced_at) : 0),
+    dailyReward: dailyReward.nextRewardAt ? dailyReward : existingDailyReward,
     streakDays: Number.isFinite(Number(existing?.streakDays)) ? Number(existing.streakDays) : 0,
     lastActiveDate: existing?.lastActiveDate || "",
     achievements: Array.isArray(existing?.achievements) ? existing.achievements : [],
