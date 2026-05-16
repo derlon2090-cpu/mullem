@@ -4034,6 +4034,48 @@ async function handleDailyRewardClaim(req, res) {
     shouldReward
   });
 
+  if (typeof databaseClient.claimDailyReward === "function") {
+    const claimResult = await databaseClient.claimDailyReward(user.id, {
+      rewardAmount: dailyRewardAmount,
+      intervalMs: DAILY_REWARD_INTERVAL_MS,
+      reason: "Daily reward claim"
+    });
+
+    if (!claimResult?.user) {
+      throw createHttpError(404, "User not found.");
+    }
+
+    const apiUser = buildApiUser(claimResult.user);
+    const dailyReward = buildDailyRewardPayload(apiUser || claimResult.user);
+    const nextBalance = Number.isFinite(Number(claimResult.balance))
+      ? Number(claimResult.balance)
+      : getUserBalanceValue(apiUser || claimResult.user);
+    const responsePayload = {
+      success: true,
+      ok: true,
+      claimed: Boolean(claimResult.claimed),
+      ...(claimResult.claimed ? { added: Number(claimResult.added ?? dailyRewardAmount) } : {}),
+      balance: nextBalance,
+      rewardAmount: dailyRewardAmount,
+      canClaim: dailyReward.canClaim,
+      lastClaimedAt: dailyReward.lastClaimedAt,
+      nextClaimAt: dailyReward.nextClaimAt,
+      remainingMs: dailyReward.remainingMs,
+      dailyReward,
+      user: apiUser
+    };
+
+    sendJson(req, res, 200, {
+      ...responsePayload,
+      data: {
+        ...responsePayload,
+        nextDailyRewardAt: dailyReward.nextRewardAt,
+        nextDailyRewardInMs: dailyReward.nextRewardInMs
+      }
+    });
+    return;
+  }
+
   if (!shouldReward) {
     const normalizedUser = rewardState.correctedLastClaimedAt
       ? await databaseClient.updateUser(user.id, {

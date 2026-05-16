@@ -1166,7 +1166,8 @@ function createFallbackDatabaseClient() {
     const shouldGrantSignup = canReceiveXp && !signupBonusClaimed && firstSignupXp > 0;
     const lastDailyRewardClaimedAt = user.last_daily_reward_claimed_at || null;
     const rewardState = getDailyRewardState(lastDailyRewardClaimedAt, now, options.dailyRewardIntervalMs);
-    const shouldGrantDaily = canReceiveXp && rewardState.canClaim;
+    // Daily reward issuance is owned exclusively by /api/daily-reward/claim.
+    const shouldGrantDaily = false;
     const requestedDailyRewardAmount = Math.max(0, Math.round(Number(options.dailyRewardAmount || 0) || 0));
     const dailyRewardAmount = requestedDailyRewardAmount || getDailyXpForUserPlan(user, options);
     const dailyXpAward = shouldGrantDaily ? dailyRewardAmount : 0;
@@ -1265,6 +1266,75 @@ function createFallbackDatabaseClient() {
     return { ...user };
   }
 
+  async function claimDailyReward(userId, options = {}) {
+    const index = data.users.findIndex((item) => String(item.id) === String(userId));
+    if (index === -1) return null;
+
+    const user = data.users[index];
+    const now = options.now instanceof Date ? options.now : new Date();
+    const nowStamp = now.toISOString();
+    const rewardState = getDailyRewardState(
+      user.last_daily_reward_claimed_at || user.lastDailyRewardClaimedAt || null,
+      now,
+      options.intervalMs || DAILY_REWARD_INTERVAL_MS
+    );
+
+    if (!rewardState.canClaim) {
+      if (rewardState.correctedLastClaimedAt) {
+        user.last_daily_reward_claimed_at = rewardState.correctedLastClaimedAt;
+        user.last_daily_reward_at = rewardState.correctedLastClaimedAt;
+        user.last_daily_xp_granted_at = rewardState.correctedLastClaimedAt;
+        user.updated_at = nowStamp;
+        data.users[index] = user;
+        persist();
+      }
+
+      return {
+        user: { ...user },
+        claimed: false,
+        added: 0,
+        balance: Math.max(0, Number(user.balance ?? user.xp ?? 0) || 0)
+      };
+    }
+
+    const rewardAmount = Math.max(0, Math.round(Number(options.rewardAmount || 0) || 0));
+    const currentBalance = Math.max(0, Number(user.balance ?? user.xp ?? 0) || 0);
+    const nextBalance = currentBalance + rewardAmount;
+
+    Object.assign(user, {
+      balance: nextBalance,
+      xp: nextBalance,
+      total_xp: nextBalance,
+      daily_reward_amount: rewardAmount,
+      last_daily_reward_claimed_at: nowStamp,
+      last_daily_reward_at: nowStamp,
+      last_daily_xp_granted_at: nowStamp,
+      last_daily_xp_claimed_date: nowStamp.slice(0, 10),
+      updated_at: nowStamp
+    });
+
+    if (rewardAmount > 0 && options.recordLedger !== false) {
+      data.xpLedger.push({
+        id: nextId("xpLedger"),
+        user_id: Number(user.id),
+        amount: rewardAmount,
+        type: "daily_grant",
+        reason: String(options.reason || "Daily reward claim").trim(),
+        admin_id: null,
+        created_at: nowStamp
+      });
+    }
+
+    data.users[index] = user;
+    persist();
+    return {
+      user: { ...user },
+      claimed: true,
+      added: rewardAmount,
+      balance: nextBalance
+    };
+  }
+
   async function getAdminStats() {
     const activeSubscriptions = data.users.filter((item) => Number(item.package_daily_xp || 0) > 0);
     const xpUsed = data.xpLedger
@@ -1343,6 +1413,7 @@ function createFallbackDatabaseClient() {
     createNotification,
     updateNotification,
     grantDailyXpIfNeeded,
+    claimDailyReward,
     listSubscriptions,
     assignPackageToUser,
     adjustUserXpByAdmin,

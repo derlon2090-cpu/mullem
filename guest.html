@@ -5,14 +5,26 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="theme-color" content="#6f4cff">
   <title>واجهة الضيف — Orlixor</title>
+  <script>
+    (() => {
+      try {
+        const params = new URLSearchParams(window.location.search);
+        const isMobile = window.matchMedia("(max-width: 768px)").matches;
+        if (isMobile && !params.has("desktop")) {
+          window.location.replace("mobile.html");
+        }
+      } catch (_) {}
+    })();
+  </script>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800;900&display=swap" rel="stylesheet">
-  <link rel="icon" type="image/png" href="orlixor-icon.png">
-  <link rel="stylesheet" href="section-preview-mobile.css?v=20260515-mobile-exact-1917">
-  <link rel="stylesheet" href="mobile-shell.css?v=20260515-mobile-exact-1917">
+  <link rel="icon" type="image/png" href="orlixor-icon.png?v=20260515-mobile-v2-009">
+  <link rel="stylesheet" href="section-preview-mobile.css?v=20260516-home-compact-001">
+  <link rel="stylesheet" href="mobile-shell.css?v=20260516-home-compact-001">
 </head>
 <body class="orlixor-guest-page">
+  <div id="orlixor-mobile-v2"></div>
   <main id="sectionApp" class="guest-root"></main>
   <script src="mullem-config.js?v=20260502-01"></script>
   <script>
@@ -30,7 +42,7 @@
     })();
   </script>
   <script src="api-client.js?v=ASSISTANT_V3_ROUTE_WORKING_2"></script>
-  <script src="section-pages.js?v=20260515-mobile-exact-1917"></script>
+  <script src="section-pages.js?v=20260516-daily-reward-final"></script>
 </body>
 </html>
 

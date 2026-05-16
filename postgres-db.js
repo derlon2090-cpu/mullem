@@ -2138,7 +2138,8 @@ function createPostgresDatabaseClient(rawConfig = {}) {
       const shouldGrantSignup = canReceiveXp && !signupBonusClaimed && firstSignupXp > 0;
       const lastDailyRewardClaimedAt = user.last_daily_reward_claimed_at || null;
       const rewardState = getDailyRewardState(lastDailyRewardClaimedAt, now, options.dailyRewardIntervalMs);
-      const shouldGrantDaily = canReceiveXp && rewardState.canClaim;
+      // Daily reward issuance is owned exclusively by /api/daily-reward/claim.
+      const shouldGrantDaily = false;
       const requestedDailyRewardAmount = Math.max(0, Math.round(Number(options.dailyRewardAmount || 0) || 0));
       const dailyRewardAmount = requestedDailyRewardAmount || getDailyXpForUserPlan(user, options);
       const dailyXpAward = shouldGrantDaily ? dailyRewardAmount : 0;
@@ -2268,6 +2269,152 @@ function createPostgresDatabaseClient(rawConfig = {}) {
       );
       await client.query("COMMIT");
       return hydrateUserRow(finalResult.rows[0] || null);
+    } catch (error) {
+      try {
+        await client.query("ROLLBACK");
+      } catch (_) {
+        // Ignore rollback failures; the original error is more useful.
+      }
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
+  async function claimDailyReward(userId, options = {}) {
+    const safeUserId = Number(userId);
+    if (!safeUserId) return null;
+
+    const client = await pool.connect();
+    try {
+      await client.query("BEGIN");
+
+      const userResult = await client.query(
+        `
+          SELECT ${getUserSelectClause("u", "p")}
+          FROM app_users u
+          LEFT JOIN app_packages p ON p.id = u.package_id
+          WHERE u.id = $1
+          LIMIT 1
+          FOR UPDATE OF u
+        `,
+        [safeUserId]
+      );
+      const user = hydrateUserRow(userResult.rows[0] || null);
+      if (!user) {
+        await client.query("COMMIT");
+        return null;
+      }
+
+      const now = options.now instanceof Date ? options.now : new Date();
+      const rewardState = getDailyRewardState(
+        user.last_daily_reward_claimed_at || user.lastDailyRewardClaimedAt || null,
+        now,
+        options.intervalMs || DAILY_REWARD_INTERVAL_MS
+      );
+
+      if (!rewardState.canClaim) {
+        if (rewardState.correctedLastClaimedAt) {
+          await client.query(
+            `
+              UPDATE app_users
+              SET last_daily_reward_claimed_at = $1,
+                  last_daily_reward_at = $1,
+                  last_daily_xp_granted_at = $1,
+                  updated_at = NOW()
+              WHERE id = $2
+            `,
+            [rewardState.correctedLastClaimedAt, safeUserId]
+          );
+        }
+
+        const finalResult = await client.query(
+          `
+            SELECT ${getUserSelectClause("u", "p")}
+            FROM app_users u
+            LEFT JOIN app_packages p ON p.id = u.package_id
+            WHERE u.id = $1
+            LIMIT 1
+          `,
+          [safeUserId]
+        );
+        await client.query("COMMIT");
+        const finalUser = hydrateUserRow(finalResult.rows[0] || null) || user;
+        return {
+          user: finalUser,
+          claimed: false,
+          added: 0,
+          balance: Math.max(0, Number(finalUser.balance ?? finalUser.xp ?? 0) || 0)
+        };
+      }
+
+      const rewardAmount = Math.max(0, Math.round(Number(options.rewardAmount || 0) || 0));
+      const currentBalance = Math.max(0, Number(user.balance ?? user.xp ?? 0) || 0);
+      const nextBalance = currentBalance + rewardAmount;
+      const nowIso = now.toISOString();
+
+      await client.query(
+        `
+          UPDATE app_users
+          SET balance = $1,
+              xp = $1,
+              total_xp = $1,
+              daily_reward_amount = $2,
+              last_daily_reward_claimed_at = $3,
+              last_daily_reward_at = $3,
+              last_daily_xp_granted_at = $3,
+              last_daily_xp_claimed_date = $4,
+              updated_at = NOW()
+          WHERE id = $5
+        `,
+        [nextBalance, rewardAmount, nowIso, nowIso.slice(0, 10), safeUserId]
+      );
+
+      if (rewardAmount > 0 && options.recordLedger !== false) {
+        await client.query(
+          `
+            INSERT INTO xp_ledger (user_id, amount, type, reason, admin_id)
+            VALUES ($1, $2, $3, $4, $5)
+          `,
+          [
+            safeUserId,
+            rewardAmount,
+            "daily_grant",
+            String(options.reason || "Daily reward claim").trim(),
+            null
+          ]
+        );
+      }
+
+      const finalResult = await client.query(
+        `
+          SELECT ${getUserSelectClause("u", "p")}
+          FROM app_users u
+          LEFT JOIN app_packages p ON p.id = u.package_id
+          WHERE u.id = $1
+          LIMIT 1
+        `,
+        [safeUserId]
+      );
+      await client.query("COMMIT");
+      const finalUser = hydrateUserRow(finalResult.rows[0] || null) || {
+        ...user,
+        balance: nextBalance,
+        xp: nextBalance,
+        total_xp: nextBalance,
+        daily_reward_amount: rewardAmount,
+        last_daily_reward_claimed_at: nowIso,
+        last_daily_reward_at: nowIso,
+        last_daily_xp_granted_at: nowIso,
+        last_daily_xp_claimed_date: nowIso.slice(0, 10)
+      };
+
+      return {
+        user: finalUser,
+        claimed: true,
+        added: rewardAmount,
+        balance: nextBalance
+      };
     } catch (error) {
       try {
         await client.query("ROLLBACK");
@@ -3191,6 +3338,7 @@ function createPostgresDatabaseClient(rawConfig = {}) {
     updateToolSuggestionStatus,
     markToolSuggestionImplemented,
     grantDailyXpIfNeeded,
+    claimDailyReward,
     findPackageById,
     findDefaultPackage,
     findPackageByKeyOrName,

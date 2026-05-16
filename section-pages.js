@@ -1371,7 +1371,6 @@
           state.currentUser = persistEmbeddedUser(refreshedUser) || getActiveUser();
           ensureAccountConversationState();
           render();
-          maybeRefreshDailyRewardIfNeeded();
           scheduleSavedConversationSync();
         } else if (result?.status === 401 || result?.status === 403) {
           apiClient.clearSession?.();
@@ -1386,6 +1385,9 @@
       })
       .finally(() => {
         sessionRefreshPromise = null;
+        if (isAuthenticated()) {
+          maybeRefreshDailyRewardIfNeeded();
+        }
       });
 
     return sessionRefreshPromise;
@@ -1563,6 +1565,7 @@
       return;
     }
 
+    if (sessionRefreshPromise) return;
     if (state.dailyRewardRefreshInFlight) return;
     Promise.resolve(initDailyReward()).catch(() => {
       // Keep the panel usable even if the reward request fails.
@@ -14603,7 +14606,6 @@
   applyAppPreferences();
   bindEvents();
   render();
-  maybeRefreshDailyRewardIfNeeded();
   refreshSessionUser();
   window.setTimeout(() => {
     if (isAuthenticated()) {
