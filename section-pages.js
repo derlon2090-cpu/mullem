@@ -1590,6 +1590,7 @@
     const rewardAmount = safeNumber(cachedUser.dailyRewardAmount || getDailyRewardMeta(cachedUser).amount, 0);
     const plan = safeText(cachedUser.plan || cachedUser.planType || cachedUser.plan_type, "free").trim() || "free";
     const remainingMs = Math.max(0, safeNumber(claimInfo.hasTimer ? claimInfo.remainingMs : null, DAILY_REWARD_INTERVAL_MS));
+    if (remainingMs <= 1000) return false;
     const nextClaimAt = claimInfo.hasTimer && claimInfo.nextAt
       ? new Date(claimInfo.nextAt).toISOString()
       : new Date(Date.now() + remainingMs).toISOString();
@@ -1645,7 +1646,7 @@
 
   function getDailyRewardPanelStatus(claimInfo = getXpClaimInfo()) {
     if (claimInfo.hasTimer && claimInfo.remainingMs <= 0) {
-      return "انتهى الوقت. سيتم استلام المكافأة عند تحديث الصفحة أو دخولك من جديد.";
+      return "جاري استلام المكافأة...";
     }
     return "يتجدد رصيدك بعد انتهاء العدّاد";
   }
@@ -1719,7 +1720,8 @@
           state.dailyReward.remainingMs = 0;
         }
 
-        setDailyRewardStatus("انتهى الوقت. سيتم استلام المكافأة عند تحديث الصفحة أو دخولك من جديد.");
+        setDailyRewardStatus("جاري استلام المكافأة...");
+        initDailyReward({ force: true }).catch(() => {});
       }
     }
 
@@ -1747,12 +1749,13 @@
     ) {
       return;
     }
-    Promise.resolve(initDailyReward()).catch(() => {
+    Promise.resolve(initDailyReward({ force: !claimInfo.hasTimer || claimInfo.remainingMs <= 1000 })).catch(() => {
       // Keep the panel usable even if the reward request fails.
     });
   }
 
-  async function initDailyReward() {
+  async function initDailyReward(options = {}) {
+    const force = Boolean(options.force);
     syncSessionFromCookies();
     const apiClient = getApiClient();
     if (!apiClient?.hasToken?.()) return null;
@@ -1764,7 +1767,10 @@
 
     const sessionKey = getDailyRewardSessionKey(apiClient);
     if (!sessionKey) return state.currentUser;
-    if (dailyRewardInitStarted && dailyRewardLoadedForUserId === sessionKey) return state.currentUser;
+    if (dailyRewardInitStarted && dailyRewardLoadedForUserId === sessionKey && !force) {
+      const claimInfo = getXpClaimInfo();
+      if (claimInfo.hasTimer && claimInfo.remainingMs > 1000) return state.currentUser;
+    }
     if (state.dailyRewardRefreshInFlight) return state.currentUser;
 
     dailyRewardInitStarted = true;
@@ -1781,46 +1787,36 @@
     const headers = { Accept: "application/json" };
     const token = apiClient?.getToken?.();
     if (token) headers.Authorization = `Bearer ${token}`;
+    headers["Content-Type"] = "application/json";
 
     try {
-      const statusRes = await fetch("/api/daily-reward/status", {
+      const claimRes = await fetch("/api/daily-reward/claim", {
+        method: "POST",
         credentials: "include",
         headers
       });
-      const status = await statusRes.json().catch(() => null);
+      const data = await claimRes.json().catch(() => null);
 
-      console.log("DAILY_STATUS", status);
+      console.log("DAILY_REWARD_CLAIM_RESPONSE", data);
 
-      if (!statusRes.ok || !status?.ok) {
-        throw new Error(safeText(status?.message || status?.error, "STATUS_FAILED"));
-      }
-
-      let data = status;
-      if (Boolean(status.canClaim)) {
-        const claimRes = await fetch("/api/daily-reward/claim", {
-          method: "POST",
-          credentials: "include",
-          headers
-        });
-        data = await claimRes.json().catch(() => null);
-
-        console.log("DAILY_CLAIM", data);
-
-        if (!claimRes.ok || !data?.ok) {
-          throw new Error(safeText(data?.message || data?.error, "CLAIM_FAILED"));
-        }
+      if (!claimRes.ok || !data?.ok) {
+        throw new Error(safeText(data?.message || data?.error, "DAILY_REWARD_FAILED"));
       }
 
       const rewardAmount = safeNumber(data.rewardAmount, 0);
       const plan = safeText(data.plan, "free").trim() || "free";
-      const remainingMs = safeNumber(data.remainingMs, DAILY_REWARD_INTERVAL_MS);
+      const remainingMs = safeNumber(data.remainingMs, 0);
+      if (!Number.isFinite(remainingMs) || remainingMs <= 0) {
+        throw new Error("INVALID_REMAINING_MS_FROM_SERVER");
+      }
       const balance = safeNumber(data.balance, getPreviewBalance());
       const nextClaimAt = safeText(data.nextClaimAt, "");
+      const lastClaimedAt = safeText(data.lastClaimedAt, "");
       const dailyReward = {
         amount: rewardAmount,
         plan,
-        canClaim: Boolean(data.canClaim),
-        lastClaimedAt: null,
+        canClaim: false,
+        lastClaimedAt: lastClaimedAt || null,
         nextClaimAt: nextClaimAt || null,
         nextRewardAt: nextClaimAt || null,
         remainingMs,
@@ -1833,6 +1829,7 @@
         xp: balance,
         dailyReward,
         dailyRewardAmount: rewardAmount,
+        lastDailyRewardClaimedAt: lastClaimedAt || null,
         nextDailyRewardAt: nextClaimAt || null,
         nextDailyRewardInMs: remainingMs,
         dailyRewardSyncedAt: Date.now()
@@ -1856,8 +1853,8 @@
         plan,
         rewardAmount,
         remainingMs: Math.max(0, remainingMs),
-        canClaim: Boolean(data.canClaim),
-        lastClaimedAt: null,
+        canClaim: false,
+        lastClaimedAt: lastClaimedAt || null,
         nextClaimAt: nextClaimAt || null,
         nextRewardAt: nextClaimAt || null,
         syncedAt: Date.now()
@@ -1865,10 +1862,11 @@
       render();
 
       updateBalanceUI(balance);
-      setDailyRewardStatus(getDailyRewardPanelStatus(getXpClaimInfo()));
+      setDailyRewardStatus(Boolean(data.claimed)
+        ? `تمت إضافة ${formatNumber(rewardAmount)} XP إلى رصيدك.`
+        : "يتجدد رصيدك بعد انتهاء العدّاد.");
       setDailyRewardText(getDailyRewardPanelText(rewardAmount));
       startDailyCountdown(remainingMs);
-      syncDailyRewardPanel();
       dailyRewardLoadedForUserId = sessionKey;
       return state.currentUser;
     } catch (error) {
@@ -1881,7 +1879,7 @@
       if (state.dailyReward?.initialized) {
         syncDailyRewardPanel();
       } else {
-        setDailyRewardStatus("جاري التحقق من المكافأة...");
+        setDailyRewardStatus("تعذر تحديث المكافأة الآن. حاول لاحقًا.");
         setDailyRewardText("يتم تجديد XP حسب باقتك كل 24 ساعة من آخر استلام.");
       }
       return null;
@@ -1899,7 +1897,7 @@
     const claimInfo = getXpClaimInfo();
     const needsServerTimer = !claimInfo.hasTimer;
     const expired = claimInfo.hasTimer && claimInfo.remainingMs <= 0;
-    const countdown = needsServerTimer
+    const countdown = (needsServerTimer || expired)
       ? { hours: "24", minutes: "00", seconds: "00" }
       : formatCountdown(claimInfo.remainingMs);
     if (needsServerTimer || expired) window.setTimeout(() => maybeRefreshDailyRewardIfNeeded(), 0);
