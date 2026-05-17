@@ -1646,10 +1646,10 @@
 
   function getDailyRewardClaimUrls(apiClient = getApiClient()) {
     const candidates = typeof apiClient?.buildApiCandidates === "function"
-      ? apiClient.buildApiCandidates("/daily-reward/claim")
+      ? apiClient.buildApiCandidates("/reward-claim")
       : typeof apiClient?.buildApiUrl === "function"
-        ? [apiClient.buildApiUrl("/daily-reward/claim")]
-        : ["/api/daily-reward/claim"];
+        ? [apiClient.buildApiUrl("/reward-claim")]
+        : ["/api/reward-claim"];
     return [...new Set(candidates.filter(Boolean))];
   }
 
@@ -1872,7 +1872,7 @@
     try {
       const { data } = await fetchDailyRewardClaim(headers);
 
-      if (data.test === "DAILY_REWARD_ROUTE_WORKING" || data.test === "DAILY_REWARD_CLAIM_ROUTE_WORKING") {
+      if (data.test === "REWARD_CLAIM_ROUTE_WORKING") {
         setDailyRewardStatus(data.test);
         setDailyRewardText("تم الوصول إلى مسار المكافأة اليومي بنجاح.");
         return state.currentUser;

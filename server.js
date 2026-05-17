@@ -4013,9 +4013,9 @@ async function handleDailyRewardStatus(req, res) {
   });
 }
 
-async function handleDailyRewardClaim(req, res) {
+async function handleRewardClaim(req, res) {
   try {
-    console.log("DAILY_REWARD_CLAIM_HIT", {
+    console.log("REWARD_CLAIM_HIT", {
       userId: null,
       hasAuthorization: Boolean(req.headers.authorization),
       hasCookie: Boolean(req.headers.cookie),
@@ -4025,7 +4025,7 @@ async function handleDailyRewardClaim(req, res) {
     requireDatabaseConnection();
     const auth = await getAuthContext(req);
 
-    console.log("DAILY_REWARD_CLAIM_AUTH", {
+    console.log("REWARD_CLAIM_AUTH", {
       userId: auth?.user?.id || null,
       hasUser: Boolean(auth?.user),
       time: new Date().toISOString()
@@ -4046,10 +4046,10 @@ async function handleDailyRewardClaim(req, res) {
       balance: 319,
       rewardAmount: 80,
       remainingMs: 24 * 60 * 60 * 1000,
-      test: "DAILY_REWARD_CLAIM_ROUTE_WORKING"
+      test: "REWARD_CLAIM_ROUTE_WORKING"
     });
   } catch (error) {
-    console.error("DAILY_REWARD_CLAIM_ERROR_FULL", {
+    console.error("REWARD_CLAIM_ERROR_FULL", {
       message: error?.message,
       stack: error?.stack,
       name: error?.name,
@@ -4058,7 +4058,7 @@ async function handleDailyRewardClaim(req, res) {
 
     sendJson(req, res, error?.statusCode || error?.status || 500, {
       ok: false,
-      error: "DAILY_REWARD_CLAIM_FAILED",
+      error: "REWARD_CLAIM_FAILED",
       message: error?.message || "Unknown server error",
       code: error?.code || null
     });
@@ -6578,16 +6578,16 @@ async function routeRequest(req, res) {
     return;
   }
 
-  if (req.method === "POST" && requestPath === "/api/daily-reward/claim") {
-    await handleDailyRewardClaim(req, res);
-    return;
-  }
-
   if (req.method === "GET" && requestPath === "/api/assistant-v3/ping") {
     sendJson(req, res, 200, {
       ok: true,
       message: "PING_OK"
     });
+    return;
+  }
+
+  if (req.method === "POST" && requestPath === "/api/reward-claim") {
+    await handleRewardClaim(req, res);
     return;
   }
 

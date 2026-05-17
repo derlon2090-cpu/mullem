@@ -1166,7 +1166,7 @@ function createFallbackDatabaseClient() {
     const shouldGrantSignup = canReceiveXp && !signupBonusClaimed && firstSignupXp > 0;
     const lastDailyRewardClaimedAt = user.last_daily_reward_claimed_at || null;
     const rewardState = getDailyRewardState(lastDailyRewardClaimedAt, now, options.dailyRewardIntervalMs);
-    // Daily reward issuance is owned exclusively by /api/daily-reward/claim.
+    // Daily reward issuance is owned exclusively by /api/reward-claim.
     const shouldGrantDaily = false;
     const requestedDailyRewardAmount = Math.max(0, Math.round(Number(options.dailyRewardAmount || 0) || 0));
     const dailyRewardAmount = requestedDailyRewardAmount || getDailyXpForUserPlan(user, options);
