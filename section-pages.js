@@ -1872,12 +1872,6 @@
     try {
       const { data } = await fetchDailyRewardClaim(headers);
 
-      if (data.test === "REWARD_CLAIM_ROUTE_WORKING") {
-        setDailyRewardStatus(data.test);
-        setDailyRewardText("تم الوصول إلى مسار المكافأة اليومي بنجاح.");
-        return state.currentUser;
-      }
-
       const rewardAmount = safeNumber(data.rewardAmount, 0);
       const plan = safeText(data.plan, "free").trim() || "free";
       const remainingMs = safeNumber(data.remainingMs, 0);

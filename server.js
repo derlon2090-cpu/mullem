@@ -1036,6 +1036,16 @@ function normalizeDailyRewardPlan(user = {}) {
 }
 
 function getDailyRewardAmount(user = {}) {
+  const packageDailyXp = Number(user.package_daily_xp ?? user.packageDailyXp ?? 0);
+  if (Number.isFinite(packageDailyXp) && packageDailyXp > 0) {
+    return Math.max(0, Math.round(packageDailyXp));
+  }
+
+  const savedRewardAmount = Number(user.daily_reward_amount ?? user.dailyRewardAmount ?? 0);
+  if (Number.isFinite(savedRewardAmount) && savedRewardAmount > 0) {
+    return Math.max(0, Math.round(savedRewardAmount));
+  }
+
   const plan = normalizeDailyRewardPlan(user);
   const rewards = {
     free: 80,
@@ -4040,13 +4050,90 @@ async function handleRewardClaim(req, res) {
       return;
     }
 
+    let user = typeof databaseClient.findUserById === "function"
+      ? (await databaseClient.findUserById(auth.user.id)) || auth.user
+      : auth.user;
+
+    user = await ensureUserPackageLifecycle(user) || user;
+    const rewardAmount = Math.max(0, Number(getUserDailyRewardAmount(user) || 0));
+    let claimResult = null;
+
+    if (typeof databaseClient.claimDailyReward === "function") {
+      claimResult = await databaseClient.claimDailyReward(user.id, {
+        rewardAmount,
+        intervalMs: DAILY_REWARD_INTERVAL_MS,
+        reason: "Daily reward claim"
+      });
+    } else if (typeof databaseClient.updateUser === "function") {
+      const state = getDailyRewardState(user);
+      if (state.correctedLastClaimedAt) {
+        user = await databaseClient.updateUser(user.id, {
+          last_daily_reward_claimed_at: state.correctedLastClaimedAt,
+          last_daily_reward_at: state.correctedLastClaimedAt,
+          last_daily_xp_granted_at: state.correctedLastClaimedAt
+        }) || user;
+      } else if (state.canClaim) {
+        const nowIso = new Date().toISOString();
+        const nextBalance = getUserBalanceValue(user) + rewardAmount;
+        user = await databaseClient.updateUser(user.id, {
+          balance: nextBalance,
+          xp: nextBalance,
+          total_xp: nextBalance,
+          daily_reward_amount: rewardAmount,
+          last_daily_reward_claimed_at: nowIso,
+          last_daily_reward_at: nowIso,
+          last_daily_xp_granted_at: nowIso,
+          last_daily_xp_claimed_date: nowIso.slice(0, 10)
+        }) || {
+          ...user,
+          balance: nextBalance,
+          xp: nextBalance,
+          total_xp: nextBalance,
+          daily_reward_amount: rewardAmount,
+          last_daily_reward_claimed_at: nowIso,
+          last_daily_reward_at: nowIso,
+          last_daily_xp_granted_at: nowIso,
+          last_daily_xp_claimed_date: nowIso.slice(0, 10)
+        };
+        claimResult = {
+          user,
+          claimed: true,
+          added: rewardAmount,
+          balance: nextBalance
+        };
+      }
+    }
+
+    const claimed = Boolean(claimResult?.claimed);
+    const effectiveUser = claimResult?.user || (
+      typeof databaseClient.findUserById === "function"
+        ? (await databaseClient.findUserById(user.id)) || user
+        : user
+    );
+    const nextState = getDailyRewardState(effectiveUser);
+    const remainingMs = claimed
+      ? Math.max(1000, DAILY_REWARD_INTERVAL_MS)
+      : Math.max(1000, Number(nextState.remainingMs || 0));
+    const nextClaimAt = nextState.nextClaimAt
+      || new Date(Date.now() + remainingMs).toISOString();
+    const lastClaimedAt = nextState.lastClaimedAt
+      || getUserLastDailyRewardClaimedAt(effectiveUser)
+      || null;
+    const finalRewardAmount = Math.max(0, Number(getUserDailyRewardAmount(effectiveUser) || rewardAmount || 0));
+    const balance = Number(claimResult?.balance ?? getUserBalanceValue(effectiveUser) ?? 0);
+
     sendJson(req, res, 200, {
       ok: true,
-      claimed: false,
-      balance: 319,
-      rewardAmount: 80,
-      remainingMs: 24 * 60 * 60 * 1000,
-      test: "REWARD_CLAIM_ROUTE_WORKING"
+      claimed,
+      added: claimed ? finalRewardAmount : 0,
+      balance: Number.isFinite(balance) ? Math.max(0, balance) : 0,
+      plan: String(getRewardPlan(effectiveUser) || "free"),
+      packageKey: String(effectiveUser.package_key || effectiveUser.packageKey || effectiveUser.plan_type || ""),
+      packageName: String(effectiveUser.package_name || effectiveUser.packageName || effectiveUser.package || ""),
+      rewardAmount: Number(finalRewardAmount || 0),
+      lastClaimedAt: lastClaimedAt ? new Date(lastClaimedAt).toISOString() : null,
+      nextClaimAt,
+      remainingMs: Number(remainingMs || 0)
     });
   } catch (error) {
     console.error("REWARD_CLAIM_ERROR_FULL", {
