@@ -1214,6 +1214,30 @@
     };
   }
 
+  function getFallbackDailyRewardAmount(user = {}) {
+    const explicit = Number(user?.dailyRewardAmount ?? user?.daily_reward_amount ?? 0);
+    if (Number.isFinite(explicit) && explicit > 0) return Math.round(explicit);
+
+    const packageDailyXp = Number(user?.packageDailyXp ?? user?.package_daily_xp ?? 0);
+    if (Number.isFinite(packageDailyXp) && packageDailyXp > 0) return Math.round(packageDailyXp);
+
+    const planText = [
+      user?.plan,
+      user?.planType,
+      user?.plan_type,
+      user?.packageKey,
+      user?.package_key,
+      user?.packageName,
+      user?.package_name,
+      user?.package
+    ].map((item) => String(item || "").trim().toLowerCase()).join(" ");
+
+    if (/(^|\s)(premium|pro_max|pioneer|elite|ultra)(\s|$)/.test(planText)) return 500;
+    if (/(^|\s)(pro|pro_plus|tuwaiq|plus)(\s|$)/.test(planText)) return 250;
+    if (/(^|\s)(basic|spark)(\s|$)/.test(planText)) return 120;
+    return 80;
+  }
+
   function normalizeUser(user) {
     if (!user || typeof user !== "object") return null;
     const dailyReward = getDailyRewardMeta(user);
@@ -1478,7 +1502,7 @@
     const explicit = Number(state.dailyReward?.rewardAmount || state.currentUser?.dailyRewardAmount || state.currentUser?.daily_reward_amount || 0);
     if (explicit > 0) return explicit;
     const paidDaily = Number(state.currentUser?.packageDailyXp || state.currentUser?.package_daily_xp || 0);
-    return paidDaily > 0 ? paidDaily : 0;
+    return paidDaily > 0 ? paidDaily : getFallbackDailyRewardAmount(state.currentUser || {});
   }
 
   function getCurrentDailyRewardPlan() {
@@ -1587,7 +1611,7 @@
 
     const claimInfo = getXpClaimInfo();
 
-    const rewardAmount = safeNumber(cachedUser.dailyRewardAmount || getDailyRewardMeta(cachedUser).amount, 0);
+    const rewardAmount = safeNumber(cachedUser.dailyRewardAmount || getDailyRewardMeta(cachedUser).amount, getFallbackDailyRewardAmount(cachedUser));
     const plan = safeText(cachedUser.plan || cachedUser.planType || cachedUser.plan_type, "free").trim() || "free";
     const remainingMs = Math.max(0, safeNumber(claimInfo.hasTimer ? claimInfo.remainingMs : null, DAILY_REWARD_INTERVAL_MS));
     if (remainingMs <= 1000) return false;
@@ -1836,7 +1860,9 @@
     syncSessionFromCookies();
     const apiClient = getApiClient();
     if (!apiClient?.hasToken?.()) {
-      setDailyRewardStatus("DAILY_REWARD_ERROR: AUTH_REQUIRED_CLIENT_NO_TOKEN");
+      if (state.balancePanelOpen) {
+        setDailyRewardStatus("سجّل الدخول لاستلام مكافأتك اليومية.");
+      }
       return null;
     }
 
@@ -1942,11 +1968,14 @@
       console.error("DAILY_REWARD_INIT_ERROR_FULL", error);
       dailyRewardInitStarted = false;
       dailyRewardLoadedForUserId = "";
-      if (!state.dailyReward?.initialized) {
-        primeDailyRewardFromCachedSession();
+      const recoveredFromCache = state.dailyReward?.initialized || primeDailyRewardFromCachedSession();
+      if (recoveredFromCache && state.dailyReward?.remainingMs > 1000) {
+        setDailyRewardStatus("يتجدد رصيدك بعد انتهاء العدّاد.");
+        setDailyRewardText(getDailyRewardPanelText(state.dailyReward.rewardAmount || getCurrentXpDailyReward()));
+      } else if (state.balancePanelOpen) {
+        setDailyRewardStatus("تعذر تحديث المكافأة الآن. سيعاد التحقق تلقائيًا.");
+        setDailyRewardText(getDailyRewardPanelText(getCurrentXpDailyReward()));
       }
-      setDailyRewardStatus(`DAILY_REWARD_ERROR: ${error?.message || String(error)}`);
-      setDailyRewardText("يتم تجديد XP حسب باقتك كل 24 ساعة من آخر استلام.");
       return null;
     } finally {
       state.dailyRewardRefreshInFlight = false;
@@ -1958,7 +1987,7 @@
     const balance = getPreviewBalance();
     const rewardAmount = state.dailyReward.initialized
       ? Number(state.dailyReward.rewardAmount || getCurrentXpDailyReward() || 0)
-      : 0;
+      : getCurrentXpDailyReward();
     const claimInfo = getXpClaimInfo();
     const needsServerTimer = !claimInfo.hasTimer;
     const expired = claimInfo.hasTimer && claimInfo.remainingMs <= 0;
