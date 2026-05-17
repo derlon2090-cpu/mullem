@@ -803,7 +803,12 @@
           payload,
           request_id: payload?.request_id || payload?.requestId || response.headers.get("x-request-id") || "",
           url,
-          serverUnavailable: response.status === 404 || response.status >= 500,
+          serverUnavailable: response.status >= 500 || (
+            response.status === 404 &&
+            !payload?.code &&
+            !payload?.error &&
+            !payload?.message
+          ),
           networkError: false
         };
 

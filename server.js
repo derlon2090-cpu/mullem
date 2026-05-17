@@ -83,6 +83,16 @@ const OPENAI_IMAGES_EDITS_ENDPOINT = String(process.env.OPENAI_IMAGES_EDITS_ENDP
 const OPENAI_EMBEDDINGS_ENDPOINT = String(process.env.OPENAI_EMBEDDINGS_ENDPOINT || "https://api.openai.com/v1/embeddings").trim();
 const OPENAI_EMBEDDING_MODEL = String(process.env.ORLIXOR_EMBEDDING_MODEL || process.env.OPENAI_EMBEDDING_MODEL || "text-embedding-3-small").trim();
 const ORLIXOR_ENABLE_EMBEDDINGS = /^(1|true|yes|on)$/i.test(String(process.env.ORLIXOR_ENABLE_EMBEDDINGS || "").trim());
+const NEXTAUTH_URL = readEnvValue("NEXTAUTH_URL", "");
+const NEXTAUTH_SECRET = readEnvValue("NEXTAUTH_SECRET", "");
+const SUPABASE_URL = readEnvValue("SUPABASE_URL", "");
+const SUPABASE_ANON_KEY = readEnvValue("SUPABASE_ANON_KEY", "");
+const GOOGLE_CLIENT_ID = readEnvValue("GOOGLE_CLIENT_ID", "");
+const GOOGLE_CLIENT_SECRET = readEnvValue("GOOGLE_CLIENT_SECRET", "");
+const APPLE_CLIENT_ID = readEnvValue("APPLE_CLIENT_ID", "");
+const APPLE_CLIENT_SECRET = readEnvValue("APPLE_CLIENT_SECRET", "");
+const MICROSOFT_CLIENT_ID = readEnvValue("MICROSOFT_CLIENT_ID", "");
+const MICROSOFT_CLIENT_SECRET = readEnvValue("MICROSOFT_CLIENT_SECRET", "");
 const OPENAI_TIMEOUT_MS = Number(process.env.OPENAI_TIMEOUT_MS || 25000);
 const OPENAI_MAX_OUTPUT_TOKENS = Math.max(120, Math.min(Number(process.env.OPENAI_MAX_OUTPUT_TOKENS || 900), 2000));
 const DB_INIT_TIMEOUT_MS = Math.max(1000, Number(process.env.DB_INIT_TIMEOUT_MS || 30000));
@@ -2208,6 +2218,153 @@ function getRequestIp(req) {
     .slice(0, 80);
 }
 
+function getPublicBaseUrl(req) {
+  const envUrl = readEnvValue(["NEXTAUTH_URL", "RENDER_EXTERNAL_URL", "PUBLIC_APP_URL", "APP_URL"], "");
+  if (envUrl) return envUrl.replace(/\/+$/, "");
+  const protocol = String(req.headers["x-forwarded-proto"] || "").split(",")[0].trim() || "https";
+  const host = String(req.headers["x-forwarded-host"] || req.headers.host || "").split(",")[0].trim();
+  return host ? `${protocol}://${host}` : "";
+}
+
+function getAuthProviderConfig(provider, req) {
+  const key = String(provider || "").trim().toLowerCase();
+  const baseUrl = getPublicBaseUrl(req);
+  const configs = {
+    google: {
+      provider: "google",
+      label: "Google",
+      callbackPath: "/api/auth/callback/google",
+      clientId: GOOGLE_CLIENT_ID,
+      clientSecret: GOOGLE_CLIENT_SECRET,
+      authBase: "https://accounts.google.com/o/oauth2/v2/auth",
+      scope: "openid email profile"
+    },
+    microsoft: {
+      provider: "microsoft",
+      label: "Microsoft",
+      callbackPath: "/api/auth/callback/azure-ad",
+      clientId: MICROSOFT_CLIENT_ID,
+      clientSecret: MICROSOFT_CLIENT_SECRET,
+      authBase: "https://login.microsoftonline.com/common/oauth2/v2.0/authorize",
+      scope: "openid email profile offline_access"
+    },
+    "azure-ad": {
+      provider: "microsoft",
+      label: "Microsoft",
+      callbackPath: "/api/auth/callback/azure-ad",
+      clientId: MICROSOFT_CLIENT_ID,
+      clientSecret: MICROSOFT_CLIENT_SECRET,
+      authBase: "https://login.microsoftonline.com/common/oauth2/v2.0/authorize",
+      scope: "openid email profile offline_access"
+    },
+    apple: {
+      provider: "apple",
+      label: "Apple",
+      callbackPath: "/api/auth/callback/apple",
+      clientId: APPLE_CLIENT_ID,
+      clientSecret: APPLE_CLIENT_SECRET,
+      authBase: "https://appleid.apple.com/auth/authorize",
+      scope: "name email",
+      responseMode: "form_post"
+    }
+  };
+  const config = configs[key] || null;
+  if (!config) return null;
+  const callbackUrl = baseUrl ? `${baseUrl}${config.callbackPath}` : config.callbackPath;
+  const enabled = Boolean(config.clientId && config.clientSecret);
+  return {
+    ...config,
+    enabled,
+    callbackUrl,
+    missing: [
+      config.clientId ? "" : `${config.provider.toUpperCase()}_CLIENT_ID`,
+      config.clientSecret ? "" : `${config.provider.toUpperCase()}_CLIENT_SECRET`
+    ].filter(Boolean)
+  };
+}
+
+function buildAuthProviderLoginUrl(config) {
+  const params = new URLSearchParams({
+    client_id: config.clientId,
+    redirect_uri: config.callbackUrl,
+    response_type: config.provider === "apple" ? "code id_token" : "code",
+    scope: config.scope,
+    state: crypto.randomBytes(16).toString("hex")
+  });
+  if (config.responseMode) {
+    params.set("response_mode", config.responseMode);
+  }
+  return `${config.authBase}?${params.toString()}`;
+}
+
+function publicAuthProvider(config) {
+  return {
+    provider: config.provider,
+    label: config.label,
+    enabled: Boolean(config.enabled),
+    callbackUrl: config.callbackUrl,
+    missing: config.missing
+  };
+}
+
+async function handleAuthProviders(req, res) {
+  const providers = ["google", "microsoft", "apple"]
+    .map((provider) => publicAuthProvider(getAuthProviderConfig(provider, req)));
+  sendJson(req, res, 200, {
+    success: true,
+    ok: true,
+    providers,
+    config: {
+      nextAuthConfigured: Boolean(NEXTAUTH_URL && NEXTAUTH_SECRET),
+      supabaseConfigured: Boolean(SUPABASE_URL && SUPABASE_ANON_KEY)
+    }
+  });
+}
+
+async function handleAuthProviderStart(req, res, provider) {
+  const config = getAuthProviderConfig(provider, req);
+  if (!config) {
+    throw createPublicHttpError(404, "AUTH_PROVIDER_NOT_FOUND", "مزود تسجيل الدخول غير موجود.", {
+      provider
+    });
+  }
+
+  if (!config.enabled) {
+    console.error("LOGIN_ERROR", {
+      provider: config.provider,
+      status: 503,
+      message: "OAuth provider is not configured",
+      code: "AUTH_PROVIDER_DISABLED"
+    });
+    throw createPublicHttpError(503, "AUTH_PROVIDER_DISABLED", `خدمة تسجيل الدخول عبر ${config.label} غير مفعلة حاليًا.`, {
+      provider: config.provider,
+      missing: config.missing,
+      callbackUrl: config.callbackUrl
+    });
+  }
+
+  sendJson(req, res, 200, {
+    success: true,
+    ok: true,
+    provider: config.provider,
+    login_url: buildAuthProviderLoginUrl(config),
+    callbackUrl: config.callbackUrl
+  });
+}
+
+async function handleAuthProviderCallback(req, res, provider) {
+  const config = getAuthProviderConfig(provider, req);
+  if (!config) {
+    throw createPublicHttpError(404, "AUTH_PROVIDER_NOT_FOUND", "مزود تسجيل الدخول غير موجود.", {
+      provider
+    });
+  }
+  throw createPublicHttpError(501, "AUTH_PROVIDER_CALLBACK_NOT_IMPLEMENTED", `ربط ${config.label} لم يكتمل على الخادم بعد.`, {
+    provider: config.provider,
+    callbackUrl: config.callbackUrl
+  });
+}
+
 async function recordAdminAction(req, auth, action, targetType = "", targetId = "", details = {}) {
   if (!databaseClient || typeof databaseClient.recordAdminLog !== "function") return;
   try {
@@ -4262,24 +4419,67 @@ async function handleLogin(req, res) {
   try {
     user = await databaseClient.findUserByEmail(email);
   } catch (error) {
+    console.error("LOGIN_ERROR", {
+      provider: "password",
+      status: 503,
+      message: error?.message || String(error || ""),
+      code: "AUTH_LOOKUP_FAILED"
+    });
     console.error("[mullem] login user lookup failed", {
       request_id: req.__requestId,
       email,
       message: error?.message || String(error || ""),
       stack: error?.stack
     });
-    throw createHttpError(503, "تعذر الوصول إلى بيانات الحساب الآن. حاول لاحقًا.");
+    throw createPublicHttpError(503, "AUTH_SERVICE_UNAVAILABLE", "حدث خطأ في الخادم، حاول لاحقًا.", {
+      provider: "password"
+    });
   }
-  if (!user || !verifyPassword(password, user.password_hash)) {
-    throw createHttpError(401, "Invalid email or password.");
+  if (!user) {
+    console.error("LOGIN_ERROR", {
+      provider: "password",
+      status: 404,
+      message: "Account not found",
+      code: "ACCOUNT_NOT_FOUND"
+    });
+    throw createPublicHttpError(404, "ACCOUNT_NOT_FOUND", "الحساب غير موجود.", {
+      provider: "password"
+    });
+  }
+  if (!verifyPassword(password, user.password_hash)) {
+    console.error("LOGIN_ERROR", {
+      provider: "password",
+      status: 401,
+      message: "Wrong password",
+      code: "WRONG_PASSWORD"
+    });
+    throw createPublicHttpError(401, "WRONG_PASSWORD", "كلمة المرور خاطئة.", {
+      provider: "password"
+    });
   }
 
   const normalizedStatus = normalizeUserStatus(user.status);
   if (normalizedStatus === "banned") {
-    throw createHttpError(403, "This account is banned.");
+    console.error("LOGIN_ERROR", {
+      provider: "password",
+      status: 403,
+      message: "Account banned",
+      code: "ACCOUNT_BANNED"
+    });
+    throw createPublicHttpError(403, "ACCOUNT_BANNED", "هذا الحساب محظور.", {
+      provider: "password"
+    });
   }
   if (normalizedStatus === "suspended") {
-    throw createHttpError(403, "This account is suspended.");
+    console.error("LOGIN_ERROR", {
+      provider: "password",
+      status: 403,
+      message: "Account suspended",
+      code: "ACCOUNT_SUSPENDED"
+    });
+    throw createPublicHttpError(403, "ACCOUNT_SUSPENDED", "هذا الحساب موقوف مؤقتًا.", {
+      provider: "password"
+    });
   }
 
   const updatedUser = await syncUserDailyProgressSafely(user, "تم تسجيل الدخول عبر الخادم");
@@ -7414,6 +7614,23 @@ async function routeRequest(req, res) {
         deepseek_configured: Boolean(DEEPSEEK_API_KEY)
       }
     });
+    return;
+  }
+
+  if (req.method === "GET" && requestPath === "/api/auth/providers") {
+    await handleAuthProviders(req, res);
+    return;
+  }
+
+  if (req.method === "GET" && requestPath.startsWith("/api/auth/provider/")) {
+    const provider = decodeURIComponent(requestPath.replace("/api/auth/provider/", ""));
+    await handleAuthProviderStart(req, res, provider);
+    return;
+  }
+
+  if ((req.method === "GET" || req.method === "POST") && requestPath.startsWith("/api/auth/callback/")) {
+    const provider = decodeURIComponent(requestPath.replace("/api/auth/callback/", ""));
+    await handleAuthProviderCallback(req, res, provider);
     return;
   }
 

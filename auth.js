@@ -24,6 +24,8 @@ const loginError = document.querySelector("[data-auth-login-error]");
 const registerError = document.querySelector("[data-auth-register-error]");
 const googleButton = document.querySelector("[data-auth-google]");
 const googleError = document.querySelector("[data-auth-google-error]");
+const appleButton = document.querySelector("[data-auth-apple]");
+const microsoftButton = document.querySelector("[data-auth-microsoft]");
 const forgotButton = document.querySelector("[data-auth-forgot]");
 const backButton = document.querySelector("[data-auth-back]");
 const scrollTopButton = document.querySelector("[data-scroll-top]");
@@ -522,13 +524,60 @@ function setInlineError(target, message) {
 function resetInlineErrors() {
   setInlineError(loginError, "");
   setInlineError(registerError, "");
+  setInlineError(googleError, "");
+  setFieldError(loginEmail, false);
   setFieldError(loginPassword, false);
+  setFieldError(registerEmail, false);
   setFieldError(registerPassword, false);
+}
+
+function getAuthErrorCode(result = {}) {
+  return String(result.payload?.code || result.payload?.error || result.code || result.error || "").trim();
+}
+
+function logLoginError(provider, result = {}) {
+  const status = Number(result.status || 0);
+  const message = String(result.message || result.payload?.message || result.error || "").trim();
+  const code = getAuthErrorCode(result);
+  console.error("LOGIN_ERROR", {
+    provider,
+    status,
+    message,
+    code
+  });
+}
+
+function getProviderLabel(provider) {
+  const key = String(provider || "").trim().toLowerCase();
+  if (key === "google") return "Google";
+  if (key === "apple") return "Apple";
+  if (key === "microsoft" || key === "azure-ad") return "Microsoft";
+  return provider || "مزود الدخول";
+}
+
+function getFriendlyProviderError(provider, result = {}) {
+  const status = Number(result.status || 0);
+  const code = getAuthErrorCode(result);
+  const label = getProviderLabel(provider);
+  if (code === "AUTH_PROVIDER_DISABLED" || status === 503) {
+    return `خدمة تسجيل الدخول عبر ${label} غير مفعلة حاليًا.`;
+  }
+  if (code === "AUTH_PROVIDER_NOT_FOUND" || status === 404) {
+    return "مزود تسجيل الدخول غير موجود.";
+  }
+  if (result.networkError || status === 0) {
+    return "خطأ في الاتصال بالخادم.";
+  }
+  if (status >= 500) {
+    return "حدث خطأ في الخادم، حاول لاحقًا.";
+  }
+  return String(result.message || result.payload?.message || `تعذر تسجيل الدخول عبر ${label}.`).trim();
 }
 
 function getFriendlyLoginError(result = {}) {
   const status = Number(result.status || 0);
   const rawMessage = String(result.message || "").trim();
+  const code = getAuthErrorCode(result);
   const requestId = String(result.request_id || result.requestId || result.payload?.request_id || "").trim();
   const suffix = requestId ? ` (رقم الطلب: ${requestId})` : "";
 
@@ -539,7 +588,49 @@ function getFriendlyLoginError(result = {}) {
     };
   }
 
-  if (status === 401 || /invalid email or password/i.test(rawMessage)) {
+  if (code === "AUTH_PROVIDER_DISABLED") {
+    return {
+      message: "خدمة تسجيل الدخول غير مفعلة حاليًا",
+      field: ""
+    };
+  }
+
+  if (code === "AUTH_PROVIDER_NOT_FOUND") {
+    return {
+      message: "تعذر العثور على خدمة تسجيل الدخول.",
+      field: ""
+    };
+  }
+
+  if (status === 0 || result.networkError) {
+    return {
+      message: "خطأ في الاتصال بالخادم.",
+      field: ""
+    };
+  }
+
+  if (status >= 500 || result.serverUnavailable) {
+    return {
+      message: `حدث خطأ في الخادم، حاول لاحقًا${suffix}`,
+      field: ""
+    };
+  }
+
+  if (code === "ACCOUNT_NOT_FOUND") {
+    return {
+      message: "الحساب غير موجود",
+      field: "email"
+    };
+  }
+
+  if (code === "WRONG_PASSWORD") {
+    return {
+      message: "كلمة المرور خاطئة",
+      field: "password"
+    };
+  }
+
+  if (status === 401 || code === "WRONG_PASSWORD" || code === "INVALID_CREDENTIALS" || /invalid email or password|wrong password/i.test(rawMessage)) {
     return {
       message: "البريد الإلكتروني أو كلمة المرور غير صحيحة",
       field: "password"
@@ -555,22 +646,8 @@ function getFriendlyLoginError(result = {}) {
 
   if (status === 404) {
     return {
-      message: `تعذر العثور على خدمة تسجيل الدخول. حدّث الصفحة أو حاول لاحقًا${suffix}`,
-      field: ""
-    };
-  }
-
-  if (status === 0 || result.networkError) {
-    return {
-      message: "تعذر الاتصال بالخادم الآن. تحقق من اتصالك أو حاول لاحقًا",
-      field: ""
-    };
-  }
-
-  if (status >= 500 || result.serverUnavailable) {
-    return {
-      message: `حدث خطأ في الخادم، حاول لاحقًا${suffix}`,
-      field: ""
+      message: `الحساب غير موجود${suffix}`,
+      field: "email"
     };
   }
 
@@ -817,8 +894,12 @@ loginForm?.addEventListener("submit", async (event) => {
   event.stopImmediatePropagation();
 
   if (!apiResult.ok || !apiResult.data?.user) {
+    logLoginError("password", apiResult);
     const friendlyError = getFriendlyLoginError(apiResult);
     setInlineError(loginError, friendlyError.message);
+    if (friendlyError.field === "email") {
+      setFieldError(loginEmail, true);
+    }
     if (friendlyError.field === "password") {
       setFieldError(loginPassword, true);
     }
@@ -1095,18 +1176,84 @@ verifyForm?.addEventListener("submit", (event) => {
   finishAuthSuccess({ role: "student", user }, "index.html");
 });
 
-googleButton?.addEventListener("click", () => {
-  const url = getGoogleAuthUrl();
-  if (!url) {
-    if (googleError) {
-      googleError.hidden = false;
-    } else if (authState) {
-      authState.textContent = "تسجيل Google غير متاح الآن. تواصل مع الدعم لتفعيل الربط.";
-    }
+async function startProviderLogin(provider) {
+  const apiClient = getApiClient();
+  const label = getProviderLabel(provider);
+  resetInlineErrors();
+
+  if (!apiClient?.request) {
+    const message = "خطأ في الاتصال بالخادم.";
+    logLoginError(provider, {
+      status: 0,
+      message,
+      code: "AUTH_API_CLIENT_MISSING"
+    });
+    setInlineError(googleError, message);
+    setState(message);
     return;
   }
-  window.location.href = url;
-});
+
+  setState(`جاري التحقق من خدمة ${label}...`);
+
+  let result;
+  try {
+    result = await apiClient.request(`/auth/provider/${encodeURIComponent(provider)}`, {
+      method: "GET",
+      skipAuth: true
+    });
+  } catch (error) {
+    result = {
+      ok: false,
+      status: 0,
+      networkError: true,
+      message: error?.message || String(error || ""),
+      code: "AUTH_PROVIDER_REQUEST_FAILED"
+    };
+  }
+
+  if (!result?.ok) {
+    logLoginError(provider, result);
+    const message = getFriendlyProviderError(provider, result);
+    setInlineError(googleError, message);
+    setState(message);
+    return;
+  }
+
+  const loginUrl = result.data?.login_url ||
+    result.data?.loginUrl ||
+    result.payload?.login_url ||
+    result.payload?.loginUrl ||
+    result.payload?.data?.login_url ||
+    "";
+
+  if (!loginUrl) {
+    const missingUrlResult = {
+      ...result,
+      status: result.status || 500,
+      message: "Provider login URL is missing",
+      code: "AUTH_PROVIDER_LOGIN_URL_MISSING"
+    };
+    logLoginError(provider, missingUrlResult);
+    const message = "خدمة تسجيل الدخول غير مفعلة حاليًا.";
+    setInlineError(googleError, message);
+    setState(message);
+    return;
+  }
+
+  window.location.href = loginUrl;
+}
+
+function bindProviderButton(button, provider) {
+  button?.addEventListener("click", (event) => {
+    event.preventDefault();
+    event.stopImmediatePropagation();
+    startProviderLogin(provider);
+  }, { capture: true });
+}
+
+bindProviderButton(googleButton, "google");
+bindProviderButton(appleButton, "apple");
+bindProviderButton(microsoftButton, "microsoft");
 
 registerSubmitButton?.addEventListener("click", () => {
   registerForm?.requestSubmit();
