@@ -1222,6 +1222,32 @@ async function ensureUserPackageLifecycle(user) {
     return user;
   }
 
+  const currentPackage = typeof databaseClient.findPackageByKeyOrName === "function"
+    ? await databaseClient.findPackageByKeyOrName(user.package_key || user.plan_type || user.package_name || user.package || "")
+    : null;
+  if (
+    currentPackage &&
+    Number(currentPackage.daily_xp || 0) > 0 &&
+    Number(currentPackage.duration_days || durationDays || 0) > 0 &&
+    typeof databaseClient.assignPackageToUser === "function"
+  ) {
+    const renewedUser = await databaseClient.assignPackageToUser({
+      user_id: user.id,
+      package_id: currentPackage.id,
+      package_key: currentPackage.package_key,
+      duration_days: Math.max(1, Math.round(Number(currentPackage.duration_days || durationDays || 30) || 30))
+    });
+    if (!renewedUser) {
+      return user;
+    }
+    if (typeof databaseClient.updateUser === "function") {
+      return await databaseClient.updateUser(renewedUser.id, {
+        activity: `تم تجديد اشتراك ${String(currentPackage.display_name || currentPackage.package_name || renewedUser.package_name || "الباقة").trim()} تلقائيًا لمدة ${Math.max(1, Math.round(Number(currentPackage.duration_days || durationDays || 30) || 30))} يوم`
+      }) || renewedUser;
+    }
+    return renewedUser;
+  }
+
   const defaultPackage = await databaseClient.findDefaultPackage();
   if (!defaultPackage) {
     return user;
@@ -6038,6 +6064,8 @@ async function handleAdminCreatePackage(req, res) {
 }
 
 async function handleAssistantV3(req, res) {
+  return handleAssistantV3Protected(req, res);
+  /*
   const payload = await parseJsonBody(req);
   const message = String(payload.message || payload.query || payload.prompt || "").trim();
 
@@ -6111,6 +6139,7 @@ async function handleAssistantV3(req, res) {
   } finally {
     clearTimeout(timeoutId);
   }
+  */
 }
 
 async function handleAssistantV3Protected(req, res) {
