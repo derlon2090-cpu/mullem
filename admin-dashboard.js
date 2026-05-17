@@ -198,6 +198,8 @@
     const cards = [
       { label: "إجمالي الإيرادات", value: formatMoney(stats.revenue_total ?? stats.revenue ?? 0), delta: "+12.5%", icon: "$" },
       { label: "إجمالي XP المستخدم", value: formatNumber(stats.xp_used_total ?? 0), delta: "+8.7%", icon: "ϟ" },
+      { label: "توكن الذكاء اليوم", value: formatNumber(stats.ai_daily_tokens ?? 0), delta: "مراقبة التكلفة", icon: "AI" },
+      { label: "توكن الذكاء الشهري", value: formatNumber(stats.ai_monthly_tokens ?? 0), delta: "حدود الباقات", icon: "TK", warm: true },
       { label: "إجمالي المستخدمين", value: formatNumber(stats.users_count ?? state.users.length), delta: "+10.2%", icon: "👥" },
       { label: "المشتركين النشطين", value: formatNumber(stats.active_subscriptions_count ?? state.subscriptions.filter((item) => item.status === "active").length), delta: "+9.3%", icon: "♕", warm: true },
       { label: "طلبات اليوم", value: formatNumber(stats.today_requests_count ?? 0), delta: "+15.1%", icon: "▤" }

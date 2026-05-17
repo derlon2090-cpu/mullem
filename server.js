@@ -70,6 +70,10 @@ const OPENAI_MODEL_STYLE = String(process.env.ORLIXOR_STYLE_MODEL || process.env
 const OPENAI_IMAGE_MODEL = String(process.env.OPENAI_IMAGE_MODEL || "dall-e-3").trim();
 const OPENAI_RESPONSES_ENDPOINT = String(process.env.OPENAI_RESPONSES_ENDPOINT || "https://api.openai.com/v1/responses").trim();
 const OPENAI_CHAT_COMPLETIONS_ENDPOINT = String(process.env.OPENAI_CHAT_COMPLETIONS_ENDPOINT || "https://api.openai.com/v1/chat/completions").trim();
+const DEEPSEEK_API_KEY = readEnvValue(["DEEPSEEK_API_KEY", "ORLIXOR_DEEPSEEK_API_KEY"], "");
+const DEEPSEEK_CHAT_COMPLETIONS_ENDPOINT = String(process.env.DEEPSEEK_CHAT_COMPLETIONS_ENDPOINT || "https://api.deepseek.com/chat/completions").trim();
+const DEEPSEEK_CHAT_MODEL = String(process.env.DEEPSEEK_CHAT_MODEL || "deepseek-chat").trim();
+const DEEPSEEK_REASONER_MODEL = String(process.env.DEEPSEEK_REASONER_MODEL || "deepseek-reasoner").trim();
 const OPENAI_VISION_MODEL = String(process.env.ORLIXOR_VISION_MODEL || process.env.OPENAI_VISION_MODEL || "gpt-4.1-mini").trim();
 const ORLIXOR_IMAGE_ANALYSIS_MODEL = String(process.env.ORLIXOR_IMAGE_ANALYSIS_MODEL || process.env.OPENAI_IMAGE_ANALYSIS_MODEL || OPENAI_VISION_MODEL || "gpt-4.1-mini").trim();
 const ORLIXOR_IMAGE_GENERATION_MODEL = String(process.env.ORLIXOR_IMAGE_GENERATION_MODEL || "gpt-image-1-mini").trim();
@@ -84,45 +88,13 @@ const OPENAI_MAX_OUTPUT_TOKENS = Math.max(120, Math.min(Number(process.env.OPENA
 const DB_INIT_TIMEOUT_MS = Math.max(1000, Number(process.env.DB_INIT_TIMEOUT_MS || 30000));
 const MAX_BODY_BYTES = Math.max(10_000, Number(process.env.MAX_BODY_BYTES || 8_000_000));
 
-function assertOpenAIOnlyRuntime() {
-  const allEnv = JSON.stringify(process.env || {});
-  if (allEnv.includes(("deep" + "seek") + "-chat") || allEnv.includes("api." + ("deep" + "seek") + ".com")) {
-    throw new Error("FATAL: old DeepSeek config still exists in production environment");
-  }
-
-  const blockedToken = "deep" + "seek";
-  const blockedKeys = [
-    "AI_MODEL",
-    "MODEL",
-    "LLM_MODEL",
-    "MULLEM_AI_PROVIDER",
-    "ORLIXOR_DEFAULT_PROVIDER",
-    "ORLIXOR_TURBO_PROVIDER",
-    "ORLIXOR_PRO_PROVIDER",
-    "ORLIXOR_CREATIVE_PROVIDER",
-    "ORLIXOR_ALPHA_PROVIDER",
-    "ORLIXOR_DEFAULT_MODEL",
-    "ORLIXOR_TURBO_MODEL",
-    "ORLIXOR_PRO_MODEL",
-    "ORLIXOR_CREATIVE_MODEL",
-    "ORLIXOR_ALPHA_MODEL",
-    "DEEP" + "SEEK_MODEL",
-    "DEEP" + "SEEK_API_KEY",
-    "ORLIXOR_" + "DEEP" + "SEEK_API_KEY",
-    "DEEP" + "SEEK_CHAT_COMPLETIONS_ENDPOINT"
-  ];
-
-  const offending = blockedKeys.filter((key) => {
-    const value = String(process.env[key] || "").trim().toLowerCase();
-    return value.includes(blockedToken) || (key.toLowerCase().includes(blockedToken) && value);
-  });
-
-  if (offending.length) {
-    throw new Error(`Blocked legacy AI provider environment variables: ${offending.join(", ")}`);
+function assertAiRuntimeConfig() {
+  if (!OPENAI_API_KEY && !DEEPSEEK_API_KEY) {
+    console.warn("[mullem] no text AI provider key configured. Set DEEPSEEK_API_KEY and/or OPENAI_API_KEY.");
   }
 }
 
-assertOpenAIOnlyRuntime();
+assertAiRuntimeConfig();
 const MAX_IMAGE_INPUTS = Math.max(1, Math.min(Number(process.env.MAX_IMAGE_INPUTS || 4), 8));
 const MAX_IMAGE_DATA_URL_BYTES = Math.max(100_000, Number(process.env.MAX_IMAGE_DATA_URL_BYTES || 1_800_000));
 const MAX_MESSAGE_LENGTH = Math.max(200, Number(process.env.MAX_MESSAGE_LENGTH || 4000));
@@ -137,7 +109,7 @@ const PDF_PROTECTION_MAX_FILE_SIZE = Math.max(1024 * 1024, Number(process.env.PD
 const PDF_TOOL_TMP_DIR = path.join(ROOT_DIR, ".tmp", "pdf-tools");
 const QPDF_BINARY = String(process.env.QPDF_BINARY || "qpdf").trim() || "qpdf";
 const SEARCH_XP_COST = Math.max(1, Number(process.env.SEARCH_XP_COST || 10));
-const SEARCH_DEEP_XP_COST = Math.max(SEARCH_XP_COST, Number(process.env.SEARCH_DEEP_XP_COST || 15));
+const SEARCH_DEEP_XP_COST = Math.max(SEARCH_XP_COST, Number(process.env.SEARCH_DEEP_XP_COST || 25));
 const TONE_XP_COST = Math.max(1, Number(process.env.TONE_XP_COST || 5));
 const EXPAND_XP_COST = Math.max(1, Number(process.env.EXPAND_XP_COST || process.env.WRITING_EXPAND_XP_COST || 8));
 const EXPAND_LONG_XP_COST = Math.max(EXPAND_XP_COST, Number(process.env.EXPAND_LONG_XP_COST || 12));
@@ -210,12 +182,12 @@ const DEFAULT_STUDENT_PASSWORD = String(process.env.DEFAULT_STUDENT_PASSWORD || 
 const DEFAULT_STUDENT_NAME = String(process.env.DEFAULT_STUDENT_NAME || "Orlixor Secure User").trim();
 const TEXT_MESSAGE_XP_COST = Math.max(1, Number(process.env.TEXT_MESSAGE_XP_COST || process.env.TEXT_MESSAGE_XP_REWARD || 10));
 const IMAGE_GENERATION_XP_COST = Math.max(1, Number(process.env.IMAGE_GENERATION_XP_COST || process.env.IMAGE_MESSAGE_XP_COST || process.env.IMAGE_MESSAGE_XP_REWARD || 15));
-const ATTACHMENT_ANALYSIS_XP_COST = Math.max(1, Number(process.env.ATTACHMENT_ANALYSIS_XP_COST || process.env.ATTACHMENT_XP_COST || 15));
+const ATTACHMENT_ANALYSIS_XP_COST = Math.max(1, Number(process.env.ATTACHMENT_ANALYSIS_XP_COST || process.env.ATTACHMENT_XP_COST || 20));
 const IMAGE_TOOL_MAX_FILE_SIZE = Math.max(1024 * 1024, Number(process.env.IMAGE_TOOL_MAX_FILE_SIZE || 10 * 1024 * 1024));
 const IMAGE_PROMPT_MAX_LENGTH = Math.max(120, Math.min(Number(process.env.IMAGE_PROMPT_MAX_LENGTH || 32000), 32000));
 const IMAGE_XP_COSTS = Object.freeze({
-  analyze: Math.max(1, Number(process.env.IMAGE_ANALYZE_XP_COST || 5)),
-  generate_standard: Math.max(1, Number(process.env.IMAGE_GENERATE_STANDARD_XP_COST || 20)),
+  analyze: Math.max(1, Number(process.env.IMAGE_ANALYZE_XP_COST || 15)),
+  generate_standard: Math.max(1, Number(process.env.IMAGE_GENERATE_STANDARD_XP_COST || 15)),
   generate_high: Math.max(1, Number(process.env.IMAGE_GENERATE_HIGH_XP_COST || 35)),
   edit: Math.max(1, Number(process.env.IMAGE_EDIT_XP_COST || 25))
 });
@@ -223,6 +195,68 @@ const DAILY_REWARD_INTERVAL_MS = 24 * 60 * 60 * 1000;
 const FIRST_SIGNUP_XP = Math.max(0, Number(process.env.FIRST_SIGNUP_XP || 50));
 const FREE_MAX_OUTPUT_TOKENS = Math.max(120, Math.min(Number(process.env.FREE_MAX_OUTPUT_TOKENS || 500), 1200));
 const FREE_MAX_CONTEXT_TOKENS = Math.max(500, Math.min(Number(process.env.FREE_MAX_CONTEXT_TOKENS || 1500), 6000));
+const PLAN_LIMITS = Object.freeze({
+  free: {
+    label: "Free",
+    dailyXp: 5,
+    dailyTokens: 20_000,
+    monthlyTokens: 600_000,
+    dailyImages: 1,
+    perMessageTokens: 2_000,
+    maxOutputTokens: 500,
+    maxContextTokens: 1_500,
+    requestsPerMinute: 5,
+    queuePriority: 1,
+    allowAdvanced: false,
+    allowedModels: ["orlixor"],
+    defaultModel: "orlixor"
+  },
+  spark: {
+    label: "Spark",
+    dailyXp: 80,
+    dailyTokens: 120_000,
+    monthlyTokens: 3_600_000,
+    dailyImages: 5,
+    perMessageTokens: 6_000,
+    maxOutputTokens: 900,
+    maxContextTokens: 4_000,
+    requestsPerMinute: 12,
+    queuePriority: 2,
+    allowAdvanced: false,
+    allowedModels: ["orlixor", "turbo"],
+    defaultModel: "orlixor"
+  },
+  tuwaiq: {
+    label: "Tuwaiq",
+    dailyXp: 250,
+    dailyTokens: 400_000,
+    monthlyTokens: 12_000_000,
+    dailyImages: 20,
+    perMessageTokens: 12_000,
+    maxOutputTokens: 1_400,
+    maxContextTokens: 8_000,
+    requestsPerMinute: 25,
+    queuePriority: 3,
+    allowAdvanced: true,
+    allowedModels: ["orlixor", "turbo", "pro", "creative"],
+    defaultModel: "pro"
+  },
+  pioneer: {
+    label: "Pioneer",
+    dailyXp: 600,
+    dailyTokens: 1_000_000,
+    monthlyTokens: 30_000_000,
+    dailyImages: 60,
+    perMessageTokens: 32_000,
+    maxOutputTokens: 1_600,
+    maxContextTokens: 16_000,
+    requestsPerMinute: 60,
+    queuePriority: 4,
+    allowAdvanced: true,
+    allowedModels: ["orlixor", "turbo", "pro", "creative", "alpha"],
+    defaultModel: "pro"
+  }
+});
 const DAILY_MOTIVATION_BONUS = Math.max(1, Number(process.env.DAILY_MOTIVATION_BONUS || 5));
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const ACCOUNT_MEMORY_LIMIT = Math.max(1, Math.min(Number(process.env.ACCOUNT_MEMORY_LIMIT || 5), 8));
@@ -235,7 +269,8 @@ const modelProfiles = {
   orlixor: {
     key: "orlixor",
     name: "Orlixor AI",
-    provider: ORLIXOR_DEFAULT_PROVIDER,
+    provider: DEEPSEEK_API_KEY ? "deepseek" : ORLIXOR_DEFAULT_PROVIDER,
+    deepseekModel: DEEPSEEK_CHAT_MODEL,
     openaiModel: OPENAI_MODEL_DEFAULT || OPENAI_MODEL,
     temperature: 0.5,
     minXpCost: 8,
@@ -252,7 +287,8 @@ const modelProfiles = {
   turbo: {
     key: "turbo",
     name: "Orlixor AI Turbo",
-    provider: ORLIXOR_TURBO_PROVIDER,
+    provider: ORLIXOR_TURBO_PROVIDER === "deepseek" && DEEPSEEK_API_KEY ? "deepseek" : "openai",
+    deepseekModel: DEEPSEEK_CHAT_MODEL,
     openaiModel: OPENAI_MODEL_TURBO || OPENAI_MODEL,
     temperature: 0.4,
     minXpCost: 5,
@@ -269,7 +305,8 @@ const modelProfiles = {
   pro: {
     key: "pro",
     name: "Orlixor AI Pro",
-    provider: ORLIXOR_PRO_PROVIDER,
+    provider: DEEPSEEK_API_KEY ? "deepseek" : ORLIXOR_PRO_PROVIDER,
+    deepseekModel: DEEPSEEK_REASONER_MODEL,
     openaiModel: OPENAI_MODEL_PRO || OPENAI_MODEL,
     temperature: 0.4,
     minXpCost: 10,
@@ -286,7 +323,8 @@ const modelProfiles = {
   creative: {
     key: "creative",
     name: "Orlixor AI Creative",
-    provider: ORLIXOR_CREATIVE_PROVIDER,
+    provider: ORLIXOR_CREATIVE_PROVIDER === "deepseek" && DEEPSEEK_API_KEY ? "deepseek" : "openai",
+    deepseekModel: DEEPSEEK_REASONER_MODEL,
     openaiModel: OPENAI_MODEL_CREATIVE || OPENAI_MODEL,
     temperature: 0.8,
     minXpCost: 10,
@@ -303,7 +341,8 @@ const modelProfiles = {
   alpha: {
     key: "alpha",
     name: "Orlixor AI Alpha",
-    provider: ORLIXOR_ALPHA_PROVIDER,
+    provider: ORLIXOR_ALPHA_PROVIDER === "deepseek" && DEEPSEEK_API_KEY ? "deepseek" : "openai",
+    deepseekModel: DEEPSEEK_REASONER_MODEL,
     openaiModel: ORLIXOR_ALPHA_MODEL || OPENAI_MODEL_PRO || OPENAI_MODEL,
     temperature: 0.35,
     minXpCost: 8,
@@ -625,6 +664,13 @@ async function parseJsonBody(req) {
 function createHttpError(statusCode, message) {
   const error = new Error(message);
   error.statusCode = statusCode;
+  return error;
+}
+
+function createPublicHttpError(statusCode, code, message, details = {}) {
+  const error = createHttpError(statusCode, message);
+  error.publicCode = code;
+  error.details = details;
   return error;
 }
 
@@ -1048,10 +1094,10 @@ function getDailyRewardAmount(user = {}) {
 
   const plan = normalizeDailyRewardPlan(user);
   const rewards = {
-    free: 80,
-    basic: 120,
+    free: 5,
+    basic: 80,
     pro: 250,
-    premium: 500
+    premium: 600
   };
 
   return rewards[plan] || rewards.free;
@@ -1342,9 +1388,7 @@ function getModelProfile(value) {
 
 function isFreeUser(user) {
   if (!user) return true;
-  const dailyXp = Number(user.package_daily_xp || 0);
-  const planType = String(user.plan_type || user.package_key || user.package_name || "").trim().toLowerCase();
-  return dailyXp <= 0 || planType === "starter" || planType === "free";
+  return normalizePlanKeyForRouter(user) === "free";
 }
 
 function hasSubscriberToolAccess(user) {
@@ -1375,7 +1419,7 @@ async function requireSubscriberToolUser(req) {
   return auth;
 }
 
-function getUserPlanKey(user) {
+function getUserPlanKeyLegacy(user) {
   const raw = [
     user?.plan_key,
     user?.planKey,
@@ -1396,14 +1440,47 @@ function getUserPlanKey(user) {
   return "free";
 }
 
+function getUserPlanKey(user) {
+  return normalizePlanKeyForRouter(user);
+}
+
+function normalizePlanKeyForRouter(user) {
+  const raw = [
+    user?.plan_key,
+    user?.planKey,
+    user?.plan,
+    user?.plan_type,
+    user?.planType,
+    user?.package_key,
+    user?.packageKey,
+    user?.package_name,
+    user?.packageName,
+    user?.package
+  ].map((item) => String(item || "").trim().toLowerCase()).filter(Boolean).join(" ") || "free";
+  const dailyXp = Number(user?.package_daily_xp || user?.packageDailyXp || user?.daily_xp || 0);
+
+  if (/(^|\s)(pro_max|pioneer|business|elite|ultra|premium)(\s|$)/.test(raw) || raw.includes("الرائد") || dailyXp >= 600) return "pioneer";
+  if (/(^|\s)(pro_plus|tuwaiq|plus)(\s|$)/.test(raw) || raw.includes("طويق") || dailyXp >= 250) return "tuwaiq";
+  if (/(^|\s)(pro|spark|basic)(\s|$)/.test(raw) || raw.includes("شرارة") || dailyXp >= 80) return "spark";
+  return "free";
+}
+
+function getPlanLimits(user) {
+  const planKey = normalizePlanKeyForRouter(user);
+  return {
+    planKey,
+    limits: PLAN_LIMITS[planKey] || PLAN_LIMITS.free
+  };
+}
+
 function canUseHighImageQuality(user) {
-  return ["pioneer", "business"].includes(getUserPlanKey(user));
+  return normalizePlanKeyForRouter(user) === "pioneer";
 }
 
 function hasAlphaModelAccess(user) {
   if (!user) return false;
   const role = normalizeUserRole(user.role);
-  const planKey = getUserPlanKey(user);
+  const planKey = normalizePlanKeyForRouter(user);
   const labels = [
     role,
     planKey,
@@ -1415,7 +1492,7 @@ function hasAlphaModelAccess(user) {
   ].map((item) => String(item || "").trim().toLowerCase());
 
   if (role === "admin" || role === "super_admin") return true;
-  if (planKey === "pioneer" || planKey === "business") return true;
+  if (planKey === "pioneer") return true;
   return ORLIXOR_ALPHA_ACCESS.some((key) => labels.some((label) => label === key || label.includes(key)));
 }
 
@@ -1605,6 +1682,227 @@ function calculateFinalXpCost(profile, assistantText = "", attachmentCount = 0, 
 
   const cap = maxCost + (normalizedAttachmentCount > 0 ? 3 : 0);
   return Math.max(1, Math.min(Math.round(cost), cap));
+}
+
+function estimateTokens(value) {
+  const text = Array.isArray(value)
+    ? value.map((item) => `${item?.role || ""} ${coerceModelText(item?.content)}`).join("\n")
+    : coerceModelText(value);
+  return Math.max(1, Math.ceil(String(text || "").length / 4));
+}
+
+function buildUsageLimitMessage(code, details = {}) {
+  if (code === "daily_token_limit") {
+    return `لقد وصلت للحد اليومي المسموح في باقتك. سيتم إعادة التحديث خلال ${details.resetIn || "أقل من 24 ساعة"}.`;
+  }
+  if (code === "monthly_token_limit") {
+    return "لقد استهلكت الحد الشهري بالكامل. يمكنك الترقية أو انتظار التجديد القادم.";
+  }
+  if (code === "image_daily_limit") {
+    return "لقد وصلت للحد اليومي للصور في باقتك. يمكنك المحاولة لاحقًا أو الترقية.";
+  }
+  if (code === "message_token_limit") {
+    return `رسالتك الحالية تتجاوز حد الرسالة الواحدة في باقتك. التكلفة الإضافية ستكون +${details.extraXp || 0} XP و +${details.extraTokens || 0} Token.`;
+  }
+  return "لقد وصلت إلى حد الاستخدام المسموح في باقتك.";
+}
+
+function getNextDailyResetText() {
+  const now = new Date();
+  const next = new Date(now);
+  next.setUTCHours(24, 0, 0, 0);
+  const ms = Math.max(0, next.getTime() - now.getTime());
+  const hours = Math.floor(ms / 3600000);
+  const minutes = Math.floor((ms % 3600000) / 60000);
+  return `${hours} ساعة و ${minutes} دقيقة`;
+}
+
+function enforcePlanRequestRate(user, planKey, limits) {
+  const userId = String(user?.id || "guest");
+  const key = `model-router:${planKey}:${userId}`;
+  const now = Date.now();
+  const windowMs = 60_000;
+  const max = Math.max(1, Number(limits.requestsPerMinute || 5));
+  const current = rateLimitStore.get(key);
+  if (!current || current.expiresAt <= now) {
+    rateLimitStore.set(key, { count: 1, expiresAt: now + windowMs });
+    return;
+  }
+  current.count += 1;
+  if (current.count > max) {
+    throw createPublicHttpError(429, "QUEUE_RATE_LIMIT", "طلبات كثيرة الآن، حاول بعد قليل.", {
+      plan: planKey,
+      retryAfterMs: Math.max(0, current.expiresAt - now),
+      queuePriority: limits.queuePriority
+    });
+  }
+}
+
+async function getUserUsageStats(user) {
+  if (!user?.id || !isDatabaseReady() || typeof databaseClient.getAiUsageStats !== "function") {
+    return {
+      dailyTokens: 0,
+      monthlyTokens: 0,
+      dailyImages: 0
+    };
+  }
+  return databaseClient.getAiUsageStats(user.id);
+}
+
+function buildModelRouterProfile(baseProfile, routing) {
+  const limits = routing.limits || PLAN_LIMITS.free;
+  const profile = { ...(baseProfile || modelProfiles.orlixor) };
+  profile.provider = routing.provider;
+  profile.deepseekModel = routing.deepseekModel || profile.deepseekModel;
+  profile.openaiModel = routing.openaiModel || profile.openaiModel;
+  profile.maxOutputTokens = Math.min(Number(profile.maxOutputTokens || OPENAI_MAX_OUTPUT_TOKENS), Number(limits.maxOutputTokens || OPENAI_MAX_OUTPUT_TOKENS));
+  profile.maxContextTokens = Math.min(Number(profile.maxContextTokens || FREE_MAX_CONTEXT_TOKENS), Number(limits.maxContextTokens || FREE_MAX_CONTEXT_TOKENS));
+  return profile;
+}
+
+function routeModelForUser({ user, requestedModel, message = "", attachmentCount = 0, attachmentNames = [], operation = "chat" } = {}) {
+  const { planKey, limits } = getPlanLimits(user);
+  const requestedKey = normalizeSelectedModel(requestedModel || limits.defaultModel);
+  const advanced = detectAdvancedTask({ message, attachmentCount, attachmentNames });
+  const hasAttachments = Number(attachmentCount || 0) > 0;
+
+  if (planKey === "free" && (advanced || hasAttachments || operation !== "chat")) {
+    throw createPublicHttpError(403, "PLAN_UPGRADE_REQUIRED", "هذه المهمة تحتاج باقة مدفوعة لأنها تستخدم تحليلًا متقدمًا أو مرفقات.", {
+      plan: planKey,
+      upgradeRecommended: true
+    });
+  }
+
+  let modelKey = limits.allowedModels.includes(requestedKey) ? requestedKey : limits.defaultModel;
+  if (advanced && limits.allowAdvanced) {
+    modelKey = planKey === "tuwaiq" || planKey === "pioneer" ? "pro" : modelKey;
+  }
+
+  let provider = "openai";
+  let deepseekModel = DEEPSEEK_CHAT_MODEL;
+  let openaiModel = OPENAI_MODEL_DEFAULT || OPENAI_MODEL;
+
+  if (modelKey === "orlixor") {
+    provider = DEEPSEEK_API_KEY ? "deepseek" : "openai";
+    deepseekModel = DEEPSEEK_CHAT_MODEL;
+    openaiModel = OPENAI_MODEL_DEFAULT || OPENAI_MODEL;
+  } else if (modelKey === "pro") {
+    provider = DEEPSEEK_API_KEY ? "deepseek" : "openai";
+    deepseekModel = DEEPSEEK_REASONER_MODEL;
+    openaiModel = OPENAI_MODEL_PRO || OPENAI_MODEL_DEFAULT || OPENAI_MODEL;
+  } else if (modelKey === "creative") {
+    provider = "openai";
+    openaiModel = OPENAI_MODEL_CREATIVE || OPENAI_MODEL_DEFAULT || OPENAI_MODEL;
+  } else if (modelKey === "turbo") {
+    provider = "openai";
+    openaiModel = OPENAI_MODEL_TURBO || OPENAI_MODEL_DEFAULT || OPENAI_MODEL;
+  } else if (modelKey === "alpha") {
+    provider = "openai";
+    openaiModel = ORLIXOR_ALPHA_MODEL || OPENAI_MODEL_PRO || OPENAI_MODEL;
+  }
+
+  const baseProfile = getModelProfile(modelKey);
+  const estimatedInputTokens = estimateTokens(message) + (hasAttachments ? 500 * Number(attachmentCount || 0) : 0);
+  return {
+    planKey,
+    limits,
+    requestedKey,
+    modelKey,
+    provider,
+    deepseekModel,
+    openaiModel,
+    advanced,
+    queuePriority: limits.queuePriority,
+    estimatedInputTokens,
+    estimatedRequestTokens: estimatedInputTokens + Math.max(120, Number(limits.maxOutputTokens || OPENAI_MAX_OUTPUT_TOKENS)),
+    modelProfile: buildModelRouterProfile(baseProfile, { limits, provider, deepseekModel, openaiModel })
+  };
+}
+
+async function enforceModelUsageLimits(user, routing, options = {}) {
+  const stats = await getUserUsageStats(user);
+  const limits = routing.limits || PLAN_LIMITS.free;
+  enforcePlanRequestRate(user, routing.planKey, limits);
+
+  if (Number(routing.estimatedInputTokens || 0) > Number(limits.perMessageTokens || 0)) {
+    const extraTokens = Math.max(0, Number(routing.estimatedInputTokens || 0) - Number(limits.perMessageTokens || 0));
+    const extraXp = Math.max(1, Math.ceil(extraTokens / 600));
+    routing.extraTokens = extraTokens;
+    routing.extraXpCost = extraXp;
+    if (!options.confirmOverage) {
+      throw createPublicHttpError(409, "MESSAGE_LIMIT_CONFIRMATION_REQUIRED", buildUsageLimitMessage("message_token_limit", { extraXp, extraTokens }), {
+        confirm_required: true,
+        plan: routing.planKey,
+        extraXp,
+        extraTokens,
+        perMessageTokens: limits.perMessageTokens
+      });
+    }
+  }
+
+  if (stats.dailyTokens + routing.estimatedRequestTokens > limits.dailyTokens) {
+    throw createPublicHttpError(429, "DAILY_TOKEN_LIMIT_EXCEEDED", buildUsageLimitMessage("daily_token_limit", { resetIn: getNextDailyResetText() }), {
+      plan: routing.planKey,
+      used: stats.dailyTokens,
+      limit: limits.dailyTokens,
+      resetIn: getNextDailyResetText()
+    });
+  }
+
+  if (stats.monthlyTokens + routing.estimatedRequestTokens > limits.monthlyTokens) {
+    throw createPublicHttpError(429, "MONTHLY_TOKEN_LIMIT_EXCEEDED", buildUsageLimitMessage("monthly_token_limit"), {
+      plan: routing.planKey,
+      used: stats.monthlyTokens,
+      limit: limits.monthlyTokens
+    });
+  }
+}
+
+async function enforceImageUsageLimit(user, taskType = "image") {
+  const { planKey, limits } = getPlanLimits(user);
+  enforcePlanRequestRate(user, planKey, limits);
+  const stats = await getUserUsageStats(user);
+  if (stats.dailyImages + 1 > limits.dailyImages) {
+    throw createPublicHttpError(429, "IMAGE_DAILY_LIMIT_EXCEEDED", buildUsageLimitMessage("image_daily_limit"), {
+      plan: planKey,
+      taskType,
+      used: stats.dailyImages,
+      limit: limits.dailyImages
+    });
+  }
+}
+
+const modelResponseCache = new Map();
+
+function getCachedModelResponse(cacheKey) {
+  const item = modelResponseCache.get(cacheKey);
+  if (!item || item.expiresAt <= Date.now()) {
+    if (item) modelResponseCache.delete(cacheKey);
+    return null;
+  }
+  return item.value;
+}
+
+function setCachedModelResponse(cacheKey, value) {
+  if (!cacheKey || !value?.text) return;
+  if (modelResponseCache.size > 300) {
+    const firstKey = modelResponseCache.keys().next().value;
+    if (firstKey) modelResponseCache.delete(firstKey);
+  }
+  modelResponseCache.set(cacheKey, {
+    value,
+    expiresAt: Date.now() + 10 * 60 * 1000
+  });
+}
+
+function buildModelCacheKey({ user, routing, messages }) {
+  const source = JSON.stringify({
+    plan: routing?.planKey,
+    model: routing?.modelKey,
+    provider: routing?.provider,
+    messages: Array.isArray(messages) ? messages.slice(-4) : messages
+  });
+  return crypto.createHash("sha256").update(source).digest("hex");
 }
 
 async function chargeUserForMessage(user, cost, activityText) {
@@ -2335,14 +2633,21 @@ function normalizeQuestionType(value) {
 }
 
 function normalizeProviderKey(value) {
-  return "openai";
+  const provider = String(value || "").trim().toLowerCase();
+  return provider === "deepseek" ? "deepseek" : "openai";
 }
 
 function resolveProfileProvider(profile) {
+  const provider = normalizeProviderKey(profile?.provider);
+  if (provider === "deepseek" && DEEPSEEK_API_KEY) return "deepseek";
   return "openai";
 }
 
 function resolveProviderModel(profile, provider) {
+  if (normalizeProviderKey(provider) === "deepseek") {
+    return String(profile?.deepseekModel || DEEPSEEK_CHAT_MODEL || "deepseek-chat").trim();
+  }
+
   const rawModel = String(profile?.openaiModel || "").trim();
   const blockedModelPattern = new RegExp(`^${"deep" + "seek"}-`, "i");
   if (!rawModel || blockedModelPattern.test(rawModel)) {
@@ -2378,6 +2683,69 @@ function buildChatCompletionMessagesFromInput(input, profile) {
     systemPrompt ? { role: "system", content: systemPrompt } : null,
     { role: "user", content: userInput }
   ].filter(Boolean);
+}
+
+async function callDeepSeekChat({ input, modelProfile }) {
+  if (!DEEPSEEK_API_KEY) {
+    throw createHttpError(503, "DeepSeek is not configured on the server.");
+  }
+
+  const profile = modelProfile || modelProfiles.orlixor;
+  const endpoint = DEEPSEEK_CHAT_COMPLETIONS_ENDPOINT;
+  const model = resolveProviderModel(profile, "deepseek");
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), OPENAI_TIMEOUT_MS);
+  let response;
+
+  try {
+    response = await fetch(endpoint, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${DEEPSEEK_API_KEY}`,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        model,
+        messages: buildChatCompletionMessagesFromInput(input, profile),
+        temperature: Number(profile.temperature ?? 0.5),
+        max_tokens: Math.max(120, Math.min(Number(profile.maxOutputTokens || OPENAI_MAX_OUTPUT_TOKENS), 2000)),
+        stream: false
+      }),
+      signal: controller.signal
+    });
+  } catch (error) {
+    if (error?.name === "AbortError") {
+      throw createHttpError(504, "DeepSeek request timed out.");
+    }
+    throw createHttpError(503, "Failed to reach DeepSeek from the server.");
+  } finally {
+    clearTimeout(timeoutId);
+  }
+
+  const contentType = response.headers.get("content-type") || "";
+  const payload = contentType.includes("application/json")
+    ? await response.json()
+    : { error: await response.text() };
+
+  if (!response.ok) {
+    console.error("[DEEPSEEK_CHAT_ERROR]", {
+      endpoint,
+      model,
+      status: response.status,
+      body: payload
+    });
+    throw createHttpError(
+      response.status,
+      payload?.error?.message || payload?.message || `DeepSeek request failed with status ${response.status}.`
+    );
+  }
+
+  const text = extractResponseText(payload);
+  if (!text) {
+    throw createHttpError(502, "DeepSeek returned an empty response.");
+  }
+
+  return { text, raw: payload, usage: extractTokenUsage(payload), provider: "deepseek", model };
 }
 
 async function callOpenAIChat({ input, modelProfile }) {
@@ -2457,6 +2825,10 @@ async function callOpenAIChat({ input, modelProfile }) {
 
 async function callOpenAI({ input, modelProfile }) {
   const profile = modelProfile || modelProfiles.orlixor;
+  if (resolveProfileProvider(profile) === "deepseek") {
+    return callDeepSeekChat({ input, modelProfile: profile });
+  }
+
   if (resolveProfileProvider(profile) === "openai") {
     try {
       return await callOpenAIChat({ input, modelProfile: profile });
@@ -5303,14 +5675,26 @@ async function handleChatSend(req, res) {
   }
 
   const requestedModel = normalizeSelectedModel(payload.selected_model || payload.selectedModel || payload.model || "orlixor");
-  const selectedModel = resolveEffectiveModelKey(requestedModel, { message, attachmentCount, attachmentNames });
+  const routing = routeModelForUser({
+    user: activeUser,
+    requestedModel,
+    message,
+    attachmentCount,
+    attachmentNames,
+    operation: "chat"
+  });
+  await enforceModelUsageLimits(activeUser, routing, {
+    confirmOverage: Boolean(payload.confirm_overage || payload.confirmOverage)
+  });
+  const selectedModel = routing.modelKey;
   if (selectedModel === "alpha" && !hasAlphaModelAccess(activeUser)) {
     throw createHttpError(403, "Orlixor AI Alpha متاح لمجموعة تجريبية محدودة فقط.");
   }
   const routingNotice = buildModelRoutingNotice(requestedModel, selectedModel, { message, attachmentCount, attachmentNames });
-  const modelProfile = applyUserModelLimits(getModelProfile(selectedModel), activeUser);
+  const modelProfile = applyUserModelLimits(routing.modelProfile, activeUser);
 
-  const preflightXpCost = getPreflightXpCost(modelProfile, attachmentCount, attachmentNames);
+  const overageXpCost = Math.max(0, Number(routing.extraXpCost || 0));
+  const preflightXpCost = getPreflightXpCost(modelProfile, attachmentCount, attachmentNames) + overageXpCost;
   const currentXp = Math.max(0, Number(activeUser.xp || 0));
   if (currentXp < preflightXpCost) {
     throw createHttpError(402, `Insufficient XP balance. This request needs ${preflightXpCost} XP.`);
@@ -5357,7 +5741,9 @@ async function handleChatSend(req, res) {
     lesson: lesson || project?.lesson || "",
     projectTitle: project?.title || ""
   });
-  const result = attachmentImages.length
+  const cacheKey = !attachmentImages.length ? buildModelCacheKey({ user: activeUser, routing, messages: chatMessages }) : "";
+  const cachedResult = cacheKey ? getCachedModelResponse(cacheKey) : null;
+  const result = cachedResult || (attachmentImages.length
     ? await callOpenAIVision({
       modelProfile,
       messages: chatMessages,
@@ -5366,9 +5752,12 @@ async function handleChatSend(req, res) {
     : await callOpenAI({
       modelProfile,
       input: buildResponsesInput(chatMessages)
-    });
+    }));
+  if (!cachedResult && cacheKey) {
+    setCachedModelResponse(cacheKey, result);
+  }
   const assistantText = sanitizeModelDisplayText(result.text);
-  const xpCost = calculateFinalXpCost(modelProfile, assistantText, attachmentCount, attachmentNames, result.usage);
+  const xpCost = calculateFinalXpCost(modelProfile, assistantText, attachmentCount, attachmentNames, result.usage) + overageXpCost;
 
   if (activeUser && isDatabaseReady()) {
     chargedUser = await chargeUserForMessage(
@@ -5417,12 +5806,24 @@ async function handleChatSend(req, res) {
         key: selectedModel,
         requested_key: requestedModel,
         name: modelProfile.name,
+        provider: resolveProfileProvider(modelProfile),
+        provider_model: resolveProviderModel(modelProfile, resolveProfileProvider(modelProfile)),
+        plan: routing.planKey,
+        queue_priority: routing.queuePriority,
+        cache_hit: Boolean(cachedResult),
         routed: requestedModel !== selectedModel,
         notice: routingNotice
       },
       usage: activeUser ? {
         xp_spent: xpCost,
-        xp_remaining: Math.max(0, Number(chargedUser?.xp || 0))
+        xp_remaining: Math.max(0, Number(chargedUser?.xp || 0)),
+        input_tokens: Number(result.usage?.input_tokens || result.usage?.prompt_tokens || 0),
+        output_tokens: Number(result.usage?.output_tokens || result.usage?.completion_tokens || 0),
+        daily_token_limit: routing.limits.dailyTokens,
+        monthly_token_limit: routing.limits.monthlyTokens,
+        per_message_token_limit: routing.limits.perMessageTokens,
+        overage_xp_spent: overageXpCost,
+        overage_tokens: Number(routing.extraTokens || 0)
       } : null,
       user: chargedUser ? buildApiUser(chargedUser) : null,
       guest: null
@@ -5710,6 +6111,125 @@ async function handleAssistantV3(req, res) {
   } finally {
     clearTimeout(timeoutId);
   }
+}
+
+async function handleAssistantV3Protected(req, res) {
+  const payload = await parseJsonBody(req);
+  const message = String(payload.message || payload.query || payload.prompt || "").trim();
+
+  if (!message) {
+    sendJson(req, res, 400, {
+      ok: false,
+      error: "MISSING_MESSAGE"
+    });
+    return;
+  }
+
+  const auth = await getAuthContext(req);
+  const activeUser = auth?.user ? await syncUserDailyProgressSafely(auth.user, "استخدم المساعد الذكي") : null;
+  if (!activeUser) {
+    throw createHttpError(401, "Authentication is required to use assistant search.");
+  }
+
+  const deepSearch = Boolean(payload.deep || payload.deep_search || payload.deepSearch || payload.advanced);
+  const requestedModel = normalizeSelectedModel(payload.selected_model || payload.selectedModel || payload.model || "orlixor");
+  const routing = routeModelForUser({
+    user: activeUser,
+    requestedModel,
+    message,
+    attachmentCount: 0,
+    attachmentNames: [],
+    operation: "chat"
+  });
+  await enforceModelUsageLimits(activeUser, routing, {
+    confirmOverage: Boolean(payload.confirm_overage || payload.confirmOverage)
+  });
+
+  const modelProfile = applyUserModelLimits(routing.modelProfile, activeUser);
+  const overageXpCost = Math.max(0, Number(routing.extraXpCost || 0));
+  const xpCost = deepSearch ? SEARCH_DEEP_XP_COST : SEARCH_XP_COST;
+  const currentXp = Math.max(0, Number(activeUser.xp || 0));
+  const totalXpCost = xpCost + overageXpCost;
+  if (currentXp < totalXpCost) {
+    throw createHttpError(402, `Insufficient XP balance. This request needs ${totalXpCost} XP.`);
+  }
+
+  const prompt = buildResponsesInput([
+    {
+      role: "system",
+      content: [
+        "أجب عن سؤال المستخدم بشكل مفيد وواضح ومختصر.",
+        "إذا كان السؤال يحتاج معلومات حديثة فوضح أن الإجابة قد لا تكون محدثة.",
+        "لا تذكر تفاصيل داخلية عن النماذج أو مزودات API."
+      ].join("\n")
+    },
+    {
+      role: "user",
+      content: message
+    }
+  ]);
+  const cacheKey = buildModelCacheKey({ user: activeUser, routing, messages: prompt });
+  const cachedResult = getCachedModelResponse(cacheKey);
+  const result = cachedResult || await callOpenAI({
+    modelProfile,
+    input: prompt
+  });
+  if (!cachedResult) {
+    setCachedModelResponse(cacheKey, result);
+  }
+
+  const answer = sanitizeModelDisplayText(result.text);
+  if (!answer) {
+    throw createHttpError(502, "Assistant returned an empty response.");
+  }
+
+  const chargedUser = await chargeUserForMessage(
+    activeUser,
+    totalXpCost,
+    deepSearch ? "استخدم البحث المتقدم" : "استخدم المساعد الذكي"
+  );
+
+  if (isDatabaseReady() && typeof databaseClient.saveToolUsage === "function") {
+    await databaseClient.saveToolUsage({
+      user_id: activeUser.id,
+      tool_key: "assistant_v3",
+      task_type: deepSearch ? "advanced_search" : "search",
+      input_text: message,
+      output_text: answer,
+      xp_cost: totalXpCost,
+      input_tokens: Number(result.usage?.input_tokens || result.usage?.prompt_tokens || 0),
+      output_tokens: Number(result.usage?.output_tokens || result.usage?.completion_tokens || 0),
+      metadata: {
+        model_key: routing.modelKey,
+        provider: resolveProfileProvider(modelProfile),
+        provider_model: resolveProviderModel(modelProfile, resolveProfileProvider(modelProfile)),
+        plan: routing.planKey,
+        cache_hit: Boolean(cachedResult)
+      }
+    });
+  }
+
+  sendJson(req, res, 200, {
+    ok: true,
+    provider: resolveProfileProvider(modelProfile),
+    model: resolveProviderModel(modelProfile, resolveProfileProvider(modelProfile)),
+    model_key: routing.modelKey,
+    plan: routing.planKey,
+    queue_priority: routing.queuePriority,
+    cache_hit: Boolean(cachedResult),
+    answer,
+    usage: {
+      xp_spent: totalXpCost,
+      xp_remaining: Math.max(0, Number(chargedUser?.xp ?? activeUser.xp ?? 0)),
+      overage_xp_spent: overageXpCost,
+      overage_tokens: Number(routing.extraTokens || 0),
+      input_tokens: Number(result.usage?.input_tokens || result.usage?.prompt_tokens || 0),
+      output_tokens: Number(result.usage?.output_tokens || result.usage?.completion_tokens || 0),
+      daily_token_limit: routing.limits.dailyTokens,
+      monthly_token_limit: routing.limits.monthlyTokens,
+      per_message_token_limit: routing.limits.perMessageTokens
+    }
+  });
 }
 
 async function handleToneTool(req, res) {
@@ -6216,6 +6736,7 @@ async function saveImageToolUsage({ user, taskType, inputText = "", outputText =
 async function handleImageAnalyze(req, res) {
   const activeUser = await getActiveImageTaskUser(req, "استخدم تحليل الصور");
   const xpCost = IMAGE_XP_COSTS.analyze;
+  await enforceImageUsageLimit(activeUser, "analyze");
   ensureUserCanSpendXp(activeUser, xpCost, "تحليل الصور");
 
   const { fields, files } = await parseMultipartFormData(req, {
@@ -6267,6 +6788,7 @@ async function handleImageGenerate(req, res) {
   }
 
   const xpCost = requestedQuality === "high" ? IMAGE_XP_COSTS.generate_high : IMAGE_XP_COSTS.generate_standard;
+  await enforceImageUsageLimit(activeUser, "generate");
   ensureUserCanSpendXp(activeUser, xpCost, "إنشاء الصور");
 
   const result = await callImageGenerationModel({
@@ -6313,6 +6835,7 @@ async function handleImageGenerate(req, res) {
 async function handleImageEdit(req, res) {
   const activeUser = await getActiveImageTaskUser(req, "استخدم تعديل الصور");
   const xpCost = IMAGE_XP_COSTS.edit;
+  await enforceImageUsageLimit(activeUser, "edit");
   ensureUserCanSpendXp(activeUser, xpCost, "تعديل الصور");
 
   const { fields, files } = await parseMultipartFormData(req, {
@@ -6394,14 +6917,26 @@ async function handleSolveQuestion(req, res) {
   }
 
   const requestedModel = normalizeSelectedModel(payload.selected_model || payload.selectedModel || payload.model || "orlixor");
-  const selectedModel = resolveEffectiveModelKey(requestedModel, { message: question, attachmentCount, attachmentNames });
+  const routing = routeModelForUser({
+    user: activeUser,
+    requestedModel,
+    message: question,
+    attachmentCount,
+    attachmentNames,
+    operation: "solve"
+  });
+  await enforceModelUsageLimits(activeUser, routing, {
+    confirmOverage: Boolean(payload.confirm_overage || payload.confirmOverage)
+  });
+  const selectedModel = routing.modelKey;
   if (selectedModel === "alpha" && !hasAlphaModelAccess(activeUser)) {
     throw createHttpError(403, "Orlixor AI Alpha متاح لمجموعة تجريبية محدودة فقط.");
   }
   const routingNotice = buildModelRoutingNotice(requestedModel, selectedModel, { message: question, attachmentCount, attachmentNames });
-  const modelProfile = applyUserModelLimits(getModelProfile(selectedModel), activeUser);
+  const modelProfile = applyUserModelLimits(routing.modelProfile, activeUser);
 
-  const preflightXpCost = getPreflightXpCost(modelProfile, attachmentCount, attachmentNames);
+  const overageXpCost = Math.max(0, Number(routing.extraXpCost || 0));
+  const preflightXpCost = getPreflightXpCost(modelProfile, attachmentCount, attachmentNames) + overageXpCost;
   const currentXp = Math.max(0, Number(activeUser.xp || 0));
   if (currentXp < preflightXpCost) {
     throw createHttpError(402, `Insufficient XP balance. This request needs ${preflightXpCost} XP.`);
@@ -6438,7 +6973,7 @@ async function handleSolveQuestion(req, res) {
     question_type: "general",
     confidence: 0.72
   });
-  const xpCost = calculateFinalXpCost(modelProfile, normalized.display_text || cleanedSolveText, attachmentCount, attachmentNames, result.usage);
+  const xpCost = calculateFinalXpCost(modelProfile, normalized.display_text || cleanedSolveText, attachmentCount, attachmentNames, result.usage) + overageXpCost;
   const chargedUser = isDatabaseReady()
     ? await chargeUserForMessage(
       activeUser,
@@ -6449,16 +6984,40 @@ async function handleSolveQuestion(req, res) {
     )
     : activeUser;
 
+  if (isDatabaseReady() && typeof databaseClient.saveToolUsage === "function") {
+    await databaseClient.saveToolUsage({
+      user_id: activeUser.id,
+      tool_key: "solve_question",
+      task_type: "solve",
+      input_text: question,
+      output_text: normalized.display_text || cleanedSolveText,
+      xp_cost: xpCost,
+      input_tokens: Number(result.usage?.input_tokens || result.usage?.prompt_tokens || 0),
+      output_tokens: Number(result.usage?.output_tokens || result.usage?.completion_tokens || 0),
+      metadata: {
+        model_key: selectedModel,
+        provider: resolveProfileProvider(modelProfile),
+        plan: routing.planKey
+      }
+    });
+  }
+
   sendJson(req, res, 200, {
     ...normalized,
     model: {
       key: selectedModel,
       requested_key: requestedModel,
       name: modelProfile.name,
+      provider: resolveProfileProvider(modelProfile),
+      provider_model: resolveProviderModel(modelProfile, resolveProfileProvider(modelProfile)),
+      plan: routing.planKey,
+      queue_priority: routing.queuePriority,
       routed: requestedModel !== selectedModel,
       notice: routingNotice
     },
     xp_spent: xpCost,
+    overage_xp_spent: overageXpCost,
+    overage_tokens: Number(routing.extraTokens || 0),
     remaining_xp: Number(chargedUser?.xp ?? activeUser.xp ?? 0)
   });
 }
@@ -6679,7 +7238,7 @@ async function routeRequest(req, res) {
   }
 
   if (req.method === "POST" && requestPath === "/api/assistant-v3") {
-    await handleAssistantV3(req, res);
+    await handleAssistantV3Protected(req, res);
     return;
   }
 
@@ -6694,8 +7253,8 @@ async function routeRequest(req, res) {
       time: new Date().toISOString(),
       request_id: requestId,
       provider: "orlixor",
-      ai_configured: Boolean(OPENAI_API_KEY),
-      text_ai_configured: Boolean(OPENAI_API_KEY),
+      ai_configured: Boolean(OPENAI_API_KEY || DEEPSEEK_API_KEY),
+      text_ai_configured: Boolean(OPENAI_API_KEY || DEEPSEEK_API_KEY),
       image_ai_configured: Boolean(OPENAI_API_KEY),
       model: "Orlixor AI",
       image_model: "Orlixor Image",
@@ -6727,9 +7286,10 @@ async function routeRequest(req, res) {
       ok: true,
       route: "/api/assistant-v3",
       version: ASSISTANT_V3_VERSION,
-      provider: "openai",
-      model: "gpt-4o-mini",
+      provider: DEEPSEEK_API_KEY ? "deepseek" : "openai",
+      model: DEEPSEEK_API_KEY ? DEEPSEEK_CHAT_MODEL : (OPENAI_MODEL_DEFAULT || OPENAI_MODEL || "gpt-4.1-mini"),
       hasOpenAIKey: Boolean(OPENAI_API_KEY),
+      hasDeepSeekKey: Boolean(DEEPSEEK_API_KEY),
       keyPrefix: OPENAI_API_KEY ? OPENAI_API_KEY.slice(0, 7) : null,
       timestamp: new Date().toISOString(),
       build: process.env.RENDER_GIT_COMMIT ||
@@ -6760,9 +7320,10 @@ async function routeRequest(req, res) {
   if (req.method === "GET" && requestPath === "/api/debug-version") {
     sendJson(req, res, 200, {
       version: ASSISTANT_V3_VERSION,
-      provider: "openai",
-      model: "gpt-4o-mini",
+      provider: DEEPSEEK_API_KEY ? "deepseek" : "openai",
+      model: DEEPSEEK_API_KEY ? DEEPSEEK_CHAT_MODEL : (OPENAI_MODEL_DEFAULT || OPENAI_MODEL || "gpt-4.1-mini"),
       hasOpenAIKey: Boolean(OPENAI_API_KEY),
+      hasDeepSeekKey: Boolean(DEEPSEEK_API_KEY),
       envModel: process.env.MODEL || null,
       aiModel: process.env.AI_MODEL || null,
       llmModel: process.env.LLM_MODEL || null,
@@ -6779,9 +7340,9 @@ async function routeRequest(req, res) {
   if (req.method === "GET" && requestPath === "/api/whoami-final-999") {
     sendJson(req, res, 200, {
       build: OPENAI_ONLY_FINAL_999,
-      provider: "openai",
-      model: "gpt-4o-mini",
-      noDeepSeek: true,
+      provider: DEEPSEEK_API_KEY ? "deepseek" : "openai",
+      model: DEEPSEEK_API_KEY ? DEEPSEEK_CHAT_MODEL : (OPENAI_MODEL_DEFAULT || OPENAI_MODEL || "gpt-4.1-mini"),
+      deepSeekEnabled: Boolean(DEEPSEEK_API_KEY),
       time: new Date().toISOString()
     });
     return;
@@ -6790,8 +7351,8 @@ async function routeRequest(req, res) {
   if (req.method === "GET" && requestPath === "/api/proof-openai-only-777") {
     sendJson(req, res, 200, {
       proof: "OPENAI_ONLY_777",
-      provider: "openai",
-      model: "gpt-4o-mini",
+      provider: DEEPSEEK_API_KEY ? "deepseek" : "openai",
+      model: DEEPSEEK_API_KEY ? DEEPSEEK_CHAT_MODEL : (OPENAI_MODEL_DEFAULT || OPENAI_MODEL || "gpt-4.1-mini"),
       time: new Date().toISOString()
     });
     return;
@@ -6800,9 +7361,7 @@ async function routeRequest(req, res) {
   if (req.method === "GET" && requestPath === "/api/ready") {
     const url = new URL(req.url, `http://${req.headers.host || "127.0.0.1"}`);
     const task = String(url.searchParams.get("task") || "").trim().toLowerCase();
-    const textAiConfigured = ORLIXOR_DEFAULT_PROVIDER === "openai"
-      ? Boolean(OPENAI_API_KEY)
-      : Boolean(OPENAI_API_KEY);
+    const textAiConfigured = Boolean(OPENAI_API_KEY || DEEPSEEK_API_KEY);
     const imageAiConfigured = Boolean(OPENAI_API_KEY);
     const requestedAiReady = task === "image" || task === "vision"
       ? imageAiConfigured
@@ -6822,8 +7381,8 @@ async function routeRequest(req, res) {
         ai_configured: requestedAiReady,
         text_ai_configured: textAiConfigured,
         image_ai_configured: imageAiConfigured,
-        openai_configured: imageAiConfigured,
-        openai_configured: Boolean(OPENAI_API_KEY)
+        openai_configured: Boolean(OPENAI_API_KEY),
+        deepseek_configured: Boolean(DEEPSEEK_API_KEY)
       }
     });
     return;
@@ -7242,7 +7801,9 @@ const server = http.createServer((req, res) => {
     sendJson(req, res, statusCode, {
       success: false,
       request_id: req.__requestId,
-      code: statusCode >= 500 ? "server_error" : "request_error",
+      code: error?.publicCode || (statusCode >= 500 ? "server_error" : "request_error"),
+      error: error?.publicCode || (statusCode >= 500 ? "server_error" : "request_error"),
+      details: error?.details || null,
       message: statusCode >= 500 && !isExpectedHttpError
         ? "تعذر تنفيذ الطلب الآن. أعد المحاولة بعد قليل."
         : safeMessage

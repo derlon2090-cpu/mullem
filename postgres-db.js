@@ -307,7 +307,7 @@ const DEFAULT_PACKAGE_CATALOG = [
   {
     package_key: "starter",
     display_name: "المجانية",
-    daily_xp: 80,
+    daily_xp: 5,
     price_sar: 0,
     duration_days: 0,
     summary: "خطة البداية للتجربة الأساسية داخل المنصة.",
@@ -3229,6 +3229,51 @@ function createPostgresDatabaseClient(rawConfig = {}) {
     return getGuestUsage(safeGuestSessionId);
   }
 
+  async function getAiUsageStats(userId) {
+    const safeUserId = Number(userId);
+    if (!safeUserId) {
+      return { dailyTokens: 0, monthlyTokens: 0, dailyImages: 0 };
+    }
+
+    const rows = await query(
+      `
+        WITH message_usage AS (
+          SELECT
+            created_at,
+            COALESCE(input_tokens, 0) + COALESCE(output_tokens, 0) AS tokens,
+            0 AS images
+          FROM messages
+          WHERE user_id = $1
+        ),
+        tool_usage_rows AS (
+          SELECT
+            created_at,
+            COALESCE(input_tokens, 0) + COALESCE(output_tokens, 0) AS tokens,
+            CASE WHEN tool_key = 'image_system' THEN 1 ELSE 0 END AS images
+          FROM tool_usage
+          WHERE user_id = $1
+        ),
+        all_usage AS (
+          SELECT * FROM message_usage
+          UNION ALL
+          SELECT * FROM tool_usage_rows
+        )
+        SELECT
+          COALESCE(SUM(tokens) FILTER (WHERE created_at >= CURRENT_DATE), 0) AS daily_tokens,
+          COALESCE(SUM(tokens) FILTER (WHERE created_at >= DATE_TRUNC('month', NOW())), 0) AS monthly_tokens,
+          COALESCE(SUM(images) FILTER (WHERE created_at >= CURRENT_DATE), 0) AS daily_images
+        FROM all_usage
+      `,
+      [safeUserId]
+    );
+    const row = rows[0] || {};
+    return {
+      dailyTokens: Number(row.daily_tokens || 0),
+      monthlyTokens: Number(row.monthly_tokens || 0),
+      dailyImages: Number(row.daily_images || 0)
+    };
+  }
+
   async function getAdminStats() {
     const userCountsRows = await query(`
       SELECT
@@ -3245,9 +3290,43 @@ function createPostgresDatabaseClient(rawConfig = {}) {
     const subscriptionRows = await query("SELECT COUNT(*) AS active_subscriptions_count, COALESCE(SUM(price_sar), 0) AS revenue_total FROM app_subscriptions WHERE status = 'active'");
     const xpRows = await query("SELECT COALESCE(SUM(ABS(amount)), 0) AS xp_used_total FROM xp_ledger WHERE amount < 0");
     const todayRows = await query("SELECT COUNT(*) AS today_requests_count FROM messages WHERE created_at >= CURRENT_DATE");
+    const aiUsageRows = await query(`
+      WITH message_usage AS (
+        SELECT
+          created_at,
+          COALESCE(input_tokens, 0) + COALESCE(output_tokens, 0) AS tokens,
+          COALESCE(xp_cost, 0) AS xp_cost,
+          COALESCE(model_key, 'chat') AS model_key,
+          0 AS images
+        FROM messages
+      ),
+      tool_usage_rows AS (
+        SELECT
+          created_at,
+          COALESCE(input_tokens, 0) + COALESCE(output_tokens, 0) AS tokens,
+          COALESCE(xp_cost, 0) AS xp_cost,
+          COALESCE(metadata->>'model_key', tool_key, 'tool') AS model_key,
+          CASE WHEN tool_key = 'image_system' THEN 1 ELSE 0 END AS images
+        FROM tool_usage
+      ),
+      all_usage AS (
+        SELECT * FROM message_usage
+        UNION ALL
+        SELECT * FROM tool_usage_rows
+      )
+      SELECT
+        COALESCE(SUM(tokens) FILTER (WHERE created_at >= CURRENT_DATE), 0) AS ai_daily_tokens,
+        COALESCE(SUM(tokens) FILTER (WHERE created_at >= DATE_TRUNC('month', NOW())), 0) AS ai_monthly_tokens,
+        COALESCE(SUM(tokens), 0) AS ai_total_tokens,
+        COALESCE(SUM(xp_cost), 0) AS ai_xp_spent_total,
+        COALESCE(SUM(images) FILTER (WHERE created_at >= CURRENT_DATE), 0) AS ai_daily_images,
+        COUNT(*) FILTER (WHERE created_at >= CURRENT_DATE) AS ai_daily_requests
+      FROM all_usage
+    `);
 
     const userCountsRow = userCountsRows[0] || {};
     const subscriptionRow = subscriptionRows[0] || {};
+    const aiUsageRow = aiUsageRows[0] || {};
     return {
       users_count: Number(userCountsRow.users_count || 0),
       students_count: Number(userCountsRow.students_count || 0),
@@ -3257,6 +3336,12 @@ function createPostgresDatabaseClient(rawConfig = {}) {
       revenue_total: Number(subscriptionRow.revenue_total || 0),
       xp_used_total: Number(xpRows?.[0]?.xp_used_total || 0),
       today_requests_count: Number(todayRows?.[0]?.today_requests_count || 0),
+      ai_daily_tokens: Number(aiUsageRow.ai_daily_tokens || 0),
+      ai_monthly_tokens: Number(aiUsageRow.ai_monthly_tokens || 0),
+      ai_total_tokens: Number(aiUsageRow.ai_total_tokens || 0),
+      ai_xp_spent_total: Number(aiUsageRow.ai_xp_spent_total || 0),
+      ai_daily_images: Number(aiUsageRow.ai_daily_images || 0),
+      ai_daily_requests: Number(aiUsageRow.ai_daily_requests || 0),
       conversations_count: Number(conversationRows?.[0]?.conversations_count || 0),
       messages_count: Number(messageRows?.[0]?.messages_count || 0),
       projects_count: Number(projectRows?.[0]?.projects_count || 0),
@@ -3367,6 +3452,7 @@ function createPostgresDatabaseClient(rawConfig = {}) {
     updateProject,
     getGuestUsage,
     incrementGuestUsage,
+    getAiUsageStats,
     getAdminStats,
     getStudentDashboard,
     close

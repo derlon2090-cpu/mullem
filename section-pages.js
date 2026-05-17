@@ -1232,10 +1232,10 @@
       user?.package
     ].map((item) => String(item || "").trim().toLowerCase()).join(" ");
 
-    if (/(^|\s)(premium|pro_max|pioneer|elite|ultra)(\s|$)/.test(planText)) return 500;
+    if (/(^|\s)(premium|pro_max|pioneer|elite|ultra)(\s|$)/.test(planText)) return 600;
     if (/(^|\s)(pro|pro_plus|tuwaiq|plus)(\s|$)/.test(planText)) return 250;
-    if (/(^|\s)(basic|spark)(\s|$)/.test(planText)) return 120;
-    return 80;
+    if (/(^|\s)(basic|spark)(\s|$)/.test(planText)) return 80;
+    return 5;
   }
 
   function normalizeUser(user) {
@@ -11710,10 +11710,13 @@
 
     const formatChatFailureMessage = (result, hasImageAttachments = false) => {
       const status = Number(result?.status || 0);
-      const message = String(result?.message || "").trim();
+      const message = String(result?.payload?.message || result?.message || "").trim();
+      const code = String(result?.payload?.code || result?.payload?.error || "").trim();
+      if (status === 409 && message) return message;
+      if (/LIMIT|QUEUE|PLAN_UPGRADE|CONFIRMATION/i.test(code) && message) return message;
       if (status === 401 || status === 403) return "انتهت الجلسة، سجّل الدخول من جديد.";
       if (status === 413) return hasImageAttachments ? "الصورة أو الملف كبير جدًا. جرّب صورة أصغر." : "الطلب كبير جدًا. اختصر الرسالة ثم أعد المحاولة.";
-      if (status === 429) return "طلبات كثيرة، حاول بعد قليل.";
+      if (status === 429) return message || "طلبات كثيرة، حاول بعد قليل.";
       if (status === 404) return "مسار الشات غير موجود على هذا الدومين. تحقق من API backend أو رابط النشر.";
       if (status >= 500) return message || (hasImageAttachments ? "حدث خطأ في خادم تحليل الصور." : "حدث خطأ في الخادم.");
       if (result?.networkError || status === 0) return "تعذر الاتصال بالـ Backend. تحقق من رابط API أو اتصالك ثم أعد المحاولة.";
@@ -11733,7 +11736,7 @@
           throw new Error(ready?.message || "خدمة تحليل الصور غير جاهزة على الخادم الآن.");
         }
       }
-      const result = await apiClient.sendChat({
+      const chatPayload = {
         conversation_id: state.conversationIds[threadEntry.id] || undefined,
         selected_model: state.selectedModel || "orlixor",
         message: outboundMessage,
@@ -11746,7 +11749,26 @@
         attachment_names: outgoingFiles.map((file) => file.name).slice(0, 8),
         attachment_previews: attachmentPreviews,
         attachment_images: attachmentImages
-      });
+      };
+      let result = await apiClient.sendChat(chatPayload);
+      const confirmationDetails = result?.payload?.details || {};
+      if (
+        result?.status === 409 &&
+        confirmationDetails.confirm_required &&
+        typeof window.confirm === "function"
+      ) {
+        const extraXp = Number(confirmationDetails.extraXp || 0);
+        const extraTokens = Number(confirmationDetails.extraTokens || 0);
+        const confirmed = window.confirm(
+          `رسالتك الحالية تستهلك موارد إضافية.\nهل ترغب بالمتابعة مقابل:\n+${extraXp} XP إضافية\n+${extraTokens} Token؟`
+        );
+        if (confirmed) {
+          result = await apiClient.sendChat({
+            ...chatPayload,
+            confirm_overage: true
+          });
+        }
+      }
 
       threadEntry.messages.pop();
       const authMessage = String(result.message || "");

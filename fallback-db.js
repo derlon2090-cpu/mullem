@@ -10,7 +10,7 @@ const DEFAULT_PACKAGES = [
     id: 1,
     package_key: "starter",
     display_name: "المجانية",
-    daily_xp: 80,
+    daily_xp: 5,
     price_sar: 0,
     duration_days: 0,
     summary: "خطة البداية للتجربة الأساسية داخل المنصة.",
@@ -179,6 +179,7 @@ function createEmptyState() {
       projects: 1,
       messages: 1,
       guestUsage: 1,
+      toolUsage: 1,
       xpLedger: 1,
       adminLogs: 1,
       notifications: 1,
@@ -191,6 +192,7 @@ function createEmptyState() {
     conversations: [],
     messages: [],
     guestUsage: [],
+    toolUsage: [],
     xpLedger: [],
     adminLogs: [],
     notifications: [],
@@ -718,7 +720,7 @@ function createFallbackDatabaseClient() {
     return enrichConversation(conversation);
   }
 
-  async function saveMessage(conversationId, role, text, source = "web") {
+  async function saveMessage(conversationId, role, text, source = "web", metadata = {}) {
     const conversation = findConversationSync(conversationId);
     if (!conversation) return null;
     const message = {
@@ -726,6 +728,11 @@ function createFallbackDatabaseClient() {
       conversation_id: conversationId,
       role: String(role || "").trim(),
       text: String(text || "").trim(),
+      user_id: metadata.user_id || metadata.userId || null,
+      model_key: metadata.model_key || metadata.modelKey || null,
+      input_tokens: Math.max(0, Math.round(Number(metadata.input_tokens || metadata.inputTokens || 0) || 0)),
+      output_tokens: Math.max(0, Math.round(Number(metadata.output_tokens || metadata.outputTokens || 0) || 0)),
+      xp_cost: Math.max(0, Math.round(Number(metadata.xp_cost || metadata.xpCost || 0) || 0)),
       source: String(source || "web").trim(),
       created_at: nowIso()
     };
@@ -835,6 +842,70 @@ function createFallbackDatabaseClient() {
     data.xpLedger.push(entry);
     persist();
     return { ...entry };
+  }
+
+  async function saveToolUsage(payload = {}) {
+    const userId = Number(payload.user_id || payload.userId);
+    const toolKey = String(payload.tool_key || payload.toolKey || payload.tool || "").trim().slice(0, 80);
+    if (!userId || !toolKey) return null;
+    const entry = {
+      id: nextId("toolUsage"),
+      user_id: userId,
+      tool_key: toolKey,
+      task_type: String(payload.task_type || payload.taskType || "").trim().slice(0, 80) || null,
+      input_text: String(payload.input_text || payload.inputText || "").trim() || null,
+      output_text: String(payload.output_text || payload.outputText || "").trim() || null,
+      xp_cost: Math.max(0, Math.round(Number(payload.xp_cost || payload.xpCost || 0) || 0)),
+      input_tokens: Math.max(0, Math.round(Number(payload.input_tokens || payload.inputTokens || 0) || 0)),
+      output_tokens: Math.max(0, Math.round(Number(payload.output_tokens || payload.outputTokens || 0) || 0)),
+      metadata: payload.metadata || null,
+      created_at: nowIso()
+    };
+    data.toolUsage.push(entry);
+    persist();
+    return { ...entry };
+  }
+
+  async function getAiUsageStats(userId) {
+    const safeUserId = Number(userId);
+    if (!safeUserId) {
+      return { dailyTokens: 0, monthlyTokens: 0, dailyImages: 0 };
+    }
+    const now = new Date();
+    const dayStart = new Date(now);
+    dayStart.setHours(0, 0, 0, 0);
+    const monthStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
+    const messageRows = Array.from(data.messages || []);
+    const toolRows = Array.from(data.toolUsage || []);
+    const allRows = [
+      ...messageRows
+        .filter((item) => Number(item.user_id || item.userId || 0) === safeUserId)
+        .map((item) => ({
+          created_at: item.created_at,
+          tokens: Number(item.input_tokens || item.inputTokens || 0) + Number(item.output_tokens || item.outputTokens || 0),
+          images: 0
+        })),
+      ...toolRows
+        .filter((item) => Number(item.user_id || item.userId || 0) === safeUserId)
+        .map((item) => ({
+          created_at: item.created_at,
+          tokens: Number(item.input_tokens || item.inputTokens || 0) + Number(item.output_tokens || item.outputTokens || 0),
+          images: String(item.tool_key || item.toolKey || "") === "image_system" ? 1 : 0
+        }))
+    ];
+
+    return allRows.reduce((stats, item) => {
+      const createdAt = new Date(item.created_at || 0);
+      if (Number.isNaN(createdAt.getTime())) return stats;
+      if (createdAt >= dayStart) {
+        stats.dailyTokens += Math.max(0, Number(item.tokens || 0));
+        stats.dailyImages += Math.max(0, Number(item.images || 0));
+      }
+      if (createdAt >= monthStart) {
+        stats.monthlyTokens += Math.max(0, Number(item.tokens || 0));
+      }
+      return stats;
+    }, { dailyTokens: 0, monthlyTokens: 0, dailyImages: 0 });
   }
 
   async function recordAdminLog(payload = {}) {
@@ -1340,6 +1411,24 @@ function createFallbackDatabaseClient() {
     const xpUsed = data.xpLedger
       .filter((item) => Number(item.amount || 0) < 0)
       .reduce((total, item) => total + Math.abs(Number(item.amount || 0)), 0);
+    const today = getTodayStamp();
+    const monthPrefix = today.slice(0, 7);
+    const aiUsageRows = [
+      ...data.messages.map((item) => ({
+        created_at: item.created_at,
+        tokens: Number(item.input_tokens || 0) + Number(item.output_tokens || 0),
+        xp_cost: Number(item.xp_cost || 0),
+        images: 0
+      })),
+      ...(data.toolUsage || []).map((item) => ({
+        created_at: item.created_at,
+        tokens: Number(item.input_tokens || 0) + Number(item.output_tokens || 0),
+        xp_cost: Number(item.xp_cost || 0),
+        images: String(item.tool_key || "") === "image_system" ? 1 : 0
+      }))
+    ];
+    const aiDailyRows = aiUsageRows.filter((item) => String(item.created_at || "").slice(0, 10) === today);
+    const aiMonthlyRows = aiUsageRows.filter((item) => String(item.created_at || "").slice(0, 7) === monthPrefix);
     return {
       total_users: data.users.length,
       users_count: data.users.length,
@@ -1351,7 +1440,13 @@ function createFallbackDatabaseClient() {
       active_subscriptions_count: activeSubscriptions.length,
       revenue_total: activeSubscriptions.reduce((total, item) => total + Number(item.package_price_sar || 0), 0),
       xp_used_total: xpUsed,
-      today_requests_count: data.messages.filter((item) => String(item.created_at || "").slice(0, 10) === getTodayStamp()).length,
+      today_requests_count: data.messages.filter((item) => String(item.created_at || "").slice(0, 10) === today).length,
+      ai_daily_tokens: aiDailyRows.reduce((total, item) => total + Math.max(0, Number(item.tokens || 0)), 0),
+      ai_monthly_tokens: aiMonthlyRows.reduce((total, item) => total + Math.max(0, Number(item.tokens || 0)), 0),
+      ai_total_tokens: aiUsageRows.reduce((total, item) => total + Math.max(0, Number(item.tokens || 0)), 0),
+      ai_xp_spent_total: aiUsageRows.reduce((total, item) => total + Math.max(0, Number(item.xp_cost || 0)), 0),
+      ai_daily_images: aiDailyRows.reduce((total, item) => total + Math.max(0, Number(item.images || 0)), 0),
+      ai_daily_requests: aiDailyRows.length,
       total_projects: data.projects.length,
       projects_count: data.projects.length,
       total_conversations: data.conversations.length,
@@ -1405,6 +1500,7 @@ function createFallbackDatabaseClient() {
     listPackages,
     createPackage,
     updatePackage,
+    saveToolUsage,
     recordXpLedger,
     listNotificationsForUser,
     markNotificationAsRead,
@@ -1436,6 +1532,7 @@ function createFallbackDatabaseClient() {
     updateProject,
     getGuestUsage,
     incrementGuestUsage,
+    getAiUsageStats,
     getAdminStats,
     getStudentDashboard,
     close
