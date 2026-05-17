@@ -5,6 +5,7 @@ const crypto = require("crypto");
 const { execFile, execSync } = require("child_process");
 const { promisify } = require("util");
 const { openAiWebSearchV2Raw, resolveOpenAiWebSearchV2Model } = require("./openAiWebSearchV2");
+const aiIntelligence = require("./ai-intelligence-layer");
 
 const execFileAsync = promisify(execFile);
 
@@ -1799,7 +1800,17 @@ function buildModelRouterProfile(baseProfile, routing) {
 function routeModelForUser({ user, requestedModel, message = "", attachmentCount = 0, attachmentNames = [], operation = "chat" } = {}) {
   const { planKey, limits } = getPlanLimits(user);
   const requestedKey = normalizeSelectedModel(requestedModel || limits.defaultModel);
-  const advanced = detectAdvancedTask({ message, attachmentCount, attachmentNames });
+  const intelligence = aiIntelligence.analyzeRequest({
+    message,
+    attachmentCount,
+    attachmentNames,
+    requestedModel: requestedKey,
+    userPlan: planKey,
+    operation
+  });
+  const advanced = detectAdvancedTask({ message, attachmentCount, attachmentNames }) ||
+    intelligence.needsReasoning ||
+    intelligence.needsCoding;
   const hasAttachments = Number(attachmentCount || 0) > 0;
 
   if (planKey === "free" && (advanced || hasAttachments || operation !== "chat")) {
@@ -1810,8 +1821,12 @@ function routeModelForUser({ user, requestedModel, message = "", attachmentCount
   }
 
   let modelKey = limits.allowedModels.includes(requestedKey) ? requestedKey : limits.defaultModel;
-  if (advanced && limits.allowAdvanced) {
+  if (limits.allowAdvanced && intelligence.needsCreativity && limits.allowedModels.includes("creative")) {
+    modelKey = "creative";
+  } else if (limits.allowAdvanced && (advanced || intelligence.needsCoding) && limits.allowedModels.includes("pro")) {
     modelKey = planKey === "tuwaiq" || planKey === "pioneer" ? "pro" : modelKey;
+  } else if (intelligence.needsSpeed && limits.allowedModels.includes("turbo")) {
+    modelKey = "turbo";
   }
 
   let provider = "openai";
@@ -1848,6 +1863,10 @@ function routeModelForUser({ user, requestedModel, message = "", attachmentCount
     deepseekModel,
     openaiModel,
     advanced,
+    intelligence,
+    taskType: intelligence.taskType,
+    questionType: intelligence.questionType,
+    promptKey: intelligence.promptKey,
     queuePriority: limits.queuePriority,
     estimatedInputTokens,
     estimatedRequestTokens: estimatedInputTokens + Math.max(120, Number(limits.maxOutputTokens || OPENAI_MAX_OUTPUT_TOKENS)),
@@ -4172,6 +4191,39 @@ async function createEmbedding(content) {
   }
 }
 
+async function getRetrievedKnowledgeContext(payload = {}) {
+  const analysis = payload.analysis || aiIntelligence.analyzeRequest({ message: payload.message || "" });
+  if (!analysis.needsRetrieval || !isDatabaseReady() || typeof databaseClient?.listKnowledgeChunks !== "function") {
+    return { context: "", sources: [] };
+  }
+
+  const sanitized = aiIntelligence.sanitizeSensitiveText(payload.message || "");
+  const queryText = sanitized.text || String(payload.message || "").trim();
+  if (!queryText) return { context: "", sources: [] };
+
+  let embedding = null;
+  if (ORLIXOR_ENABLE_EMBEDDINGS) {
+    embedding = await createEmbedding(queryText);
+  }
+
+  try {
+    const rows = await databaseClient.listKnowledgeChunks({
+      query: queryText,
+      embedding,
+      task_type: analysis.taskType,
+      limit: 10
+    });
+    const ranked = aiIntelligence.rankKnowledgeSources(rows, analysis).slice(0, 5);
+    return {
+      context: aiIntelligence.formatKnowledgeContext(ranked, 5),
+      sources: ranked
+    };
+  } catch (error) {
+    console.warn("[AI_RAG_RETRIEVAL_SKIPPED]", error?.message || error);
+    return { context: "", sources: [] };
+  }
+}
+
 function inferMemoryEntries(userMessage, assistantText) {
   const text = `${String(userMessage || "")}\n${String(assistantText || "")}`.trim();
   if (!text) return [];
@@ -4228,19 +4280,27 @@ async function storeConversationIntelligence(payload = {}) {
   if (!isDatabaseReady() || !payload.user?.id || !payload.conversation?.id) return;
 
   try {
+    const sanitizedUserMessage = aiIntelligence.sanitizeSensitiveText(payload.userMessage || "");
+    const sanitizedAssistantText = aiIntelligence.sanitizeSensitiveText(payload.assistantText || "");
+    const safeUserMessage = sanitizedUserMessage.text || String(payload.userMessage || "");
+    const safeAssistantText = sanitizedAssistantText.text || String(payload.assistantText || "");
+
     if (typeof databaseClient.saveUserMemory === "function") {
-      for (const entry of inferMemoryEntries(payload.userMessage, payload.assistantText)) {
+      for (const entry of inferMemoryEntries(safeUserMessage, safeAssistantText)) {
         await databaseClient.saveUserMemory({
           user_id: payload.user.id,
           memory_type: entry.memory_type,
           content: entry.content,
-          importance: entry.importance
+          importance: entry.importance,
+          metadata: {
+            privacy_findings: [...new Set([...sanitizedUserMessage.findings, ...sanitizedAssistantText.findings])]
+          }
         });
       }
     }
 
     if (typeof databaseClient.saveMessageEmbedding === "function") {
-      const sourceText = `${String(payload.userMessage || "")}\n${String(payload.assistantText || "")}`.trim();
+      const sourceText = `${safeUserMessage}\n${safeAssistantText}`.trim();
       const embedding = await createEmbedding(sourceText);
       if (embedding) {
         await databaseClient.saveMessageEmbedding({
@@ -5827,11 +5887,29 @@ async function handleAdminUpdateUser(req, res, userId) {
 
 async function buildChatMessages(conversation, payload) {
   const modelProfile = payload.modelProfile || getModelProfile(payload.selected_model || payload.selectedModel || payload.model);
-  const systemPrompt = [
-    modelProfile.systemPrompt,
-    `النموذج المختار: ${modelProfile.name}.`,
-    buildAudienceAwareChatPrompt(payload)
-  ].filter(Boolean).join("\n");
+  const analysis = payload.intelligence || aiIntelligence.analyzeRequest({
+    message: payload.message || "",
+    attachmentCount: payload.attachment_count || payload.attachmentCount || 0,
+    attachmentNames: payload.attachment_names || payload.attachmentNames || [],
+    requestedModel: payload.selected_model || payload.selectedModel || payload.model
+  });
+  const retrievedKnowledge = await getRetrievedKnowledgeContext({
+    message: payload.message || "",
+    analysis,
+    user: { id: payload.user_id || null },
+    project_id: payload.project_id || null
+  });
+  payload.__retrievedKnowledge = retrievedKnowledge;
+  const systemPrompt = aiIntelligence.buildDynamicSystemPrompt({
+    basePrompt: [
+      modelProfile.systemPrompt,
+      `النموذج المختار: ${modelProfile.name}.`
+    ].filter(Boolean).join("\n"),
+    audiencePrompt: buildAudienceAwareChatPrompt(payload),
+    analysis,
+    planKey: payload.plan_key || payload.planKey || "",
+    ragContext: retrievedKnowledge.context
+  });
   const history = await listConversationHistory(conversation);
   const attachmentContext = buildAttachmentContext(payload);
   const attachmentImages = sanitizeAttachmentImages(payload.attachment_images || payload.attachmentImages);
@@ -5872,6 +5950,7 @@ async function buildChatMessages(conversation, payload) {
 }
 
 async function handleChatSend(req, res) {
+  const startedAt = Date.now();
   const payload = await parseJsonBody(req);
   const message = requireTextField(payload.message, "message", MAX_MESSAGE_LENGTH);
   const guestSessionId = sanitizeOptionalText(payload.guest_session_id, MAX_METADATA_LENGTH);
@@ -5950,11 +6029,13 @@ async function handleChatSend(req, res) {
 
   let chargedUser = activeUser || null;
 
-  const chatMessages = await buildChatMessages(conversation, {
+  const chatPayload = {
     ...payload,
     message,
     selected_model: selectedModel,
     modelProfile,
+    intelligence: routing.intelligence,
+    plan_key: routing.planKey,
     attachment_count: attachmentCount,
     attachment_names: attachmentNames,
     attachment_images: attachmentImages,
@@ -5966,7 +6047,9 @@ async function handleChatSend(req, res) {
     term: term || project?.term || "",
     lesson: lesson || project?.lesson || "",
     projectTitle: project?.title || ""
-  });
+  };
+  const chatMessages = await buildChatMessages(conversation, chatPayload);
+  const retrievedKnowledge = chatPayload.__retrievedKnowledge || { context: "", sources: [] };
   const cacheKey = !attachmentImages.length ? buildModelCacheKey({ user: activeUser, routing, messages: chatMessages }) : "";
   const cachedResult = cacheKey ? getCachedModelResponse(cacheKey) : null;
   const result = cachedResult || (attachmentImages.length
@@ -5984,6 +6067,12 @@ async function handleChatSend(req, res) {
   }
   const assistantText = sanitizeModelDisplayText(result.text);
   const xpCost = calculateFinalXpCost(modelProfile, assistantText, attachmentCount, attachmentNames, result.usage) + overageXpCost;
+  const quality = aiIntelligence.scoreResponse({
+    answer: assistantText,
+    usage: result.usage,
+    latencyMs: Date.now() - startedAt,
+    cached: Boolean(cachedResult)
+  });
 
   if (activeUser && isDatabaseReady()) {
     chargedUser = await chargeUserForMessage(
@@ -6014,9 +6103,42 @@ async function handleChatSend(req, res) {
     assistantText,
     modelKey: selectedModel,
     usage: result.usage,
-    userMessage,
     assistantMessage
   });
+
+  if (isDatabaseReady() && typeof databaseClient.recordAiQualityEvent === "function") {
+    await databaseClient.recordAiQualityEvent({
+      user_id: activeUser.id,
+      conversation_id: conversation.id,
+      message_id: assistantMessage?.id || null,
+      task_type: routing.taskType,
+      question_type: routing.questionType,
+      model_key: selectedModel,
+      provider: resolveProfileProvider(modelProfile),
+      prompt_key: routing.promptKey,
+      prompt_version: "v1",
+      quality_score: quality.qualityScore,
+      accuracy_score: quality.accuracyScore,
+      length_score: quality.lengthScore,
+      speed_score: quality.speedScore,
+      satisfaction_score: quality.satisfactionScore,
+      cost_score: quality.costScore,
+      latency_ms: Date.now() - startedAt,
+      input_tokens: Number(result.usage?.input_tokens || result.usage?.prompt_tokens || 0),
+      output_tokens: Number(result.usage?.output_tokens || result.usage?.completion_tokens || 0),
+      token_cost: quality.tokenCost,
+      xp_cost: xpCost,
+      was_cached: Boolean(cachedResult),
+      metadata: {
+        request_analysis: routing.intelligence,
+        rag_sources: retrievedKnowledge.sources.map((source) => ({
+          id: source.id,
+          title: source.title || source.source_title || "",
+          rank_score: source.rank_score || 0
+        }))
+      }
+    });
+  }
 
   sendJson(req, res, 200, {
     success: true,
@@ -6024,6 +6146,8 @@ async function handleChatSend(req, res) {
       conversation_id: conversation.id,
       project: project ? buildProjectSummary(project) : null,
       assistant_message: {
+        id: assistantMessage?.id || null,
+        message_id: assistantMessage?.id || null,
         body: assistantText,
         source: "orlixor",
         model: modelProfile.name
@@ -6038,7 +6162,10 @@ async function handleChatSend(req, res) {
         queue_priority: routing.queuePriority,
         cache_hit: Boolean(cachedResult),
         routed: requestedModel !== selectedModel,
-        notice: routingNotice
+        notice: routingNotice,
+        prompt_key: routing.promptKey,
+        task_type: routing.taskType,
+        question_type: routing.questionType
       },
       usage: activeUser ? {
         xp_spent: xpCost,
@@ -6051,6 +6178,13 @@ async function handleChatSend(req, res) {
         overage_xp_spent: overageXpCost,
         overage_tokens: Number(routing.extraTokens || 0)
       } : null,
+      intelligence: {
+        quality_score: quality.qualityScore,
+        prompt_key: routing.promptKey,
+        task_type: routing.taskType,
+        question_type: routing.questionType,
+        rag_sources: retrievedKnowledge.sources.length
+      },
       user: chargedUser ? buildApiUser(chargedUser) : null,
       guest: null
     }
@@ -6070,13 +6204,18 @@ async function handleMessageFeedback(req, res, messageId) {
     return;
   }
 
-  if (!["like", "dislike"].includes(rating)) {
+  const feedback = aiIntelligence.normalizeFeedback(rating);
+  if (!feedback) {
     throw createHttpError(422, "قيمة التقييم غير صحيحة.");
   }
 
   const numericMessageId = Number(messageId);
   const modelKey = normalizeSelectedModel(payload.model_key || payload.modelKey || payload.model);
   const provider = payload.provider ? normalizeProviderKey(payload.provider) : resolveProfileProvider(getModelProfile(modelKey));
+  const quality = aiIntelligence.scoreResponse({
+    feedback: feedback.type,
+    answer: payload.answer || payload.output_text || payload.outputText || ""
+  });
   if (isDatabaseReady() && typeof databaseClient.saveFeedback === "function") {
     await databaseClient.saveFeedback({
       user_id: auth.user.id,
@@ -6084,15 +6223,171 @@ async function handleMessageFeedback(req, res, messageId) {
       conversation_id: sanitizeOptionalText(payload.conversation_id || payload.conversationId, MAX_METADATA_LENGTH) || null,
       model_key: modelKey,
       provider,
-      rating,
+      rating: feedback.rating,
+      feedback_type: feedback.type,
+      task_type: sanitizeOptionalText(payload.task_type || payload.taskType, 80) || null,
+      question_type: sanitizeOptionalText(payload.question_type || payload.questionType, 80) || null,
+      prompt_key: sanitizeOptionalText(payload.prompt_key || payload.promptKey, 160) || null,
+      prompt_version: sanitizeOptionalText(payload.prompt_version || payload.promptVersion, 80) || null,
+      quality_score: quality.qualityScore,
       reason: sanitizeOptionalText(payload.reason, 500),
-      note: sanitizeOptionalText(payload.note || payload.reason, 500)
+      note: sanitizeOptionalText(payload.note || payload.reason, 500),
+      metadata: {
+        tags: feedback.tags,
+        quality
+      }
     });
+  }
+
+  if (isDatabaseReady() && typeof databaseClient.recordAiQualityEvent === "function") {
+    await databaseClient.recordAiQualityEvent({
+      user_id: auth.user.id,
+      message_id: Number.isFinite(numericMessageId) ? numericMessageId : null,
+      conversation_id: sanitizeOptionalText(payload.conversation_id || payload.conversationId, MAX_METADATA_LENGTH) || null,
+      task_type: sanitizeOptionalText(payload.task_type || payload.taskType, 80) || null,
+      question_type: sanitizeOptionalText(payload.question_type || payload.questionType, 80) || null,
+      model_key: modelKey,
+      provider,
+      prompt_key: sanitizeOptionalText(payload.prompt_key || payload.promptKey, 160) || null,
+      prompt_version: sanitizeOptionalText(payload.prompt_version || payload.promptVersion, 80) || null,
+      quality_score: quality.qualityScore,
+      accuracy_score: quality.accuracyScore,
+      length_score: quality.lengthScore,
+      speed_score: quality.speedScore,
+      satisfaction_score: quality.satisfactionScore,
+      cost_score: quality.costScore,
+      user_feedback: feedback.type,
+      metadata: {
+        tags: feedback.tags,
+        reason: sanitizeOptionalText(payload.reason || payload.note, 500)
+      }
+    });
+  }
+
+  if (
+    isDatabaseReady() &&
+    typeof databaseClient.saveAiTrainingExample === "function" &&
+    ["excellent", "save_worthy", "solved"].includes(feedback.type) &&
+    (payload.input_text || payload.inputText) &&
+    (payload.output_text || payload.outputText)
+  ) {
+    const candidate = aiIntelligence.buildTrainingCandidate({
+      inputText: payload.input_text || payload.inputText,
+      outputText: payload.output_text || payload.outputText,
+      taskType: payload.task_type || payload.taskType || "general",
+      modelKey,
+      qualityScore: quality.qualityScore
+    });
+    if (candidate) {
+      await databaseClient.saveAiTrainingExample(candidate);
+    }
   }
 
   sendJson(req, res, 200, {
     success: true,
-    data: { saved: true }
+    data: {
+      saved: true,
+      feedback_type: feedback.type,
+      quality_score: quality.qualityScore
+    }
+  });
+}
+
+function splitKnowledgeContent(content, maxLength = 1400) {
+  const text = String(content || "").replace(/\r\n/g, "\n").trim();
+  if (!text) return [];
+  const paragraphs = text.split(/\n{2,}/).map((item) => item.trim()).filter(Boolean);
+  const chunks = [];
+  let current = "";
+  for (const paragraph of paragraphs.length ? paragraphs : [text]) {
+    if ((current + "\n\n" + paragraph).trim().length > maxLength && current) {
+      chunks.push(current.trim());
+      current = paragraph;
+    } else {
+      current = `${current ? `${current}\n\n` : ""}${paragraph}`;
+    }
+  }
+  if (current.trim()) chunks.push(current.trim());
+  return chunks.flatMap((chunk) => {
+    if (chunk.length <= maxLength * 1.4) return [chunk];
+    const parts = [];
+    for (let index = 0; index < chunk.length; index += maxLength) {
+      parts.push(chunk.slice(index, index + maxLength).trim());
+    }
+    return parts.filter(Boolean);
+  });
+}
+
+async function handleAdminAiIntelligence(req, res) {
+  await requireAdminUser(req);
+  if (!isDatabaseReady() || typeof databaseClient.getAiIntelligenceAnalytics !== "function") {
+    throw createHttpError(503, "AI intelligence analytics are not available until the database is ready.");
+  }
+  const analytics = await databaseClient.getAiIntelligenceAnalytics();
+  sendJson(req, res, 200, {
+    success: true,
+    data: {
+      layer: "AI Intelligence Layer",
+      fine_tuning_enabled: false,
+      rag_enabled: true,
+      privacy_sanitization_enabled: true,
+      analytics
+    }
+  });
+}
+
+async function handleAdminKnowledgeIngest(req, res) {
+  await requireAdminUser(req);
+  if (!isDatabaseReady() || typeof databaseClient.saveKnowledgeSource !== "function" || typeof databaseClient.saveKnowledgeChunk !== "function") {
+    throw createHttpError(503, "Knowledge Base storage is not available until the database is ready.");
+  }
+
+  const payload = await parseJsonBody(req);
+  const title = sanitizeOptionalText(payload.title || payload.source_title || payload.sourceTitle, 255);
+  const content = String(payload.content || payload.text || payload.body || "").trim();
+  if (!title || !content) {
+    throw createHttpError(422, "title and content are required.");
+  }
+
+  const source = await databaseClient.saveKnowledgeSource({
+    source_key: payload.source_key || payload.sourceKey || aiIntelligence.hashText(`${title}:${payload.url || ""}`).slice(0, 32),
+    source_type: payload.source_type || payload.sourceType || "manual",
+    title,
+    url: payload.url || "",
+    quality_score: payload.quality_score || payload.qualityScore || 70,
+    metadata: {
+      imported_by: "admin",
+      privacy: "sanitized"
+    }
+  });
+
+  const chunks = splitKnowledgeContent(content);
+  const savedChunks = [];
+  for (let index = 0; index < chunks.length; index += 1) {
+    const sanitized = aiIntelligence.sanitizeSensitiveText(chunks[index]);
+    const embedding = ORLIXOR_ENABLE_EMBEDDINGS ? await createEmbedding(sanitized.text) : null;
+    const chunk = await databaseClient.saveKnowledgeChunk({
+      source_id: source?.id || null,
+      chunk_key: `${source?.source_key || source?.id || "source"}:${index + 1}`,
+      title: `${title} #${index + 1}`,
+      content: chunks[index],
+      sanitized_content: sanitized.text,
+      embedding,
+      task_type: payload.task_type || payload.taskType || null,
+      quality_score: payload.quality_score || payload.qualityScore || 70,
+      metadata: {
+        privacy_findings: sanitized.findings
+      }
+    });
+    if (chunk) savedChunks.push(chunk);
+  }
+
+  sendJson(req, res, 201, {
+    success: true,
+    data: {
+      source,
+      chunks_count: savedChunks.length
+    }
   });
 }
 
@@ -6343,6 +6638,7 @@ async function handleAssistantV3(req, res) {
 }
 
 async function handleAssistantV3Protected(req, res) {
+  const startedAt = Date.now();
   const payload = await parseJsonBody(req);
   const message = String(payload.message || payload.query || payload.prompt || "").trim();
 
@@ -6383,14 +6679,24 @@ async function handleAssistantV3Protected(req, res) {
     throw createHttpError(402, `Insufficient XP balance. This request needs ${totalXpCost} XP.`);
   }
 
+  const assistantKnowledge = await getRetrievedKnowledgeContext({
+    message,
+    analysis: routing.intelligence,
+    user: activeUser
+  });
   const prompt = buildResponsesInput([
     {
       role: "system",
-      content: [
-        "أجب عن سؤال المستخدم بشكل مفيد وواضح ومختصر.",
-        "إذا كان السؤال يحتاج معلومات حديثة فوضح أن الإجابة قد لا تكون محدثة.",
-        "لا تذكر تفاصيل داخلية عن النماذج أو مزودات API."
-      ].join("\n")
+      content: aiIntelligence.buildDynamicSystemPrompt({
+        basePrompt: [
+          "أجب عن سؤال المستخدم بشكل مفيد وواضح ومختصر.",
+          "إذا كان السؤال يحتاج معلومات حديثة فوضح أن الإجابة قد لا تكون محدثة.",
+          "لا تذكر تفاصيل داخلية عن النماذج أو مزودات API."
+        ].join("\n"),
+        analysis: routing.intelligence,
+        planKey: routing.planKey,
+        ragContext: assistantKnowledge.context
+      })
     },
     {
       role: "user",
@@ -6411,6 +6717,12 @@ async function handleAssistantV3Protected(req, res) {
   if (!answer) {
     throw createHttpError(502, "Assistant returned an empty response.");
   }
+  const quality = aiIntelligence.scoreResponse({
+    answer,
+    usage: result.usage,
+    latencyMs: Date.now() - startedAt,
+    cached: Boolean(cachedResult)
+  });
 
   const chargedUser = await chargeUserForMessage(
     activeUser,
@@ -6428,12 +6740,43 @@ async function handleAssistantV3Protected(req, res) {
       xp_cost: totalXpCost,
       input_tokens: Number(result.usage?.input_tokens || result.usage?.prompt_tokens || 0),
       output_tokens: Number(result.usage?.output_tokens || result.usage?.completion_tokens || 0),
-      metadata: {
+    metadata: {
         model_key: routing.modelKey,
         provider: resolveProfileProvider(modelProfile),
         provider_model: resolveProviderModel(modelProfile, resolveProfileProvider(modelProfile)),
         plan: routing.planKey,
-        cache_hit: Boolean(cachedResult)
+        cache_hit: Boolean(cachedResult),
+        prompt_key: routing.promptKey,
+        task_type: routing.taskType,
+        rag_sources: assistantKnowledge.sources.length
+      }
+    });
+  }
+
+  if (isDatabaseReady() && typeof databaseClient.recordAiQualityEvent === "function") {
+    await databaseClient.recordAiQualityEvent({
+      user_id: activeUser.id,
+      task_type: routing.taskType,
+      question_type: routing.questionType,
+      model_key: routing.modelKey,
+      provider: resolveProfileProvider(modelProfile),
+      prompt_key: routing.promptKey,
+      prompt_version: "v1",
+      quality_score: quality.qualityScore,
+      accuracy_score: quality.accuracyScore,
+      length_score: quality.lengthScore,
+      speed_score: quality.speedScore,
+      satisfaction_score: quality.satisfactionScore,
+      cost_score: quality.costScore,
+      latency_ms: Date.now() - startedAt,
+      input_tokens: Number(result.usage?.input_tokens || result.usage?.prompt_tokens || 0),
+      output_tokens: Number(result.usage?.output_tokens || result.usage?.completion_tokens || 0),
+      token_cost: quality.tokenCost,
+      xp_cost: totalXpCost,
+      was_cached: Boolean(cachedResult),
+      metadata: {
+        request_analysis: routing.intelligence,
+        rag_sources: assistantKnowledge.sources.length
       }
     });
   }
@@ -6447,6 +6790,13 @@ async function handleAssistantV3Protected(req, res) {
     queue_priority: routing.queuePriority,
     cache_hit: Boolean(cachedResult),
     answer,
+    intelligence: {
+      quality_score: quality.qualityScore,
+      prompt_key: routing.promptKey,
+      task_type: routing.taskType,
+      question_type: routing.questionType,
+      rag_sources: assistantKnowledge.sources.length
+    },
     usage: {
       xp_spent: totalXpCost,
       xp_remaining: Math.max(0, Number(chargedUser?.xp ?? activeUser.xp ?? 0)),
@@ -7732,6 +8082,16 @@ async function routeRequest(req, res) {
 
   if (req.method === "GET" && requestPath === "/api/admin/stats") {
     await handleAdminStats(req, res);
+    return;
+  }
+
+  if (req.method === "GET" && requestPath === "/api/admin/ai-intelligence") {
+    await handleAdminAiIntelligence(req, res);
+    return;
+  }
+
+  if (req.method === "POST" && requestPath === "/api/admin/ai-knowledge") {
+    await handleAdminKnowledgeIngest(req, res);
     return;
   }
 

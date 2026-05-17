@@ -667,6 +667,13 @@ function createPostgresDatabaseClient(rawConfig = {}) {
     `);
     await pool.query("CREATE INDEX IF NOT EXISTS idx_ai_feedback_model_rating ON ai_feedback (model_key, rating, created_at DESC)");
     await pool.query("CREATE INDEX IF NOT EXISTS idx_ai_feedback_user_created ON ai_feedback (user_id, created_at DESC)");
+    await ensureColumn("ai_feedback", "feedback_type", "feedback_type VARCHAR(40) NULL");
+    await ensureColumn("ai_feedback", "task_type", "task_type VARCHAR(80) NULL");
+    await ensureColumn("ai_feedback", "question_type", "question_type VARCHAR(80) NULL");
+    await ensureColumn("ai_feedback", "prompt_key", "prompt_key VARCHAR(160) NULL");
+    await ensureColumn("ai_feedback", "prompt_version", "prompt_version VARCHAR(80) NULL");
+    await ensureColumn("ai_feedback", "quality_score", "quality_score INTEGER NOT NULL DEFAULT 0");
+    await ensureColumn("ai_feedback", "metadata", "metadata JSONB NULL");
 
     await pool.query(`
       CREATE TABLE IF NOT EXISTS ai_training_examples (
@@ -681,6 +688,81 @@ function createPostgresDatabaseClient(rawConfig = {}) {
       )
     `);
     await pool.query("CREATE INDEX IF NOT EXISTS idx_ai_training_examples_quality ON ai_training_examples (approved_by_admin, quality_score DESC, created_at DESC)");
+
+    try {
+      await pool.query("CREATE EXTENSION IF NOT EXISTS vector");
+    } catch (error) {
+      console.warn("pgvector extension is not available; using JSONB embeddings and keyword ranking.", error?.message || error);
+    }
+
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS ai_knowledge_sources (
+        id BIGSERIAL PRIMARY KEY,
+        source_key VARCHAR(160) NOT NULL UNIQUE,
+        source_type VARCHAR(80) NOT NULL DEFAULT 'manual',
+        title VARCHAR(255) NOT NULL,
+        url TEXT NULL,
+        quality_score INTEGER NOT NULL DEFAULT 60,
+        is_active BOOLEAN NOT NULL DEFAULT TRUE,
+        metadata JSONB NULL,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )
+    `);
+    await pool.query("CREATE INDEX IF NOT EXISTS idx_ai_knowledge_sources_type ON ai_knowledge_sources (source_type, is_active)");
+
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS ai_knowledge_chunks (
+        id BIGSERIAL PRIMARY KEY,
+        source_id BIGINT NULL REFERENCES ai_knowledge_sources(id) ON DELETE CASCADE,
+        chunk_key VARCHAR(180) NULL UNIQUE,
+        title VARCHAR(255) NULL,
+        content TEXT NOT NULL,
+        sanitized_content TEXT NULL,
+        embedding JSONB NULL,
+        task_type VARCHAR(80) NULL,
+        quality_score INTEGER NOT NULL DEFAULT 60,
+        feedback_score INTEGER NOT NULL DEFAULT 0,
+        usage_count INTEGER NOT NULL DEFAULT 0,
+        metadata JSONB NULL,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )
+    `);
+    await pool.query("CREATE INDEX IF NOT EXISTS idx_ai_knowledge_chunks_task ON ai_knowledge_chunks (task_type, quality_score DESC, updated_at DESC)");
+    await pool.query("CREATE INDEX IF NOT EXISTS idx_ai_knowledge_chunks_updated ON ai_knowledge_chunks (updated_at DESC)");
+
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS ai_quality_events (
+        id BIGSERIAL PRIMARY KEY,
+        user_id BIGINT NULL REFERENCES app_users(id) ON DELETE SET NULL,
+        conversation_id VARCHAR(64) NULL REFERENCES conversations(id) ON DELETE SET NULL,
+        message_id BIGINT NULL REFERENCES messages(id) ON DELETE SET NULL,
+        task_type VARCHAR(80) NULL,
+        question_type VARCHAR(80) NULL,
+        model_key VARCHAR(80) NULL,
+        provider VARCHAR(40) NULL,
+        prompt_key VARCHAR(160) NULL,
+        prompt_version VARCHAR(80) NULL,
+        quality_score INTEGER NOT NULL DEFAULT 0,
+        accuracy_score INTEGER NOT NULL DEFAULT 0,
+        length_score INTEGER NOT NULL DEFAULT 0,
+        speed_score INTEGER NOT NULL DEFAULT 0,
+        satisfaction_score INTEGER NOT NULL DEFAULT 0,
+        cost_score INTEGER NOT NULL DEFAULT 0,
+        latency_ms INTEGER NOT NULL DEFAULT 0,
+        input_tokens INTEGER NOT NULL DEFAULT 0,
+        output_tokens INTEGER NOT NULL DEFAULT 0,
+        token_cost INTEGER NOT NULL DEFAULT 0,
+        xp_cost INTEGER NOT NULL DEFAULT 0,
+        user_feedback VARCHAR(40) NULL,
+        was_cached BOOLEAN NOT NULL DEFAULT FALSE,
+        metadata JSONB NULL,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )
+    `);
+    await pool.query("CREATE INDEX IF NOT EXISTS idx_ai_quality_model_created ON ai_quality_events (model_key, provider, created_at DESC)");
+    await pool.query("CREATE INDEX IF NOT EXISTS idx_ai_quality_task_created ON ai_quality_events (task_type, created_at DESC)");
 
     await pool.query(`
       CREATE TABLE IF NOT EXISTS tool_usage (
@@ -1398,8 +1480,11 @@ function createPostgresDatabaseClient(rawConfig = {}) {
     try {
       await query(
         `
-          INSERT INTO ai_feedback (user_id, conversation_id, message_id, model_key, provider, rating, reason)
-          VALUES ($1, $2, $3, $4, $5, $6, $7)
+          INSERT INTO ai_feedback (
+            user_id, conversation_id, message_id, model_key, provider, rating, reason,
+            feedback_type, task_type, question_type, prompt_key, prompt_version, quality_score, metadata
+          )
+          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
         `,
         [
           userId,
@@ -1408,7 +1493,14 @@ function createPostgresDatabaseClient(rawConfig = {}) {
           String(payload.model_key || payload.modelKey || "").trim().slice(0, 80) || null,
           String(payload.provider || "").trim().toLowerCase().slice(0, 40) || null,
           rating.slice(0, 20),
-          String(payload.reason || payload.note || "").trim() || null
+          String(payload.reason || payload.note || "").trim() || null,
+          String(payload.feedback_type || payload.feedbackType || "").trim().slice(0, 40) || null,
+          String(payload.task_type || payload.taskType || "").trim().slice(0, 80) || null,
+          String(payload.question_type || payload.questionType || "").trim().slice(0, 80) || null,
+          String(payload.prompt_key || payload.promptKey || "").trim().slice(0, 160) || null,
+          String(payload.prompt_version || payload.promptVersion || "").trim().slice(0, 80) || null,
+          Math.max(0, Math.min(100, Math.round(Number(payload.quality_score || payload.qualityScore || 0)))),
+          payload.metadata ? JSON.stringify(payload.metadata) : null
         ]
       );
     } catch (error) {
@@ -1438,6 +1530,238 @@ function createPostgresDatabaseClient(rawConfig = {}) {
       ]
     );
     return rows[0] || null;
+  }
+
+  async function saveKnowledgeSource(payload = {}) {
+    const title = String(payload.title || "").trim().slice(0, 255);
+    const sourceKey = String(payload.source_key || payload.sourceKey || title || crypto.randomUUID()).trim().slice(0, 160);
+    if (!title) return null;
+    const rows = await query(
+      `
+        INSERT INTO ai_knowledge_sources (
+          source_key, source_type, title, url, quality_score, is_active, metadata, updated_at
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, NOW())
+        ON CONFLICT (source_key) DO UPDATE SET
+          source_type = EXCLUDED.source_type,
+          title = EXCLUDED.title,
+          url = EXCLUDED.url,
+          quality_score = EXCLUDED.quality_score,
+          is_active = EXCLUDED.is_active,
+          metadata = EXCLUDED.metadata,
+          updated_at = NOW()
+        RETURNING *
+      `,
+      [
+        sourceKey,
+        String(payload.source_type || payload.sourceType || "manual").trim().slice(0, 80),
+        title,
+        String(payload.url || "").trim() || null,
+        Math.max(0, Math.min(100, Math.round(Number(payload.quality_score || payload.qualityScore || 60)))),
+        payload.is_active === undefined ? true : normalizeBoolean(payload.is_active || payload.isActive),
+        payload.metadata ? JSON.stringify(payload.metadata) : null
+      ]
+    );
+    return rows[0] || null;
+  }
+
+  async function saveKnowledgeChunk(payload = {}) {
+    const content = String(payload.content || payload.chunk_text || payload.text || "").trim();
+    if (!content) return null;
+    const chunkKey = String(payload.chunk_key || payload.chunkKey || "").trim().slice(0, 180) || null;
+    const rows = await query(
+      `
+        INSERT INTO ai_knowledge_chunks (
+          source_id, chunk_key, title, content, sanitized_content, embedding, task_type,
+          quality_score, feedback_score, metadata, updated_at
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, NOW())
+        ON CONFLICT (chunk_key) DO UPDATE SET
+          source_id = EXCLUDED.source_id,
+          title = EXCLUDED.title,
+          content = EXCLUDED.content,
+          sanitized_content = EXCLUDED.sanitized_content,
+          embedding = EXCLUDED.embedding,
+          task_type = EXCLUDED.task_type,
+          quality_score = EXCLUDED.quality_score,
+          feedback_score = EXCLUDED.feedback_score,
+          metadata = EXCLUDED.metadata,
+          updated_at = NOW()
+        RETURNING *
+      `,
+      [
+        payload.source_id || payload.sourceId ? Number(payload.source_id || payload.sourceId) : null,
+        chunkKey,
+        String(payload.title || "").trim().slice(0, 255) || null,
+        content,
+        String(payload.sanitized_content || payload.sanitizedContent || content).trim() || null,
+        payload.embedding ? JSON.stringify(payload.embedding) : null,
+        String(payload.task_type || payload.taskType || "").trim().slice(0, 80) || null,
+        Math.max(0, Math.min(100, Math.round(Number(payload.quality_score || payload.qualityScore || 60)))),
+        Math.max(-100, Math.min(100, Math.round(Number(payload.feedback_score || payload.feedbackScore || 0)))),
+        payload.metadata ? JSON.stringify(payload.metadata) : null
+      ]
+    );
+    return rows[0] || null;
+  }
+
+  function extractSearchTerms(value) {
+    return String(value || "")
+      .toLowerCase()
+      .replace(/[^\p{L}\p{N}\s]/gu, " ")
+      .split(/\s+/)
+      .map((term) => term.trim())
+      .filter((term) => term.length >= 3)
+      .slice(0, 8);
+  }
+
+  async function listKnowledgeChunks(options = {}) {
+    const limit = Math.max(1, Math.min(Number(options.limit || 8), 20));
+    const terms = extractSearchTerms(options.query || options.text || "");
+    const params = [];
+    const where = ["COALESCE(s.is_active, TRUE) = TRUE"];
+    let keywordScoreSql = "0";
+
+    if (options.task_type || options.taskType) {
+      params.push(String(options.task_type || options.taskType).trim().slice(0, 80));
+      where.push(`(c.task_type IS NULL OR c.task_type = $${params.length})`);
+    }
+
+    if (terms.length) {
+      const scoreParts = [];
+      const termClauses = [];
+      for (const term of terms) {
+        params.push(`%${term}%`);
+        const idx = params.length;
+        termClauses.push(`(LOWER(COALESCE(c.sanitized_content, c.content, '')) LIKE $${idx} OR LOWER(COALESCE(c.title, '')) LIKE $${idx} OR LOWER(COALESCE(s.title, '')) LIKE $${idx})`);
+        scoreParts.push(`CASE WHEN LOWER(COALESCE(c.sanitized_content, c.content, '')) LIKE $${idx} THEN 8 ELSE 0 END`);
+        scoreParts.push(`CASE WHEN LOWER(COALESCE(c.title, '')) LIKE $${idx} THEN 5 ELSE 0 END`);
+      }
+      where.push(`(${termClauses.join(" OR ")})`);
+      keywordScoreSql = scoreParts.join(" + ");
+    }
+
+    params.push(limit);
+    return query(
+      `
+        SELECT
+          c.id,
+          c.source_id,
+          c.title,
+          COALESCE(c.sanitized_content, c.content) AS content,
+          c.task_type,
+          c.quality_score,
+          c.feedback_score,
+          c.usage_count,
+          c.created_at,
+          c.updated_at,
+          s.title AS source_title,
+          s.source_type,
+          s.url,
+          (${keywordScoreSql}) AS keyword_score
+        FROM ai_knowledge_chunks c
+        LEFT JOIN ai_knowledge_sources s ON s.id = c.source_id
+        WHERE ${where.join(" AND ")}
+        ORDER BY (${keywordScoreSql}) DESC, c.quality_score DESC, c.feedback_score DESC, c.updated_at DESC
+        LIMIT $${params.length}
+      `,
+      params
+    );
+  }
+
+  async function recordAiQualityEvent(payload = {}) {
+    const rows = await query(
+      `
+        INSERT INTO ai_quality_events (
+          user_id, conversation_id, message_id, task_type, question_type, model_key, provider,
+          prompt_key, prompt_version, quality_score, accuracy_score, length_score, speed_score,
+          satisfaction_score, cost_score, latency_ms, input_tokens, output_tokens, token_cost,
+          xp_cost, user_feedback, was_cached, metadata
+        ) VALUES (
+          $1, $2, $3, $4, $5, $6, $7,
+          $8, $9, $10, $11, $12, $13,
+          $14, $15, $16, $17, $18, $19,
+          $20, $21, $22, $23
+        )
+        RETURNING *
+      `,
+      [
+        payload.user_id || payload.userId ? Number(payload.user_id || payload.userId) : null,
+        payload.conversation_id ? String(payload.conversation_id) : null,
+        payload.message_id || payload.messageId ? Number(payload.message_id || payload.messageId) : null,
+        String(payload.task_type || payload.taskType || "").trim().slice(0, 80) || null,
+        String(payload.question_type || payload.questionType || "").trim().slice(0, 80) || null,
+        String(payload.model_key || payload.modelKey || "").trim().slice(0, 80) || null,
+        String(payload.provider || "").trim().slice(0, 40) || null,
+        String(payload.prompt_key || payload.promptKey || "").trim().slice(0, 160) || null,
+        String(payload.prompt_version || payload.promptVersion || "").trim().slice(0, 80) || null,
+        Math.max(0, Math.min(100, Math.round(Number(payload.quality_score || payload.qualityScore || 0)))),
+        Math.max(0, Math.min(100, Math.round(Number(payload.accuracy_score || payload.accuracyScore || 0)))),
+        Math.max(0, Math.min(100, Math.round(Number(payload.length_score || payload.lengthScore || 0)))),
+        Math.max(0, Math.min(100, Math.round(Number(payload.speed_score || payload.speedScore || 0)))),
+        Math.max(0, Math.min(100, Math.round(Number(payload.satisfaction_score || payload.satisfactionScore || 0)))),
+        Math.max(0, Math.min(100, Math.round(Number(payload.cost_score || payload.costScore || 0)))),
+        Math.max(0, Math.round(Number(payload.latency_ms || payload.latencyMs || 0))),
+        Math.max(0, Math.round(Number(payload.input_tokens || payload.inputTokens || 0))),
+        Math.max(0, Math.round(Number(payload.output_tokens || payload.outputTokens || 0))),
+        Math.max(0, Math.round(Number(payload.token_cost || payload.tokenCost || 0))),
+        Math.max(0, Math.round(Number(payload.xp_cost || payload.xpCost || 0))),
+        String(payload.user_feedback || payload.userFeedback || "").trim().slice(0, 40) || null,
+        normalizeBoolean(payload.was_cached || payload.wasCached),
+        payload.metadata ? JSON.stringify(payload.metadata) : null
+      ]
+    );
+    return rows[0] || null;
+  }
+
+  async function getAiIntelligenceAnalytics() {
+    const modelRows = await query(`
+      SELECT
+        COALESCE(model_key, 'unknown') AS model_key,
+        COALESCE(provider, 'unknown') AS provider,
+        COUNT(*)::int AS events_count,
+        ROUND(AVG(quality_score))::int AS avg_quality,
+        ROUND(AVG(latency_ms))::int AS avg_latency_ms,
+        SUM(input_tokens + output_tokens)::bigint AS total_tokens,
+        SUM(xp_cost)::bigint AS total_xp
+      FROM ai_quality_events
+      WHERE created_at >= NOW() - INTERVAL '30 days'
+      GROUP BY model_key, provider
+      ORDER BY avg_quality DESC NULLS LAST, events_count DESC
+      LIMIT 20
+    `);
+    const feedbackRows = await query(`
+      SELECT
+        COALESCE(feedback_type, rating, 'unknown') AS reason,
+        COUNT(*)::int AS count
+      FROM ai_feedback
+      WHERE created_at >= NOW() - INTERVAL '30 days'
+      GROUP BY reason
+      ORDER BY count DESC
+      LIMIT 20
+    `);
+    const taskRows = await query(`
+      SELECT
+        COALESCE(task_type, 'unknown') AS task_type,
+        COUNT(*)::int AS count,
+        ROUND(AVG(quality_score))::int AS avg_quality
+      FROM ai_quality_events
+      WHERE created_at >= NOW() - INTERVAL '30 days'
+      GROUP BY task_type
+      ORDER BY count DESC
+      LIMIT 20
+    `);
+    const knowledgeRows = await query(`
+      SELECT
+        COUNT(*)::int AS chunks_count,
+        ROUND(AVG(quality_score))::int AS avg_quality,
+        SUM(usage_count)::bigint AS total_usage
+      FROM ai_knowledge_chunks
+    `);
+    return {
+      model_performance: modelRows,
+      feedback_reasons: feedbackRows,
+      task_quality: taskRows,
+      knowledge_base: knowledgeRows[0] || { chunks_count: 0, avg_quality: 0, total_usage: 0 }
+    };
   }
 
   async function saveToolUsage(payload = {}) {
@@ -3410,6 +3734,11 @@ function createPostgresDatabaseClient(rawConfig = {}) {
     saveMessageEmbedding,
     saveFeedback,
     saveAiTrainingExample,
+    saveKnowledgeSource,
+    saveKnowledgeChunk,
+    listKnowledgeChunks,
+    recordAiQualityEvent,
+    getAiIntelligenceAnalytics,
     saveToolUsage,
     recordXpLedger,
     listNotificationsForUser,

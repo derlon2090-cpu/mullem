@@ -709,6 +709,7 @@
     toolSuggestionReturnView: "tools",
     toolSuggestionDraft: {},
     likedReplies: {},
+    feedbackReplies: {},
     openThreadMenuId: "",
     authReason: "",
     conversationIds: {},
@@ -5390,6 +5391,7 @@
     if (message.role === "assistant") {
       const feedbackKey = getMessageFeedbackKey(message, index);
       const isLiked = Boolean(state.likedReplies[feedbackKey]);
+      const activeFeedback = state.feedbackReplies[feedbackKey] || "";
       const safeBody = message.body && Array.isArray(message.body.bullets)
         ? {
             heading: coerceDisplayText(message.body.heading),
@@ -5414,6 +5416,17 @@
               <button class="ghost-action ${isAuthenticated() ? "" : "requires-auth"}" type="button" data-copy-reply>${icons.copy}</button>
               <button class="ghost-action ${isAuthenticated() ? "" : "requires-auth"}" type="button" data-refresh-reply>${icons.refresh}</button>
               <button class="ghost-action feedback-btn ${isLiked ? "liked" : ""} ${isAuthenticated() ? "" : "requires-auth"}" type="button" data-like-reply="${escapeHtml(feedbackKey)}" aria-pressed="${isLiked ? "true" : "false"}">${icons.thumbsUp}</button>
+              ${[
+                ["excellent", "ممتاز"],
+                ["inaccurate", "غير دقيق"],
+                ["too_long", "طويل"],
+                ["too_short", "قصير"],
+                ["save_worthy", "للحفظ"],
+                ["code_error", "خطأ برمجي"],
+                ["solved", "تم الحل"]
+              ].map(([type, label]) => `
+                <button class="ghost-action feedback-chip ${activeFeedback === type ? "liked" : ""} ${isAuthenticated() ? "" : "requires-auth"}" type="button" data-feedback-reply="${escapeHtml(feedbackKey)}" data-feedback-type="${escapeHtml(type)}">${escapeHtml(label)}</button>
+              `).join("")}
             </div>
           </div>
         </article>
@@ -11811,7 +11824,12 @@
         }
         threadEntry.messages.push({
           role: "assistant",
-          body: buildAssistantReplyFromText(result.data.assistant_message.body)
+          id: result.data.assistant_message.id || result.data.assistant_message.message_id || undefined,
+          feedbackId: result.data.assistant_message.id || result.data.assistant_message.message_id || undefined,
+          rawText: result.data.assistant_message.body,
+          body: buildAssistantReplyFromText(result.data.assistant_message.body),
+          model: result.data.model || null,
+          intelligence: result.data.intelligence || null
         });
         if (result.data.conversation_id) {
           const savedAt = new Date().toISOString();
@@ -14076,6 +14094,51 @@
       }
 
       const likeButton = event.target.closest("[data-like-reply]");
+      const feedbackButton = event.target.closest("[data-feedback-reply]");
+      if (feedbackButton) {
+        event.preventDefault();
+        event.stopPropagation();
+        if (!isAuthenticated()) {
+          openAuthModal("أكمل التقييم بعد تسجيل الدخول.");
+          return;
+        }
+        const feedbackKey = feedbackButton.getAttribute("data-feedback-reply") || "";
+        const feedbackType = feedbackButton.getAttribute("data-feedback-type") || "";
+        if (feedbackKey && feedbackType) {
+          const activeThread = getActiveThread();
+          const messageIndex = (activeThread?.messages || []).findIndex((item, index) => getMessageFeedbackKey(item, index) === feedbackKey);
+          const message = messageIndex >= 0 ? activeThread.messages[messageIndex] : null;
+          const previousUserMessage = messageIndex > 0
+            ? [...activeThread.messages.slice(0, messageIndex)].reverse().find((item) => item.role === "user")
+            : null;
+          state.feedbackReplies[feedbackKey] = feedbackType;
+          const apiClient = getApiClient();
+          if (apiClient?.sendMessageFeedback) {
+            const conversationId = state.conversationIds?.[activeThread?.id] || "";
+            const outputText = message?.rawText ||
+              (message?.body && Array.isArray(message.body.bullets)
+                ? [message.body.heading, ...message.body.bullets].filter(Boolean).join("\n")
+                : "");
+            apiClient.sendMessageFeedback(feedbackKey, {
+              feedback: feedbackType,
+              conversation_id: conversationId,
+              model_key: message?.model?.key || state.selectedModel || "orlixor",
+              provider: message?.model?.provider || "",
+              prompt_key: message?.model?.prompt_key || message?.intelligence?.prompt_key || "",
+              task_type: message?.model?.task_type || message?.intelligence?.task_type || "",
+              question_type: message?.model?.question_type || message?.intelligence?.question_type || "",
+              input_text: previousUserMessage?.body || "",
+              output_text: outputText
+            }).catch(() => {
+              delete state.feedbackReplies[feedbackKey];
+              render();
+            });
+          }
+          render();
+        }
+        return;
+      }
+
       if (likeButton) {
         event.preventDefault();
         event.stopPropagation();
