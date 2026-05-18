@@ -484,7 +484,6 @@ function createPostgresDatabaseClient(rawConfig = {}) {
     await pool.query("CREATE UNIQUE INDEX IF NOT EXISTS uq_app_users_email ON app_users (email)");
     await pool.query("CREATE INDEX IF NOT EXISTS idx_app_users_role_status ON app_users (role, status)");
     await pool.query("CREATE INDEX IF NOT EXISTS idx_app_users_package_id ON app_users (package_id)");
-    await pool.query("CREATE UNIQUE INDEX IF NOT EXISTS uq_app_users_referral_code ON app_users (referral_code) WHERE referral_code IS NOT NULL");
 
     await ensureColumn("app_users", "package_id", "package_id BIGINT NULL REFERENCES app_packages(id) ON DELETE SET NULL");
     await ensureColumn("app_users", "plan_type", "plan_type VARCHAR(80) NOT NULL DEFAULT 'starter'");
@@ -508,6 +507,7 @@ function createPostgresDatabaseClient(rawConfig = {}) {
     await ensureColumn("app_users", "trust_score", "trust_score INTEGER NOT NULL DEFAULT 70");
     await ensureColumn("app_users", "abuse_score", "abuse_score INTEGER NOT NULL DEFAULT 0");
     await ensureColumn("app_users", "shadow_banned", "shadow_banned BOOLEAN NOT NULL DEFAULT FALSE");
+    await pool.query("CREATE UNIQUE INDEX IF NOT EXISTS uq_app_users_referral_code ON app_users (referral_code) WHERE referral_code IS NOT NULL");
     await pool.query("ALTER TABLE app_users ALTER COLUMN signup_bonus_claimed SET DEFAULT FALSE");
     await pool.query(`
       UPDATE app_users
