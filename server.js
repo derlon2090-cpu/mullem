@@ -269,6 +269,32 @@ const PLAN_LIMITS = Object.freeze({
     defaultModel: "pro"
   }
 });
+const AI_COST_WARNING_RATIO = Math.max(0.1, Math.min(Number(process.env.ORLIXOR_AI_COST_WARNING_RATIO || 0.8), 0.99));
+const AI_SITE_DAILY_COST_LIMIT_USD = Math.max(0, readEnvNumber("ORLIXOR_AI_SITE_DAILY_COST_LIMIT_USD", 25));
+const AI_USER_DAILY_COST_LIMIT_USD = Math.max(0, readEnvNumber("ORLIXOR_AI_USER_DAILY_COST_LIMIT_USD", 2));
+const AI_PLAN_DAILY_COST_LIMITS_USD = Object.freeze({
+  free: Math.max(0, readEnvNumber("ORLIXOR_AI_FREE_DAILY_COST_LIMIT_USD", 1)),
+  spark: Math.max(0, readEnvNumber("ORLIXOR_AI_SPARK_DAILY_COST_LIMIT_USD", 5)),
+  tuwaiq: Math.max(0, readEnvNumber("ORLIXOR_AI_TUWAIQ_DAILY_COST_LIMIT_USD", 12)),
+  pioneer: Math.max(0, readEnvNumber("ORLIXOR_AI_PIONEER_DAILY_COST_LIMIT_USD", 25))
+});
+const AI_PROVIDER_DEGRADED_WINDOW_MS = Math.max(30_000, readEnvNumber("ORLIXOR_AI_PROVIDER_DEGRADED_WINDOW_MS", 5 * 60_000));
+const AI_PROVIDER_FAILURE_STREAK_LIMIT = Math.max(1, readEnvNumber("ORLIXOR_AI_PROVIDER_FAILURE_STREAK_LIMIT", 3));
+const ORLIXOR_AI_FORCE_SAFE_MODE = /^(1|true|yes|on)$/i.test(String(process.env.ORLIXOR_AI_FORCE_SAFE_MODE || "").trim());
+const AI_OPENAI_INPUT_USD_PER_1M = Math.max(0, readEnvNumber("ORLIXOR_AI_OPENAI_INPUT_USD_PER_1M", 0.15));
+const AI_OPENAI_OUTPUT_USD_PER_1M = Math.max(0, readEnvNumber("ORLIXOR_AI_OPENAI_OUTPUT_USD_PER_1M", 0.6));
+const AI_DEEPSEEK_INPUT_USD_PER_1M = Math.max(0, readEnvNumber("ORLIXOR_AI_DEEPSEEK_INPUT_USD_PER_1M", 0.27));
+const AI_DEEPSEEK_OUTPUT_USD_PER_1M = Math.max(0, readEnvNumber("ORLIXOR_AI_DEEPSEEK_OUTPUT_USD_PER_1M", 1.1));
+const aiRuntimeState = {
+  startedAt: new Date().toISOString(),
+  providers: {
+    deepseek: { configured: Boolean(DEEPSEEK_API_KEY), last_success_at: null, last_error_at: null, last_error: null, latency_samples: [], failure_streak: 0 },
+    openai: { configured: Boolean(OPENAI_API_KEY), last_success_at: null, last_error_at: null, last_error: null, latency_samples: [], failure_streak: 0 }
+  },
+  rag: { last_success_at: null, last_error_at: null, last_error: null, latency_samples: [] },
+  embeddings: { enabled: ORLIXOR_ENABLE_EMBEDDINGS, configured: Boolean(OPENAI_API_KEY), last_success_at: null, last_error_at: null, last_error: null, latency_samples: [] },
+  loginFailures: []
+};
 const DAILY_MOTIVATION_BONUS = Math.max(1, Number(process.env.DAILY_MOTIVATION_BONUS || 5));
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const ACCOUNT_MEMORY_LIMIT = Math.max(1, Math.min(Number(process.env.ACCOUNT_MEMORY_LIMIT || 5), 8));
@@ -370,6 +396,146 @@ const modelProfiles = {
     ].join("\n")
   }
 };
+
+function addLatencySample(target, latencyMs) {
+  if (!target || !Number.isFinite(Number(latencyMs))) return;
+  target.latency_samples = Array.isArray(target.latency_samples) ? target.latency_samples : [];
+  target.latency_samples.push(Math.max(0, Math.round(Number(latencyMs))));
+  if (target.latency_samples.length > 50) target.latency_samples.splice(0, target.latency_samples.length - 50);
+}
+
+function averageLatency(samples = []) {
+  const safeSamples = (Array.isArray(samples) ? samples : []).map(Number).filter(Number.isFinite);
+  if (!safeSamples.length) return 0;
+  return Math.round(safeSamples.reduce((total, value) => total + value, 0) / safeSamples.length);
+}
+
+function recordAiProviderHealth(provider, ok, latencyMs = 0, error = null) {
+  const key = normalizeProviderKey(provider);
+  const target = aiRuntimeState.providers[key];
+  if (!target) return;
+  addLatencySample(target, latencyMs);
+  if (ok) {
+    target.last_success_at = new Date().toISOString();
+    target.last_error = null;
+    target.failure_streak = 0;
+    return;
+  }
+  target.last_error_at = new Date().toISOString();
+  target.last_error = String(error?.message || error || "Unknown AI provider error").slice(0, 500);
+  target.failure_streak = Math.max(1, Number(target.failure_streak || 0) + 1);
+}
+
+function recordAiSubsystemHealth(subsystem, ok, latencyMs = 0, error = null) {
+  const target = aiRuntimeState[subsystem];
+  if (!target) return;
+  addLatencySample(target, latencyMs);
+  if (ok) {
+    target.last_success_at = new Date().toISOString();
+    target.last_error = null;
+    return;
+  }
+  target.last_error_at = new Date().toISOString();
+  target.last_error = String(error?.message || error || `Unknown ${subsystem} error`).slice(0, 500);
+}
+
+function recordLoginFailure(code, status = 0) {
+  const now = Date.now();
+  aiRuntimeState.loginFailures.push({
+    at: now,
+    code: String(code || "LOGIN_FAILED").slice(0, 80),
+    status: Number(status || 0)
+  });
+  aiRuntimeState.loginFailures = aiRuntimeState.loginFailures.filter((item) => now - Number(item.at || 0) <= 60 * 60_000);
+}
+
+function estimateAiCostUsd(provider, usage = {}) {
+  const key = normalizeProviderKey(provider);
+  const inputTokens = Math.max(0, Number(usage.input_tokens || usage.prompt_tokens || usage.inputTokens || 0));
+  const outputTokens = Math.max(0, Number(usage.output_tokens || usage.completion_tokens || usage.outputTokens || 0));
+  const inputRate = key === "deepseek" ? AI_DEEPSEEK_INPUT_USD_PER_1M : AI_OPENAI_INPUT_USD_PER_1M;
+  const outputRate = key === "deepseek" ? AI_DEEPSEEK_OUTPUT_USD_PER_1M : AI_OPENAI_OUTPUT_USD_PER_1M;
+  return Number((((inputTokens * inputRate) + (outputTokens * outputRate)) / 1_000_000).toFixed(6));
+}
+
+function getProviderStatus(provider) {
+  const state = aiRuntimeState.providers[normalizeProviderKey(provider)] || {};
+  if (!state.configured) return "not_configured";
+  const lastErrorAt = state.last_error_at ? new Date(state.last_error_at).getTime() : 0;
+  const recentlyFailed = lastErrorAt && Date.now() - lastErrorAt <= AI_PROVIDER_DEGRADED_WINDOW_MS;
+  if (recentlyFailed && Number(state.failure_streak || 0) >= AI_PROVIDER_FAILURE_STREAK_LIMIT) return "degraded";
+  if (state.last_success_at) return "ok";
+  return "configured";
+}
+
+function buildProviderHealth(provider) {
+  const key = normalizeProviderKey(provider);
+  const state = aiRuntimeState.providers[key] || {};
+  return {
+    provider: key,
+    configured: Boolean(state.configured),
+    status: getProviderStatus(key),
+    last_success_at: state.last_success_at || null,
+    last_error_at: state.last_error_at || null,
+    last_error: state.last_error || null,
+    failure_streak: Number(state.failure_streak || 0),
+    avg_latency_ms: averageLatency(state.latency_samples)
+  };
+}
+
+function buildCostBudgets() {
+  return {
+    site_daily_usd: AI_SITE_DAILY_COST_LIMIT_USD,
+    user_daily_usd: AI_USER_DAILY_COST_LIMIT_USD,
+    warning_ratio: AI_COST_WARNING_RATIO,
+    plan_daily_usd: { ...AI_PLAN_DAILY_COST_LIMITS_USD }
+  };
+}
+
+function getCostLimitStatus(used = 0, limit = 0) {
+  const safeUsed = Math.max(0, Number(used || 0));
+  const safeLimit = Math.max(0, Number(limit || 0));
+  if (!safeLimit) return { used: safeUsed, limit: safeLimit, ratio: 0, status: "unlimited" };
+  const ratio = safeUsed / safeLimit;
+  return {
+    used: Number(safeUsed.toFixed(6)),
+    limit: safeLimit,
+    ratio: Number(ratio.toFixed(4)),
+    status: ratio >= 1 ? "blocked" : ratio >= AI_COST_WARNING_RATIO ? "warning" : "ok"
+  };
+}
+
+function isProviderDegradedForSafeMode() {
+  return ["deepseek", "openai"].some((provider) => getProviderStatus(provider) === "degraded");
+}
+
+function buildSafeModeState(costStats = {}, options = {}) {
+  const site = getCostLimitStatus(costStats.site_daily_cost_usd, AI_SITE_DAILY_COST_LIMIT_USD);
+  const forced = ORLIXOR_AI_FORCE_SAFE_MODE || Boolean(options.simulateSafeMode);
+  const providerDegraded = isProviderDegradedForSafeMode();
+  const active = forced || site.status === "blocked" || providerDegraded;
+  const reasons = [];
+  if (forced) reasons.push(options.simulateSafeMode ? "simulation" : "forced_by_env");
+  if (site.status === "blocked") reasons.push("site_daily_cost_limit");
+  if (providerDegraded) reasons.push("provider_degraded");
+  return {
+    active,
+    reasons,
+    site_cost: site,
+    restrictions: active ? {
+      free_deepseek_only: true,
+      images_disabled: true,
+      heavy_requests_disabled: true,
+      reduced_context: true
+    } : {
+      free_deepseek_only: false,
+      images_disabled: false,
+      heavy_requests_disabled: false,
+      reduced_context: false
+    }
+  };
+}
+
 const MEMORY_STOP_WORDS = new Set([
   "هذا", "هذه", "ذلك", "تلك", "هناك", "هنا", "الذي", "التي", "الى", "إلى", "على", "من", "عن", "في", "مع",
   "ثم", "او", "أو", "كما", "بعد", "قبل", "لقد", "كان", "كانت", "يكون", "يمكن", "عندي", "عندك", "عنده",
@@ -1829,6 +1995,14 @@ function routeModelForUser({ user, requestedModel, message = "", attachmentCount
   } else if (intelligence.needsSpeed && limits.allowedModels.includes("turbo")) {
     modelKey = "turbo";
   }
+  const routeReason = [
+    `plan:${planKey}`,
+    `task:${intelligence.taskType}`,
+    advanced ? "advanced" : "standard",
+    intelligence.needsSpeed ? "speed" : "",
+    intelligence.needsCreativity ? "creative" : "",
+    modelKey !== requestedKey ? `rerouted:${requestedKey}->${modelKey}` : "requested_allowed"
+  ].filter(Boolean).join("|");
 
   let provider = "openai";
   let deepseekModel = DEEPSEEK_CHAT_MODEL;
@@ -1868,6 +2042,7 @@ function routeModelForUser({ user, requestedModel, message = "", attachmentCount
     taskType: intelligence.taskType,
     questionType: intelligence.questionType,
     promptKey: intelligence.promptKey,
+    routeReason,
     queuePriority: limits.queuePriority,
     estimatedInputTokens,
     estimatedRequestTokens: estimatedInputTokens + Math.max(120, Number(limits.maxOutputTokens || OPENAI_MAX_OUTPUT_TOKENS)),
@@ -1915,6 +2090,13 @@ async function enforceModelUsageLimits(user, routing, options = {}) {
 }
 
 async function enforceImageUsageLimit(user, taskType = "image") {
+  const safeMode = buildSafeModeState(await getAiCostGuardrailStatsSafe());
+  if (safeMode.active) {
+    throw createPublicHttpError(503, "AI_SAFE_MODE_IMAGES_DISABLED", "تم إيقاف الصور مؤقتًا لتخفيف الضغط على النظام. جرّب لاحقًا من فضلك.", {
+      safe_mode: true,
+      reasons: safeMode.reasons
+    });
+  }
   const { planKey, limits } = getPlanLimits(user);
   enforcePlanRequestRate(user, planKey, limits);
   const stats = await getUserUsageStats(user);
@@ -2907,6 +3089,7 @@ async function callDeepSeekChat({ input, modelProfile }) {
     throw createHttpError(503, "DeepSeek is not configured on the server.");
   }
 
+  const startedAt = Date.now();
   const profile = modelProfile || modelProfiles.orlixor;
   const endpoint = DEEPSEEK_CHAT_COMPLETIONS_ENDPOINT;
   const model = resolveProviderModel(profile, "deepseek");
@@ -2931,6 +3114,7 @@ async function callDeepSeekChat({ input, modelProfile }) {
       signal: controller.signal
     });
   } catch (error) {
+    recordAiProviderHealth("deepseek", false, Date.now() - startedAt, error);
     if (error?.name === "AbortError") {
       throw createHttpError(504, "DeepSeek request timed out.");
     }
@@ -2945,6 +3129,7 @@ async function callDeepSeekChat({ input, modelProfile }) {
     : { error: await response.text() };
 
   if (!response.ok) {
+    recordAiProviderHealth("deepseek", false, Date.now() - startedAt, payload?.error?.message || payload?.message || `HTTP_${response.status}`);
     console.error("[DEEPSEEK_CHAT_ERROR]", {
       endpoint,
       model,
@@ -2959,9 +3144,11 @@ async function callDeepSeekChat({ input, modelProfile }) {
 
   const text = extractResponseText(payload);
   if (!text) {
+    recordAiProviderHealth("deepseek", false, Date.now() - startedAt, "DeepSeek returned an empty response.");
     throw createHttpError(502, "DeepSeek returned an empty response.");
   }
 
+  recordAiProviderHealth("deepseek", true, Date.now() - startedAt);
   return { text, raw: payload, usage: extractTokenUsage(payload), provider: "deepseek", model };
 }
 
@@ -2970,6 +3157,7 @@ async function callOpenAIChat({ input, modelProfile }) {
     throw createHttpError(503, "مزود النصوص غير مفعّل حاليًا.");
   }
 
+  const startedAt = Date.now();
   const profile = modelProfile || modelProfiles.orlixor;
   const endpoint = OPENAI_CHAT_COMPLETIONS_ENDPOINT;
   const model = resolveProviderModel(profile, "openai");
@@ -2994,6 +3182,7 @@ async function callOpenAIChat({ input, modelProfile }) {
       signal: controller.signal
     });
   } catch (error) {
+    recordAiProviderHealth("openai", false, Date.now() - startedAt, error);
     if (error?.name === "AbortError") {
       console.error("[OPENAI_CHAT_TIMEOUT]", {
         endpoint,
@@ -3019,6 +3208,7 @@ async function callOpenAIChat({ input, modelProfile }) {
     : { error: await response.text() };
 
   if (!response.ok) {
+    recordAiProviderHealth("openai", false, Date.now() - startedAt, payload?.error?.message || payload?.message || `HTTP_${response.status}`);
     console.error("[OPENAI_CHAT_ERROR]", {
       endpoint,
       model,
@@ -3037,6 +3227,7 @@ async function callOpenAIChat({ input, modelProfile }) {
     throw createHttpError(502, "عاد Orlixor AI برد فارغ.");
   }
 
+  recordAiProviderHealth("openai", true, Date.now() - startedAt);
   return { text, raw: payload, usage: extractTokenUsage(payload), provider: "openai" };
 }
 
@@ -4184,6 +4375,7 @@ async function callOpenAiWebSearchV2({ query, language, sourceType, deep }) {
 async function createEmbedding(content) {
   const text = String(content || "").trim();
   if (!ORLIXOR_ENABLE_EMBEDDINGS || !OPENAI_API_KEY || !text) return null;
+  const startedAt = Date.now();
 
   try {
     const response = await fetch(OPENAI_EMBEDDINGS_ENDPOINT, {
@@ -4198,10 +4390,16 @@ async function createEmbedding(content) {
       })
     });
     const payload = await response.json().catch(() => ({}));
-    if (!response.ok) return null;
+    if (!response.ok) {
+      recordAiSubsystemHealth("embeddings", false, Date.now() - startedAt, payload?.error?.message || payload?.message || `HTTP_${response.status}`);
+      return null;
+    }
     const embedding = payload?.data?.[0]?.embedding;
-    return Array.isArray(embedding) ? embedding : null;
-  } catch (_) {
+    const ok = Array.isArray(embedding);
+    recordAiSubsystemHealth("embeddings", ok, Date.now() - startedAt, ok ? null : "Embedding response did not include a vector.");
+    return ok ? embedding : null;
+  } catch (error) {
+    recordAiSubsystemHealth("embeddings", false, Date.now() - startedAt, error);
     return null;
   }
 }
@@ -4215,6 +4413,7 @@ async function getRetrievedKnowledgeContext(payload = {}) {
   const sanitized = aiIntelligence.sanitizeSensitiveText(payload.message || "");
   const queryText = sanitized.text || String(payload.message || "").trim();
   if (!queryText) return { context: "", sources: [] };
+  const startedAt = Date.now();
 
   let embedding = null;
   if (ORLIXOR_ENABLE_EMBEDDINGS) {
@@ -4229,14 +4428,225 @@ async function getRetrievedKnowledgeContext(payload = {}) {
       limit: 10
     });
     const ranked = aiIntelligence.rankKnowledgeSources(rows, analysis).slice(0, 5);
+    recordAiSubsystemHealth("rag", true, Date.now() - startedAt);
     return {
       context: aiIntelligence.formatKnowledgeContext(ranked, 5),
       sources: ranked
     };
   } catch (error) {
+    recordAiSubsystemHealth("rag", false, Date.now() - startedAt, error);
     console.warn("[AI_RAG_RETRIEVAL_SKIPPED]", error?.message || error);
     return { context: "", sources: [] };
   }
+}
+
+async function getAiCostGuardrailStatsSafe() {
+  if (!isDatabaseReady() || typeof databaseClient.getAiCostGuardrailStats !== "function") {
+    return {
+      site_daily_cost_usd: 0,
+      events_today: 0,
+      avg_latency_ms: 0,
+      avg_quality: 0,
+      by_plan: [],
+      by_user: []
+    };
+  }
+  try {
+    return await databaseClient.getAiCostGuardrailStats({
+      since: new Date(new Date().toISOString().slice(0, 10)).toISOString()
+    });
+  } catch (error) {
+    console.warn("[AI_COST_GUARDRAILS_STATS_FAILED]", error?.message || error);
+    return {
+      site_daily_cost_usd: 0,
+      events_today: 0,
+      avg_latency_ms: 0,
+      avg_quality: 0,
+      by_plan: [],
+      by_user: []
+    };
+  }
+}
+
+function findCostRow(rows = [], key, field) {
+  return (Array.isArray(rows) ? rows : []).find((row) => String(row?.[field] || "").toLowerCase() === String(key || "").toLowerCase()) || null;
+}
+
+async function enforceAiProductionGuardrails(user, routing, options = {}) {
+  const stats = await getAiCostGuardrailStatsSafe();
+  const safeMode = buildSafeModeState(stats);
+  const planKey = routing.planKey || getUserPlanKey(user);
+  const planLimit = AI_PLAN_DAILY_COST_LIMITS_USD[planKey] ?? 0;
+  const planRow = findCostRow(stats.by_plan, planKey, "plan");
+  const userRow = findCostRow(stats.by_user, user?.id, "user_id");
+  const planStatus = getCostLimitStatus(planRow?.cost_usd || 0, planLimit);
+  const userStatus = getCostLimitStatus(userRow?.cost_usd || 0, AI_USER_DAILY_COST_LIMIT_USD);
+
+  routing.costGuardrails = {
+    site: safeMode.site_cost,
+    plan: planStatus,
+    user: userStatus,
+    safe_mode: safeMode
+  };
+
+  if (planStatus.status === "blocked") {
+    throw createPublicHttpError(429, "AI_PLAN_DAILY_COST_LIMIT", "وصلت باقتك إلى حد التكلفة اليومي مؤقتًا. حاول لاحقًا أو تواصل مع الدعم.", {
+      plan: planKey,
+      used: planStatus.used,
+      limit: planStatus.limit
+    });
+  }
+
+  if (userStatus.status === "blocked") {
+    throw createPublicHttpError(429, "AI_USER_DAILY_COST_LIMIT", "وصل حسابك إلى حد التكلفة اليومي مؤقتًا. سنعيد المحاولة بعد إعادة التحديث.", {
+      user_id: user?.id || null,
+      used: userStatus.used,
+      limit: userStatus.limit
+    });
+  }
+
+  if (safeMode.active) {
+    routing.safeModeActive = true;
+    routing.safeModeReasons = safeMode.reasons;
+    routing.modelProfile.maxContextTokens = Math.min(Number(routing.modelProfile.maxContextTokens || FREE_MAX_CONTEXT_TOKENS), FREE_MAX_CONTEXT_TOKENS);
+    routing.modelProfile.maxOutputTokens = Math.min(Number(routing.modelProfile.maxOutputTokens || OPENAI_MAX_OUTPUT_TOKENS), 500);
+
+    const hasAttachments = Number(options.attachmentCount || 0) > 0;
+    const heavy = hasAttachments ||
+      options.operation === "image" ||
+      routing.intelligence?.needsCreativity ||
+      Number(routing.estimatedInputTokens || 0) > 2500;
+
+    if (heavy) {
+      throw createPublicHttpError(503, "AI_SAFE_MODE_ACTIVE", "نخفف الضغط على الذكاء الاصطناعي الآن لحماية التجربة. جرّب طلبًا نصيًا أخف أو حاول لاحقًا.", {
+        safe_mode: true,
+        reasons: safeMode.reasons
+      });
+    }
+
+    if (planKey === "free") {
+      routing.modelKey = "orlixor";
+      routing.provider = DEEPSEEK_API_KEY ? "deepseek" : "openai";
+      routing.deepseekModel = DEEPSEEK_CHAT_MODEL;
+      routing.openaiModel = OPENAI_MODEL_DEFAULT || OPENAI_MODEL;
+      routing.modelProfile = buildModelRouterProfile(modelProfiles.orlixor, routing);
+      routing.modelProfile.maxContextTokens = Math.min(Number(routing.modelProfile.maxContextTokens || FREE_MAX_CONTEXT_TOKENS), FREE_MAX_CONTEXT_TOKENS);
+      routing.modelProfile.maxOutputTokens = Math.min(Number(routing.modelProfile.maxOutputTokens || OPENAI_MAX_OUTPUT_TOKENS), 500);
+    }
+  }
+}
+
+function buildAiAlerts({ costStats = {}, safeMode = {}, analytics = {} } = {}) {
+  const alerts = [];
+  const siteStatus = getCostLimitStatus(costStats.site_daily_cost_usd, AI_SITE_DAILY_COST_LIMIT_USD);
+  if (siteStatus.status === "warning") {
+    alerts.push({ type: "cost_warning", severity: "warning", message: "Site AI cost reached 80% of the daily budget.", data: siteStatus });
+  }
+  if (siteStatus.status === "blocked" || safeMode.active) {
+    alerts.push({ type: "safe_mode", severity: "critical", message: "AI Safe Mode is active.", data: safeMode });
+  }
+  for (const [plan, limit] of Object.entries(AI_PLAN_DAILY_COST_LIMITS_USD)) {
+    const row = findCostRow(costStats.by_plan, plan, "plan");
+    const status = getCostLimitStatus(row?.cost_usd || 0, limit);
+    if (["warning", "blocked"].includes(status.status)) {
+      alerts.push({
+        type: "plan_cost_guardrail",
+        severity: status.status === "blocked" ? "critical" : "warning",
+        message: `${plan} AI cost reached ${Math.round(status.ratio * 100)}% of the daily budget.`,
+        data: { plan, ...status }
+      });
+    }
+  }
+  const userWarning = (Array.isArray(costStats.by_user) ? costStats.by_user : [])
+    .map((row) => ({ row, status: getCostLimitStatus(row.cost_usd || 0, AI_USER_DAILY_COST_LIMIT_USD) }))
+    .find((item) => ["warning", "blocked"].includes(item.status.status));
+  if (userWarning) {
+    alerts.push({
+      type: "user_cost_guardrail",
+      severity: userWarning.status.status === "blocked" ? "critical" : "warning",
+      message: "A user is close to or above the daily AI cost budget.",
+      data: { user_id: userWarning.row.user_id, plan: userWarning.row.plan, ...userWarning.status }
+    });
+  }
+  for (const provider of ["deepseek", "openai"]) {
+    const health = buildProviderHealth(provider);
+    if (["degraded", "not_configured"].includes(health.status)) {
+      alerts.push({ type: "api_failure", severity: health.status === "degraded" ? "critical" : "warning", message: `${provider} status is ${health.status}.`, data: health });
+    }
+  }
+  const avgQuality = Number(costStats.avg_quality || analytics.overview?.avg_quality || 0);
+  if (avgQuality > 0 && avgQuality < 60) {
+    alerts.push({ type: "quality_drop", severity: "warning", message: "Average AI quality dropped below 60%.", data: { avg_quality: avgQuality } });
+  }
+  const topModel = analytics.overview?.most_used_model;
+  if (topModel && Number(topModel.requests || 0) >= 100) {
+    alerts.push({ type: "model_pressure", severity: "info", message: "High pressure on a single model.", data: topModel });
+  }
+  const loginFailures = aiRuntimeState.loginFailures.filter((item) => Date.now() - Number(item.at || 0) <= 15 * 60_000);
+  if (loginFailures.length >= 10) {
+    alerts.push({ type: "login_errors", severity: "warning", message: "Login errors increased in the last 15 minutes.", data: { count: loginFailures.length } });
+  }
+  return alerts;
+}
+
+async function buildAiHealthSnapshot(options = {}) {
+  const costStats = await getAiCostGuardrailStatsSafe();
+  const analytics = isDatabaseReady() && typeof databaseClient.getAiIntelligenceAnalytics === "function"
+    ? await databaseClient.getAiIntelligenceAnalytics({}).catch(() => ({}))
+    : {};
+  const safeMode = buildSafeModeState(costStats, options);
+  const approvedSources = isDatabaseReady() && typeof databaseClient.listKnowledgeSources === "function"
+    ? await databaseClient.listKnowledgeSources({ status: "approved", limit: 5 }).catch(() => [])
+    : [];
+  const dbDriver = databaseState?.driver || "unknown";
+  const vectorType = dbDriver.includes("postgres")
+    ? (ORLIXOR_ENABLE_EMBEDDINGS ? "postgres_pgvector_or_embedding_ready" : "postgres_keyword_fallback")
+    : "fallback_keyword";
+  const ragStatus = isDatabaseReady() && typeof databaseClient.listKnowledgeChunks === "function"
+    ? "ok"
+    : "unavailable";
+  const health = {
+    generated_at: new Date().toISOString(),
+    providers: {
+      deepseek: buildProviderHealth("deepseek"),
+      openai: buildProviderHealth("openai")
+    },
+    rag: {
+      status: ragStatus,
+      approved_sources_sample: Array.isArray(approvedSources) ? approvedSources.length : 0,
+      last_success_at: aiRuntimeState.rag.last_success_at,
+      last_error_at: aiRuntimeState.rag.last_error_at,
+      last_error: aiRuntimeState.rag.last_error,
+      avg_latency_ms: averageLatency(aiRuntimeState.rag.latency_samples)
+    },
+    embeddings: {
+      enabled: ORLIXOR_ENABLE_EMBEDDINGS,
+      configured: Boolean(OPENAI_API_KEY),
+      status: ORLIXOR_ENABLE_EMBEDDINGS ? (OPENAI_API_KEY ? "enabled" : "missing_openai_key") : "disabled",
+      last_success_at: aiRuntimeState.embeddings.last_success_at,
+      last_error_at: aiRuntimeState.embeddings.last_error_at,
+      last_error: aiRuntimeState.embeddings.last_error,
+      avg_latency_ms: averageLatency(aiRuntimeState.embeddings.latency_samples)
+    },
+    vector_store: {
+      driver: dbDriver,
+      type: vectorType,
+      status: isDatabaseReady() ? "ok" : "unavailable"
+    },
+    cost_guardrails: {
+      budgets: buildCostBudgets(),
+      stats: costStats,
+      site: getCostLimitStatus(costStats.site_daily_cost_usd, AI_SITE_DAILY_COST_LIMIT_USD),
+      plans: Object.entries(AI_PLAN_DAILY_COST_LIMITS_USD).map(([plan, limit]) => {
+        const row = findCostRow(costStats.by_plan, plan, "plan");
+        return { plan, ...getCostLimitStatus(row?.cost_usd || 0, limit), requests: Number(row?.requests || 0) };
+      })
+    },
+    safe_mode: safeMode,
+    alerts: []
+  };
+  health.alerts = buildAiAlerts({ costStats, safeMode, analytics });
+  return health;
 }
 
 function inferMemoryEntries(userMessage, assistantText) {
@@ -4500,6 +4910,7 @@ async function handleLogin(req, res) {
       message: error?.message || String(error || ""),
       code: "AUTH_LOOKUP_FAILED"
     });
+    recordLoginFailure("AUTH_LOOKUP_FAILED", 503);
     console.error("[mullem] login user lookup failed", {
       request_id: req.__requestId,
       email,
@@ -4517,6 +4928,7 @@ async function handleLogin(req, res) {
       message: "Account not found",
       code: "ACCOUNT_NOT_FOUND"
     });
+    recordLoginFailure("ACCOUNT_NOT_FOUND", 404);
     throw createPublicHttpError(404, "ACCOUNT_NOT_FOUND", "الحساب غير موجود.", {
       provider: "password"
     });
@@ -4528,6 +4940,7 @@ async function handleLogin(req, res) {
       message: "Wrong password",
       code: "WRONG_PASSWORD"
     });
+    recordLoginFailure("WRONG_PASSWORD", 401);
     throw createPublicHttpError(401, "WRONG_PASSWORD", "كلمة المرور خاطئة.", {
       provider: "password"
     });
@@ -4541,6 +4954,7 @@ async function handleLogin(req, res) {
       message: "Account banned",
       code: "ACCOUNT_BANNED"
     });
+    recordLoginFailure("ACCOUNT_BANNED", 403);
     throw createPublicHttpError(403, "ACCOUNT_BANNED", "هذا الحساب محظور.", {
       provider: "password"
     });
@@ -4552,6 +4966,7 @@ async function handleLogin(req, res) {
       message: "Account suspended",
       code: "ACCOUNT_SUSPENDED"
     });
+    recordLoginFailure("ACCOUNT_SUSPENDED", 403);
     throw createPublicHttpError(403, "ACCOUNT_SUSPENDED", "هذا الحساب موقوف مؤقتًا.", {
       provider: "password"
     });
@@ -6006,6 +6421,10 @@ async function handleChatSend(req, res) {
   await enforceModelUsageLimits(activeUser, routing, {
     confirmOverage: Boolean(payload.confirm_overage || payload.confirmOverage)
   });
+  await enforceAiProductionGuardrails(activeUser, routing, {
+    operation: "chat",
+    attachmentCount
+  });
   const selectedModel = routing.modelKey;
   if (selectedModel === "alpha" && !hasAlphaModelAccess(activeUser)) {
     throw createHttpError(403, "Orlixor AI Alpha متاح لمجموعة تجريبية محدودة فقط.");
@@ -6088,6 +6507,8 @@ async function handleChatSend(req, res) {
     latencyMs: Date.now() - startedAt,
     cached: Boolean(cachedResult)
   });
+  const provider = resolveProfileProvider(modelProfile);
+  const totalCostEstimateUsd = estimateAiCostUsd(provider, result.usage);
 
   if (activeUser && isDatabaseReady()) {
     chargedUser = await chargeUserForMessage(
@@ -6129,7 +6550,7 @@ async function handleChatSend(req, res) {
       task_type: routing.taskType,
       question_type: routing.questionType,
       model_key: selectedModel,
-      provider: resolveProfileProvider(modelProfile),
+      provider,
       prompt_key: routing.promptKey,
       prompt_version: "v1",
       quality_score: quality.qualityScore,
@@ -6146,6 +6567,16 @@ async function handleChatSend(req, res) {
       was_cached: Boolean(cachedResult),
       metadata: {
         request_analysis: routing.intelligence,
+        user_id: activeUser.id,
+        plan: routing.planKey,
+        model: selectedModel,
+        provider,
+        route_reason: routing.routeReason,
+        rag_used: retrievedKnowledge.sources.length > 0,
+        quality_score: quality.qualityScore,
+        total_cost_estimate_usd: totalCostEstimateUsd,
+        cost_guardrails: routing.costGuardrails || null,
+        safe_mode: Boolean(routing.safeModeActive),
         rag_sources: retrievedKnowledge.sources.map((source) => ({
           id: source.id,
           title: source.title || source.source_title || "",
@@ -6198,7 +6629,8 @@ async function handleChatSend(req, res) {
         prompt_key: routing.promptKey,
         task_type: routing.taskType,
         question_type: routing.questionType,
-        rag_sources: retrievedKnowledge.sources.length
+        rag_sources: retrievedKnowledge.sources.length,
+        safe_mode: Boolean(routing.safeModeActive)
       },
       user: chargedUser ? buildApiUser(chargedUser) : null,
       guest: null
@@ -6407,6 +6839,18 @@ async function handleAdminAiIntelligence(req, res) {
       privacy_sanitization_enabled: true,
       analytics
     }
+  });
+}
+
+async function handleAdminAiHealth(req, res) {
+  await requireAdminUser(req);
+  const url = new URL(req.url, `http://${req.headers.host || "127.0.0.1"}`);
+  const health = await buildAiHealthSnapshot({
+    simulateSafeMode: url.searchParams.get("simulate_safe_mode") === "1"
+  });
+  sendJson(req, res, 200, {
+    success: true,
+    data: health
   });
 }
 
@@ -7032,6 +7476,10 @@ async function handleAssistantV3Protected(req, res) {
   await enforceModelUsageLimits(activeUser, routing, {
     confirmOverage: Boolean(payload.confirm_overage || payload.confirmOverage)
   });
+  await enforceAiProductionGuardrails(activeUser, routing, {
+    operation: "assistant_v3",
+    attachmentCount: 0
+  });
 
   const modelProfile = applyUserModelLimits(routing.modelProfile, activeUser);
   const overageXpCost = Math.max(0, Number(routing.extraXpCost || 0));
@@ -7086,6 +7534,8 @@ async function handleAssistantV3Protected(req, res) {
     latencyMs: Date.now() - startedAt,
     cached: Boolean(cachedResult)
   });
+  const provider = resolveProfileProvider(modelProfile);
+  const totalCostEstimateUsd = estimateAiCostUsd(provider, result.usage);
 
   const chargedUser = await chargeUserForMessage(
     activeUser,
@@ -7105,13 +7555,17 @@ async function handleAssistantV3Protected(req, res) {
       output_tokens: Number(result.usage?.output_tokens || result.usage?.completion_tokens || 0),
     metadata: {
         model_key: routing.modelKey,
-        provider: resolveProfileProvider(modelProfile),
-        provider_model: resolveProviderModel(modelProfile, resolveProfileProvider(modelProfile)),
+        provider,
+        provider_model: resolveProviderModel(modelProfile, provider),
         plan: routing.planKey,
         cache_hit: Boolean(cachedResult),
         prompt_key: routing.promptKey,
         task_type: routing.taskType,
-        rag_sources: assistantKnowledge.sources.length
+        route_reason: routing.routeReason,
+        rag_used: assistantKnowledge.sources.length > 0,
+        rag_sources: assistantKnowledge.sources.length,
+        total_cost_estimate_usd: totalCostEstimateUsd,
+        safe_mode: Boolean(routing.safeModeActive)
       }
     });
   }
@@ -7122,7 +7576,7 @@ async function handleAssistantV3Protected(req, res) {
       task_type: routing.taskType,
       question_type: routing.questionType,
       model_key: routing.modelKey,
-      provider: resolveProfileProvider(modelProfile),
+      provider,
       prompt_key: routing.promptKey,
       prompt_version: "v1",
       quality_score: quality.qualityScore,
@@ -7139,6 +7593,16 @@ async function handleAssistantV3Protected(req, res) {
       was_cached: Boolean(cachedResult),
       metadata: {
         request_analysis: routing.intelligence,
+        user_id: activeUser.id,
+        plan: routing.planKey,
+        model: routing.modelKey,
+        provider,
+        route_reason: routing.routeReason,
+        rag_used: assistantKnowledge.sources.length > 0,
+        quality_score: quality.qualityScore,
+        total_cost_estimate_usd: totalCostEstimateUsd,
+        cost_guardrails: routing.costGuardrails || null,
+        safe_mode: Boolean(routing.safeModeActive),
         rag_sources: assistantKnowledge.sources.length
       }
     });
@@ -7146,8 +7610,8 @@ async function handleAssistantV3Protected(req, res) {
 
   sendJson(req, res, 200, {
     ok: true,
-    provider: resolveProfileProvider(modelProfile),
-    model: resolveProviderModel(modelProfile, resolveProfileProvider(modelProfile)),
+    provider,
+    model: resolveProviderModel(modelProfile, provider),
     model_key: routing.modelKey,
     plan: routing.planKey,
     queue_priority: routing.queuePriority,
@@ -7158,7 +7622,8 @@ async function handleAssistantV3Protected(req, res) {
       prompt_key: routing.promptKey,
       task_type: routing.taskType,
       question_type: routing.questionType,
-      rag_sources: assistantKnowledge.sources.length
+      rag_sources: assistantKnowledge.sources.length,
+      safe_mode: Boolean(routing.safeModeActive)
     },
     usage: {
       xp_spent: totalXpCost,
@@ -8450,6 +8915,11 @@ async function routeRequest(req, res) {
 
   if (req.method === "GET" && requestPath === "/api/admin/ai-intelligence") {
     await handleAdminAiIntelligence(req, res);
+    return;
+  }
+
+  if (req.method === "GET" && requestPath === "/api/admin/ai-health") {
+    await handleAdminAiHealth(req, res);
     return;
   }
 

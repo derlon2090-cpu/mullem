@@ -12,6 +12,7 @@
     toolSuggestions: [],
     ai: {
       analytics: null,
+      health: null,
       knowledge: [],
       review: [],
       rag: null,
@@ -59,6 +60,8 @@
     messagesGrid: $("[data-messages-grid]"),
     settingsGrid: $("[data-settings-grid]"),
     aiOverview: $("[data-ai-overview]"),
+    aiHealth: $("[data-ai-health]"),
+    aiAlerts: $("[data-ai-alerts]"),
     aiFeedback: $("[data-ai-feedback]"),
     aiFeedbackModel: $("[data-ai-feedback-model]"),
     aiFeedbackPlan: $("[data-ai-feedback-plan]"),
@@ -188,7 +191,7 @@
   }
 
   async function loadAdminData() {
-    const [stats, users, plans, subscriptions, xpLedger, logs, notifications, toolSuggestions, aiAnalytics, aiKnowledge, aiReview] = await Promise.all([
+    const [stats, users, plans, subscriptions, xpLedger, logs, notifications, toolSuggestions, aiAnalytics, aiHealth, aiKnowledge, aiReview] = await Promise.all([
       api.getAdminStats(),
       api.getAdminUsers({ per_page: 200 }),
       api.getAdminPackages(),
@@ -198,6 +201,7 @@
       api.getAdminNotifications?.({ limit: 80 }) || api.request("/admin/notifications"),
       api.getAdminToolSuggestions?.({ limit: 120 }) || api.request("/admin/tool-suggestions"),
       api.getAdminAiIntelligence?.() || api.request("/admin/ai-intelligence"),
+      api.getAdminAiHealth?.() || api.request("/admin/ai-health"),
       api.getAdminAiKnowledge?.({ limit: 160 }) || api.request("/admin/ai-knowledge"),
       api.getAdminAiReview?.({ limit: 120 }) || api.request("/admin/ai-review")
     ]);
@@ -214,8 +218,9 @@
     if (notifications.ok) state.notifications = Array.isArray(notifications.data?.items) ? notifications.data.items : [];
     if (toolSuggestions.ok) state.toolSuggestions = Array.isArray(toolSuggestions.data?.items) ? toolSuggestions.data.items : [];
     state.ai.loading = false;
-    state.ai.error = [aiAnalytics, aiKnowledge, aiReview].find((item) => item && !item.ok)?.message || "";
+    state.ai.error = [aiAnalytics, aiHealth, aiKnowledge, aiReview].find((item) => item && !item.ok)?.message || "";
     if (aiAnalytics.ok) state.ai.analytics = aiAnalytics.data || null;
+    if (aiHealth.ok) state.ai.health = aiHealth.data || null;
     if (aiKnowledge.ok) state.ai.knowledge = Array.isArray(aiKnowledge.data?.items) ? aiKnowledge.data.items : [];
     if (aiReview.ok) state.ai.review = Array.isArray(aiReview.data?.items) ? aiReview.data.items : [];
 
@@ -719,6 +724,57 @@
     `).join("");
   }
 
+  function renderAiHealth(health) {
+    if (!nodes.aiHealth) return;
+    if (!health) {
+      nodes.aiHealth.innerHTML = `<div class="admin-empty-panel">جاري تحميل حالة AI...</div>`;
+      return;
+    }
+    const deepseek = health.providers?.deepseek || {};
+    const openai = health.providers?.openai || {};
+    const rows = [
+      ["DeepSeek", deepseek.status, deepseek.avg_latency_ms, deepseek.last_success_at, deepseek.last_error],
+      ["OpenAI", openai.status, openai.avg_latency_ms, openai.last_success_at, openai.last_error],
+      ["RAG", health.rag?.status, health.rag?.avg_latency_ms, health.rag?.last_success_at, health.rag?.last_error],
+      ["Embeddings", health.embeddings?.status, health.embeddings?.avg_latency_ms, health.embeddings?.last_success_at, health.embeddings?.last_error],
+      ["Vector Store", health.vector_store?.type || health.vector_store?.driver, 0, health.generated_at, health.vector_store?.status]
+    ];
+    nodes.aiHealth.innerHTML = `
+      <table class="admin-data-table compact">
+        <thead><tr><th>Service</th><th>Status</th><th>Avg Latency</th><th>Last Success</th><th>Last Error</th></tr></thead>
+        <tbody>${rows.map(([name, status, latency, success, error]) => `
+          <tr>
+            <td><strong>${escapeHtml(name)}</strong></td>
+            <td><mark class="admin-state">${escapeHtml(status || "unknown")}</mark></td>
+            <td>${formatNumber(latency || 0)}ms</td>
+            <td>${escapeHtml(success || "-")}</td>
+            <td><span>${escapeHtml(error || "-")}</span></td>
+          </tr>
+        `).join("")}</tbody>
+      </table>
+      <div class="admin-empty-panel">
+        Safe Mode: ${health.safe_mode?.active ? "Active" : "Inactive"} · Site cost: ${formatMoney(health.cost_guardrails?.site?.used || 0)} / ${formatMoney(health.cost_guardrails?.site?.limit || 0)}
+      </div>
+    `;
+  }
+
+  function renderAiAlerts(health) {
+    if (!nodes.aiAlerts) return;
+    const alerts = Array.isArray(health?.alerts) ? health.alerts : [];
+    nodes.aiAlerts.innerHTML = alerts.length ? `
+      <table class="admin-data-table compact">
+        <thead><tr><th>Alert</th><th>Severity</th><th>Details</th></tr></thead>
+        <tbody>${alerts.map((alert) => `
+          <tr>
+            <td><strong>${escapeHtml(alert.type || "alert")}</strong></td>
+            <td><mark class="admin-state">${escapeHtml(alert.severity || "info")}</mark></td>
+            <td><span>${escapeHtml(alert.message || "")}</span></td>
+          </tr>
+        `).join("")}</tbody>
+      </table>
+    ` : `<div class="admin-empty-panel">لا توجد تنبيهات AI حرجة الآن.</div>`;
+  }
+
   function renderAiFeedbackFilters(feedbackRows, modelRows) {
     const currentModel = nodes.aiFeedbackModel?.value || "";
     const currentPlan = nodes.aiFeedbackPlan?.value || "";
@@ -880,9 +936,12 @@
 
   function renderAiDashboard() {
     const analytics = getAiAnalytics();
+    const health = state.ai.health || {};
     const modelRows = Array.isArray(analytics.model_performance) ? analytics.model_performance : [];
     const feedbackRows = Array.isArray(analytics.feedback_analytics) ? analytics.feedback_analytics : [];
     renderAiOverview(analytics);
+    renderAiHealth(health);
+    renderAiAlerts(health);
     renderAiFeedbackFilters(feedbackRows, modelRows);
     renderAiFeedback(analytics);
     renderAiModelPerformance(analytics);

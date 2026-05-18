@@ -2163,6 +2163,85 @@ function createPostgresDatabaseClient(rawConfig = {}) {
     };
   }
 
+  async function getAiCostGuardrailStats(options = {}) {
+    const since = options.since ? toSqlDateTime(options.since) : new Date(new Date().toISOString().slice(0, 10)).toISOString();
+    const planRows = await query(
+      `
+        SELECT
+          COALESCE(NULLIF(metadata->>'plan', ''), 'unknown') AS plan,
+          COUNT(*)::int AS requests,
+          COALESCE(SUM(input_tokens + output_tokens), 0)::bigint AS tokens,
+          COALESCE(SUM(
+            CASE
+              WHEN COALESCE(metadata->>'total_cost_estimate_usd', '') ~ '^[0-9]+(\\.[0-9]+)?$'
+                THEN (metadata->>'total_cost_estimate_usd')::numeric
+              WHEN COALESCE(metadata->>'total_cost_estimate', '') ~ '^[0-9]+(\\.[0-9]+)?$'
+                THEN (metadata->>'total_cost_estimate')::numeric
+              ELSE COALESCE(token_cost, 0)::numeric / 1000000.0
+            END
+          ), 0)::float8 AS cost_usd
+        FROM ai_quality_events
+        WHERE created_at >= $1
+        GROUP BY plan
+        ORDER BY cost_usd DESC
+      `,
+      [since]
+    );
+    const userRows = await query(
+      `
+        SELECT
+          COALESCE(user_id::text, 'unknown') AS user_id,
+          MIN(COALESCE(NULLIF(metadata->>'plan', ''), 'unknown')) AS plan,
+          COUNT(*)::int AS requests,
+          COALESCE(SUM(input_tokens + output_tokens), 0)::bigint AS tokens,
+          COALESCE(SUM(
+            CASE
+              WHEN COALESCE(metadata->>'total_cost_estimate_usd', '') ~ '^[0-9]+(\\.[0-9]+)?$'
+                THEN (metadata->>'total_cost_estimate_usd')::numeric
+              WHEN COALESCE(metadata->>'total_cost_estimate', '') ~ '^[0-9]+(\\.[0-9]+)?$'
+                THEN (metadata->>'total_cost_estimate')::numeric
+              ELSE COALESCE(token_cost, 0)::numeric / 1000000.0
+            END
+          ), 0)::float8 AS cost_usd
+        FROM ai_quality_events
+        WHERE created_at >= $1
+        GROUP BY COALESCE(user_id::text, 'unknown')
+        ORDER BY cost_usd DESC
+        LIMIT 200
+      `,
+      [since]
+    );
+    const overviewRows = await query(
+      `
+        SELECT
+          COUNT(*)::int AS events_today,
+          COALESCE(ROUND(AVG(latency_ms)), 0)::int AS avg_latency_ms,
+          COALESCE(ROUND(AVG(quality_score)), 0)::int AS avg_quality,
+          COALESCE(SUM(
+            CASE
+              WHEN COALESCE(metadata->>'total_cost_estimate_usd', '') ~ '^[0-9]+(\\.[0-9]+)?$'
+                THEN (metadata->>'total_cost_estimate_usd')::numeric
+              WHEN COALESCE(metadata->>'total_cost_estimate', '') ~ '^[0-9]+(\\.[0-9]+)?$'
+                THEN (metadata->>'total_cost_estimate')::numeric
+              ELSE COALESCE(token_cost, 0)::numeric / 1000000.0
+            END
+          ), 0)::float8 AS site_daily_cost_usd
+        FROM ai_quality_events
+        WHERE created_at >= $1
+      `,
+      [since]
+    );
+    const overview = overviewRows[0] || {};
+    return {
+      site_daily_cost_usd: Number(overview.site_daily_cost_usd || 0),
+      events_today: Number(overview.events_today || 0),
+      avg_latency_ms: Number(overview.avg_latency_ms || 0),
+      avg_quality: Number(overview.avg_quality || 0),
+      by_plan: planRows.map((row) => ({ ...row, cost_usd: Number(row.cost_usd || 0) })),
+      by_user: userRows.map((row) => ({ ...row, cost_usd: Number(row.cost_usd || 0) }))
+    };
+  }
+
   async function saveToolUsage(payload = {}) {
     const userId = Number(payload.user_id);
     const toolKey = String(payload.tool_key || payload.tool || "").trim().slice(0, 80);
@@ -4143,6 +4222,7 @@ function createPostgresDatabaseClient(rawConfig = {}) {
     listKnowledgeChunks,
     recordAiQualityEvent,
     getAiIntelligenceAnalytics,
+    getAiCostGuardrailStats,
     saveToolUsage,
     recordXpLedger,
     listNotificationsForUser,

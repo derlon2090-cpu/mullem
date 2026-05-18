@@ -1290,6 +1290,55 @@ function createFallbackDatabaseClient() {
     };
   }
 
+  async function getAiCostGuardrailStats(options = {}) {
+    const since = options.since ? new Date(options.since).getTime() : new Date(new Date().toISOString().slice(0, 10)).getTime();
+    const rows = (data.aiQualityEvents || []).filter((event) => {
+      const createdAt = new Date(event.created_at || 0).getTime();
+      return Number.isFinite(createdAt) && createdAt >= since;
+    });
+    const estimateEventCost = (event) => {
+      const metadata = event.metadata || {};
+      const explicit = Number(metadata.total_cost_estimate_usd || metadata.total_cost_estimate || 0);
+      if (Number.isFinite(explicit) && explicit > 0) return explicit;
+      return Math.max(0, Number(event.token_cost || 0)) / 1_000_000;
+    };
+    const byPlan = new Map();
+    const byUser = new Map();
+    let siteDailyCost = 0;
+    let latency = 0;
+    let quality = 0;
+
+    for (const event of rows) {
+      const cost = estimateEventCost(event);
+      const plan = String(event.metadata?.plan || "unknown").toLowerCase();
+      const userId = event.user_id == null ? "unknown" : String(event.user_id);
+      siteDailyCost += cost;
+      latency += Number(event.latency_ms || 0);
+      quality += Number(event.quality_score || 0);
+
+      const planRow = byPlan.get(plan) || { plan, requests: 0, cost_usd: 0, tokens: 0 };
+      planRow.requests += 1;
+      planRow.cost_usd += cost;
+      planRow.tokens += Number(event.input_tokens || 0) + Number(event.output_tokens || 0);
+      byPlan.set(plan, planRow);
+
+      const userRow = byUser.get(userId) || { user_id: userId, plan, requests: 0, cost_usd: 0, tokens: 0 };
+      userRow.requests += 1;
+      userRow.cost_usd += cost;
+      userRow.tokens += Number(event.input_tokens || 0) + Number(event.output_tokens || 0);
+      byUser.set(userId, userRow);
+    }
+
+    return {
+      site_daily_cost_usd: Number(siteDailyCost.toFixed(6)),
+      events_today: rows.length,
+      avg_latency_ms: rows.length ? Math.round(latency / rows.length) : 0,
+      avg_quality: rows.length ? Math.round(quality / rows.length) : 0,
+      by_plan: [...byPlan.values()].map((row) => ({ ...row, cost_usd: Number(row.cost_usd.toFixed(6)) })),
+      by_user: [...byUser.values()].map((row) => ({ ...row, cost_usd: Number(row.cost_usd.toFixed(6)) }))
+    };
+  }
+
   async function getAiUsageStats(userId) {
     const safeUserId = Number(userId);
     if (!safeUserId) {
@@ -1936,6 +1985,7 @@ function createFallbackDatabaseClient() {
     listKnowledgeChunks,
     recordAiQualityEvent,
     getAiIntelligenceAnalytics,
+    getAiCostGuardrailStats,
     saveToolUsage,
     recordXpLedger,
     listNotificationsForUser,

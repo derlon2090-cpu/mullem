@@ -1168,6 +1168,15 @@
     return request(`/admin/ai-intelligence${query.toString() ? `?${query.toString()}` : ""}`);
   }
 
+  async function getAdminAiHealth(params = {}) {
+    const query = new URLSearchParams();
+    Object.entries(params || {}).forEach(([key, value]) => {
+      if (value == null || value === "") return;
+      query.set(key, String(value));
+    });
+    return request(`/admin/ai-health${query.toString() ? `?${query.toString()}` : ""}`);
+  }
+
   async function getAdminAiKnowledge(params = {}) {
     const query = new URLSearchParams();
     Object.entries(params || {}).forEach(([key, value]) => {
@@ -1643,6 +1652,7 @@
     createAdminNotification,
     updateAdminNotification,
     getAdminAiIntelligence,
+    getAdminAiHealth,
     getAdminAiKnowledge,
     createAdminAiKnowledge,
     updateAdminAiKnowledge,
