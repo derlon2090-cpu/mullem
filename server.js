@@ -5613,7 +5613,7 @@ function collectLastAiErrors() {
     .slice(0, 10);
 }
 
-function buildLaunchReadiness(health, envStatus) {
+function buildLaunchReadiness(health, envStatus, operationalReadiness = {}) {
   const critical = [];
   const nonCritical = [];
   const recommendations = [];
@@ -5632,6 +5632,18 @@ function buildLaunchReadiness(health, envStatus) {
   }
   if (health.cost_guardrails?.site?.status === "blocked") {
     critical.push("Site AI daily cost limit is already exhausted.");
+  }
+  if (!operationalReadiness.redis_ready) {
+    critical.push("Redis is not connected.");
+  }
+  if (!operationalReadiness.worker_ready) {
+    critical.push("AI Worker heartbeat is missing.");
+  }
+  if (!operationalReadiness.ai_service_ready) {
+    critical.push("AI Service is not reachable.");
+  }
+  if (!operationalReadiness.sentry_ready) {
+    critical.push("Sentry is not configured.");
   }
   if (!envStatus.DEEPSEEK_API_KEY.configured) {
     nonCritical.push("DeepSeek key is missing; low-cost routing may fall back to OpenAI.");
@@ -5665,6 +5677,16 @@ function buildLaunchReadiness(health, envStatus) {
 
 async function buildAiLaunchMonitorSnapshot() {
   const health = await buildAiHealthSnapshot();
+  const aiService = await probeAiServiceHealth();
+  const worker = await probeAiWorkerHeartbeat();
+  const operationalReadiness = {
+    redis_ready: Boolean(health.real_scale?.redis?.connected),
+    queue_ready: health.real_scale?.queue?.mode === "bullmq",
+    worker_ready: Boolean(worker.ready),
+    ai_service_ready: Boolean(aiService.ok),
+    streaming_ready: Boolean(health.real_scale?.streaming?.sse_enabled),
+    sentry_ready: Boolean(health.real_scale?.monitoring?.sentry_enabled)
+  };
   const env = buildEnvLaunchStatus();
   const analytics = isDatabaseReady() && typeof databaseClient.getAiIntelligenceAnalytics === "function"
     ? await databaseClient.getAiIntelligenceAnalytics({}).catch(() => ({}))
@@ -5688,7 +5710,10 @@ async function buildAiLaunchMonitorSnapshot() {
     highest_cost_model: highestCostModel,
     last_ai_errors: collectLastAiErrors(),
     alerts: health.alerts || [],
-    readiness: buildLaunchReadiness(health, env),
+    readiness: buildLaunchReadiness(health, env, operationalReadiness),
+    operational_readiness: operationalReadiness,
+    worker,
+    ai_service: aiService,
     health
   };
 }
