@@ -4630,7 +4630,39 @@
     const normalized = typeof normalizeText === "function"
       ? normalizeText(text || "")
       : String(text || "").toLowerCase();
-    return /(\bgenerate\s+(an\s+)?image\b|\bcreate\s+(an\s+)?image\b|\bimage generation\b|\bdraw\b|\bdesign\s+(an\s+)?image\b|ارسم|صمم|صمّم|ولد\s*صورة|ولّد\s*صورة|اعمل\s*(لي)?\s*صورة|تعمل\s*(لي)?\s*صورة|سو[ّي]?ي\s*(لي)?\s*صورة|أنشئ\s*(لي)?\s*صورة)/i.test(normalized);
+    return /(\bgenerate\s+(an\s+)?image\b|\bcreate\s+(an\s+)?image\b|\bimage generation\b|\bdraw\b|\bdesign\s+(an\s+)?image\b|\bmake\s+(me\s+)?(an?\s+)?image\b|ارسم|صمم|صمّم|ولد\s*صورة|ولّد\s*صورة|اعمل\s*(لي)?\s*صورة|تعمل\s*(لي)?\s*صورة|سو[ّي]?ي\s*(لي)?\s*صورة|أنشئ\s*(لي)?\s*صورة)/i.test(normalized);
+  }
+
+  function getRuntimeImageQuality(user) {
+    const planText = [
+      user?.plan,
+      user?.subscriptionPlan,
+      user?.package,
+      user?.packageName,
+      user?.package_name,
+      user?.tier
+    ].filter(Boolean).join(" ").toLowerCase();
+    const dailyXp = Number(user?.packageDailyXp || user?.package_daily_xp || user?.daily_xp || 0);
+    return /pioneer|business|premium|pro_max|الرائد|الأعمال|اعمال/.test(planText) || dailyXp >= 600
+      ? "high"
+      : "standard";
+  }
+
+  function buildRuntimeImageBody({ imageUrl, prompt, revisedPrompt }) {
+    const safeUrl = escapeRuntimeHtml(imageUrl || "");
+    const caption = escapeRuntimeHtml(revisedPrompt || prompt || "صورة مولدة");
+    if (!safeUrl) {
+      return formatSimpleReply("تعذر عرض الصورة الآن.");
+    }
+    return `
+      <div class="ai-answer-card image-answer-card" dir="rtl">
+        <div class="ai-answer-heading">تم إنشاء الصورة بنجاح.</div>
+        <figure style="margin:0;display:flex;flex-direction:column;gap:12px;">
+          <img src="${safeUrl}" alt="${caption}" loading="lazy" style="width:min(100%,420px);border-radius:18px;border:1px solid rgba(109,74,255,.14);box-shadow:0 14px 36px rgba(38,35,83,.12);background:#f7f4ff;object-fit:cover;">
+          <figcaption style="color:#8b90aa;font-size:13px;line-height:1.8;">${caption}</figcaption>
+        </figure>
+      </div>
+    `;
   }
 
   const runtimeApiConversationMapKey = "mlm_api_chat_session_map";
@@ -4983,7 +5015,7 @@
   }
 
   function buildRuntimeApiResponse(question, route, apiReply, decisionBasis = "laravel_ai_chat") {
-    if (!apiReply?.content) return null;
+    if (!apiReply?.content && !apiReply?.preRenderedBody) return null;
     return {
       mode: "chat",
       displayMode: "quick",
@@ -5002,11 +5034,11 @@
       hideSources: true,
       sourceTrace: [],
       structuredResult: {
-        final_answer: apiReply.content,
+        final_answer: apiReply.content || "",
         provider: apiReply.provider || "openai",
         decision_basis: decisionBasis
       },
-      preRenderedBody: formatSimpleReply(apiReply.content)
+      preRenderedBody: apiReply.preRenderedBody || formatSimpleReply(apiReply.content)
     };
   }
 
@@ -6479,12 +6511,45 @@
       };
     }
 
-    if (isRuntimeImageGenerationRequest(question)) {
+    if (isRuntimeImageGenerationRequest(question) && typeof apiClient.generateImage === "function") {
+      const activeUser = typeof getActiveUser === "function" ? getActiveUser() : null;
+      const result = await apiClient.generateImage({
+        prompt: question,
+        size: "1024x1024",
+        quality: getRuntimeImageQuality(activeUser),
+        count: 1
+      });
+      if (!result?.ok || !result?.data) {
+        return {
+          content: "",
+          failed: true,
+          errorType: result?.status === 429 ? "limit_exceeded" : "image_request_failed",
+          message: result?.status === 402
+            ? "رصيدك غير كافٍ لإنشاء صورة. يمكنك المحاولة لاحقًا أو ترقية الباقة."
+            : result?.status === 503
+              ? "خدمة الصور غير متاحة مؤقتًا."
+              : "تعذر إنشاء الصورة حاليًا. حاول مرة أخرى بعد قليل."
+        };
+      }
+      const imageData = result.data.image || (Array.isArray(result.data.images) ? result.data.images[0] : null) || {};
+      const imageUrl = result.data.imageUrl || imageData.url || (imageData.b64_json ? `data:image/png;base64,${imageData.b64_json}` : "");
+      if (result.data.user && typeof apiClient.setSession === "function" && typeof apiClient.getToken === "function") {
+        apiClient.setSession({
+          token: apiClient.getToken(),
+          user: result.data.user
+        });
+        if (typeof updateXpBalance === "function") updateXpBalance();
+      }
       return {
-        content: "",
-        failed: true,
-        errorType: "unsupported_image",
-        message: "توليد الصور غير متاح حاليًا. يمكنك استخدام Orlixor AI للكتابة، الشرح، التحليل، والأفكار النصية."
+        content: "تم إنشاء الصورة بنجاح.",
+        kind: "image",
+        provider: "openai",
+        failed: false,
+        preRenderedBody: buildRuntimeImageBody({
+          imageUrl,
+          prompt: question,
+          revisedPrompt: result.data.revisedPrompt || imageData.revised_prompt || question
+        })
       };
     }
 
@@ -6558,8 +6623,8 @@
 
     if (reason === "attachment_not_supported" || reason === "unsupported_image") {
       return hasAttachment
-        ? "توليد الصور غير متاح حاليًا."
-        : "توليد الصور غير متاح حاليًا.";
+        ? "تعذر إنشاء الصورة حاليًا. حاول مرة أخرى بعد قليل."
+        : "تعذر إنشاء الصورة حاليًا. حاول مرة أخرى بعد قليل.";
     }
 
     if (reason === "server_unavailable") {

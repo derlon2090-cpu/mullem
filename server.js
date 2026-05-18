@@ -207,7 +207,7 @@ const IMAGE_XP_COSTS = Object.freeze({
   analyze: Math.max(1, Number(process.env.IMAGE_ANALYZE_XP_COST || 15)),
   generate_standard: Math.max(1, Number(process.env.IMAGE_GENERATE_STANDARD_XP_COST || 15)),
   generate_high: Math.max(1, Number(process.env.IMAGE_GENERATE_HIGH_XP_COST || 35)),
-  edit: Math.max(1, Number(process.env.IMAGE_EDIT_XP_COST || 25))
+  edit: Math.max(1, Number(process.env.IMAGE_EDIT_XP_COST || 15))
 });
 const DAILY_REWARD_INTERVAL_MS = 24 * 60 * 60 * 1000;
 const FIRST_SIGNUP_XP = Math.max(0, Number(process.env.FIRST_SIGNUP_XP || 50));
@@ -2518,9 +2518,11 @@ function chooseImageModel(task, userPlan, quality) {
   throw createHttpError(400, "نوع مهمة الصور غير معروف.");
 }
 
-function ensureImageServiceConfigured() {
+function ensureImageServiceConfigured(user = null) {
   if (!OPENAI_API_KEY) {
-    throw createHttpError(503, "خدمة الصور غير مفعلة حاليًا.");
+    throw createHttpError(503, userHasPermission(user, "admin:read")
+      ? "OPENAI_API_KEY missing"
+      : "خدمة الصور غير متاحة مؤقتًا.");
   }
 }
 
@@ -2548,6 +2550,37 @@ function normalizeImageApiResult(item) {
     mime_type: "image/png",
     revised_prompt: String(safeItem.revised_prompt || "").trim()
   };
+}
+
+function estimateImageRequestCostUsd({ taskType = "generate", size = "1024x1024", quality = "standard", count = 1 } = {}) {
+  const normalizedTask = String(taskType || "generate").toLowerCase();
+  const normalizedSize = normalizeImageSize(size);
+  const normalizedQuality = normalizeImageTaskQuality(quality);
+  const requestedCount = Math.max(1, Math.min(4, Math.round(Number(count || 1) || 1)));
+  const base = normalizedTask === "edit" ? 0.055 : 0.045;
+  const sizeFactor = normalizedSize === "1024x1536" || normalizedSize === "1536x1024" ? 1.25 : 1;
+  const qualityFactor = normalizedQuality === "high" ? 1.8 : 1;
+  return Number((base * sizeFactor * qualityFactor * requestedCount).toFixed(4));
+}
+
+function isUnsafeImagePrompt(text) {
+  const normalized = String(text || "").toLowerCase();
+  if (!normalized) return false;
+  const unsafePatterns = [
+    /\b(nsfw|porn|porno|nudity|nude|explicit|sexual|erotic|fetish)\b/i,
+    /\b(gore|blood|beheading|murder|kill|suicide|self-harm|weapon|bomb|explosive|terror)\b/i,
+    /\b(hate|racist|racism|extremist|violent content)\b/i,
+    /عاري|عري|إباحي|جنسي|مثير|إثارة|عنف شديد|دماء|قتل|انتحار|سلاح|قنبلة|متفجر|إرهاب|تحريض/i
+  ];
+  return unsafePatterns.some((pattern) => pattern.test(normalized));
+}
+
+function ensureSafeImagePrompt(prompt) {
+  if (isUnsafeImagePrompt(prompt)) {
+    throw createPublicHttpError(400, "IMAGE_PROMPT_BLOCKED", "هذا النوع من الصور غير متاح حاليًا.", {
+      safety: true
+    });
+  }
 }
 
 async function readOpenAIJsonResponse(response) {
@@ -4422,10 +4455,11 @@ async function callImageAnalysisModel({ imageFile, prompt, user }) {
   return { output, raw: payload, usage: extractTokenUsage(payload) };
 }
 
-async function callImageGenerationModel({ prompt, size, quality, user }) {
-  ensureImageServiceConfigured();
+async function callImageGenerationModel({ prompt, size, quality, user, count = 1 }) {
+  ensureImageServiceConfigured(user);
   const planKey = getUserPlanKey(user);
   const model = chooseImageModel("generate", planKey, quality);
+  const requestedCount = Math.max(1, Math.min(4, Math.round(Number(count || 1) || 1)));
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), OPENAI_TIMEOUT_MS * 2);
   let response;
@@ -4447,7 +4481,7 @@ async function callImageGenerationModel({ prompt, size, quality, user }) {
         ].join("\n"),
         size,
         quality: normalizeOpenAIImageQuality(quality),
-        n: 1
+        n: requestedCount
       }),
       signal: controller.signal
     });
@@ -4465,16 +4499,19 @@ async function callImageGenerationModel({ prompt, size, quality, user }) {
     throw buildImageServiceError(payload, "تعذر إنشاء الصورة.", response.status);
   }
 
-  const image = normalizeImageApiResult(payload?.data?.[0]);
+  const images = Array.isArray(payload?.data) && payload.data.length
+    ? payload.data.map((item) => normalizeImageApiResult(item)).filter((item) => item.url || item.b64_json)
+    : [normalizeImageApiResult(payload?.data?.[0])].filter((item) => item.url || item.b64_json);
+  const image = images[0] || normalizeImageApiResult(payload?.data?.[0]);
   if (!image.url && !image.b64_json) {
     throw createHttpError(502, "لم يتم إنشاء صورة صالحة.");
   }
 
-  return { image, raw: payload, usage: payload?.usage || null };
+  return { image, images, raw: payload, usage: payload?.usage || null, provider: "openai", model };
 }
 
 async function callImageEditModel({ imageFile, prompt, size, quality, user }) {
-  ensureImageServiceConfigured();
+  ensureImageServiceConfigured(user);
   const planKey = getUserPlanKey(user);
   const model = chooseImageModel("edit", planKey, quality);
   const form = new FormData();
@@ -4513,12 +4550,15 @@ async function callImageEditModel({ imageFile, prompt, size, quality, user }) {
     throw buildImageServiceError(payload, "تعذر تعديل الصورة.", response.status);
   }
 
-  const image = normalizeImageApiResult(payload?.data?.[0]);
+  const images = Array.isArray(payload?.data) && payload.data.length
+    ? payload.data.map((item) => normalizeImageApiResult(item)).filter((item) => item.url || item.b64_json)
+    : [normalizeImageApiResult(payload?.data?.[0])].filter((item) => item.url || item.b64_json);
+  const image = images[0] || normalizeImageApiResult(payload?.data?.[0]);
   if (!image.url && !image.b64_json) {
     throw createHttpError(502, "لم يتم إنشاء صورة معدلة صالحة.");
   }
 
-  return { image, raw: payload, usage: payload?.usage || null };
+  return { image, images, raw: payload, usage: payload?.usage || null, provider: "openai", model };
 }
 
 function normalizeWritingTask(value) {
@@ -10529,6 +10569,7 @@ async function handleImageGenerate(req, res) {
   const prompt = requireTextField(payload.prompt, "prompt", IMAGE_PROMPT_MAX_LENGTH);
   const requestedQuality = normalizeImageTaskQuality(payload.quality);
   const size = normalizeImageSize(payload.size);
+  const requestedCount = Math.max(1, Math.min(4, Math.round(Number(payload.count || payload.n || 1) || 1)));
   const { planKey, limits } = getPlanLimits(activeUser);
   req.__businessContext = {
     user: activeUser,
@@ -10543,13 +10584,14 @@ async function handleImageGenerate(req, res) {
     operation: "image_generate",
     plan: planKey
   });
+  ensureSafeImagePrompt(prompt);
   const usageStatsBefore = await getUserUsageStats(activeUser);
 
   if (requestedQuality === "high" && !canUseHighImageQuality(activeUser)) {
     throw createHttpError(403, "الجودة العالية متاحة لباقة الرائد والأعمال فقط.");
   }
 
-  const xpCost = requestedQuality === "high" ? IMAGE_XP_COSTS.generate_high : IMAGE_XP_COSTS.generate_standard;
+  const xpCost = (requestedQuality === "high" ? IMAGE_XP_COSTS.generate_high : IMAGE_XP_COSTS.generate_standard) * requestedCount;
   await enforceImageUsageLimit(activeUser, "generate");
   ensureUserCanSpendXp(activeUser, xpCost, "إنشاء الصور");
 
@@ -10557,13 +10599,16 @@ async function handleImageGenerate(req, res) {
     prompt,
     size,
     quality: requestedQuality,
-    user: activeUser
+    user: activeUser,
+    count: requestedCount
   });
   const chargedUser = await chargeUserForMessage(
     activeUser,
     xpCost,
     requestedQuality === "high" ? "استخدم إنشاء الصور بجودة عالية" : "استخدم إنشاء الصور"
   );
+  const imageUrl = result.image.url || (result.image.b64_json ? `data:image/png;base64,${result.image.b64_json}` : "");
+  const costEstimateUsd = estimateImageRequestCostUsd({ taskType: "generate", size, quality: requestedQuality, count: requestedCount });
 
   await saveImageToolUsage({
     user: chargedUser || activeUser,
@@ -10601,11 +10646,20 @@ async function handleImageGenerate(req, res) {
     success: true,
     data: {
       image: result.image,
-      images: [result.image],
+      images: result.images || [result.image],
+      imageUrl,
+      imageBase64: result.image.b64_json || "",
+      revisedPrompt: result.image.revised_prompt || prompt,
       size,
       quality: requestedQuality,
       usage: result.usage,
+      count: requestedCount,
+      provider: result.provider || "openai",
+      model: result.model || chooseImageModel("generate", getUserPlanKey(activeUser), requestedQuality),
+      costEstimateUsd,
+      costEstimate: costEstimateUsd,
       xp_spent: xpCost,
+      xpCharged: xpCost,
       xp_remaining: Math.max(0, Number(chargedUser?.xp || activeUser.xp || 0)),
       user: chargedUser ? buildApiUser(chargedUser) : buildApiUser(activeUser)
     }
@@ -10645,6 +10699,7 @@ async function handleImageEdit(req, res) {
     operation: "image_edit",
     plan: imagePlan.planKey
   });
+  ensureSafeImagePrompt(prompt);
   const usageStatsBefore = await getUserUsageStats(activeUser);
   const result = await callImageEditModel({
     imageFile,
@@ -10654,6 +10709,8 @@ async function handleImageEdit(req, res) {
     user: activeUser
   });
   const chargedUser = await chargeUserForMessage(activeUser, xpCost, "استخدم تعديل الصور");
+  const imageUrl = result.image.url || (result.image.b64_json ? `data:image/png;base64,${result.image.b64_json}` : "");
+  const costEstimateUsd = estimateImageRequestCostUsd({ taskType: "edit", size, quality: requestedQuality, count: 1 });
 
   await saveImageToolUsage({
     user: chargedUser || activeUser,
@@ -10695,11 +10752,19 @@ async function handleImageEdit(req, res) {
     success: true,
     data: {
       image: result.image,
-      images: [result.image],
+      images: result.images || [result.image],
+      imageUrl,
+      imageBase64: result.image.b64_json || "",
+      revisedPrompt: result.image.revised_prompt || prompt,
       size,
       quality: requestedQuality,
       usage: result.usage,
+      provider: result.provider || "openai",
+      model: result.model || chooseImageModel("edit", getUserPlanKey(activeUser), requestedQuality),
+      costEstimateUsd,
+      costEstimate: costEstimateUsd,
       xp_spent: xpCost,
+      xpCharged: xpCost,
       xp_remaining: Math.max(0, Number(chargedUser?.xp || activeUser.xp || 0)),
       user: chargedUser ? buildApiUser(chargedUser) : buildApiUser(activeUser)
     }

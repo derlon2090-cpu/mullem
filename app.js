@@ -2555,12 +2555,15 @@ async function handleSubmit(event) {
   updateXpBalance();
 }
 
-function handleMessageInteractions(event) {
+async function handleMessageInteractions(event) {
   const fillButton = event.target.closest("[data-fill-prompt]");
   const actionButton = event.target.closest("[data-action]");
   const likeButton = event.target.closest("[data-like]");
   const dislikeButton = event.target.closest("[data-dislike]");
   const refineButton = event.target.closest("[data-refine]");
+  const downloadImageButton = event.target.closest("[data-download-image]");
+  const copyImagePromptButton = event.target.closest("[data-copy-image-prompt]");
+  const regenerateImageButton = event.target.closest("[data-regenerate-image]");
 
   if (fillButton) {
     setPromptValue(fillButton.getAttribute("data-fill-prompt") || "");
@@ -2600,6 +2603,66 @@ function handleMessageInteractions(event) {
     const action = actionButton.getAttribute("data-action");
     if (action === "upload-image") openImageUpload();
     if (action === "focus-subject") return;
+    return;
+  }
+
+  if (downloadImageButton) {
+    const card = downloadImageButton.closest(".message");
+    const imageCard = card?.querySelector(".image-result-card");
+    const imageUrl = imageCard?.dataset.imageUrl || imageCard?.querySelector("img")?.src || "";
+    if (!imageUrl) {
+      showToast("لا توجد صورة جاهزة للتنزيل.");
+      return;
+    }
+    const link = document.createElement("a");
+    link.href = imageUrl;
+    link.download = "orlixor-image.png";
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    showToast("تم تنزيل الصورة.");
+    return;
+  }
+
+  if (copyImagePromptButton) {
+    const card = copyImagePromptButton.closest(".message");
+    const imageCard = card?.querySelector(".image-result-card");
+    const text = imageCard?.dataset.imageRevisedPrompt || imageCard?.dataset.imagePrompt || "";
+    if (!text) {
+      showToast("لا يوجد وصف جاهز للنسخ.");
+      return;
+    }
+    navigator.clipboard?.writeText(text).then(() => {
+      showToast("تم نسخ الوصف.");
+    }).catch(() => {
+      showToast("تعذر نسخ الوصف حاليًا.");
+    });
+    return;
+  }
+
+  if (regenerateImageButton) {
+    if (!isLoggedIn()) {
+      openAuthModal("أكمل التفاعل بعد تسجيل الدخول.");
+      return;
+    }
+    const card = regenerateImageButton.closest(".message");
+    const imageCard = card?.querySelector(".image-result-card");
+    if (!imageCard) return;
+    const mode = imageCard.dataset.imageMode || "generate";
+    const prompt = imageCard.dataset.imagePrompt || "";
+    const revisedPrompt = imageCard.dataset.imageRevisedPrompt || prompt;
+    const sourceImageDataUrl = imageCard.dataset.imageSourceDataUrl || "";
+    const sourceImageName = imageCard.dataset.imageSourceName || "";
+    const sourceImageMime = imageCard.dataset.imageSourceMime || "";
+    await sendImageTask({
+      question: prompt,
+      attachments: [],
+      mode,
+      sourcePrompt: revisedPrompt,
+      sourceImageDataUrl,
+      sourceImageName,
+      sourceImageMime
+    });
     return;
   }
 
@@ -5141,6 +5204,291 @@ function createImageRouterResponse(route) {
   return formatSimpleReply("تم تجهيز الطلب للتحليل وسأتابع الحل الآن.");
 }
 
+function isImageGenerationPrompt(text) {
+  const normalized = normalizeText(text || "");
+  if (!normalized) return false;
+  return /(\bgenerate\s+(an\s+)?image\b|\bcreate\s+(an\s+)?image\b|\bimage generation\b|\bdraw\b|\bdesign\s+(an\s+)?image\b|\bmake\s+(an\s+)?image\b|ارسم|صمم|صمّم|ولد\s*صورة|ولّد\s*صورة|اعمل\s*(لي)?\s*صورة|تعمل\s*(لي)?\s*صورة|سو[ّي]?ي\s*(لي)?\s*صورة|أنشئ\s*(لي)?\s*صورة|صورة\s*جديدة)/i.test(normalized);
+}
+
+function isImageEditPrompt(text) {
+  const normalized = normalizeText(text || "");
+  if (!normalized) return false;
+  return /(\bedit\s+(this\s+)?image\b|\bmodify\s+(this\s+)?image\b|\brecolor\s+(this\s+)?image\b|\benhance\s+(this\s+)?image\b|\bretouch\s+(this\s+)?image\b|\brestore\s+(this\s+)?image\b|\bremove\s+background\b|\bchange\s+the\s+background\b|\bcartoon\s+style\b|\bupscale\s+(this\s+)?image\b|عدل\s*(هذه|هذي)?\s*الصورة|عدّل\s*(هذه|هذي)?\s*الصورة|تعديل\s*(هذه|هذي)?\s*الصورة|غيّر الخلفية|غير الخلفية|بدل الخلفية|بدّل الخلفية|حسّن جودة الصورة|حسن جودة الصورة|حوّلها|حولها|كرتوني|احذف الخلفية|أزل الخلفية|إزالة الخلفية)/i.test(normalized);
+}
+
+function getUserImageQuality(user) {
+  const text = [
+    user?.package,
+    user?.packageKey,
+    user?.package_name,
+    user?.plan,
+    user?.planType,
+    user?.package_key,
+    user?.package_name
+  ].map((value) => String(value || "")).join(" ").toLowerCase();
+  return /pioneer|business|رائد|الأعمال/.test(text) ? "high" : "standard";
+}
+
+function getImagePromptMode(question, attachments = []) {
+  const hasImageAttachment = attachments.some((file) => String(file?.type || "").startsWith("image/"));
+  const sourceEditHint = hasImageAttachment && /(عدل|عدّل|تعديل|حسن|حسّن|جودة|خلفية|كرتوني|حوّل|حول|غير|غيّر|احذف|أزل|إزالة|enhance|edit|modify|background|cartoon|remove)/i.test(String(question || ""));
+  if (hasImageAttachment && (isImageEditPrompt(question) || sourceEditHint)) {
+    return { mode: "edit", hasImageAttachment: true };
+  }
+  if (isImageEditPrompt(question)) {
+    return { mode: "edit", hasImageAttachment: false };
+  }
+  if (isImageGenerationPrompt(question)) {
+    return { mode: "generate", hasImageAttachment: false };
+  }
+  return null;
+}
+
+function getImageSourceAttachment(attachments = []) {
+  return attachments.find((file) => String(file?.type || "").startsWith("image/")) || null;
+}
+
+function createImageResultMarkup({
+  imageUrl,
+  prompt,
+  revisedPrompt,
+  mode,
+  sourceImageName = "",
+  sourceImageMime = "",
+  sourceImageDataUrl = "",
+  size = "1024x1024",
+  quality = "standard"
+}) {
+  const safePrompt = escapeReplyHtml(prompt || "");
+  const safeRevisedPrompt = escapeReplyHtml(revisedPrompt || prompt || "");
+  const safeImageUrl = escapeReplyHtml(imageUrl || "");
+  const safeMode = escapeReplyHtml(mode || "generate");
+  const safeSize = escapeReplyHtml(size || "1024x1024");
+  const safeQuality = escapeReplyHtml(quality || "standard");
+  const safeSourceName = escapeReplyHtml(sourceImageName || "");
+  const safeSourceMime = escapeReplyHtml(sourceImageMime || "");
+  const safeSourceDataUrl = escapeReplyHtml(sourceImageDataUrl || "");
+
+  return `
+    <div class="image-result-card"
+      data-image-mode="${safeMode}"
+      data-image-prompt="${safePrompt}"
+      data-image-revised-prompt="${safeRevisedPrompt}"
+      data-image-url="${safeImageUrl}"
+      data-image-size="${safeSize}"
+      data-image-quality="${safeQuality}"
+      data-image-source-name="${safeSourceName}"
+      data-image-source-mime="${safeSourceMime}"
+      data-image-source-data-url="${safeSourceDataUrl}">
+      <div class="image-result-preview" style="border:1px solid rgba(109,74,255,.14);border-radius:18px;overflow:hidden;background:#fff;">
+        <img src="${safeImageUrl}" alt="${safeRevisedPrompt}" style="display:block;width:100%;max-height:420px;object-fit:contain;background:#fff;">
+      </div>
+      <div class="image-result-caption" style="display:flex;flex-direction:column;gap:8px;">
+        <strong style="font-size:15px;">تم إنشاء الصورة بنجاح</strong>
+        <p style="margin:0;color:var(--muted-text,#7b7f99);line-height:1.8;">${safeRevisedPrompt}</p>
+      </div>
+      <div class="message-tools image-result-actions">
+        <button class="mini-btn" type="button" data-download-image>↓ تحميل</button>
+        <button class="mini-btn" type="button" data-regenerate-image>↻ إعادة توليد</button>
+        <button class="mini-btn" type="button" data-copy-image-prompt>⧉ نسخ الوصف</button>
+      </div>
+    </div>
+  `;
+}
+
+async function readFileAsDataUrl(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result || ""));
+    reader.onerror = () => reject(reader.error || new Error("تعذر قراءة الصورة."));
+    reader.readAsDataURL(file);
+  });
+}
+
+async function buildImageFormDataFromAttachment({ prompt, size, quality, attachment }) {
+  const formData = new FormData();
+  formData.append("prompt", prompt);
+  formData.append("size", size || "1024x1024");
+  formData.append("quality", quality || "standard");
+  formData.append("count", "1");
+  if (attachment) {
+    formData.append("image", attachment, attachment.name || "orlixor-image.png");
+  }
+  return formData;
+}
+
+async function sendImageTask({
+  question,
+  attachments = [],
+  mode = "generate",
+  sourcePrompt = "",
+  sourceImageDataUrl = "",
+  sourceImageName = "",
+  sourceImageMime = ""
+} = {}) {
+  const apiClient = window.mullemApiClient;
+  if (!apiClient) {
+    addMessage("assistant", "ملم يحل", formatSimpleReply("خدمة الصور غير متاحة مؤقتًا."));
+    return false;
+  }
+
+  const activeUser = getActiveUser();
+  const imageCost = 15;
+  const availableXp = Number(activeUser?.xp ?? activeUser?.balance ?? 0);
+  if (availableXp < imageCost) {
+    addMessage("assistant", "ملم يحل", formatSimpleReply("رصيدك غير كافٍ لإنشاء صورة. يمكنك المحاولة لاحقًا أو ترقية الباقة."));
+    return false;
+  }
+
+  if (mode === "edit" && !getImageSourceAttachment(attachments) && !sourceImageDataUrl) {
+    addMessage("assistant", "ملم يحل", formatSimpleReply("للتعديل، أرفق الصورة أولًا ثم أرسل التعديلات المطلوبة."));
+    return false;
+  }
+
+  const selectedQuality = getUserImageQuality(activeUser);
+  const imageAttachment = getImageSourceAttachment(attachments);
+  const renderedQuestion = mode === "edit" && imageAttachment
+    ? `${question || "أرفقت صورة مع طلب التعديل."}<br><span class="muted-inline">المرفقات: ${attachments.map((item) => item.name).join("، ")}</span>`
+    : (question || "طلب إنشاء صورة جديد.");
+
+  addMessage("user", "أنت", renderedQuestion);
+  appendMessageToSession("user", "أنت", renderedQuestion, {
+    subject: mode === "edit" ? "تعديل صورة" : "إنشاء صورة",
+    sessionTitle: question || sourcePrompt || (mode === "edit" ? "تعديل صورة" : "إنشاء صورة")
+  });
+
+  const pendingNode = addMessage(
+    "assistant",
+    "ملم يحل",
+    formatSimpleReply(mode === "edit" ? "جاري تعديل الصورة..." : "جاري إنشاء الصورة..."),
+    { pending: true }
+  );
+
+  try {
+    const prompt = String(sourcePrompt || question || "").trim();
+    const size = "1024x1024";
+    let result = null;
+
+    if (mode === "edit") {
+      let fileForUpload = imageAttachment;
+      if (!fileForUpload && sourceImageDataUrl) {
+        const response = await fetch(sourceImageDataUrl);
+        const blob = await response.blob();
+        fileForUpload = new File([blob], sourceImageName || "orlixor-image.png", {
+          type: sourceImageMime || blob.type || "image/png"
+        });
+      }
+
+      const formData = await buildImageFormDataFromAttachment({
+        prompt,
+        size,
+        quality: selectedQuality,
+        attachment: fileForUpload
+      });
+      result = await apiClient.editImage(formData);
+    } else {
+      result = await apiClient.generateImage({
+        prompt,
+        size,
+        quality: selectedQuality,
+        count: 1
+      });
+    }
+
+    if (!result?.ok || !result.data) {
+      throw result;
+    }
+
+    const imageData = result.data.image || (Array.isArray(result.data.images) ? result.data.images[0] : null) || {};
+    const imageUrl =
+      result.data.imageUrl ||
+      imageData.url ||
+      (imageData.b64_json ? `data:image/png;base64,${imageData.b64_json}` : "");
+    if (!imageUrl) {
+      throw new Error("invalid_image_response");
+    }
+
+    if (result.data.user) {
+      const token = apiClient.getToken?.();
+      if (token) {
+        apiClient.setSession?.({ token, user: result.data.user });
+      }
+      try {
+        const currentUser = getActiveUser();
+        const resolvedId = String(result.data.user.id || currentUser?.id || "").trim();
+        if (resolvedId) {
+          const users = getUsers();
+          const mergedUser = {
+            ...(users.find((user) => String(user.id) === resolvedId) || currentUser || {}),
+            ...result.data.user,
+            id: resolvedId
+          };
+          saveJson(storageKeys.users, [
+            mergedUser,
+            ...users.filter((user) => String(user.id) !== resolvedId)
+          ]);
+          localStorage.setItem(storageKeys.currentUser, resolvedId);
+        }
+      } catch (_) {
+        // Session refresh is best-effort; the API session remains authoritative.
+      }
+      updateXpBalance();
+    }
+    analytics.totalMessages += 1;
+    analytics.xpUsed += imageCost;
+    saveAnalytics();
+    saveHistory(question || sourcePrompt || "طلب صورة", mode === "edit" ? "تعديل صورة" : "إنشاء صورة", mode === "edit" ? "image_edit" : "image_generate", "تمت المعالجة");
+
+    const revisedPrompt = result.data.revisedPrompt || imageData.revised_prompt || prompt;
+    const body = createImageResultMarkup({
+      imageUrl,
+      prompt,
+      revisedPrompt,
+      mode,
+      sourceImageName: sourceImageName || imageAttachment?.name || "",
+      sourceImageMime: sourceImageMime || imageAttachment?.type || "",
+      sourceImageDataUrl: sourceImageDataUrl || "",
+      size,
+      quality: selectedQuality
+    });
+
+    if (pendingNode) pendingNode.remove();
+
+    addMessage("assistant", "ملم يحل", body, {
+      metadata: {
+        subject: mode === "edit" ? "تعديل صورة" : "إنشاء صورة",
+        lesson: prompt.slice(0, 80),
+        questionType: mode === "edit" ? "image_edit" : "image_generate",
+        mode: "image"
+      }
+    });
+    appendMessageToSession("assistant", "ملم يحل", body, {
+      metadata: {
+        subject: mode === "edit" ? "تعديل صورة" : "إنشاء صورة",
+        lesson: prompt.slice(0, 80),
+        questionType: mode === "edit" ? "image_edit" : "image_generate",
+        mode: "image"
+      },
+      subject: mode === "edit" ? "تعديل صورة" : "إنشاء صورة",
+      sessionTitle: question || prompt || "صورة جديدة"
+    });
+    return true;
+  } catch (error) {
+    if (pendingNode) pendingNode.remove();
+    const status = Number(error?.status || error?.statusCode || error?.response?.status || 0);
+    const message = String(error?.message || error?.payload?.message || error?.message || "").trim();
+    const blocked = /IMAGE_PROMPT_BLOCKED/.test(String(error?.code || error?.error || "")) || /هذا النوع من الصور غير متاح/.test(message);
+    const friendly =
+      blocked ? "هذا النوع من الصور غير متاح حاليًا." :
+      status === 503 ? "خدمة الصور غير متاحة مؤقتًا." :
+      status === 403 ? (message || "هذا النوع من الصور غير متاح حاليًا.") :
+      status === 429 ? "وصلت إلى الحد المتاح في باقتك اليوم. يمكنك المحاولة لاحقًا أو ترقية الباقة." :
+      "تعذر إنشاء الصورة حاليًا. حاول مرة أخرى بعد قليل.";
+    addMessage("assistant", "ملم يحل", formatSimpleReply(friendly));
+    return false;
+  }
+}
+
 async function handleSubmit(event) {
   event.preventDefault();
   const question = promptInput?.value.trim() || "";
@@ -5148,6 +5496,33 @@ async function handleSubmit(event) {
   if (!question && !hasAttachments) return;
 
   const activeUser = getActiveUser();
+  const imageRequest = getImagePromptMode(question, attachments);
+  if (imageRequest) {
+    if (!isLoggedIn()) {
+      addMessage("assistant", "ملم يحل", formatSimpleReply(`الشات متاح بعد تسجيل الدخول فقط. بعد الدخول يتجدد لك ${LOGIN_REQUIRED_DAILY_XP_LABEL}. <a class="top-link" href="login.html">سجّل دخولك من هنا</a>.`));
+      return;
+    }
+    const sourceFile = getImageSourceAttachment(attachments);
+    const sourceImageDataUrl = sourceFile ? await readFileAsDataUrl(sourceFile) : "";
+    const imageSucceeded = await sendImageTask({
+      question,
+      attachments,
+      mode: imageRequest.mode,
+      sourcePrompt: question,
+      sourceImageDataUrl,
+      sourceImageName: sourceFile?.name || "",
+      sourceImageMime: sourceFile?.type || ""
+    });
+    if (imageSucceeded) {
+      promptInput.value = "";
+      autoGrow(promptInput);
+      attachments = [];
+      if (fileInput) fileInput.value = "";
+    }
+    renderAttachments();
+    return;
+  }
+
   const route = request_router({
     user_text: question,
     uploaded_files: attachments,

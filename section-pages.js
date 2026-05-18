@@ -5381,6 +5381,33 @@
   function renderMessage(message, index = 0) {
     if (message.role === "assistant") {
       const feedbackKey = getMessageFeedbackKey(message, index);
+      if (message.kind === "image" || message.image?.url) {
+        const image = message.image || {};
+        const safeUrl = escapeHtml(image.url || "");
+        const safePrompt = escapeHtml(image.revisedPrompt || image.prompt || "صورة مولدة");
+        const actionKey = escapeHtml(feedbackKey);
+        return `
+          <article class="guest-message assistant">
+            <div class="guest-message-mark">${icons.logo}</div>
+            <div class="guest-message-body guest-message-image-body">
+              <h3>${escapeHtml(message.body?.heading || (image.mode === "edit" ? "تم تعديل الصورة بنجاح." : "تم إنشاء الصورة بنجاح."))}</h3>
+              ${safeUrl ? `
+                <figure class="chat-image-result" style="margin:0;display:flex;flex-direction:column;gap:12px;">
+                  <img src="${safeUrl}" alt="${safePrompt}" loading="lazy" style="width:min(100%,420px);border-radius:18px;border:1px solid rgba(109,74,255,.14);box-shadow:0 14px 36px rgba(38,35,83,.12);background:#f7f4ff;object-fit:cover;">
+                  <figcaption style="color:#8b90aa;font-size:13px;line-height:1.8;">${safePrompt}</figcaption>
+                </figure>
+              ` : `
+                <p>${escapeHtml("تعذر عرض الصورة الآن.")}</p>
+              `}
+              <div class="guest-message-actions">
+                <button class="ghost-action ${isAuthenticated() ? "" : "requires-auth"}" type="button" data-download-image="${actionKey}">تحميل</button>
+                <button class="ghost-action ${isAuthenticated() ? "" : "requires-auth"}" type="button" data-regenerate-image="${actionKey}">${image.mode === "edit" ? "إعادة التعديل" : "إعادة توليد"}</button>
+                <button class="ghost-action ${isAuthenticated() ? "" : "requires-auth"}" type="button" data-copy-image-prompt="${actionKey}">نسخ الوصف</button>
+              </div>
+            </div>
+          </article>
+        `;
+      }
       const isLiked = Boolean(state.likedReplies[feedbackKey]);
       const activeFeedback = state.feedbackReplies[feedbackKey] || "";
       const safeBody = message.body && Array.isArray(message.body.bullets)
@@ -11646,7 +11673,268 @@
   function isImageGenerationPrompt(text) {
     const normalized = String(text || "").trim().toLowerCase();
     if (!normalized) return false;
-    return /(\bgenerate\s+(an\s+)?image\b|\bcreate\s+(an\s+)?image\b|\bimage generation\b|\bdraw\b|\bdesign\s+(an\s+)?image\b|ارسم|صمم|صمّم|ولد\s*صورة|ولّد\s*صورة|اعمل\s*(لي)?\s*صورة|تعمل\s*(لي)?\s*صورة|سو[ّي]?ي\s*(لي)?\s*صورة|أنشئ\s*(لي)?\s*صورة)/i.test(normalized);
+    return /(\bgenerate\s+(an\s+)?image\b|\bcreate\s+(an\s+)?image\b|\bimage generation\b|\bdraw\b|\bdesign\s+(an\s+)?image\b|\bmake\s+(me\s+)?(an?\s+)?image\b|ارسم|صمم|صمّم|ولد\s*صورة|ولّد\s*صورة|اعمل\s*(لي)?\s*صورة|تعمل\s*(لي)?\s*صورة|سو[ّي]?ي\s*(لي)?\s*صورة|أنشئ\s*(لي)?\s*صورة)/i.test(normalized);
+  }
+
+  function isImageEditPrompt(text) {
+    const normalized = String(text || "").trim().toLowerCase();
+    if (!normalized) return false;
+    return /(\bedit\s+(this\s+)?image\b|\bmodify\s+(this\s+)?image\b|\bchange\s+the\s+background\b|\benhance\s+(this\s+)?image\b|\bremove\s+background\b|عدل\s*(هذه|هذي)?\s*الصورة|عدّل\s*(هذه|هذي)?\s*الصورة|تعديل\s*(هذه|هذي)?\s*الصورة|خلي الخلفية|غيّر الخلفية|غير الخلفية|حسن جودة الصورة|حسّن جودة الصورة|حوّلها|حولها|كرتوني|ازالة الخلفية|إزالة الخلفية)/i.test(normalized);
+  }
+
+  function getImageSourceFile(files = []) {
+    return (files || []).find(isVisionImageFile) || null;
+  }
+
+  function getImagePromptMode(text, files = []) {
+    const sourceFile = getImageSourceFile(files);
+    const sourceEditHint = sourceFile && /(عدل|عدّل|تعديل|حسن|حسّن|جودة|خلفية|كرتوني|حوّل|حول|غير|غيّر|احذف|أزل|إزالة|enhance|edit|modify|background|cartoon|remove)/i.test(String(text || ""));
+    if (!isImageGenerationPrompt(text) && !isImageEditPrompt(text) && !sourceEditHint) return null;
+    return {
+      mode: sourceFile || isImageEditPrompt(text) || sourceEditHint ? "edit" : "generate",
+      sourceFile
+    };
+  }
+
+  function getUserImageQuality(user) {
+    const planText = [
+      user?.plan,
+      user?.subscriptionPlan,
+      user?.package,
+      user?.packageName,
+      user?.package_name,
+      user?.tier
+    ].filter(Boolean).join(" ").toLowerCase();
+    const dailyXp = Number(user?.packageDailyXp || user?.package_daily_xp || user?.daily_xp || 0);
+    return /pioneer|business|premium|pro_max|الرائد|الأعمال|اعمال/.test(planText) || dailyXp >= 600
+      ? "high"
+      : "standard";
+  }
+
+  function getImageTaskFriendlyError(error) {
+    const status = Number(error?.status || error?.statusCode || error?.payload?.status || 0);
+    const code = String(error?.code || error?.error || error?.payload?.error || "").toUpperCase();
+    const message = String(error?.message || error?.payload?.message || "").trim();
+    if (status === 402 || /XP|INSUFFICIENT/.test(code) || /XP/.test(message)) {
+      return "رصيدك غير كافٍ لإنشاء صورة. يمكنك المحاولة لاحقًا أو ترقية الباقة.";
+    }
+    if (status === 429 || /LIMIT/.test(code)) {
+      return "وصلت إلى الحد المتاح في باقتك اليوم. يمكنك المحاولة لاحقًا أو ترقية الباقة.";
+    }
+    if (status === 503 || /OPENAI_API_KEY|IMAGE_SERVICE_UNAVAILABLE|MISSING/.test(code)) {
+      return "خدمة الصور غير متاحة مؤقتًا.";
+    }
+    if (status === 400 || status === 403 || /BLOCKED|SAFETY|MODERATION/.test(code)) {
+      return message || "هذا النوع من الصور غير متاح حاليًا.";
+    }
+    return "تعذر إنشاء الصورة حاليًا. حاول مرة أخرى بعد قليل.";
+  }
+
+  function updateThreadActivity(threadEntry) {
+    if (!threadEntry) return;
+    const sentAtMs = Date.now();
+    threadEntry.time = "الآن";
+    threadEntry.sortTime = sentAtMs;
+    threadEntry.updatedAtMs = sentAtMs;
+    threadEntry.stats = {
+      ...(threadEntry.stats || {}),
+      updated: "الآن",
+      messages: `${Math.max(1, threadEntry.messages.length)} رسالة`,
+      sortTime: sentAtMs
+    };
+    sortThreadGroupsByNewest(state.section);
+  }
+
+  function buildImageResultMessage({ result, prompt, mode, sourceFile, sourceImageDataUrl = "" }) {
+    const imageData = result?.data?.image || (Array.isArray(result?.data?.images) ? result.data.images[0] : null) || {};
+    const imageUrl = result?.data?.imageUrl || imageData.url || (imageData.b64_json ? `data:image/png;base64,${imageData.b64_json}` : "");
+    const revisedPrompt = result?.data?.revisedPrompt || imageData.revised_prompt || prompt;
+    return {
+      role: "assistant",
+      kind: "image",
+      body: assistantReply(mode === "edit" ? "تم تعديل الصورة بنجاح." : "تم إنشاء الصورة بنجاح.", [
+        "يمكنك تحميل الصورة أو إعادة توليدها من الأزرار أسفلها."
+      ]),
+      rawText: revisedPrompt,
+      image: {
+        url: imageUrl,
+        prompt,
+        revisedPrompt,
+        mode,
+        size: result?.data?.size || "1024x1024",
+        quality: result?.data?.quality || "standard",
+        sourceImageDataUrl,
+        sourceImageName: sourceFile?.name || "",
+        sourceImageMime: sourceFile?.type || ""
+      }
+    };
+  }
+
+  async function buildImageEditFormData({ prompt, sourceFile, sourceImageDataUrl = "", sourceImageName = "", sourceImageMime = "", quality = "standard" }) {
+    let fileForUpload = sourceFile || null;
+    if (!fileForUpload && sourceImageDataUrl) {
+      const response = await fetch(sourceImageDataUrl);
+      const blob = await response.blob();
+      fileForUpload = new File([blob], sourceImageName || "orlixor-image.png", {
+        type: sourceImageMime || blob.type || "image/png"
+      });
+    }
+    const formData = new FormData();
+    formData.append("prompt", prompt);
+    formData.append("size", "1024x1024");
+    formData.append("quality", quality);
+    formData.append("count", "1");
+    if (fileForUpload) {
+      formData.append("image", fileForUpload, fileForUpload.name || "orlixor-image.png");
+    }
+    return formData;
+  }
+
+  async function runImageThreadTask({
+    input = "",
+    outboundMessage = "",
+    outgoingFiles = [],
+    mode = "generate",
+    sourceImageDataUrl = "",
+    sourceImageName = "",
+    sourceImageMime = ""
+  } = {}) {
+    const apiClient = getApiClient();
+    const prompt = String(input || outboundMessage || "").trim();
+    const sourceFile = getImageSourceFile(outgoingFiles);
+    const activeUser = state.currentUser || getActiveUser();
+    const xpValue = activeUser?.balance ?? activeUser?.xp;
+    if (Number.isFinite(Number(xpValue)) && Number(xpValue) < 15) {
+      ensureThreadState();
+      let threadEntry = getActiveThread();
+      if (!threadEntry) {
+        createNewThreadFromDraft(prompt.slice(0, 28) || "طلب صورة");
+        threadEntry = getActiveThread();
+      }
+      threadEntry.messages.push(
+        { role: "user", body: prompt || "طلب إنشاء صورة" },
+        { role: "assistant", body: assistantReply("رصيدك غير كافٍ لإنشاء صورة.", ["يمكنك المحاولة لاحقًا أو ترقية الباقة."]) }
+      );
+      updateThreadActivity(threadEntry);
+      state.homeConversationOpen = true;
+      state.sending = false;
+      render();
+      scrollConversationToLatest();
+      return false;
+    }
+
+    if (mode === "edit" && !sourceFile && !sourceImageDataUrl) {
+      ensureThreadState();
+      let threadEntry = getActiveThread();
+      if (!threadEntry) {
+        createNewThreadFromDraft(prompt.slice(0, 28) || "تعديل صورة");
+        threadEntry = getActiveThread();
+      }
+      threadEntry.messages.push(
+        { role: "user", body: prompt || "طلب تعديل صورة" },
+        { role: "assistant", body: assistantReply("أرفق الصورة أولًا.", ["للتعديل، أرفق الصورة ثم اكتب التعديل المطلوب."]) }
+      );
+      updateThreadActivity(threadEntry);
+      state.homeConversationOpen = true;
+      state.sending = false;
+      render();
+      scrollConversationToLatest();
+      return false;
+    }
+
+    ensureThreadState();
+    let threadEntry = getActiveThread();
+    const draftTitle = prompt.slice(0, 28) || (mode === "edit" ? "تعديل صورة" : "إنشاء صورة");
+    if (isHomeWorkspace && !state.homeConversationOpen) {
+      createNewThreadFromDraft(draftTitle);
+      threadEntry = getActiveThread();
+    } else if (!threadEntry) {
+      createNewThreadFromDraft(draftTitle);
+      threadEntry = getActiveThread();
+    }
+
+    const displayUserMessage = prompt || (mode === "edit" ? "تعديل صورة مرفقة" : "إنشاء صورة جديدة");
+    const pendingAssistant = {
+      role: "assistant",
+      pending: true,
+      body: assistantReply(mode === "edit" ? "جاري تعديل الصورة..." : "جاري إنشاء الصورة...", [
+        "نعالج طلب الصورة الآن."
+      ])
+    };
+    threadEntry.messages.push({ role: "user", body: displayUserMessage }, pendingAssistant);
+    updateThreadActivity(threadEntry);
+    state.homeConversationOpen = true;
+    state.chatSendError = "";
+    setComposerValue("");
+    state.selectedFiles = [];
+    render();
+    scrollConversationToLatest();
+
+    try {
+      const quality = getUserImageQuality(activeUser);
+      let result = null;
+      if (mode === "edit") {
+        const formData = await buildImageEditFormData({
+          prompt,
+          sourceFile,
+          sourceImageDataUrl,
+          sourceImageName,
+          sourceImageMime,
+          quality
+        });
+        result = await apiClient.editImage(formData);
+      } else {
+        result = await apiClient.generateImage({
+          prompt,
+          size: "1024x1024",
+          quality,
+          count: 1
+        });
+      }
+
+      if (!result?.ok || !result?.data) {
+        throw result || new Error("IMAGE_REQUEST_FAILED");
+      }
+
+      const imageMessage = buildImageResultMessage({
+        result,
+        prompt,
+        mode,
+        sourceFile,
+        sourceImageDataUrl
+      });
+      if (!imageMessage.image.url) {
+        throw new Error("INVALID_IMAGE_RESPONSE");
+      }
+
+      if (result.data.user) {
+        const token = apiClient.getToken?.();
+        if (token) {
+          apiClient.setSession?.({ token, user: result.data.user });
+        }
+        state.currentUser = persistEmbeddedUser(result.data.user) || normalizeUser(result.data.user) || state.currentUser;
+        updateBalanceUI(state.currentUser?.balance ?? state.currentUser?.xp ?? 0);
+      }
+
+      Object.assign(pendingAssistant, imageMessage, { pending: false });
+      updateThreadActivity(threadEntry);
+      state.chatSendError = "";
+      state.sending = false;
+      render();
+      scrollConversationToLatest();
+      return true;
+    } catch (error) {
+      Object.assign(pendingAssistant, {
+        pending: false,
+        body: assistantReply(getImageTaskFriendlyError(error), [])
+      });
+      updateThreadActivity(threadEntry);
+      state.chatSendError = "";
+      state.sending = false;
+      render();
+      scrollConversationToLatest();
+      return false;
+    }
   }
 
   async function submitMessage() {
@@ -11672,44 +11960,25 @@
 
     const outgoingFiles = [...state.selectedFiles];
     const outboundMessage = input || "حلل المرفقات المرسلة.";
-    if (isImageGenerationPrompt(outboundMessage)) {
-      ensureThreadState();
-      let threadEntry = getActiveThread();
-      const draftTitle = input.slice(0, 28) || "طلب صورة غير مدعوم";
-      if (isHomeWorkspace && !state.homeConversationOpen) {
-        createNewThreadFromDraft(draftTitle);
-        threadEntry = getActiveThread();
-      } else if (!threadEntry) {
-        createNewThreadFromDraft(draftTitle);
-        threadEntry = getActiveThread();
-      }
-      threadEntry.messages.push(
-        { role: "user", body: input || outboundMessage },
-        {
-          role: "assistant",
-          body: assistantReply(
-            "توليد الصور غير متاح حاليًا.",
-            ["يمكنك استخدام Orlixor AI للكتابة، الشرح، التحليل، والأفكار النصية."]
-          )
+    const imageRequest = getImagePromptMode(outboundMessage, outgoingFiles);
+    if (imageRequest) {
+      let sourceImageDataUrl = "";
+      if (imageRequest.sourceFile) {
+        try {
+          sourceImageDataUrl = await readFileAsDataUrl(imageRequest.sourceFile);
+        } catch (_) {
+          sourceImageDataUrl = "";
         }
-      );
-      const sentAtMs = Date.now();
-      threadEntry.time = "الآن";
-      threadEntry.sortTime = sentAtMs;
-      threadEntry.updatedAtMs = sentAtMs;
-      threadEntry.stats = {
-        ...(threadEntry.stats || {}),
-        updated: "الآن",
-        messages: `${Math.max(1, threadEntry.messages.length)} رسالة`,
-        sortTime: sentAtMs
-      };
-      sortThreadGroupsByNewest(state.section);
-      state.homeConversationOpen = true;
-      state.sending = false;
-      state.chatSendError = "";
-      setComposerValue("");
-      render();
-      scrollConversationToLatest();
+      }
+      await runImageThreadTask({
+        input,
+        outboundMessage,
+        outgoingFiles,
+        mode: imageRequest.mode,
+        sourceImageDataUrl,
+        sourceImageName: imageRequest.sourceFile?.name || "",
+        sourceImageMime: imageRequest.sourceFile?.type || ""
+      });
       return;
     }
     const canSendLargeRequest = await confirmLargeChatRequest(outboundMessage);
@@ -14108,6 +14377,63 @@
         }
         render();
         return;
+      }
+
+      const downloadImageButton = event.target.closest("[data-download-image]");
+      const regenerateImageButton = event.target.closest("[data-regenerate-image]");
+      const copyImagePromptButton = event.target.closest("[data-copy-image-prompt]");
+      if (downloadImageButton || regenerateImageButton || copyImagePromptButton) {
+        if (!isAuthenticated()) {
+          openAuthModal("أكمل التفاعل بعد تسجيل الدخول.");
+          return;
+        }
+        const messageKey = (downloadImageButton || regenerateImageButton || copyImagePromptButton).getAttribute(
+          downloadImageButton ? "data-download-image" : regenerateImageButton ? "data-regenerate-image" : "data-copy-image-prompt"
+        ) || "";
+        const activeThread = getActiveThread();
+        const imageMessage = (activeThread?.messages || []).find((item, index) => getMessageFeedbackKey(item, index) === messageKey);
+        const image = imageMessage?.image || {};
+
+        if (downloadImageButton) {
+          const url = image.url || downloadImageButton.closest(".guest-message-body")?.querySelector("img")?.src || "";
+          if (!url) {
+            showToast("تعذر تحميل الصورة حاليًا.");
+            return;
+          }
+          const link = document.createElement("a");
+          link.href = url;
+          link.download = `orlixor-image-${Date.now()}.png`;
+          document.body.appendChild(link);
+          link.click();
+          link.remove();
+          showToast("بدأ تحميل الصورة.");
+          return;
+        }
+
+        if (copyImagePromptButton) {
+          const text = image.revisedPrompt || image.prompt || "";
+          navigator.clipboard?.writeText(text).then(() => {
+            showToast("تم نسخ وصف الصورة.");
+          }).catch(() => {
+            showToast("تعذر نسخ الوصف حاليًا.");
+          });
+          return;
+        }
+
+        if (regenerateImageButton) {
+          if (state.sending) return;
+          state.sending = true;
+          await runImageThreadTask({
+            input: image.prompt || image.revisedPrompt || "إعادة توليد الصورة",
+            outboundMessage: image.prompt || image.revisedPrompt || "إعادة توليد الصورة",
+            outgoingFiles: [],
+            mode: image.mode === "edit" ? "edit" : "generate",
+            sourceImageDataUrl: image.sourceImageDataUrl || "",
+            sourceImageName: image.sourceImageName || "",
+            sourceImageMime: image.sourceImageMime || ""
+          });
+          return;
+        }
       }
 
       if (event.target.closest("[data-copy-reply]")) {
