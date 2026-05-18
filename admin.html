@@ -49,6 +49,7 @@
           <button type="button" data-admin-tab="xp"><span>ϟ</span>إدارة XP</button>
           <button type="button" data-admin-tab="tools"><span>◔</span>الأدوات والتقارير</button>
           <button type="button" data-admin-tab="ai"><span>AI</span>AI Intelligence</button>
+          <button type="button" data-admin-tab="orlixor-alpha"><span>OA</span>Orlixor AI Alpha</button>
           <button type="button" data-admin-tab="messages"><span>✉</span>الرسائل والإشعارات</button>
           <button type="button" data-admin-tab="support"><span>☏</span>طلبات الدعم</button>
           <button type="button" data-admin-tab="settings"><span>⚙</span>الإعدادات</button>
@@ -330,6 +331,60 @@
               <article class="admin-glass-panel">
                 <h2>Model Performance</h2>
                 <div class="admin-table-wrap" data-ai-model-performance></div>
+              </article>
+            </section>
+          </section>
+
+          <section class="admin-tab-panel" data-admin-panel="orlixor-alpha" hidden>
+            <div class="admin-section-heading">
+              <div>
+                <h1>Orlixor AI Alpha</h1>
+                <p>Internal admin-only model test chat. It does not save normal user conversations.</p>
+              </div>
+              <div class="admin-date-controls">
+                <button type="button">Admin Only</button>
+                <button type="button">No User Conversation Save</button>
+              </div>
+            </div>
+
+            <section class="admin-dashboard-grid">
+              <article class="admin-glass-panel">
+                <h2>Alpha Test Chat</h2>
+                <form class="admin-notification-form" data-alpha-chat-form>
+                  <div class="admin-notification-form-grid">
+                    <label>Model
+                      <select class="field" data-alpha-model>
+                        <option value="alpha">Alpha</option>
+                        <option value="pro">Deep Reasoning</option>
+                        <option value="orlixor">Orlixor Basic</option>
+                        <option value="creative">Creative</option>
+                        <option value="turbo">Turbo</option>
+                      </select>
+                    </label>
+                    <label>RAG
+                      <select class="field" data-alpha-rag>
+                        <option value="auto">Auto</option>
+                        <option value="force">Force RAG</option>
+                        <option value="off">Off</option>
+                      </select>
+                    </label>
+                  </div>
+                  <label>Prompt
+                    <textarea class="field" data-alpha-prompt rows="7" required placeholder="Ask Orlixor AI Alpha a test question..."></textarea>
+                  </label>
+                  <div class="admin-row-actions">
+                    <button class="primary-btn" type="submit">Send</button>
+                    <button type="button" data-alpha-preset="normal">Test Normal Prompt</button>
+                    <button type="button" data-alpha-preset="rag">Test RAG Prompt</button>
+                    <button type="button" data-alpha-preset="coding">Test Coding Prompt</button>
+                    <button type="button" data-alpha-clear>Clear Chat</button>
+                    <button type="button" data-alpha-save-candidate disabled>Save as Knowledge Candidate</button>
+                  </div>
+                </form>
+              </article>
+              <article class="admin-glass-panel">
+                <h2>Alpha Result</h2>
+                <div class="admin-table-wrap" data-alpha-result></div>
               </article>
             </section>
           </section>

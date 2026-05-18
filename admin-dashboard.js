@@ -19,6 +19,7 @@
       knowledge: [],
       review: [],
       rag: null,
+      alpha: null,
       loading: true,
       error: ""
     },
@@ -81,6 +82,11 @@
     aiRagForm: $("[data-ai-rag-form]"),
     aiRagQuestion: $("[data-ai-rag-question]"),
     aiRagResult: $("[data-ai-rag-result]"),
+    alphaForm: $("[data-alpha-chat-form]"),
+    alphaPrompt: $("[data-alpha-prompt]"),
+    alphaModel: $("[data-alpha-model]"),
+    alphaRag: $("[data-alpha-rag]"),
+    alphaResult: $("[data-alpha-result]"),
     planDonut: $("[data-plan-donut]"),
     totalUsers: $("[data-total-users]"),
     planLegend: $("[data-plan-legend]"),
@@ -1231,6 +1237,55 @@
     `;
   }
 
+  function renderAlphaResult() {
+    if (!nodes.alphaResult) return;
+    const result = state.ai.alpha;
+    if (!result) {
+      nodes.alphaResult.innerHTML = `<div class="admin-empty-panel">Run an internal Alpha test to inspect routing, RAG, cost, tokens, latency, and Safe Mode.</div>`;
+      return;
+    }
+    if (result.loading) {
+      nodes.alphaResult.innerHTML = `<div class="admin-empty-panel">Testing Orlixor AI Alpha...</div>`;
+      return;
+    }
+    if (result.error) {
+      nodes.alphaResult.innerHTML = `<div class="admin-empty-panel">Alpha test failed: ${escapeHtml(result.error)}</div>`;
+      return;
+    }
+    const sources = Array.isArray(result.sources) ? result.sources : [];
+    const usage = result.usage || {};
+    nodes.alphaResult.innerHTML = `
+      <table class="admin-data-table compact">
+        <tbody>
+          <tr><td><strong>Model used</strong></td><td>${escapeHtml(result.model?.key || "")} / ${escapeHtml(result.model?.provider || "")} / ${escapeHtml(result.model?.provider_model || "")}</td></tr>
+          <tr><td><strong>RAG</strong></td><td>${result.rag?.used ? "Used" : "Not used"} / attempted: ${escapeHtml(String(Boolean(result.rag?.attempted)))}</td></tr>
+          <tr><td><strong>Tokens</strong></td><td>${formatNumber(usage.input_tokens || 0)} in / ${formatNumber(usage.output_tokens || 0)} out / ${formatNumber(result.total_tokens || 0)} total</td></tr>
+          <tr><td><strong>Cost estimate</strong></td><td>${formatMoney(result.cost_estimate_usd || 0)}</td></tr>
+          <tr><td><strong>Latency</strong></td><td>${formatNumber(result.latency_ms || 0)}ms</td></tr>
+          <tr><td><strong>Route reason</strong></td><td>${escapeHtml(result.route_reason || "")}</td></tr>
+          <tr><td><strong>Safe Mode</strong></td><td>${result.safe_mode?.active ? "Active" : "Inactive"} ${escapeHtml((result.safe_mode?.reasons || []).join(", "))}</td></tr>
+          <tr><td><strong>Quality score</strong></td><td>${formatNumber(result.quality_score || 0)}%</td></tr>
+        </tbody>
+      </table>
+      <div class="admin-empty-panel">
+        <strong>Answer</strong><br>
+        <span>${escapeHtml(result.answer || "")}</span>
+      </div>
+      <table class="admin-data-table">
+        <thead><tr><th>RAG Source</th><th>Similarity</th><th>Rank</th><th>Reason</th><th>Excerpt</th></tr></thead>
+        <tbody>${sources.map((source) => `
+          <tr>
+            <td><strong>${escapeHtml(source.title || "")}</strong><span>${escapeHtml(source.category || source.source || "")}</span></td>
+            <td>${formatNumber(source.similarity || 0)}</td>
+            <td>${formatNumber(source.rank_score || 0)}</td>
+            <td>${escapeHtml(source.reason || "")}</td>
+            <td><span>${escapeHtml(String(source.content || "").slice(0, 180))}</span></td>
+          </tr>
+        `).join("") || `<tr><td colspan="5">No RAG sources retrieved.</td></tr>`}</tbody>
+      </table>
+    `;
+  }
+
   function renderAiDashboard() {
     const analytics = getAiAnalytics();
     const health = state.ai.health || {};
@@ -1249,6 +1304,7 @@
     renderAiKnowledgeList();
     renderAiReviewList();
     renderAiRagResult();
+    renderAlphaResult();
   }
 
   function renderAll() {
@@ -1539,6 +1595,61 @@
     form?.reset?.();
   }
 
+  function setAlphaPreset(type) {
+    const presets = {
+      normal: "Give a concise summary of what Orlixor AI Alpha is used for inside the admin dashboard.",
+      rag: "كم سعر باقة طويق؟ وكم XP يوميًا في Spark؟ استخدم مصادر Knowledge Base إن وجدت.",
+      coding: "Review this Node.js route idea and suggest a safer implementation pattern for admin-only AI testing."
+    };
+    if (nodes.alphaPrompt) nodes.alphaPrompt.value = presets[type] || presets.normal;
+    if (nodes.alphaRag) nodes.alphaRag.value = type === "rag" ? "force" : "auto";
+    if (nodes.alphaModel) nodes.alphaModel.value = type === "coding" ? "pro" : "alpha";
+  }
+
+  async function runAlphaChat(form) {
+    const message = String(nodes.alphaPrompt?.value || "").trim();
+    if (!message) {
+      window.alert("Write an Alpha test prompt first.");
+      return;
+    }
+    const ragMode = nodes.alphaRag?.value || "auto";
+    state.ai.alpha = { loading: true };
+    renderAlphaResult();
+    const result = await api.adminOrlixorAlphaChat?.({
+      message,
+      model: nodes.alphaModel?.value || "alpha",
+      use_rag: ragMode === "off" ? false : undefined,
+      force_rag: ragMode === "force"
+    });
+    if (!result?.ok) {
+      state.ai.alpha = { error: result?.message || "ORLIXOR_ALPHA_CHAT_FAILED" };
+      renderAlphaResult();
+      return;
+    }
+    state.ai.alpha = result.data || null;
+    renderAlphaResult();
+    form?.querySelector?.("[data-alpha-save-candidate]")?.removeAttribute("disabled");
+  }
+
+  async function saveAlphaKnowledgeCandidate() {
+    const candidate = state.ai.alpha?.knowledge_candidate;
+    if (!candidate?.content) {
+      window.alert("Run an Alpha test before saving a knowledge candidate.");
+      return;
+    }
+    const result = await api.createAdminAiKnowledge?.({
+      ...candidate,
+      status: "draft"
+    });
+    if (!result?.ok) {
+      window.alert(result?.message || "Could not save Alpha answer as a Knowledge Base draft.");
+      return;
+    }
+    window.alert("Saved as a draft Knowledge Base candidate. Approve it manually before RAG can use it.");
+    await loadAdminData();
+    setTab("ai");
+  }
+
   async function toggleAiSafeMode(value) {
     if (!api?.setAdminAiSafeMode) return;
     const enabled = value === "reset" ? null : value === "1";
@@ -1665,6 +1776,24 @@
       await toggleAiSafeMode(aiSafeModeButton.dataset.aiSafeModeToggle);
       return;
     }
+    const alphaPresetButton = event.target.closest("[data-alpha-preset]");
+    if (alphaPresetButton) {
+      setAlphaPreset(alphaPresetButton.dataset.alphaPreset);
+      return;
+    }
+    const alphaClearButton = event.target.closest("[data-alpha-clear]");
+    if (alphaClearButton) {
+      state.ai.alpha = null;
+      if (nodes.alphaPrompt) nodes.alphaPrompt.value = "";
+      nodes.alphaForm?.querySelector?.("[data-alpha-save-candidate]")?.setAttribute("disabled", "disabled");
+      renderAlphaResult();
+      return;
+    }
+    const alphaSaveButton = event.target.closest("[data-alpha-save-candidate]");
+    if (alphaSaveButton) {
+      await saveAlphaKnowledgeCandidate();
+      return;
+    }
   });
 
   document.addEventListener("submit", async (event) => {
@@ -1682,6 +1811,11 @@
     if (aiRagForm) {
       event.preventDefault();
       await runAiRagDebug(aiRagForm);
+    }
+    const alphaForm = event.target.closest("[data-alpha-chat-form]");
+    if (alphaForm) {
+      event.preventDefault();
+      await runAlphaChat(alphaForm);
     }
   });
 

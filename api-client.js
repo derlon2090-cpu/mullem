@@ -1275,6 +1275,13 @@
     });
   }
 
+  async function adminOrlixorAlphaChat(payload) {
+    return request("/admin/orlixor-alpha-chat", {
+      method: "POST",
+      body: payload
+    });
+  }
+
   async function submitToolSuggestion(payload) {
     return request("/tool-suggestions", {
       method: "POST",
@@ -1711,6 +1718,7 @@
     approveAdminAiReview,
     rejectAdminAiReview,
     debugAdminAiRag,
+    adminOrlixorAlphaChat,
     submitToolSuggestion,
     getAdminToolSuggestions,
     updateAdminToolSuggestionStatus,

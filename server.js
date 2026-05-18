@@ -9015,6 +9015,171 @@ async function handleAdminRagDebug(req, res) {
   });
 }
 
+async function handleAdminOrlixorAlphaChat(req, res) {
+  const auth = await requireAdminUser(req);
+  const payload = await parseJsonBody(req);
+  const message = sanitizeOptionalText(payload.message || payload.question || payload.prompt, 8000);
+  if (!message) {
+    throw createHttpError(422, "message is required.");
+  }
+
+  const startedAt = Date.now();
+  const health = await buildAiHealthSnapshot();
+  const adminAiUser = {
+    ...auth.user,
+    plan: "pioneer",
+    package_key: "pioneer",
+    package_name: "Pioneer",
+    plan_type: "pioneer",
+    package_daily_xp: 600
+  };
+  const requestedModel = normalizeSelectedModel(payload.model || payload.selected_model || payload.selectedModel || "alpha");
+  const analysis = aiIntelligence.analyzeRequest({
+    message,
+    requestedModel,
+    operation: "admin_orlixor_alpha"
+  });
+  const shouldRetrieve = payload.use_rag === false || payload.useRag === false
+    ? false
+    : Boolean(payload.force_rag || payload.forceRag || analysis.needsRetrieval || requestedModel === "alpha");
+  const retrievedKnowledge = shouldRetrieve
+    ? await getRetrievedKnowledgeContext({ message, analysis, user: adminAiUser })
+    : { context: "", sources: [] };
+  const routing = routeModelForUser({
+    user: adminAiUser,
+    requestedModel,
+    message,
+    operation: "admin_orlixor_alpha"
+  });
+  routing.routeReason = `${routing.routeReason}|admin_alpha_test`;
+  if (health.safe_mode?.active) {
+    routing.safeModeActive = true;
+    routing.safeModeReasons = health.safe_mode.reasons || [];
+    routing.modelProfile.maxContextTokens = Math.min(Number(routing.modelProfile.maxContextTokens || FREE_MAX_CONTEXT_TOKENS), FREE_MAX_CONTEXT_TOKENS);
+    routing.modelProfile.maxOutputTokens = Math.min(Number(routing.modelProfile.maxOutputTokens || OPENAI_MAX_OUTPUT_TOKENS), 650);
+    routing.routeReason = `${routing.routeReason}|safe_mode_reduced_context`;
+  }
+
+  const systemPrompt = aiIntelligence.buildDynamicSystemPrompt({
+    basePrompt: [
+      "You are Orlixor AI Alpha, an internal admin-only test assistant.",
+      "Answer the admin's prompt directly. Use retrieved knowledge when relevant.",
+      "Do not store this exchange as a user conversation. Do not reveal API keys, secrets, or private user data."
+    ].join("\n"),
+    audiencePrompt: "The user is an Orlixor admin validating routing, quality, RAG, cost, latency, and Safe Mode before release.",
+    analysis,
+    ragContext: retrievedKnowledge.context
+  });
+  const dryRun = Boolean(payload.dry_run || payload.dryRun);
+  const input = buildResponsesInput([
+    { role: "system", content: systemPrompt },
+    { role: "user", content: message }
+  ]);
+  const result = dryRun
+    ? {
+        text: retrievedKnowledge.sources.length
+          ? `Dry-run Orlixor AI Alpha answer. Retrieved source: ${retrievedKnowledge.sources[0].title || retrievedKnowledge.sources[0].source_title || "Knowledge Base"}.`
+          : "Dry-run Orlixor AI Alpha answer. No approved RAG source was retrieved.",
+        usage: {
+          input_tokens: aiIntelligence.estimateTokens(`${systemPrompt}\n${message}`),
+          output_tokens: 42
+        },
+        provider: routing.provider
+      }
+    : await withAiQueueSlot({ routing, operation: "admin_orlixor_alpha" }, () => callAiWithSessionRecovery({
+        input,
+        modelProfile: routing.modelProfile,
+        routing,
+        operation: "admin_orlixor_alpha"
+      }));
+  const answer = sanitizeModelDisplayText(result.text);
+  const provider = normalizeProviderKey(result.provider || resolveProfileProvider(routing.modelProfile));
+  const usage = {
+    input_tokens: Number(result.usage?.input_tokens || result.usage?.prompt_tokens || 0),
+    output_tokens: Number(result.usage?.output_tokens || result.usage?.completion_tokens || 0)
+  };
+  const totalCostEstimateUsd = estimateAiCostUsd(provider, usage);
+  const latencyMs = Date.now() - startedAt;
+  const quality = aiIntelligence.scoreResponse({
+    answer,
+    usage,
+    latencyMs
+  });
+  realScaleInfra.recordAiRequest({
+    provider,
+    model: routing.modelKey,
+    plan: "admin",
+    routeReason: routing.routeReason,
+    ragUsed: retrievedKnowledge.sources.length > 0,
+    latencyMs,
+    costUsd: totalCostEstimateUsd,
+    cached: false
+  });
+  await recordAdminAction(req, auth, "RUN_ORLIXOR_ALPHA_CHAT", "ai_runtime", "orlixor_alpha", {
+    dry_run: dryRun,
+    requested_model: requestedModel,
+    model_key: routing.modelKey,
+    provider,
+    rag_used: retrievedKnowledge.sources.length > 0,
+    input_tokens: usage.input_tokens,
+    output_tokens: usage.output_tokens,
+    cost_usd: totalCostEstimateUsd,
+    latency_ms: latencyMs,
+    route_reason: routing.routeReason,
+    safe_mode: Boolean(health.safe_mode?.active)
+  });
+  sendJson(req, res, 200, {
+    success: true,
+    data: {
+      message,
+      answer,
+      dry_run: dryRun,
+      model: {
+        key: routing.modelKey,
+        requested_key: requestedModel,
+        name: routing.modelProfile?.name || routing.modelKey,
+        provider,
+        provider_model: resolveProviderModel(routing.modelProfile, provider),
+        prompt_key: routing.promptKey,
+        task_type: routing.taskType,
+        question_type: routing.questionType
+      },
+      rag: {
+        used: retrievedKnowledge.sources.length > 0,
+        attempted: shouldRetrieve,
+        sources_count: retrievedKnowledge.sources.length
+      },
+      sources: retrievedKnowledge.sources.map((source, index) => ({
+        id: source.id,
+        title: source.title || source.source_title || `Source ${index + 1}`,
+        source_key: source.source_key || "",
+        content: aiIntelligence.sanitizeSensitiveText(source.content || source.sanitized_content || "").text.slice(0, 900),
+        similarity: Number(source.similarity || source.keyword_score || source.keywordScore || 0),
+        rank_score: Number(source.rank_score || 0),
+        reason: `Matched task ${analysis.taskType}; ranked by similarity, quality, feedback, and recency.`,
+        source: source.source_label || source.source_title || source.source_type || "",
+        category: source.category || source.source_category || "",
+        updated_at: source.updated_at || null
+      })),
+      usage,
+      total_tokens: usage.input_tokens + usage.output_tokens,
+      cost_estimate_usd: totalCostEstimateUsd,
+      latency_ms: latencyMs,
+      route_reason: routing.routeReason,
+      safe_mode: health.safe_mode || { active: false, reasons: [] },
+      quality_score: quality.qualityScore,
+      knowledge_candidate: {
+        title: `Orlixor AI Alpha - ${message.slice(0, 80)}`,
+        category: "excellent_answer",
+        source: "Orlixor AI Alpha",
+        status: "draft",
+        tags: ["orlixor-alpha", routing.modelKey, routing.taskType].filter(Boolean),
+        content: aiIntelligence.sanitizeSensitiveText(`Question:\n${message}\n\nAnswer:\n${answer}`).text
+      }
+    }
+  });
+}
+
 async function handleAdminAdjustUserXp(req, res, userId, direction = "add") {
   const auth = await requireAdminUser(req);
   if (typeof databaseClient.adjustUserXpByAdmin !== "function") {
@@ -11547,6 +11712,10 @@ async function routeRequest(req, res) {
 
   if (req.method === "POST" && requestPath === "/api/admin/ai-rag-debug") {
     await handleAdminRagDebug(req, res);
+    return;
+  }
+  if (req.method === "POST" && requestPath === "/api/admin/orlixor-alpha-chat") {
+    await handleAdminOrlixorAlphaChat(req, res);
     return;
   }
 
