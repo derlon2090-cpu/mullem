@@ -193,6 +193,7 @@ const MIN_PASSWORD_LENGTH = Math.max(6, Number(process.env.MIN_PASSWORD_LENGTH |
 const PASSWORD_HASH_ITERATIONS = Math.max(60000, Number(process.env.PASSWORD_HASH_ITERATIONS || 120000));
 const DEFAULT_ADMIN_EMAIL = String(process.env.DEFAULT_ADMIN_EMAIL || "super.admin.orlixor.2026@orlixor.ai").trim().toLowerCase();
 const DEFAULT_ADMIN_PASSWORD = String(process.env.DEFAULT_ADMIN_PASSWORD || "Orlixor#Admin!2026$Secure-9Qv").trim();
+const DEFAULT_ADMIN_PASSWORD_FROM_ENV = Boolean(String(process.env.DEFAULT_ADMIN_PASSWORD || "").trim());
 const DEFAULT_ADMIN_NAME = String(process.env.DEFAULT_ADMIN_NAME || "Orlixor Super Admin").trim();
 const DEFAULT_STUDENT_EMAIL = String(process.env.DEFAULT_STUDENT_EMAIL || "secure.user.orlixor.2026@orlixor.ai").trim().toLowerCase();
 const DEFAULT_STUDENT_PASSWORD = String(process.env.DEFAULT_STUDENT_PASSWORD || "Orlixor#User!2026$Secure-4Lm").trim();
@@ -3130,7 +3131,7 @@ function getRequestCookie(req, name) {
 async function ensureDefaultUsers(client = databaseClient) {
   if (!client || typeof client.isReady !== "function" || !client.isReady()) return;
 
-  await client.ensureUserByEmail({
+  const defaultAdmin = await client.ensureUserByEmail({
     name: DEFAULT_ADMIN_NAME,
     email: DEFAULT_ADMIN_EMAIL,
     password_hash: hashPassword(DEFAULT_ADMIN_PASSWORD),
@@ -3140,6 +3141,24 @@ async function ensureDefaultUsers(client = databaseClient) {
     status: "active",
     activity: "حساب إدارة افتراضي"
   });
+  if (
+    DEFAULT_ADMIN_PASSWORD_FROM_ENV &&
+    defaultAdmin?.id &&
+    typeof client.updateUser === "function"
+  ) {
+    const needsAdminPasswordSync = !verifyPassword(DEFAULT_ADMIN_PASSWORD, defaultAdmin.password_hash);
+    const needsAdminRoleSync = String(defaultAdmin.role || "").trim().toLowerCase() !== "super_admin" ||
+      String(defaultAdmin.status || "").trim().toLowerCase() !== "active";
+    if (needsAdminPasswordSync || needsAdminRoleSync) {
+      await client.updateUser(defaultAdmin.id, {
+        name: DEFAULT_ADMIN_NAME,
+        password_hash: hashPassword(DEFAULT_ADMIN_PASSWORD),
+        role: "super_admin",
+        status: "active",
+        activity: "Default admin credentials synchronized from environment."
+      });
+    }
+  }
 
   await client.ensureUserByEmail({
     name: DEFAULT_STUDENT_NAME,
