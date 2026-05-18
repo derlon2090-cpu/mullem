@@ -393,45 +393,40 @@
       name: "Orlixor AI",
       label: "Orlixor AI",
       badge: "الموصى به",
-      description: "الأكثر توازنًا للشرح والكتابة والأسئلة العامة.",
-      icon: "logo",
-      xp: "قد يستهلك حتى 15 XP لكل رسالة"
+      description: "للشرح والكتابة والأسئلة العامة.",
+      icon: "logo"
     },
     turbo: {
       key: "turbo",
       name: "Orlixor AI Turbo",
       label: "Orlixor AI Turbo",
       badge: "الأسرع",
-      description: "أسرع استجابة للمهام اليومية والردود المختصرة.",
-      icon: "bolt",
-      xp: "قد يستهلك حتى 10 XP لكل رسالة"
+      description: "أسرع استجابة للمهام اليومية.",
+      icon: "bolt"
     },
     pro: {
       key: "pro",
       name: "Orlixor AI Pro",
       label: "Orlixor AI Pro",
       badge: "للتحليل المتقدم",
-      description: "أدق نموذج لتحليل معمق ونتائج دقيقة.",
-      icon: "star",
-      xp: "قد يستهلك حتى 15 XP أو أكثر حسب الاستهلاك"
+      description: "للتحليل الأعمق والنتائج الدقيقة.",
+      icon: "star"
     },
     creative: {
       key: "creative",
       name: "Orlixor AI Creative",
       label: "Orlixor AI Creative",
       badge: "للإبداع والكتابة",
-      description: "أفضل للكتابة الإبداعية والتسويق وصناعة المحتوى.",
-      icon: "edit",
-      xp: "قد يستهلك حتى 15 XP حسب طول النص"
+      description: "للكتابة الإبداعية وصناعة المحتوى.",
+      icon: "edit"
     },
     alpha: {
       key: "alpha",
       name: "Orlixor AI Alpha",
       label: "Orlixor AI Alpha",
       badge: "قيد التطوير",
-      description: "نموذجنا القادم في التطوير، لأفكار أعمق وتجارب أكثر ذكاءً.",
+      description: "نموذج داخلي قيد التطوير للاختبار فقط.",
       icon: "sparkle",
-      xp: "سيتم إطلاقه قريبًا",
       disabled: true
     }
   };
@@ -5107,22 +5102,12 @@
     }
   }
 
-  function showXpWarning({ tokens, xp, maxAllowed }) {
-    const safeTokens = Math.max(0, Number(tokens) || 0);
-    const safeXp = Math.max(1, Number(xp) || 1);
-    const safeMax = Math.max(0, Number(maxAllowed) || 0);
+  function showXpWarning() {
     const message = [
-      "⚠️ هذا الطلب كبير",
-      "",
-      `عدد التوكن المتوقع: ${safeTokens.toLocaleString("ar-SA")}`,
-      safeMax ? `حد خطتك التقريبي: ${safeMax.toLocaleString("ar-SA")} توكن` : "",
-      `التكلفة المتوقعة: ${safeXp} XP`,
-      "",
-      "قد يتم استهلاك رصيد أعلى من المعتاد.",
-      "التكلفة تقديرية، والخصم الفعلي يتم بعد الرد.",
+      "هذا الطلب كبير وقد يحتاج موارد إضافية.",
       "",
       "هل ترغب بالمتابعة؟"
-    ].filter(Boolean).join("\n");
+    ].join("\n");
 
     return Promise.resolve(typeof window.confirm === "function" ? window.confirm(message) : true);
   }
@@ -6221,7 +6206,6 @@
                 <span class="model-option-copy">
                   <strong>${escapeHtml(profile.label)}${profile.badge ? ` <b class="model-option-badge">${escapeHtml(profile.badge)}</b>` : ""}</strong>
                   <small>${escapeHtml(profile.description)}</small>
-                  <em>${escapeHtml(profile.xp)}</em>
                 </span>
                 <span class="model-option-icon">${icons[profile.icon] || icons.logo}</span>
               </button>
@@ -11732,7 +11716,9 @@
       const message = String(result?.payload?.message || result?.message || "").trim();
       const code = String(result?.payload?.code || result?.payload?.error || "").trim();
       if (status === 409 && message) return message;
-      if (/LIMIT|QUEUE|PLAN_UPGRADE|CONFIRMATION/i.test(code) && message) return message;
+      if (/LIMIT|QUEUE|PLAN_UPGRADE|CONFIRMATION/i.test(code)) {
+        return "وصلت إلى الحد المتاح في باقتك اليوم. يمكنك المحاولة لاحقًا أو ترقية الباقة.";
+      }
       if (status === 401 || status === 403) return "انتهت الجلسة، سجّل الدخول من جديد.";
       if (status === 413) return hasImageAttachments ? "الصورة أو الملف كبير جدًا. جرّب صورة أصغر." : "الطلب كبير جدًا. اختصر الرسالة ثم أعد المحاولة.";
       if (status === 429) return message || "طلبات كثيرة، حاول بعد قليل.";
