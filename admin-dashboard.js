@@ -15,6 +15,7 @@
       health: null,
       launch: null,
       beta: null,
+      scale: null,
       knowledge: [],
       review: [],
       rag: null,
@@ -64,6 +65,7 @@
     aiOverview: $("[data-ai-overview]"),
     aiLaunchMonitor: $("[data-ai-launch-monitor]"),
     aiBetaAnalytics: $("[data-ai-beta-analytics]"),
+    aiScaleGrowth: $("[data-ai-scale-growth]"),
     aiHealth: $("[data-ai-health]"),
     aiAlerts: $("[data-ai-alerts]"),
     aiFeedback: $("[data-ai-feedback]"),
@@ -195,7 +197,7 @@
   }
 
   async function loadAdminData() {
-    const [stats, users, plans, subscriptions, xpLedger, logs, notifications, toolSuggestions, aiAnalytics, aiHealth, aiLaunch, aiBeta, aiKnowledge, aiReview] = await Promise.all([
+    const [stats, users, plans, subscriptions, xpLedger, logs, notifications, toolSuggestions, aiAnalytics, aiHealth, aiLaunch, aiBeta, aiScale, aiKnowledge, aiReview] = await Promise.all([
       api.getAdminStats(),
       api.getAdminUsers({ per_page: 200 }),
       api.getAdminPackages(),
@@ -208,6 +210,7 @@
       api.getAdminAiHealth?.() || api.request("/admin/ai-health"),
       api.getAdminAiLaunchMonitor?.() || api.request("/admin/ai-launch-monitor"),
       api.getAdminBetaAnalytics?.({ days: 30 }) || api.request("/admin/beta-analytics"),
+      api.getAdminScaleGrowth?.({ days: 30 }) || api.request("/admin/scale-growth"),
       api.getAdminAiKnowledge?.({ limit: 160 }) || api.request("/admin/ai-knowledge"),
       api.getAdminAiReview?.({ limit: 120 }) || api.request("/admin/ai-review")
     ]);
@@ -224,11 +227,12 @@
     if (notifications.ok) state.notifications = Array.isArray(notifications.data?.items) ? notifications.data.items : [];
     if (toolSuggestions.ok) state.toolSuggestions = Array.isArray(toolSuggestions.data?.items) ? toolSuggestions.data.items : [];
     state.ai.loading = false;
-    state.ai.error = [aiAnalytics, aiHealth, aiLaunch, aiBeta, aiKnowledge, aiReview].find((item) => item && !item.ok)?.message || "";
+    state.ai.error = [aiAnalytics, aiHealth, aiLaunch, aiBeta, aiScale, aiKnowledge, aiReview].find((item) => item && !item.ok)?.message || "";
     if (aiAnalytics.ok) state.ai.analytics = aiAnalytics.data || null;
     if (aiHealth.ok) state.ai.health = aiHealth.data || null;
     if (aiLaunch.ok) state.ai.launch = aiLaunch.data || null;
     if (aiBeta.ok) state.ai.beta = aiBeta.data || null;
+    if (aiScale.ok) state.ai.scale = aiScale.data || null;
     if (aiKnowledge.ok) state.ai.knowledge = Array.isArray(aiKnowledge.data?.items) ? aiKnowledge.data.items : [];
     if (aiReview.ok) state.ai.review = Array.isArray(aiReview.data?.items) ? aiReview.data.items : [];
 
@@ -970,6 +974,85 @@
     `;
   }
 
+  function renderAiScaleGrowth(scale) {
+    if (!nodes.aiScaleGrowth) return;
+    if (!scale) {
+      nodes.aiScaleGrowth.innerHTML = `<div class="admin-empty-panel">Loading Scale + Growth...</div>`;
+      return;
+    }
+    const referrals = scale.referrals || {};
+    const reputation = scale.reputation || {};
+    const scaling = scale.scaling || {};
+    const suggestions = (scale.knowledge_expansion?.suggestions || []).slice(0, 8);
+    const topReferrers = (referrals.top_referrers || []).slice(0, 8);
+    const notifications = (scale.notifications?.by_type || []).slice(0, 8);
+    const recommendations = Array.isArray(scale.recommendations) ? scale.recommendations : [];
+    nodes.aiScaleGrowth.innerHTML = `
+      <div class="admin-kpi-row">
+        <article class="admin-kpi-card">
+          <span>Referrals</span>
+          <strong>${formatNumber(referrals.total_referrals || 0)}</strong>
+          <small>${formatNumber(referrals.conversions || 0)} conversions · ${formatNumber(referrals.rewards_xp || 0)} XP rewards</small>
+        </article>
+        <article class="admin-kpi-card">
+          <span>Queue</span>
+          <strong>${formatNumber(scaling.queue_size || 0)}</strong>
+          <small>${formatNumber(scaling.concurrent_requests || 0)} concurrent · ${formatNumber(scaling.avg_queue_wait_ms || 0)}ms wait</small>
+        </article>
+        <article class="admin-kpi-card">
+          <span>Generation</span>
+          <strong>${formatNumber(scaling.avg_generation_ms || 0)}ms</strong>
+          <small>${formatNumber(scaling.fallback_recoveries_since_start || 0)} provider recoveries</small>
+        </article>
+        <article class="admin-kpi-card ${Number(reputation.high_abuse_users || 0) ? "is-warm" : ""}">
+          <span>Reputation</span>
+          <strong>${formatNumber(reputation.avg_trust_score || 0)}</strong>
+          <small>${formatNumber(reputation.high_abuse_users || 0)} high abuse · ${formatNumber(reputation.shadow_banned_users || 0)} shadow limited</small>
+        </article>
+        <article class="admin-kpi-card">
+          <span>Memory</span>
+          <strong>${formatNumber(scaling.memory_pressure?.heap_used_mb || 0)} MB</strong>
+          <small>RSS ${formatNumber(scaling.memory_pressure?.rss_mb || 0)} MB</small>
+        </article>
+      </div>
+      <section class="admin-dashboard-grid">
+        <div>
+          <h3>Top Referrers</h3>
+          <table class="admin-data-table compact">
+            <thead><tr><th>User</th><th>Referrals</th><th>Conversions</th><th>Rewards</th></tr></thead>
+            <tbody>${topReferrers.map((row) => `
+              <tr><td>#${escapeHtml(row.user_id || "")}</td><td>${formatNumber(row.referrals || 0)}</td><td>${formatNumber(row.conversions || 0)}</td><td>${formatNumber(row.rewards_xp || 0)} XP</td></tr>
+            `).join("") || `<tr><td colspan="4">No referral data yet.</td></tr>`}</tbody>
+          </table>
+        </div>
+        <div>
+          <h3>Knowledge Expansion</h3>
+          <table class="admin-data-table compact">
+            <thead><tr><th>Suggestion</th><th>Category</th><th>Hits</th><th>Status</th></tr></thead>
+            <tbody>${suggestions.map((row) => `
+              <tr><td><strong>${escapeHtml(row.proposed_title || "")}</strong></td><td>${escapeHtml(row.proposed_category || "")}</td><td>${formatNumber(row.occurrences || 0)}</td><td>${escapeHtml(row.status || "")}</td></tr>
+            `).join("") || `<tr><td colspan="4">No repeated-question suggestions yet.</td></tr>`}</tbody>
+          </table>
+        </div>
+        <div>
+          <h3>Usage Notifications</h3>
+          <table class="admin-data-table compact">
+            <thead><tr><th>Type</th><th>Sent</th></tr></thead>
+            <tbody>${notifications.map((row) => `
+              <tr><td>${escapeHtml(row.type || "")}</td><td>${formatNumber(row.sent || 0)}</td></tr>
+            `).join("") || `<tr><td colspan="2">No notification activity yet.</td></tr>`}</tbody>
+          </table>
+        </div>
+        <div>
+          <h3>Scaling Recommendations</h3>
+          ${(recommendations.length ? recommendations : ["No scaling action needed yet."]).map((item) => `
+            <div class="admin-empty-panel">${escapeHtml(typeof item === "string" ? item : (item.action || item.title || ""))}</div>
+          `).join("")}
+        </div>
+      </section>
+    `;
+  }
+
   function renderAiAlerts(health) {
     if (!nodes.aiAlerts) return;
     const alerts = Array.isArray(health?.alerts) ? health.alerts : [];
@@ -1155,6 +1238,7 @@
     renderAiOverview(analytics);
     renderAiLaunchMonitor(launch);
     renderAiBetaAnalytics(state.ai.beta);
+    renderAiScaleGrowth(state.ai.scale);
     renderAiHealth(health);
     renderAiAlerts(health);
     renderAiFeedbackFilters(feedbackRows, modelRows);

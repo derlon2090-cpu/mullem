@@ -1195,6 +1195,26 @@
     return request(`/admin/beta-analytics${query.toString() ? `?${query.toString()}` : ""}`);
   }
 
+  async function getAdminScaleGrowth(params = {}) {
+    const query = new URLSearchParams();
+    Object.entries(params || {}).forEach(([key, value]) => {
+      if (value == null || value === "") return;
+      query.set(key, String(value));
+    });
+    return request(`/admin/scale-growth${query.toString() ? `?${query.toString()}` : ""}`);
+  }
+
+  async function getMyReferrals() {
+    return request("/referrals/me");
+  }
+
+  async function applyReferralCode(code) {
+    return request("/referrals/apply", {
+      method: "POST",
+      body: { referral_code: code }
+    });
+  }
+
   async function setAdminAiSafeMode(enabled) {
     return request("/admin/ai-safe-mode", {
       method: "POST",
@@ -1680,6 +1700,9 @@
     getAdminAiHealth,
     getAdminAiLaunchMonitor,
     getAdminBetaAnalytics,
+    getAdminScaleGrowth,
+    getMyReferrals,
+    applyReferralCode,
     setAdminAiSafeMode,
     getAdminAiKnowledge,
     createAdminAiKnowledge,

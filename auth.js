@@ -59,6 +59,20 @@ const isEmbeddedAuth = new URLSearchParams(window.location.search).get("embed") 
 const authBridgeKey = "mlm_auth_bridge";
 const savedConversationCacheLimit = 100;
 
+function getReferralCodeFromUrl() {
+  try {
+    const params = new URLSearchParams(window.location.search);
+    const code = params.get("referral_code") || params.get("referralCode") || params.get("ref") || "";
+    if (code) {
+      localStorage.setItem("mlm_referral_code", String(code).trim().toUpperCase());
+      return String(code).trim().toUpperCase();
+    }
+    return String(localStorage.getItem("mlm_referral_code") || "").trim().toUpperCase();
+  } catch (_) {
+    return "";
+  }
+}
+
 function normalizeAuthRoleKey(value) {
   return String(value || "").trim().toLowerCase().replace(/[\s-]+/g, "_");
 }
@@ -967,6 +981,7 @@ registerForm?.addEventListener("submit", async (event) => {
   setFormBusy(registerForm, true);
   let apiResult;
   try {
+    const referralCode = getReferralCodeFromUrl();
     apiResult = await apiClient.register({
       name,
       email,
@@ -974,7 +989,8 @@ registerForm?.addEventListener("submit", async (event) => {
       password_confirmation: password,
       grade,
       stage: inferStageFromGrade(grade),
-      device_name: "mullem-web"
+      device_name: "mullem-web",
+      referral_code: referralCode || undefined
     });
   } catch (_) {
     apiResult = {

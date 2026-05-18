@@ -268,6 +268,11 @@ function hydrateUserRow(row) {
     package_expires_at: row.package_expires_at || null,
     total_xp: Number(row.total_xp ?? row.xp ?? 0),
     plan_type: String(row.plan_type || row.package_key || row.package_name || "starter").trim() || "starter",
+    referral_code: String(row.referral_code || "").trim(),
+    referred_by_user_id: row.referred_by_user_id != null ? Number(row.referred_by_user_id) : null,
+    trust_score: Number(row.trust_score ?? 70),
+    abuse_score: Number(row.abuse_score || 0),
+    shadow_banned: normalizeBoolean(row.shadow_banned),
     last_reset: row.last_reset || row.last_active_date || null,
     last_daily_xp_claimed_date: row.last_daily_xp_claimed_date || row.last_reset || row.last_active_date || null,
     last_daily_xp_granted_at: row.last_daily_xp_granted_at || null,
@@ -456,6 +461,11 @@ function createPostgresDatabaseClient(rawConfig = {}) {
         daily_reward_amount INTEGER NOT NULL DEFAULT 0,
         streak_days INTEGER NOT NULL DEFAULT 0,
         motivation_score INTEGER NOT NULL DEFAULT 0,
+        referral_code VARCHAR(32) NULL,
+        referred_by_user_id BIGINT NULL REFERENCES app_users(id) ON DELETE SET NULL,
+        trust_score INTEGER NOT NULL DEFAULT 70,
+        abuse_score INTEGER NOT NULL DEFAULT 0,
+        shadow_banned BOOLEAN NOT NULL DEFAULT FALSE,
         last_active_date DATE NULL,
         last_reset DATE NULL,
         last_daily_reward_claimed_at TIMESTAMPTZ NULL,
@@ -474,6 +484,7 @@ function createPostgresDatabaseClient(rawConfig = {}) {
     await pool.query("CREATE UNIQUE INDEX IF NOT EXISTS uq_app_users_email ON app_users (email)");
     await pool.query("CREATE INDEX IF NOT EXISTS idx_app_users_role_status ON app_users (role, status)");
     await pool.query("CREATE INDEX IF NOT EXISTS idx_app_users_package_id ON app_users (package_id)");
+    await pool.query("CREATE UNIQUE INDEX IF NOT EXISTS uq_app_users_referral_code ON app_users (referral_code) WHERE referral_code IS NOT NULL");
 
     await ensureColumn("app_users", "package_id", "package_id BIGINT NULL REFERENCES app_packages(id) ON DELETE SET NULL");
     await ensureColumn("app_users", "plan_type", "plan_type VARCHAR(80) NOT NULL DEFAULT 'starter'");
@@ -492,6 +503,11 @@ function createPostgresDatabaseClient(rawConfig = {}) {
     await ensureColumn("app_users", "last_daily_xp_claimed_date", "last_daily_xp_claimed_date DATE NULL");
     await ensureColumn("app_users", "last_daily_xp_granted_at", "last_daily_xp_granted_at TIMESTAMPTZ NULL");
     await ensureColumn("app_users", "signup_bonus_claimed", "signup_bonus_claimed BOOLEAN NOT NULL DEFAULT FALSE");
+    await ensureColumn("app_users", "referral_code", "referral_code VARCHAR(32) NULL");
+    await ensureColumn("app_users", "referred_by_user_id", "referred_by_user_id BIGINT NULL REFERENCES app_users(id) ON DELETE SET NULL");
+    await ensureColumn("app_users", "trust_score", "trust_score INTEGER NOT NULL DEFAULT 70");
+    await ensureColumn("app_users", "abuse_score", "abuse_score INTEGER NOT NULL DEFAULT 0");
+    await ensureColumn("app_users", "shadow_banned", "shadow_banned BOOLEAN NOT NULL DEFAULT FALSE");
     await pool.query("ALTER TABLE app_users ALTER COLUMN signup_bonus_claimed SET DEFAULT FALSE");
     await pool.query(`
       UPDATE app_users
@@ -829,6 +845,43 @@ function createPostgresDatabaseClient(rawConfig = {}) {
     await pool.query("CREATE INDEX IF NOT EXISTS idx_abuse_events_action_created ON app_abuse_events (action, created_at DESC)");
     await pool.query("CREATE INDEX IF NOT EXISTS idx_abuse_events_user_created ON app_abuse_events (user_id, created_at DESC)");
     await pool.query("CREATE INDEX IF NOT EXISTS idx_abuse_events_ip_created ON app_abuse_events (ip_hash, created_at DESC)");
+
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS app_referrals (
+        id BIGSERIAL PRIMARY KEY,
+        referrer_user_id BIGINT NOT NULL REFERENCES app_users(id) ON DELETE CASCADE,
+        referred_user_id BIGINT NOT NULL REFERENCES app_users(id) ON DELETE CASCADE,
+        referral_code VARCHAR(32) NOT NULL,
+        status VARCHAR(40) NOT NULL DEFAULT 'signup',
+        reward_type VARCHAR(40) NULL,
+        reward_amount INTEGER NOT NULL DEFAULT 0,
+        referred_reward_amount INTEGER NOT NULL DEFAULT 0,
+        converted_at TIMESTAMPTZ NULL,
+        metadata JSONB NULL,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        UNIQUE (referred_user_id)
+      )
+    `);
+    await pool.query("CREATE INDEX IF NOT EXISTS idx_app_referrals_referrer_created ON app_referrals (referrer_user_id, created_at DESC)");
+    await pool.query("CREATE INDEX IF NOT EXISTS idx_app_referrals_status_created ON app_referrals (status, created_at DESC)");
+
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS ai_knowledge_suggestions (
+        id BIGSERIAL PRIMARY KEY,
+        question_hash VARCHAR(80) NOT NULL UNIQUE,
+        sanitized_question TEXT NOT NULL,
+        proposed_title VARCHAR(255) NOT NULL,
+        proposed_category VARCHAR(80) NOT NULL DEFAULT 'faq',
+        reason VARCHAR(160) NULL,
+        occurrences INTEGER NOT NULL DEFAULT 1,
+        status VARCHAR(40) NOT NULL DEFAULT 'pending',
+        metadata JSONB NULL,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )
+    `);
+    await pool.query("CREATE INDEX IF NOT EXISTS idx_ai_kb_suggestions_status_occurrences ON ai_knowledge_suggestions (status, occurrences DESC, updated_at DESC)");
 
     await pool.query(`
       CREATE TABLE IF NOT EXISTS xp_ledger (
@@ -2721,6 +2774,309 @@ function createPostgresDatabaseClient(rawConfig = {}) {
     };
   }
 
+  function buildReferralCodeSeed(userId) {
+    const idPart = Math.max(0, Number(userId || 0)).toString(36).toUpperCase().padStart(4, "0");
+    const randomPart = crypto.randomBytes(3).toString("hex").toUpperCase();
+    return `ORX${idPart}${randomPart}`.slice(0, 18);
+  }
+
+  async function ensureReferralCodeForUser(userId) {
+    const safeUserId = Number(userId);
+    if (!safeUserId) return null;
+    const existingRows = await query("SELECT referral_code FROM app_users WHERE id = $1 LIMIT 1", [safeUserId]);
+    const existing = String(existingRows[0]?.referral_code || "").trim();
+    if (existing) return existing;
+
+    for (let attempt = 0; attempt < 5; attempt += 1) {
+      const code = buildReferralCodeSeed(safeUserId);
+      try {
+        const rows = await query(
+          "UPDATE app_users SET referral_code = $1, updated_at = NOW() WHERE id = $2 AND referral_code IS NULL RETURNING referral_code",
+          [code, safeUserId]
+        );
+        if (rows[0]?.referral_code) return rows[0].referral_code;
+      } catch (error) {
+        if (String(error?.code || "") !== "23505") throw error;
+      }
+    }
+    return null;
+  }
+
+  async function findUserByReferralCode(referralCode) {
+    const code = String(referralCode || "").trim().toUpperCase();
+    if (!code) return null;
+    const rows = await query(
+      `
+        SELECT ${getUserSelectClause("u", "p")}
+        FROM app_users u
+        LEFT JOIN app_packages p ON p.id = u.package_id
+        WHERE UPPER(u.referral_code) = $1
+        LIMIT 1
+      `,
+      [code]
+    );
+    return hydrateUserRow(rows[0] || null);
+  }
+
+  async function recordReferralSignup(payload = {}) {
+    const code = String(payload.referral_code || payload.referralCode || "").trim().toUpperCase();
+    const referredUserId = Number(payload.referred_user_id || payload.referredUserId || payload.user_id || payload.userId);
+    if (!code || !referredUserId) return null;
+    const referrer = await findUserByReferralCode(code);
+    if (!referrer || Number(referrer.id) === referredUserId) return null;
+
+    await ensureReferralCodeForUser(referrer.id);
+    await pool.query(
+      "UPDATE app_users SET referred_by_user_id = $1, updated_at = NOW() WHERE id = $2 AND referred_by_user_id IS NULL",
+      [Number(referrer.id), referredUserId]
+    );
+    const rows = await query(
+      `
+        INSERT INTO app_referrals (referrer_user_id, referred_user_id, referral_code, status, metadata)
+        VALUES ($1, $2, $3, 'signup', $4)
+        ON CONFLICT (referred_user_id) DO UPDATE SET
+          referral_code = EXCLUDED.referral_code,
+          updated_at = NOW()
+        RETURNING *
+      `,
+      [
+        Number(referrer.id),
+        referredUserId,
+        code,
+        payload.metadata ? JSON.stringify(payload.metadata) : null
+      ]
+    );
+    return rows[0] || null;
+  }
+
+  async function markReferralConverted(payload = {}) {
+    const referredUserId = Number(payload.referred_user_id || payload.referredUserId || payload.user_id || payload.userId);
+    const referrerRewardXp = Math.max(0, Math.round(Number(payload.referrer_reward_xp || payload.referrerRewardXp || 120) || 0));
+    const referredRewardXp = Math.max(0, Math.round(Number(payload.referred_reward_xp || payload.referredRewardXp || 0) || 0));
+    if (!referredUserId || (!referrerRewardXp && !referredRewardXp)) return null;
+
+    const client = await pool.connect();
+    try {
+      await client.query("BEGIN");
+      const referralRows = await client.query(
+        `
+          SELECT *
+          FROM app_referrals
+          WHERE referred_user_id = $1
+            AND status <> 'converted'
+          ORDER BY created_at ASC
+          LIMIT 1
+          FOR UPDATE
+        `,
+        [referredUserId]
+      );
+      const referral = referralRows.rows[0];
+      if (!referral) {
+        await client.query("ROLLBACK");
+        return null;
+      }
+
+      if (referrerRewardXp > 0) {
+        await client.query(
+          "UPDATE app_users SET balance = COALESCE(balance, xp, 0) + $1, xp = COALESCE(balance, xp, 0) + $1, total_xp = COALESCE(total_xp, xp, 0) + $1, updated_at = NOW() WHERE id = $2",
+          [referrerRewardXp, referral.referrer_user_id]
+        );
+        await client.query(
+          "INSERT INTO xp_ledger (user_id, amount, type, reason) VALUES ($1, $2, 'referral_conversion', $3)",
+          [referral.referrer_user_id, referrerRewardXp, "Referral converted to a paid subscription"]
+        );
+      }
+
+      if (referredRewardXp > 0) {
+        await client.query(
+          "UPDATE app_users SET balance = COALESCE(balance, xp, 0) + $1, xp = COALESCE(balance, xp, 0) + $1, total_xp = COALESCE(total_xp, xp, 0) + $1, updated_at = NOW() WHERE id = $2",
+          [referredRewardXp, referredUserId]
+        );
+        await client.query(
+          "INSERT INTO xp_ledger (user_id, amount, type, reason) VALUES ($1, $2, 'referral_join_bonus', $3)",
+          [referredUserId, referredRewardXp, "Referral join bonus after subscription"]
+        );
+      }
+
+      const updateRows = await client.query(
+        `
+          UPDATE app_referrals
+          SET status = 'converted',
+              reward_type = 'xp',
+              reward_amount = $1,
+              referred_reward_amount = $2,
+              converted_at = NOW(),
+              metadata = COALESCE(metadata, '{}'::jsonb) || $3::jsonb,
+              updated_at = NOW()
+          WHERE id = $4
+          RETURNING *
+        `,
+        [
+          referrerRewardXp,
+          referredRewardXp,
+          JSON.stringify(payload.metadata || {}),
+          referral.id
+        ]
+      );
+
+      await client.query(
+        `
+          INSERT INTO notifications (title, body, type, badge, icon, target_plan, target_user_id, starts_at, is_active)
+          VALUES ($1, $2, 'account', 'Referral', 'gift', 'all', $3, NOW(), TRUE)
+          ON CONFLICT (type, title) DO UPDATE SET body = EXCLUDED.body, updated_at = NOW()
+        `,
+        [
+          `Referral reward #${referral.referrer_user_id}-${referral.id}`,
+          `Your referral converted. ${referrerRewardXp} XP was added to your balance.`,
+          referral.referrer_user_id
+        ]
+      );
+
+      await client.query("COMMIT");
+      return updateRows.rows[0] || null;
+    } catch (error) {
+      await client.query("ROLLBACK").catch(() => {});
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
+  async function getReferralStats(userId) {
+    const safeUserId = Number(userId);
+    if (!safeUserId) return { code: null, total_referrals: 0, conversions: 0, rewards_xp: 0, items: [] };
+    const code = await ensureReferralCodeForUser(safeUserId);
+    const rows = await query(
+      `
+        SELECT id, referral_code, status, reward_type, reward_amount, referred_reward_amount, converted_at, created_at, updated_at
+        FROM app_referrals
+        WHERE referrer_user_id = $1
+        ORDER BY created_at DESC
+        LIMIT 100
+      `,
+      [safeUserId]
+    );
+    return {
+      code,
+      total_referrals: rows.length,
+      conversions: rows.filter((row) => row.status === "converted").length,
+      rewards_xp: rows.reduce((total, row) => total + Number(row.reward_amount || 0), 0),
+      items: rows
+    };
+  }
+
+  async function saveKnowledgeSuggestion(payload = {}) {
+    const questionHash = String(payload.question_hash || payload.questionHash || "").trim().slice(0, 80);
+    const sanitizedQuestion = String(payload.sanitized_question || payload.sanitizedQuestion || "").trim();
+    if (!questionHash || !sanitizedQuestion) return null;
+    const rows = await query(
+      `
+        INSERT INTO ai_knowledge_suggestions (
+          question_hash, sanitized_question, proposed_title, proposed_category, reason, occurrences, status, metadata
+        ) VALUES ($1, $2, $3, $4, $5, 1, 'pending', $6)
+        ON CONFLICT (question_hash) DO UPDATE SET
+          occurrences = ai_knowledge_suggestions.occurrences + 1,
+          sanitized_question = EXCLUDED.sanitized_question,
+          proposed_title = EXCLUDED.proposed_title,
+          proposed_category = EXCLUDED.proposed_category,
+          reason = EXCLUDED.reason,
+          metadata = COALESCE(ai_knowledge_suggestions.metadata, '{}'::jsonb) || COALESCE(EXCLUDED.metadata, '{}'::jsonb),
+          updated_at = NOW()
+        RETURNING *
+      `,
+      [
+        questionHash,
+        sanitizedQuestion.slice(0, 4000),
+        String(payload.proposed_title || payload.proposedTitle || sanitizedQuestion.slice(0, 120)).trim().slice(0, 255),
+        String(payload.proposed_category || payload.proposedCategory || "faq").trim().slice(0, 80) || "faq",
+        String(payload.reason || "").trim().slice(0, 160) || null,
+        payload.metadata ? JSON.stringify(payload.metadata) : null
+      ]
+    );
+    return rows[0] || null;
+  }
+
+  async function getScaleGrowthAnalytics(options = {}) {
+    const days = Math.max(1, Math.min(Number(options.days || 30), 90));
+    const sinceSql = `${days} days`;
+    const referralOverviewRows = await query(
+      `
+        SELECT
+          COUNT(*)::int AS total_referrals,
+          COUNT(*) FILTER (WHERE status = 'converted')::int AS conversions,
+          COALESCE(SUM(reward_amount), 0)::int AS rewards_xp
+        FROM app_referrals
+        WHERE created_at >= NOW() - $1::interval
+      `,
+      [sinceSql]
+    );
+    const topReferrers = await query(
+      `
+        SELECT
+          referrer_user_id::text AS user_id,
+          COUNT(*)::int AS referrals,
+          COUNT(*) FILTER (WHERE status = 'converted')::int AS conversions,
+          COALESCE(SUM(reward_amount), 0)::int AS rewards_xp
+        FROM app_referrals
+        WHERE created_at >= NOW() - $1::interval
+        GROUP BY referrer_user_id
+        ORDER BY conversions DESC, referrals DESC
+        LIMIT 20
+      `,
+      [sinceSql]
+    );
+    const notificationRows = await query(
+      `
+        SELECT type, COUNT(*)::int AS sent
+        FROM notifications
+        WHERE created_at >= NOW() - $1::interval
+        GROUP BY type
+        ORDER BY sent DESC
+        LIMIT 20
+      `,
+      [sinceSql]
+    );
+    const knowledgeSuggestions = await query(
+      `
+        SELECT id, proposed_title, proposed_category, reason, occurrences, status, updated_at
+        FROM ai_knowledge_suggestions
+        WHERE updated_at >= NOW() - $1::interval OR status = 'pending'
+        ORDER BY occurrences DESC, updated_at DESC
+        LIMIT 20
+      `,
+      [sinceSql]
+    );
+    const reputationRows = await query(
+      `
+        SELECT
+          COUNT(*) FILTER (WHERE shadow_banned = TRUE)::int AS shadow_banned_users,
+          COALESCE(ROUND(AVG(trust_score)), 0)::int AS avg_trust_score,
+          COALESCE(ROUND(AVG(abuse_score)), 0)::int AS avg_abuse_score,
+          COUNT(*) FILTER (WHERE abuse_score >= 70)::int AS high_abuse_users
+        FROM app_users
+      `
+    );
+    return {
+      window_days: days,
+      referrals: {
+        ...(referralOverviewRows[0] || { total_referrals: 0, conversions: 0, rewards_xp: 0 }),
+        top_referrers: topReferrers
+      },
+      notifications: {
+        by_type: notificationRows
+      },
+      knowledge_expansion: {
+        suggestions: knowledgeSuggestions
+      },
+      reputation: reputationRows[0] || {
+        shadow_banned_users: 0,
+        avg_trust_score: 0,
+        avg_abuse_score: 0,
+        high_abuse_users: 0
+      }
+    };
+  }
+
   async function recordXpLedger(payload = {}) {
     const userId = Number(payload.user_id || payload.userId);
     const amount = Math.round(Number(payload.amount || 0) || 0);
@@ -4114,6 +4470,11 @@ function createPostgresDatabaseClient(rawConfig = {}) {
       daily_reward_amount: Math.max(0, Math.round(Number(payload.daily_reward_amount ?? payload.dailyRewardAmount ?? selectedPackage?.daily_xp ?? 0) || 0)),
       streak_days: Number.isFinite(Number(payload.streak_days)) ? Number(payload.streak_days) : 0,
       motivation_score: Number.isFinite(Number(payload.motivation_score)) ? Number(payload.motivation_score) : 0,
+      referral_code: String(payload.own_referral_code || payload.ownReferralCode || payload.generated_referral_code || "").trim().toUpperCase() || null,
+      referred_by_user_id: payload.referred_by_user_id || payload.referredByUserId ? Number(payload.referred_by_user_id || payload.referredByUserId) : null,
+      trust_score: Number.isFinite(Number(payload.trust_score || payload.trustScore)) ? Number(payload.trust_score || payload.trustScore) : 70,
+      abuse_score: Number.isFinite(Number(payload.abuse_score || payload.abuseScore)) ? Number(payload.abuse_score || payload.abuseScore) : 0,
+      shadow_banned: "shadow_banned" in payload || "shadowBanned" in payload ? normalizeBoolean(payload.shadow_banned || payload.shadowBanned) : false,
       last_active_date: payload.last_active_date || null,
       last_reset: payload.last_reset || payload.last_active_date || null,
       last_daily_xp_claimed_date: payload.last_daily_xp_claimed_date || payload.last_reset || payload.last_active_date || null,
@@ -4130,10 +4491,10 @@ function createPostgresDatabaseClient(rawConfig = {}) {
       `
         INSERT INTO app_users (
           name, email, password_hash, role, stage, grade, subject, package_id, package_name, plan_type, package_started_at, package_expires_at,
-          balance, xp, total_xp, daily_reward_amount, streak_days, motivation_score, last_active_date, last_reset, last_daily_reward_claimed_at, last_daily_reward_at, last_daily_xp_claimed_date, last_daily_xp_granted_at, signup_bonus_claimed, achievements, status, activity
+          balance, xp, total_xp, daily_reward_amount, streak_days, motivation_score, referral_code, referred_by_user_id, trust_score, abuse_score, shadow_banned, last_active_date, last_reset, last_daily_reward_claimed_at, last_daily_reward_at, last_daily_xp_claimed_date, last_daily_xp_granted_at, signup_bonus_claimed, achievements, status, activity
         ) VALUES (
           $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12,
-          $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26::jsonb, $27, $28
+          $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31::jsonb, $32, $33
         )
         RETURNING id
       `,
@@ -4156,6 +4517,11 @@ function createPostgresDatabaseClient(rawConfig = {}) {
         insertPayload.daily_reward_amount,
         insertPayload.streak_days,
         insertPayload.motivation_score,
+        insertPayload.referral_code,
+        insertPayload.referred_by_user_id,
+        insertPayload.trust_score,
+        insertPayload.abuse_score,
+        insertPayload.shadow_banned,
         insertPayload.last_active_date,
         insertPayload.last_reset,
         insertPayload.last_daily_reward_claimed_at,
@@ -4168,6 +4534,8 @@ function createPostgresDatabaseClient(rawConfig = {}) {
         insertPayload.activity
       ]
     );
+
+    await ensureReferralCodeForUser(rows[0].id);
 
     if (selectedPackage) {
       await recordSubscriptionForUser(rows[0].id, selectedPackage, assignmentWindow);
@@ -4197,6 +4565,16 @@ function createPostgresDatabaseClient(rawConfig = {}) {
     if ("dailyRewardAmount" in nextChanges && !("daily_reward_amount" in nextChanges)) nextChanges.daily_reward_amount = nextChanges.dailyRewardAmount;
     if ("balance" in nextChanges) nextChanges.balance = Math.max(0, Math.round(Number(nextChanges.balance || 0) || 0));
     if ("daily_reward_amount" in nextChanges) nextChanges.daily_reward_amount = Math.max(0, Math.round(Number(nextChanges.daily_reward_amount || 0) || 0));
+    if ("referral_code" in nextChanges) nextChanges.referral_code = String(nextChanges.referral_code || "").trim().toUpperCase() || null;
+    if ("referralCode" in nextChanges && !("referral_code" in nextChanges)) nextChanges.referral_code = String(nextChanges.referralCode || "").trim().toUpperCase() || null;
+    if ("referredByUserId" in nextChanges && !("referred_by_user_id" in nextChanges)) nextChanges.referred_by_user_id = nextChanges.referredByUserId;
+    if ("referred_by_user_id" in nextChanges) nextChanges.referred_by_user_id = nextChanges.referred_by_user_id ? Number(nextChanges.referred_by_user_id) : null;
+    if ("trust_score" in nextChanges) nextChanges.trust_score = Math.max(0, Math.min(100, Math.round(Number(nextChanges.trust_score || 0) || 0)));
+    if ("trustScore" in nextChanges && !("trust_score" in nextChanges)) nextChanges.trust_score = Math.max(0, Math.min(100, Math.round(Number(nextChanges.trustScore || 0) || 0)));
+    if ("abuse_score" in nextChanges) nextChanges.abuse_score = Math.max(0, Math.min(100, Math.round(Number(nextChanges.abuse_score || 0) || 0)));
+    if ("abuseScore" in nextChanges && !("abuse_score" in nextChanges)) nextChanges.abuse_score = Math.max(0, Math.min(100, Math.round(Number(nextChanges.abuseScore || 0) || 0)));
+    if ("shadowBanned" in nextChanges && !("shadow_banned" in nextChanges)) nextChanges.shadow_banned = nextChanges.shadowBanned;
+    if ("shadow_banned" in nextChanges) nextChanges.shadow_banned = normalizeBoolean(nextChanges.shadow_banned);
     if ("last_daily_reward_claimed_at" in nextChanges) nextChanges.last_daily_reward_claimed_at = nextChanges.last_daily_reward_claimed_at || null;
     if ("last_daily_reward_at" in nextChanges) nextChanges.last_daily_reward_at = nextChanges.last_daily_reward_at || null;
     if ("last_daily_xp_claimed_date" in nextChanges) nextChanges.last_daily_xp_claimed_date = nextChanges.last_daily_xp_claimed_date || null;
@@ -4230,6 +4608,11 @@ function createPostgresDatabaseClient(rawConfig = {}) {
       plan_type: "plan_type",
       streak_days: "streak_days",
       motivation_score: "motivation_score",
+      referral_code: "referral_code",
+      referred_by_user_id: "referred_by_user_id",
+      trust_score: "trust_score",
+      abuse_score: "abuse_score",
+      shadow_banned: "shadow_banned",
       last_active_date: "last_active_date",
       last_reset: "last_reset",
       last_daily_reward_claimed_at: "last_daily_reward_claimed_at",
@@ -4680,6 +5063,13 @@ function createPostgresDatabaseClient(rawConfig = {}) {
     recordBusinessEvent,
     recordAbuseEvent,
     getBetaBusinessAnalytics,
+    ensureReferralCodeForUser,
+    findUserByReferralCode,
+    recordReferralSignup,
+    markReferralConverted,
+    getReferralStats,
+    saveKnowledgeSuggestion,
+    getScaleGrowthAnalytics,
     recordXpLedger,
     listNotificationsForUser,
     markNotificationAsRead,
