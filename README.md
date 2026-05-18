@@ -71,6 +71,7 @@ http://127.0.0.1:3000
 ## Deploy on Render
 
 This repository already includes [render.yaml](C:\mullem\render.yaml).
+Staging uses [render-staging.yaml](C:\mullem\render-staging.yaml) and must use a separate database, Redis, API keys, and Sentry environment.
 
 Recommended setup:
 
@@ -115,12 +116,19 @@ Enable embeddings only after staging confirms pgvector or Qdrant is ready, the K
 After deploy, run:
 
 ```bash
+npm run ai:smoke
 npm run ai:launch-check
 npm run ai:scale-check
 npm run ai:real-scale-check
 npm run ai:load-test
 npm run ai:production-activation-check
 ```
+
+Release discipline and operational runbooks:
+
+- [Release discipline](C:\mullem\docs\release-discipline.md)
+- [AI platform operations](C:\mullem\docs\ai-platform-operations.md)
+- [Postmortem template](C:\mullem\docs\postmortem-template.md)
 
 To send one controlled Sentry test event:
 

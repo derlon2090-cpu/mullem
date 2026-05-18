@@ -1,27 +1,28 @@
 services:
   - type: keyvalue
-    name: mullem-ai-redis
+    name: mullem-staging-ai-redis
     plan: starter
     region: oregon
     ipAllowList: []
     maxmemoryPolicy: noeviction
 
   - type: web
-    name: mullem
+    name: mullem-staging
     runtime: node
     plan: starter
     region: oregon
+    branch: staging
     buildCommand: npm run render:build
     startCommand: npm run render:start
     healthCheckPath: /api/health
-    autoDeployTrigger: off
+    autoDeployTrigger: commit
     envVars:
       - key: NODE_VERSION
         value: 20
       - key: RELEASE_CHANNEL
-        value: production
+        value: staging
       - key: SENTRY_ENVIRONMENT
-        value: production
+        value: staging
       - key: CORS_ALLOWED_ORIGINS
         sync: false
       - key: OPENAI_MODEL
@@ -51,45 +52,48 @@ services:
       - key: REDIS_URL
         fromService:
           type: keyvalue
-          name: mullem-ai-redis
+          name: mullem-staging-ai-redis
           property: connectionString
       - key: SENTRY_DSN
         sync: false
       - key: AI_SERVICE_HOSTPORT
         fromService:
           type: pserv
-          name: mullem-ai-service
+          name: mullem-staging-ai-service
           property: hostport
       - key: DEEPSEEK_API_KEY
         sync: false
       - key: OPENAI_API_KEY
         sync: false
       - key: AI_DAILY_COST_LIMIT
-        value: "25"
+        value: "5"
       - key: AI_SAFE_MODE_ENABLED
         value: "false"
       - key: ORLIXOR_ENABLE_EMBEDDINGS
         value: "false"
+      - key: FEATURE_BETA_FEATURES
+        value: "true"
 
   - type: worker
-    name: mullem-ai-worker
+    name: mullem-staging-ai-worker
     runtime: node
     plan: starter
     region: oregon
+    branch: staging
     buildCommand: npm run render:build
     startCommand: npm run ai:worker
-    autoDeployTrigger: off
+    autoDeployTrigger: commit
     envVars:
       - key: NODE_VERSION
         value: 20
       - key: RELEASE_CHANNEL
-        value: production
+        value: staging
       - key: SENTRY_ENVIRONMENT
-        value: production
+        value: staging
       - key: REDIS_URL
         fromService:
           type: keyvalue
-          name: mullem-ai-redis
+          name: mullem-staging-ai-redis
           property: connectionString
       - key: SENTRY_DSN
         sync: false
@@ -103,25 +107,26 @@ services:
         value: "false"
 
   - type: pserv
-    name: mullem-ai-service
+    name: mullem-staging-ai-service
     runtime: node
     plan: starter
     region: oregon
+    branch: staging
     buildCommand: npm run render:build
     startCommand: npm run ai:service
     healthCheckPath: /health
-    autoDeployTrigger: off
+    autoDeployTrigger: commit
     envVars:
       - key: NODE_VERSION
         value: 20
       - key: RELEASE_CHANNEL
-        value: production
+        value: staging
       - key: SENTRY_ENVIRONMENT
-        value: production
+        value: staging
       - key: REDIS_URL
         fromService:
           type: keyvalue
-          name: mullem-ai-redis
+          name: mullem-staging-ai-redis
           property: connectionString
       - key: SENTRY_DSN
         sync: false

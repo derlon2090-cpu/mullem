@@ -250,7 +250,7 @@ function createRealScaleInfra(options = {}) {
     if (!Sentry || !process.env.SENTRY_DSN || sentryInitialized) return;
     Sentry.init({
       dsn: process.env.SENTRY_DSN,
-      environment: process.env.NODE_ENV || process.env.RENDER_SERVICE_NAME || "development",
+      environment: process.env.SENTRY_ENVIRONMENT || process.env.RELEASE_CHANNEL || process.env.NODE_ENV || process.env.RENDER_SERVICE_NAME || "development",
       tracesSampleRate: Math.max(0, Math.min(1, Number(process.env.SENTRY_TRACES_SAMPLE_RATE || 0.05)))
     });
     sentryInitialized = true;

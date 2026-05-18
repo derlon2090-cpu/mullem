@@ -1,0 +1,49 @@
+name: Release Smoke Tests
+
+on:
+  workflow_dispatch:
+    inputs:
+      target:
+        description: "Target environment: staging or production"
+        required: true
+        default: "staging"
+  push:
+    branches:
+      - staging
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      DEFAULT_ADMIN_EMAIL: ${{ secrets.DEFAULT_ADMIN_EMAIL }}
+      DEFAULT_ADMIN_PASSWORD: ${{ secrets.DEFAULT_ADMIN_PASSWORD }}
+      MULLEM_TEST_BASE_URL: ${{ github.event.inputs.target == 'production' && secrets.PRODUCTION_BASE_URL || secrets.STAGING_BASE_URL }}
+      AI_SMOKE_REQUIRE_REAL_SCALE: "1"
+      AI_SMOKE_WAIT_SECONDS: "240"
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - run: npm ci
+
+      - run: node render-build-check.js
+
+      - name: Smoke test
+        run: npm run ai:smoke
+
+      - name: Quality validation
+        run: npm run ai:quality
+
+      - name: Real scale check
+        run: npm run ai:real-scale-check
+
+      - name: Load test
+        run: npm run ai:load-test
+
+      - name: Activation check
+        run: npm run ai:production-activation-check

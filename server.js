@@ -8,6 +8,7 @@ const { openAiWebSearchV2Raw, resolveOpenAiWebSearchV2Model } = require("./openA
 const aiIntelligence = require("./ai-intelligence-layer");
 const { seedAiKnowledgeBase } = require("./ai-knowledge-seed");
 const { createRealScaleInfra } = require("./ai-real-scale-infra");
+const aiOps = require("./ai-operational-governance");
 
 const execFileAsync = promisify(execFile);
 
@@ -315,6 +316,8 @@ const aiRuntimeState = {
   safeModeOverride: null,
   safeModeUpdatedAt: null,
   safeModeUpdatedBy: null,
+  featureFlagOverrides: {},
+  incidents: [],
   scaling: {
     concurrentAiRequests: 0,
     queueSize: 0,
@@ -952,8 +955,16 @@ function buildOpenAiFallbackProfile(profile = {}) {
 async function callAiWithSessionRecovery({ input, modelProfile, routing = {}, operation = "chat" } = {}) {
   const primaryProfile = modelProfile || routing.modelProfile || modelProfiles.orlixor;
   const primaryProvider = resolveProfileProvider(primaryProfile);
+  const providerFallbackEnabled = isAiFeatureEnabled("provider_fallback");
   const primaryCircuit = realScaleInfra.canCallProvider(primaryProvider);
   if (!primaryCircuit.allowed) {
+    if (!providerFallbackEnabled) {
+      throw createPublicHttpError(503, "AI_PROVIDER_CIRCUIT_OPEN", "AI provider is temporarily unavailable. Please try again shortly.", {
+        provider: primaryProvider,
+        retry_after_ms: primaryCircuit.retry_after_ms || 0,
+        fallback_disabled: true
+      });
+    }
     const circuitFallbackProfile = primaryProvider === "openai"
       ? buildDeepSeekFallbackProfile(primaryProfile)
       : buildOpenAiFallbackProfile(primaryProfile);
@@ -986,6 +997,7 @@ async function callAiWithSessionRecovery({ input, modelProfile, routing = {}, op
     const primaryResult = await callOpenAI({ input, modelProfile: primaryProfile });
     return { ...primaryResult, recovered: false, provider: primaryResult.provider || primaryProvider };
   } catch (error) {
+    if (!providerFallbackEnabled) throw error;
     const fallbackProfile = primaryProvider === "openai"
       ? buildDeepSeekFallbackProfile(primaryProfile)
       : buildOpenAiFallbackProfile(primaryProfile);
@@ -1108,6 +1120,95 @@ function buildSafeModeState(costStats = {}, options = {}) {
       heavy_requests_disabled: false,
       reduced_context: false
     }
+  };
+}
+
+function getFeatureFlagsSync() {
+  return aiOps.buildFeatureFlags(process.env, aiRuntimeState.featureFlagOverrides || {});
+}
+
+function isAiFeatureEnabled(key) {
+  const flags = getFeatureFlagsSync();
+  return Boolean(flags?.[key]?.enabled);
+}
+
+async function loadFeatureFlagOverrides() {
+  const stored = await realScaleInfra.getJson("ops:feature_flags");
+  if (stored && typeof stored === "object") {
+    aiRuntimeState.featureFlagOverrides = {
+      ...(aiRuntimeState.featureFlagOverrides || {}),
+      ...(stored.overrides || stored)
+    };
+  }
+  return aiRuntimeState.featureFlagOverrides || {};
+}
+
+async function saveFeatureFlagOverrides(overrides) {
+  aiRuntimeState.featureFlagOverrides = { ...(overrides || {}) };
+  await realScaleInfra.setJson("ops:feature_flags", {
+    overrides: aiRuntimeState.featureFlagOverrides,
+    updated_at: new Date().toISOString()
+  }, 30 * 24 * 60 * 60_000);
+  return aiRuntimeState.featureFlagOverrides;
+}
+
+async function listOpsIncidents() {
+  const stored = await realScaleInfra.getJson("ops:incidents");
+  if (Array.isArray(stored?.items)) {
+    aiRuntimeState.incidents = stored.items;
+  }
+  return Array.isArray(aiRuntimeState.incidents) ? aiRuntimeState.incidents : [];
+}
+
+async function saveOpsIncidents(items) {
+  aiRuntimeState.incidents = (Array.isArray(items) ? items : [])
+    .slice()
+    .sort((a, b) => String(b.updated_at || b.created_at || "").localeCompare(String(a.updated_at || a.created_at || "")))
+    .slice(0, 100);
+  await realScaleInfra.setJson("ops:incidents", {
+    items: aiRuntimeState.incidents,
+    updated_at: new Date().toISOString()
+  }, 90 * 24 * 60 * 60_000);
+  return aiRuntimeState.incidents;
+}
+
+async function buildOperationalExcellenceSnapshot(options = {}) {
+  await loadFeatureFlagOverrides();
+  const health = await buildAiHealthSnapshot(options);
+  const realScale = await buildRealScaleSnapshot();
+  const errorBudgetPolicy = aiOps.buildErrorBudgetPolicy(process.env);
+  const errorBudget = aiOps.evaluateErrorBudget({
+    policy: errorBudgetPolicy,
+    health,
+    realScale: realScale.real_scale
+  });
+  const incidents = await listOpsIncidents();
+  return {
+    generated_at: new Date().toISOString(),
+    release: aiOps.buildReleaseDiscipline(process.env),
+    ai_versions: aiOps.buildAiVersionManifest(process.env),
+    feature_flags: getFeatureFlagsSync(),
+    error_budget: {
+      policy: errorBudgetPolicy,
+      evaluation: errorBudget
+    },
+    incidents: {
+      open_count: incidents.filter((item) => item.status !== "resolved").length,
+      recent: incidents.slice(0, 10),
+      postmortem_template: aiOps.buildPostmortemTemplate()
+    },
+    smoke_tests: {
+      required_after_deploy: [
+        "npm run ai:smoke",
+        "npm run ai:quality",
+        "npm run ai:real-scale-check",
+        "npm run ai:load-test",
+        "npm run ai:production-activation-check"
+      ],
+      fail_deploy_on_smoke_failure: true
+    },
+    health,
+    real_scale: realScale
   };
 }
 
@@ -5327,6 +5428,9 @@ async function buildAiHealthSnapshot(options = {}) {
     : "unavailable";
   const health = {
     generated_at: new Date().toISOString(),
+    release: aiOps.buildReleaseDiscipline(process.env),
+    ai_versions: aiOps.buildAiVersionManifest(process.env),
+    feature_flags: getFeatureFlagsSync(),
     providers: {
       deepseek: buildProviderHealth("deepseek"),
       openai: buildProviderHealth("openai")
@@ -8243,6 +8347,109 @@ async function handleAdminRealScaleSentryTest(req, res) {
   });
 }
 
+async function handleAdminOpsOverview(req, res) {
+  await requireAdminUser(req);
+  sendJson(req, res, 200, {
+    success: true,
+    data: await buildOperationalExcellenceSnapshot()
+  });
+}
+
+async function handleAdminFeatureFlags(req, res) {
+  const auth = await requireAdminUser(req);
+  if (req.method === "GET") {
+    await loadFeatureFlagOverrides();
+    sendJson(req, res, 200, {
+      success: true,
+      data: {
+        flags: getFeatureFlagsSync(),
+        overrides: aiRuntimeState.featureFlagOverrides || {}
+      }
+    });
+    return;
+  }
+  const payload = await parseJsonBody(req);
+  const current = { ...(await loadFeatureFlagOverrides()) };
+  const updates = payload.flags && typeof payload.flags === "object" ? payload.flags : payload;
+  const allowed = Object.keys(getFeatureFlagsSync());
+  for (const key of allowed) {
+    if (Object.prototype.hasOwnProperty.call(updates, key)) {
+      current[key] = Boolean(updates[key]);
+    }
+  }
+  await saveFeatureFlagOverrides(current);
+  await recordAdminAction(req, auth, "UPDATE_AI_FEATURE_FLAGS", "ai_runtime", "feature_flags", {
+    overrides: current
+  });
+  sendJson(req, res, 200, {
+    success: true,
+    data: {
+      flags: getFeatureFlagsSync(),
+      overrides: current
+    }
+  });
+}
+
+async function handleAdminIncidents(req, res) {
+  const auth = await requireAdminUser(req);
+  if (req.method === "GET") {
+    sendJson(req, res, 200, {
+      success: true,
+      data: {
+        items: await listOpsIncidents(),
+        postmortem_template: aiOps.buildPostmortemTemplate()
+      }
+    });
+    return;
+  }
+  const payload = await parseJsonBody(req);
+  const incident = aiOps.buildIncident({
+    title: sanitizeOptionalText(payload.title, 160) || "Production incident",
+    severity: payload.severity,
+    owner: sanitizeOptionalText(payload.owner, 120) || auth.user?.email || "admin",
+    summary: sanitizeOptionalText(payload.summary, 2000),
+    affected_systems: Array.isArray(payload.affected_systems || payload.affectedSystems)
+      ? (payload.affected_systems || payload.affectedSystems).map((item) => sanitizeOptionalText(item, 120)).filter(Boolean)
+      : [],
+    initial_event: sanitizeOptionalText(payload.initial_event || payload.initialEvent, 1000) || "Incident opened by admin."
+  });
+  const incidents = await listOpsIncidents();
+  await saveOpsIncidents([incident, ...incidents]);
+  await recordAdminAction(req, auth, "CREATE_INCIDENT", "ops_incident", incident.id, {
+    severity: incident.severity,
+    title: incident.title
+  });
+  sendJson(req, res, 201, {
+    success: true,
+    data: { incident }
+  });
+}
+
+async function handleAdminIncidentEvent(req, res, incidentId) {
+  const auth = await requireAdminUser(req);
+  const payload = await parseJsonBody(req);
+  const incidents = await listOpsIncidents();
+  const index = incidents.findIndex((item) => String(item.id) === String(incidentId));
+  if (index < 0) {
+    throw createHttpError(404, "Incident was not found.");
+  }
+  const updated = aiOps.appendIncidentEvent(incidents[index], {
+    type: payload.type,
+    status: payload.status,
+    message: sanitizeOptionalText(payload.message, 1000) || "Incident updated."
+  });
+  incidents[index] = updated;
+  await saveOpsIncidents(incidents);
+  await recordAdminAction(req, auth, "UPDATE_INCIDENT", "ops_incident", updated.id, {
+    status: updated.status,
+    event_type: payload.type || "update"
+  });
+  sendJson(req, res, 200, {
+    success: true,
+    data: { incident: updated }
+  });
+}
+
 async function handleAdminPrometheusMetrics(req, res) {
   await requireAdminUser(req);
   const body = await realScaleInfra.getPrometheusMetrics();
@@ -10905,6 +11112,27 @@ async function routeRequest(req, res) {
     return;
   }
 
+  if (req.method === "GET" && requestPath === "/api/admin/ops") {
+    await handleAdminOpsOverview(req, res);
+    return;
+  }
+
+  if ((req.method === "GET" || req.method === "POST") && requestPath === "/api/admin/feature-flags") {
+    await handleAdminFeatureFlags(req, res);
+    return;
+  }
+
+  if ((req.method === "GET" || req.method === "POST") && requestPath === "/api/admin/incidents") {
+    await handleAdminIncidents(req, res);
+    return;
+  }
+
+  if (req.method === "POST" && requestPath.startsWith("/api/admin/incidents/") && requestPath.endsWith("/events")) {
+    const incidentId = decodeURIComponent(requestPath.replace("/api/admin/incidents/", "").replace("/events", ""));
+    await handleAdminIncidentEvent(req, res, incidentId);
+    return;
+  }
+
   if (req.method === "POST" && requestPath === "/api/admin/real-scale/sentry-test") {
     await handleAdminRealScaleSentryTest(req, res);
     return;
@@ -11223,6 +11451,15 @@ async function routeRequest(req, res) {
   }
 
   if (req.method === "POST" && requestPath === "/api/chat/stream") {
+    if (!isAiFeatureEnabled("streaming")) {
+      sendJson(req, res, 503, {
+        success: false,
+        request_id: requestId,
+        code: "FEATURE_STREAMING_DISABLED",
+        message: "Streaming is temporarily disabled."
+      });
+      return;
+    }
     await handleChatStream(req, res);
     return;
   }
