@@ -14,6 +14,7 @@
     "ai:quality": "node ai-quality-validation.js",
     "ai:load-test": "node ai-load-test.js",
     "ai:launch-check": "node ai-launch-readiness.js",
+    "ai:beta-report": "node ai-beta-weekly-report.js",
     "render:build": "npm ci && node render-build-check.js",
     "render:start": "node render-ensure-runtime.js && node server.js"
   },

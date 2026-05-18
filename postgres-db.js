@@ -797,6 +797,40 @@ function createPostgresDatabaseClient(rawConfig = {}) {
     await pool.query("CREATE INDEX IF NOT EXISTS idx_tool_usage_tool_task ON tool_usage (tool_key, task_type)");
 
     await pool.query(`
+      CREATE TABLE IF NOT EXISTS app_business_events (
+        id BIGSERIAL PRIMARY KEY,
+        user_id BIGINT NULL REFERENCES app_users(id) ON DELETE SET NULL,
+        event_type VARCHAR(80) NOT NULL,
+        reason VARCHAR(160) NULL,
+        plan VARCHAR(80) NULL,
+        route VARCHAR(180) NULL,
+        metadata JSONB NULL,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )
+    `);
+    await pool.query("CREATE INDEX IF NOT EXISTS idx_business_events_type_created ON app_business_events (event_type, created_at DESC)");
+    await pool.query("CREATE INDEX IF NOT EXISTS idx_business_events_user_created ON app_business_events (user_id, created_at DESC)");
+    await pool.query("CREATE INDEX IF NOT EXISTS idx_business_events_plan_created ON app_business_events (plan, created_at DESC)");
+
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS app_abuse_events (
+        id BIGSERIAL PRIMARY KEY,
+        user_id BIGINT NULL REFERENCES app_users(id) ON DELETE SET NULL,
+        ip_hash VARCHAR(80) NULL,
+        action VARCHAR(80) NOT NULL DEFAULT 'observe',
+        reasons JSONB NOT NULL DEFAULT '[]'::jsonb,
+        score INTEGER NOT NULL DEFAULT 0,
+        route VARCHAR(180) NULL,
+        prompt_hash VARCHAR(80) NULL,
+        metadata JSONB NULL,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )
+    `);
+    await pool.query("CREATE INDEX IF NOT EXISTS idx_abuse_events_action_created ON app_abuse_events (action, created_at DESC)");
+    await pool.query("CREATE INDEX IF NOT EXISTS idx_abuse_events_user_created ON app_abuse_events (user_id, created_at DESC)");
+    await pool.query("CREATE INDEX IF NOT EXISTS idx_abuse_events_ip_created ON app_abuse_events (ip_hash, created_at DESC)");
+
+    await pool.query(`
       CREATE TABLE IF NOT EXISTS xp_ledger (
         id BIGSERIAL PRIMARY KEY,
         user_id BIGINT NOT NULL REFERENCES app_users(id) ON DELETE CASCADE,
@@ -2266,6 +2300,425 @@ function createPostgresDatabaseClient(rawConfig = {}) {
       ]
     );
     return rows[0] || null;
+  }
+
+  async function recordBusinessEvent(payload = {}) {
+    const eventType = String(payload.event_type || payload.eventType || "").trim().slice(0, 80);
+    if (!eventType) return null;
+    const rows = await query(
+      `
+        INSERT INTO app_business_events (user_id, event_type, reason, plan, route, metadata)
+        VALUES ($1, $2, $3, $4, $5, $6)
+        RETURNING *
+      `,
+      [
+        payload.user_id || payload.userId ? Number(payload.user_id || payload.userId) : null,
+        eventType,
+        String(payload.reason || "").trim().slice(0, 160) || null,
+        String(payload.plan || "").trim().toLowerCase().slice(0, 80) || null,
+        String(payload.route || "").trim().slice(0, 180) || null,
+        payload.metadata ? JSON.stringify(payload.metadata) : null
+      ]
+    );
+    return rows[0] || null;
+  }
+
+  async function recordAbuseEvent(payload = {}) {
+    const action = String(payload.action || "observe").trim().slice(0, 80) || "observe";
+    const reasons = Array.isArray(payload.reasons)
+      ? payload.reasons.map((item) => String(item || "").trim().slice(0, 80)).filter(Boolean).slice(0, 12)
+      : [];
+    const rows = await query(
+      `
+        INSERT INTO app_abuse_events (user_id, ip_hash, action, reasons, score, route, prompt_hash, metadata)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+        RETURNING *
+      `,
+      [
+        payload.user_id || payload.userId ? Number(payload.user_id || payload.userId) : null,
+        String(payload.ip_hash || payload.ipHash || "").trim().slice(0, 80) || null,
+        action,
+        JSON.stringify(reasons),
+        Math.max(0, Math.min(100, Math.round(Number(payload.score || 0)))),
+        String(payload.route || "").trim().slice(0, 180) || null,
+        String(payload.prompt_hash || payload.promptHash || "").trim().slice(0, 80) || null,
+        payload.metadata ? JSON.stringify(payload.metadata) : null
+      ]
+    );
+    return rows[0] || null;
+  }
+
+  function getCostEstimateSql(alias = "") {
+    const prefix = alias ? `${alias}.` : "";
+    return `
+      CASE
+        WHEN COALESCE(${prefix}metadata->>'total_cost_estimate_usd', '') ~ '^[0-9]+(\\.[0-9]+)?$'
+          THEN (${prefix}metadata->>'total_cost_estimate_usd')::numeric
+        WHEN COALESCE(${prefix}metadata->>'total_cost_estimate', '') ~ '^[0-9]+(\\.[0-9]+)?$'
+          THEN (${prefix}metadata->>'total_cost_estimate')::numeric
+        ELSE COALESCE(${prefix}token_cost, 0)::numeric / 1000000.0
+      END
+    `;
+  }
+
+  async function getBetaBusinessAnalytics(options = {}) {
+    const days = Math.max(1, Math.min(Number(options.days || 30), 90));
+    const sinceSql = `${days} days`;
+    const costSql = getCostEstimateSql("q");
+
+    const conversionRows = await query(
+      `
+        WITH paid_users AS (
+          SELECT DISTINCT user_id
+          FROM app_subscriptions
+          WHERE status = 'active'
+             OR COALESCE(price_sar, 0) > 0
+        ),
+        user_counts AS (
+          SELECT
+            COUNT(*) FILTER (
+              WHERE id NOT IN (SELECT user_id FROM paid_users)
+                AND LOWER(COALESCE(plan_type, 'starter')) IN ('starter', 'free', '')
+            )::int AS free_users,
+            COUNT(*) FILTER (
+              WHERE id IN (SELECT user_id FROM paid_users)
+                 OR LOWER(COALESCE(plan_type, '')) ~ '(spark|tuwaiq|pioneer|pro|premium)'
+            )::int AS paid_users
+          FROM app_users
+          WHERE status <> 'banned'
+        ),
+        active_today AS (
+          SELECT COUNT(DISTINCT user_id)::int AS active_users_today
+          FROM (
+            SELECT user_id FROM app_business_events WHERE created_at >= CURRENT_DATE AND user_id IS NOT NULL
+            UNION ALL
+            SELECT user_id FROM ai_quality_events WHERE created_at >= CURRENT_DATE AND user_id IS NOT NULL
+            UNION ALL
+            SELECT id AS user_id FROM app_users WHERE last_active_date = CURRENT_DATE
+          ) active
+        ),
+        message_avg AS (
+          SELECT COALESCE(ROUND(COUNT(*)::numeric / NULLIF(COUNT(DISTINCT user_id), 0), 2), 0)::float8 AS avg_messages_per_user
+          FROM ai_quality_events
+          WHERE created_at >= NOW() - $1::interval
+            AND user_id IS NOT NULL
+        )
+        SELECT *
+        FROM user_counts, active_today, message_avg
+      `,
+      [sinceSql]
+    );
+    const mostPurchasedRows = await query(
+      `
+        SELECT COALESCE(package_key, package_name, 'unknown') AS plan, COUNT(*)::int AS purchases, COALESCE(SUM(price_sar), 0)::float8 AS revenue_sar
+        FROM app_subscriptions
+        WHERE created_at >= NOW() - $1::interval
+          AND COALESCE(price_sar, 0) > 0
+        GROUP BY plan
+        ORDER BY purchases DESC, revenue_sar DESC
+        LIMIT 1
+      `,
+      [sinceSql]
+    );
+    const stopRows = await query(
+      `
+        SELECT COALESCE(reason, event_type, 'unknown') AS reason, COALESCE(route, '-') AS route, COUNT(*)::int AS count
+        FROM app_business_events
+        WHERE created_at >= NOW() - $1::interval
+          AND event_type IN ('limit_exceeded', 'upsell_shown', 'safe_mode_block', 'abuse_block', 'rate_limited', 'login_failure')
+        GROUP BY reason, route
+        ORDER BY count DESC
+        LIMIT 5
+      `,
+      [sinceSql]
+    );
+    const conversion = conversionRows[0] || {};
+    const freeUsers = Number(conversion.free_users || 0);
+    const paidUsers = Number(conversion.paid_users || 0);
+
+    const dailyByModel = await query(
+      `
+        SELECT
+          DATE_TRUNC('day', q.created_at)::date AS day,
+          COALESCE(q.model_key, 'unknown') AS model_key,
+          COALESCE(q.provider, 'unknown') AS provider,
+          COUNT(*)::int AS requests,
+          COALESCE(SUM(q.input_tokens + q.output_tokens), 0)::bigint AS tokens,
+          COALESCE(SUM(${costSql}), 0)::float8 AS cost_usd,
+          COALESCE(ROUND(AVG(q.quality_score)), 0)::int AS avg_quality,
+          COALESCE(ROUND(AVG(q.latency_ms)), 0)::int AS avg_latency_ms
+        FROM ai_quality_events q
+        WHERE q.created_at >= NOW() - $1::interval
+        GROUP BY day, model_key, provider
+        ORDER BY day DESC, cost_usd DESC
+        LIMIT 120
+      `,
+      [sinceSql]
+    );
+    const costByPlan = await query(
+      `
+        SELECT
+          COALESCE(NULLIF(q.metadata->>'plan', ''), LOWER(COALESCE(u.plan_type, 'unknown'))) AS plan,
+          COUNT(*)::int AS requests,
+          COALESCE(SUM(q.input_tokens + q.output_tokens), 0)::bigint AS tokens,
+          COALESCE(SUM(${costSql}), 0)::float8 AS cost_usd
+        FROM ai_quality_events q
+        LEFT JOIN app_users u ON u.id = q.user_id
+        WHERE q.created_at >= NOW() - $1::interval
+        GROUP BY plan
+        ORDER BY cost_usd DESC, requests DESC
+      `,
+      [sinceSql]
+    );
+    const topUsers = await query(
+      `
+        SELECT
+          COALESCE(q.user_id::text, 'unknown') AS user_id,
+          MIN(COALESCE(NULLIF(q.metadata->>'plan', ''), LOWER(COALESCE(u.plan_type, 'unknown')))) AS plan,
+          COUNT(*)::int AS requests,
+          COALESCE(SUM(q.input_tokens + q.output_tokens), 0)::bigint AS tokens,
+          COALESCE(SUM(${costSql}), 0)::float8 AS cost_usd
+        FROM ai_quality_events q
+        LEFT JOIN app_users u ON u.id = q.user_id
+        WHERE q.created_at >= NOW() - $1::interval
+        GROUP BY q.user_id
+        ORDER BY cost_usd DESC, tokens DESC
+        LIMIT 20
+      `,
+      [sinceSql]
+    );
+    const costOverviewRows = await query(
+      `
+        SELECT
+          COUNT(*)::int AS messages,
+          COUNT(DISTINCT user_id)::int AS users,
+          COALESCE(SUM(input_tokens + output_tokens), 0)::bigint AS tokens,
+          COALESCE(SUM(${costSql}), 0)::float8 AS cost_usd
+        FROM ai_quality_events q
+        WHERE created_at >= NOW() - $1::interval
+      `,
+      [sinceSql]
+    );
+    const costOverview = costOverviewRows[0] || {};
+    const imageRows = await query(
+      `
+        SELECT
+          COALESCE(task_type, 'image') AS task_type,
+          COUNT(*)::int AS requests,
+          COALESCE(SUM(input_tokens + output_tokens), 0)::bigint AS tokens,
+          COALESCE(SUM(xp_cost), 0)::bigint AS xp_cost
+        FROM tool_usage
+        WHERE created_at >= NOW() - $1::interval
+          AND tool_key = 'image_system'
+        GROUP BY task_type
+        ORDER BY requests DESC
+      `,
+      [sinceSql]
+    );
+    const ragRows = await query(
+      `
+        SELECT COUNT(*)::int AS requests, COALESCE(SUM(${costSql}), 0)::float8 AS cost_usd, COALESCE(ROUND(AVG(quality_score)), 0)::int AS avg_quality
+        FROM ai_quality_events q
+        WHERE created_at >= NOW() - $1::interval
+          AND COALESCE(q.metadata->>'rag_used', 'false') = 'true'
+      `,
+      [sinceSql]
+    );
+    const codeRows = await query(
+      `
+        SELECT COUNT(*)::int AS requests, COALESCE(SUM(${costSql}), 0)::float8 AS cost_usd, COALESCE(ROUND(AVG(quality_score)), 0)::int AS avg_quality
+        FROM ai_quality_events q
+        WHERE created_at >= NOW() - $1::interval
+          AND (LOWER(COALESCE(task_type, '')) LIKE '%code%' OR LOWER(COALESCE(question_type, '')) LIKE '%code%' OR COALESCE(metadata->'request_analysis'->>'needsCoding', 'false') = 'true')
+      `,
+      [sinceSql]
+    );
+
+    const retentionRows = await query(
+      `
+        WITH events AS (
+          SELECT user_id, created_at FROM app_business_events WHERE created_at >= NOW() - $1::interval AND user_id IS NOT NULL
+          UNION ALL
+          SELECT user_id, created_at FROM ai_quality_events WHERE created_at >= NOW() - $1::interval AND user_id IS NOT NULL
+        ),
+        today_users AS (
+          SELECT DISTINCT user_id FROM events WHERE created_at >= CURRENT_DATE
+        ),
+        prior_users AS (
+          SELECT DISTINCT user_id FROM events WHERE created_at < CURRENT_DATE
+        ),
+        session_spans AS (
+          SELECT user_id, DATE_TRUNC('day', created_at) AS day, EXTRACT(EPOCH FROM (MAX(created_at) - MIN(created_at))) / 60.0 AS minutes
+          FROM events
+          GROUP BY user_id, day
+          HAVING COUNT(*) >= 2
+        ),
+        peak AS (
+          SELECT EXTRACT(HOUR FROM created_at)::int AS hour, COUNT(*)::int AS count
+          FROM events
+          GROUP BY hour
+          ORDER BY count DESC
+          LIMIT 1
+        ),
+        safe_return AS (
+          SELECT COUNT(DISTINCT later.user_id)::int AS count
+          FROM app_business_events first
+          JOIN events later ON later.user_id = first.user_id AND later.created_at > first.created_at
+          WHERE first.event_type = 'safe_mode_block'
+        ),
+        limit_return AS (
+          SELECT COUNT(DISTINCT later.user_id)::int AS count
+          FROM app_business_events first
+          JOIN events later ON later.user_id = first.user_id AND later.created_at > first.created_at
+          WHERE first.event_type = 'limit_exceeded'
+        )
+        SELECT
+          (SELECT COUNT(*) FROM today_users t INNER JOIN prior_users p USING (user_id))::int AS returning_users,
+          COALESCE(ROUND(AVG(minutes), 2), 0)::float8 AS avg_session_duration_minutes,
+          (SELECT row_to_json(peak) FROM peak) AS peak_activity_hour,
+          (SELECT count FROM safe_return) AS returned_after_safe_mode,
+          (SELECT count FROM limit_return) AS returned_after_limit_exceeded
+        FROM session_spans
+      `,
+      [sinceSql]
+    );
+    const lastSeenRows = await query(
+      `
+        SELECT bucket, COUNT(*)::int AS users
+        FROM (
+          SELECT CASE
+            WHEN last_active_date >= CURRENT_DATE THEN 'today'
+            WHEN last_active_date >= CURRENT_DATE - INTERVAL '7 days' THEN 'last_7_days'
+            WHEN last_active_date >= CURRENT_DATE - INTERVAL '30 days' THEN 'last_30_days'
+            ELSE 'older'
+          END AS bucket
+          FROM app_users
+        ) x
+        GROUP BY bucket
+        ORDER BY bucket
+      `
+    );
+    const retention = retentionRows[0] || {};
+
+    const dailyQuality = await query(
+      `
+        SELECT
+          DATE_TRUNC('day', created_at)::date AS day,
+          COUNT(*)::int AS requests,
+          COALESCE(ROUND(AVG(quality_score)), 0)::int AS avg_quality,
+          COALESCE(ROUND(AVG(latency_ms)), 0)::int AS avg_latency_ms
+        FROM ai_quality_events
+        WHERE created_at >= NOW() - $1::interval
+        GROUP BY day
+        ORDER BY day DESC
+        LIMIT 45
+      `,
+      [sinceSql]
+    );
+    const ragVsRows = await query(
+      `
+        SELECT
+          COALESCE(metadata->>'rag_used', 'false') AS rag_used,
+          COUNT(*)::int AS requests,
+          COALESCE(ROUND(AVG(quality_score)), 0)::int AS avg_quality,
+          COALESCE(ROUND(AVG(latency_ms)), 0)::int AS avg_latency_ms
+        FROM ai_quality_events
+        WHERE created_at >= NOW() - $1::interval
+        GROUP BY rag_used
+        ORDER BY rag_used DESC
+      `,
+      [sinceSql]
+    );
+    const modelDissatisfaction = await query(
+      `
+        SELECT COALESCE(model_key, 'unknown') AS model_key, COALESCE(provider, 'unknown') AS provider, COALESCE(feedback_type, rating, 'unknown') AS reason, COUNT(*)::int AS count
+        FROM ai_feedback
+        WHERE created_at >= NOW() - $1::interval
+          AND COALESCE(feedback_type, rating, '') IN ('dislike', 'inaccurate', 'too_long', 'too_short', 'code_error', 'not_solved')
+        GROUP BY model_key, provider, reason
+        ORDER BY count DESC
+        LIMIT 30
+      `,
+      [sinceSql]
+    );
+    const abuseOverviewRows = await query(
+      `
+        SELECT COUNT(*)::int AS total_events,
+          COUNT(*) FILTER (WHERE action = 'temporary_block')::int AS temporary_blocks,
+          COUNT(*) FILTER (WHERE action = 'cooldown')::int AS cooldowns,
+          COUNT(*) FILTER (WHERE action = 'shadow_limit')::int AS shadow_limits
+        FROM app_abuse_events
+        WHERE created_at >= NOW() - $1::interval
+      `,
+      [sinceSql]
+    );
+    const abuseByAction = await query(
+      `
+        SELECT action, COUNT(*)::int AS count, COALESCE(ROUND(AVG(score)), 0)::int AS avg_score
+        FROM app_abuse_events
+        WHERE created_at >= NOW() - $1::interval
+        GROUP BY action
+        ORDER BY count DESC
+      `,
+      [sinceSql]
+    );
+    const abuseByReason = await query(
+      `
+        SELECT r.reason, COUNT(*)::int AS count
+        FROM app_abuse_events, jsonb_array_elements_text(reasons) AS r(reason)
+        WHERE created_at >= NOW() - $1::interval
+        GROUP BY r.reason
+        ORDER BY count DESC
+        LIMIT 20
+      `,
+      [sinceSql]
+    );
+    const abuseOverview = abuseOverviewRows[0] || {};
+
+    return {
+      window_days: days,
+      conversion: {
+        free_users: freeUsers,
+        paid_users: paidUsers,
+        conversion_rate_percent: freeUsers + paidUsers ? Number(((paidUsers * 100) / (freeUsers + paidUsers)).toFixed(2)) : 0,
+        most_purchased_plan: mostPurchasedRows[0] || null,
+        top_exit_reason: stopRows[0] || null,
+        top_stop_point: stopRows[0] ? { route: stopRows[0].route, reason: stopRows[0].reason, count: stopRows[0].count } : null,
+        active_users_today: Number(conversion.active_users_today || 0),
+        avg_messages_per_user: Number(conversion.avg_messages_per_user || 0)
+      },
+      cost: {
+        daily_by_model: dailyByModel.map((row) => ({ ...row, cost_usd: Number(row.cost_usd || 0) })),
+        by_plan: costByPlan.map((row) => ({ ...row, cost_usd: Number(row.cost_usd || 0) })),
+        top_users: topUsers.map((row) => ({ ...row, cost_usd: Number(row.cost_usd || 0) })),
+        avg_cost_per_message_usd: Number(costOverview.messages || 0) ? Number((Number(costOverview.cost_usd || 0) / Number(costOverview.messages || 1)).toFixed(6)) : 0,
+        avg_tokens_per_user: Number(costOverview.users || 0) ? Math.round(Number(costOverview.tokens || 0) / Number(costOverview.users || 1)) : 0,
+        images: imageRows,
+        rag: ragRows[0] || { requests: 0, cost_usd: 0, avg_quality: 0 },
+        code: codeRows[0] || { requests: 0, cost_usd: 0, avg_quality: 0 }
+      },
+      retention: {
+        returning_users: Number(retention.returning_users || 0),
+        avg_session_duration_minutes: Number(retention.avg_session_duration_minutes || 0),
+        peak_activity_hour: retention.peak_activity_hour || null,
+        last_seen: lastSeenRows,
+        returned_after_safe_mode: Number(retention.returned_after_safe_mode || 0),
+        returned_after_limit_exceeded: Number(retention.returned_after_limit_exceeded || 0)
+      },
+      quality_trends: {
+        daily: dailyQuality,
+        rag_vs_non_rag: ragVsRows,
+        model_dissatisfaction: modelDissatisfaction
+      },
+      abuse: {
+        total_events: Number(abuseOverview.total_events || 0),
+        by_action: abuseByAction,
+        by_reason: abuseByReason,
+        temporary_blocks: Number(abuseOverview.temporary_blocks || 0),
+        cooldowns: Number(abuseOverview.cooldowns || 0),
+        shadow_limits: Number(abuseOverview.shadow_limits || 0)
+      }
+    };
   }
 
   async function recordXpLedger(payload = {}) {
@@ -4224,6 +4677,9 @@ function createPostgresDatabaseClient(rawConfig = {}) {
     getAiIntelligenceAnalytics,
     getAiCostGuardrailStats,
     saveToolUsage,
+    recordBusinessEvent,
+    recordAbuseEvent,
+    getBetaBusinessAnalytics,
     recordXpLedger,
     listNotificationsForUser,
     markNotificationAsRead,

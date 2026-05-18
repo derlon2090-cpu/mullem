@@ -282,6 +282,9 @@ const AI_PROVIDER_DEGRADED_WINDOW_MS = Math.max(30_000, readEnvNumber("ORLIXOR_A
 const AI_PROVIDER_FAILURE_STREAK_LIMIT = Math.max(1, readEnvNumber("ORLIXOR_AI_PROVIDER_FAILURE_STREAK_LIMIT", 3));
 const ORLIXOR_AI_FORCE_SAFE_MODE = /^(1|true|yes|on)$/i.test(String(process.env.ORLIXOR_AI_FORCE_SAFE_MODE || process.env.AI_SAFE_MODE_ENABLED || "").trim());
 const SESSION_SECRET = readEnvValue(["SESSION_SECRET", "JWT_SECRET", "NEXTAUTH_SECRET"], "");
+const AI_ABUSE_WINDOW_MS = Math.max(30_000, readEnvNumber("ORLIXOR_AI_ABUSE_WINDOW_MS", 2 * 60_000));
+const AI_ABUSE_RETRY_LIMIT = Math.max(3, readEnvNumber("ORLIXOR_AI_ABUSE_RETRY_LIMIT", 8));
+const AI_ABUSE_SCRIPTED_LIMIT = Math.max(10, readEnvNumber("ORLIXOR_AI_ABUSE_SCRIPTED_LIMIT", 24));
 const AI_OPENAI_INPUT_USD_PER_1M = Math.max(0, readEnvNumber("ORLIXOR_AI_OPENAI_INPUT_USD_PER_1M", 0.15));
 const AI_OPENAI_OUTPUT_USD_PER_1M = Math.max(0, readEnvNumber("ORLIXOR_AI_OPENAI_OUTPUT_USD_PER_1M", 0.6));
 const AI_DEEPSEEK_INPUT_USD_PER_1M = Math.max(0, readEnvNumber("ORLIXOR_AI_DEEPSEEK_INPUT_USD_PER_1M", 0.27));
@@ -453,6 +456,201 @@ function recordLoginFailure(code, status = 0) {
   aiRuntimeState.loginFailures = aiRuntimeState.loginFailures.filter((item) => now - Number(item.at || 0) <= 60 * 60_000);
 }
 
+function hashPrivacyValue(value) {
+  const raw = String(value || "").trim();
+  if (!raw) return null;
+  return crypto.createHash("sha256").update(`${SESSION_SECRET || "mullem"}:${raw}`).digest("hex").slice(0, 40);
+}
+
+function getBusinessRoute(req) {
+  return String(req?.url || "/").split("?")[0].slice(0, 160);
+}
+
+function getBusinessContext(req) {
+  const context = req?.__businessContext || {};
+  const user = context.user || null;
+  return {
+    user,
+    user_id: user?.id || context.user_id || null,
+    plan: context.plan || (user ? getUserPlanKey(user) : null),
+    route: context.route || getBusinessRoute(req),
+    operation: context.operation || null,
+    message: context.message || ""
+  };
+}
+
+function buildSmartUpsell({ code = "", plan = "free", operation = "chat", analysis = {}, reason = "" } = {}) {
+  const normalizedCode = String(code || "").toUpperCase();
+  const taskType = String(analysis.taskType || analysis.task_type || reason || operation || "").toLowerCase();
+  if (String(plan || "free").toLowerCase() !== "free") return null;
+  if (normalizedCode.includes("IMAGE") || taskType.includes("image")) {
+    return {
+      target_plan: "spark",
+      title: "هذه الميزة متاحة في باقة Spark",
+      message: "الصور والاستخدام الأعلى متاحان في Spark، ويمكنك الترقية للوصول بدون توقف مزعج."
+    };
+  }
+  if (normalizedCode.includes("TOKEN") || normalizedCode.includes("LIMIT")) {
+    return {
+      target_plan: "spark",
+      title: "ارفع باقتك للوصول لحدود أعلى",
+      message: "باقة Spark تعطي حدود XP وتوكن أعلى للرسائل اليومية."
+    };
+  }
+  if (taskType.includes("code") || taskType.includes("reason") || normalizedCode.includes("UPGRADE")) {
+    return {
+      target_plan: "tuwaiq",
+      title: "التحليل المتقدم متاح في طويق",
+      message: "طلبات الكود والتحليل العميق تعمل بشكل أفضل في باقة طويق."
+    };
+  }
+  return {
+    target_plan: "spark",
+    title: "هذه الميزة متاحة في باقة Spark",
+    message: "ارفع باقتك للوصول الكامل مع حدود أعلى وتجربة أسرع."
+  };
+}
+
+async function recordBusinessEventSafe(req, payload = {}) {
+  if (!isDatabaseReady() || typeof databaseClient?.recordBusinessEvent !== "function") return;
+  try {
+    const context = getBusinessContext(req);
+    const metadata = {
+      ...(payload.metadata || {}),
+      request_id: req?.__requestId || null,
+      ip_hash: hashPrivacyValue(getClientIp(req)),
+      message_hash: payload.message_hash || hashPrivacyValue(context.message),
+      message_length: context.message ? String(context.message).length : undefined
+    };
+    await databaseClient.recordBusinessEvent({
+      user_id: payload.user_id || context.user_id || null,
+      event_type: payload.event_type || "event",
+      reason: payload.reason || null,
+      plan: payload.plan || context.plan || null,
+      route: payload.route || context.route || null,
+      metadata
+    });
+  } catch (error) {
+    console.warn("[BETA_EVENT_SKIPPED]", error?.message || error);
+  }
+}
+
+async function recordAbuseEventSafe(req, payload = {}) {
+  if (!isDatabaseReady() || typeof databaseClient?.recordAbuseEvent !== "function") return;
+  try {
+    const context = getBusinessContext(req);
+    await databaseClient.recordAbuseEvent({
+      user_id: payload.user_id || context.user_id || null,
+      ip_hash: hashPrivacyValue(getClientIp(req)),
+      action: payload.action || "observe",
+      reasons: payload.reasons || [],
+      score: payload.score || 0,
+      route: payload.route || context.route || null,
+      prompt_hash: payload.prompt_hash || hashPrivacyValue(context.message),
+      metadata: {
+        ...(payload.metadata || {}),
+        request_id: req?.__requestId || null,
+        plan: context.plan || null,
+        operation: context.operation || null
+      }
+    });
+  } catch (error) {
+    console.warn("[ABUSE_EVENT_SKIPPED]", error?.message || error);
+  }
+}
+
+function classifyBusinessError(error) {
+  const code = String(error?.publicCode || "").toUpperCase();
+  if (!code) return null;
+  if (code.includes("UPGRADE")) return { event_type: "upsell_shown", reason: code };
+  if (code.includes("LIMIT")) return { event_type: "limit_exceeded", reason: code };
+  if (code.includes("SAFE_MODE")) return { event_type: "safe_mode_block", reason: code };
+  if (code.includes("RATE")) return { event_type: "rate_limited", reason: code };
+  if (code.includes("ABUSE")) return { event_type: "abuse_block", reason: code };
+  return null;
+}
+
+function recordBusinessErrorSafe(req, error) {
+  const event = classifyBusinessError(error);
+  if (!event) return;
+  const context = getBusinessContext(req);
+  recordBusinessEventSafe(req, {
+    ...event,
+    metadata: {
+      status: error?.statusCode || 500,
+      upsell: error?.details?.upsell || null,
+      route: context.route
+    }
+  });
+}
+
+function detectAiAbuseSignals({ req, user, message = "", operation = "chat", plan = "free" } = {}) {
+  const now = Date.now();
+  const text = String(message || "");
+  const normalized = text.toLowerCase();
+  const promptHash = hashPrivacyValue(text) || "empty";
+  const identity = String(user?.id || hashPrivacyValue(getClientIp(req)) || "guest");
+  const key = `${identity}:${operation}`;
+  const current = abuseSignalStore.get(key) || { events: [], promptCounts: new Map() };
+  current.events = (current.events || []).filter((item) => now - Number(item.at || 0) <= AI_ABUSE_WINDOW_MS);
+  current.promptCounts = current.events.reduce((map, item) => {
+    map.set(item.promptHash, (map.get(item.promptHash) || 0) + 1);
+    return map;
+  }, new Map());
+  const repeated = (current.promptCounts.get(promptHash) || 0) + 1;
+  current.events.push({ at: now, promptHash });
+  abuseSignalStore.set(key, current);
+
+  const reasons = [];
+  if (/ignore (all )?(previous|system)|developer message|system prompt|bypass|jailbreak|prompt injection|كشف التعليمات|تجاهل التعليمات|اكشف البرومبت/i.test(text)) {
+    reasons.push("prompt_injection_attempt");
+  }
+  if (repeated >= AI_ABUSE_RETRY_LIMIT) reasons.push("excessive_retries");
+  if (current.events.length >= AI_ABUSE_SCRIPTED_LIMIT) reasons.push("scripted_requests");
+  if (estimateTokens(text) > (PLAN_LIMITS[plan]?.perMessageTokens || PLAN_LIMITS.free.perMessageTokens) * 2) reasons.push("token_abuse");
+  if (/(.)\1{60,}/.test(text) || (text.match(/https?:\/\//gi) || []).length >= 8) reasons.push("spam_prompt");
+
+  const score = reasons.reduce((total, reason) => total + ({
+    prompt_injection_attempt: 35,
+    excessive_retries: 30,
+    scripted_requests: 45,
+    token_abuse: 35,
+    spam_prompt: 25
+  }[reason] || 10), 0);
+  const action = score >= 80 ? "temporary_block" : score >= 55 ? "cooldown" : score >= 35 ? "shadow_limit" : "allow";
+  return {
+    action,
+    score,
+    reasons,
+    promptHash,
+    shadowLimit: action === "shadow_limit"
+  };
+}
+
+async function enforceAiAbuseProtection(req, { user, message = "", operation = "chat", plan = "free" } = {}) {
+  const signal = detectAiAbuseSignals({ req, user, message, operation, plan });
+  if (!signal.reasons.length) return signal;
+  await recordAbuseEventSafe(req, {
+    action: signal.action,
+    reasons: signal.reasons,
+    score: signal.score,
+    prompt_hash: signal.promptHash
+  });
+  if (signal.action === "temporary_block") {
+    throw createPublicHttpError(429, "ABUSE_TEMPORARY_BLOCK", "تم إيقاف الطلب مؤقتًا بسبب نمط استخدام غير طبيعي. حاول لاحقًا.", {
+      reasons: signal.reasons,
+      cooldownMs: AI_ABUSE_WINDOW_MS
+    });
+  }
+  if (signal.action === "cooldown") {
+    throw createPublicHttpError(429, "ABUSE_COOLDOWN", "طلبات كثيرة أو متكررة بسرعة. انتظر قليلًا ثم حاول من جديد.", {
+      reasons: signal.reasons,
+      cooldownMs: Math.min(AI_ABUSE_WINDOW_MS, 60_000)
+    });
+  }
+  return signal;
+}
+
 function estimateAiCostUsd(provider, usage = {}) {
   const key = normalizeProviderKey(provider);
   const inputTokens = Math.max(0, Number(usage.input_tokens || usage.prompt_tokens || usage.inputTokens || 0));
@@ -572,6 +770,7 @@ const MIME_TYPES = {
 const conversations = new Map();
 const guestConversationMap = new Map();
 const rateLimitStore = new Map();
+const abuseSignalStore = new Map();
 const authTokenFallbackSessions = new Map();
 let databaseClient = null;
 let databaseState = {
@@ -1993,9 +2192,11 @@ function routeModelForUser({ user, requestedModel, message = "", attachmentCount
   const hasAttachments = Number(attachmentCount || 0) > 0;
 
   if (planKey === "free" && (advanced || hasAttachments || operation !== "chat")) {
+    const upsell = buildSmartUpsell({ plan: planKey, operation, analysis: intelligence, code: "PLAN_UPGRADE_REQUIRED" });
     throw createPublicHttpError(403, "PLAN_UPGRADE_REQUIRED", "هذه المهمة تحتاج باقة مدفوعة لأنها تستخدم تحليلًا متقدمًا أو مرفقات.", {
       plan: planKey,
-      upgradeRecommended: true
+      upgradeRecommended: true,
+      upsell
     });
   }
 
@@ -2078,7 +2279,8 @@ async function enforceModelUsageLimits(user, routing, options = {}) {
         plan: routing.planKey,
         extraXp,
         extraTokens,
-        perMessageTokens: limits.perMessageTokens
+        perMessageTokens: limits.perMessageTokens,
+        upsell: buildSmartUpsell({ plan: routing.planKey, code: "MESSAGE_LIMIT_CONFIRMATION_REQUIRED", analysis: routing.intelligence })
       });
     }
   }
@@ -2088,7 +2290,8 @@ async function enforceModelUsageLimits(user, routing, options = {}) {
       plan: routing.planKey,
       used: stats.dailyTokens,
       limit: limits.dailyTokens,
-      resetIn: getNextDailyResetText()
+      resetIn: getNextDailyResetText(),
+      upsell: buildSmartUpsell({ plan: routing.planKey, code: "DAILY_TOKEN_LIMIT_EXCEEDED", analysis: routing.intelligence })
     });
   }
 
@@ -2096,7 +2299,8 @@ async function enforceModelUsageLimits(user, routing, options = {}) {
     throw createPublicHttpError(429, "MONTHLY_TOKEN_LIMIT_EXCEEDED", buildUsageLimitMessage("monthly_token_limit"), {
       plan: routing.planKey,
       used: stats.monthlyTokens,
-      limit: limits.monthlyTokens
+      limit: limits.monthlyTokens,
+      upsell: buildSmartUpsell({ plan: routing.planKey, code: "MONTHLY_TOKEN_LIMIT_EXCEEDED", analysis: routing.intelligence })
     });
   }
 }
@@ -2117,7 +2321,8 @@ async function enforceImageUsageLimit(user, taskType = "image") {
       plan: planKey,
       taskType,
       used: stats.dailyImages,
-      limit: limits.dailyImages
+      limit: limits.dailyImages,
+      upsell: buildSmartUpsell({ plan: planKey, operation: "image", code: "IMAGE_DAILY_LIMIT_EXCEEDED" })
     });
   }
 }
@@ -4805,6 +5010,147 @@ async function buildAiLaunchMonitorSnapshot() {
   };
 }
 
+function buildEmptyBetaAnalytics() {
+  return {
+    conversion: {
+      free_users: 0,
+      paid_users: 0,
+      conversion_rate_percent: 0,
+      most_purchased_plan: null,
+      top_exit_reason: null,
+      top_stop_point: null,
+      active_users_today: 0,
+      avg_messages_per_user: 0
+    },
+    cost: {
+      daily_by_model: [],
+      by_plan: [],
+      top_users: [],
+      avg_cost_per_message_usd: 0,
+      avg_tokens_per_user: 0,
+      images: [],
+      rag: {},
+      code: {}
+    },
+    retention: {
+      returning_users: 0,
+      avg_session_duration_minutes: 0,
+      peak_activity_hour: null,
+      last_seen: [],
+      returned_after_safe_mode: 0,
+      returned_after_limit_exceeded: 0
+    },
+    quality_trends: {
+      daily: [],
+      rag_vs_non_rag: [],
+      model_dissatisfaction: []
+    },
+    abuse: {
+      total_events: 0,
+      by_action: [],
+      by_reason: [],
+      temporary_blocks: 0,
+      cooldowns: 0,
+      shadow_limits: 0
+    },
+    recommendations: []
+  };
+}
+
+function buildProductionRecommendations(beta = {}, health = {}) {
+  const recommendations = [];
+  const conversion = beta.conversion || {};
+  const cost = beta.cost || {};
+  const quality = beta.quality_trends || {};
+  const abuse = beta.abuse || {};
+  const safeMode = health.safe_mode || {};
+  const siteCost = health.cost_guardrails?.site || {};
+
+  if (Number(conversion.free_users || 0) > 20 && Number(conversion.conversion_rate_percent || 0) < 3) {
+    recommendations.push({
+      type: "monetization",
+      priority: "high",
+      title: "Improve Free to Paid conversion",
+      action: "Show contextual upsell after code/reasoning/image limits, but cap it to one upsell per session."
+    });
+  }
+  const mostCostlyModel = (cost.daily_by_model || [])[0];
+  if (mostCostlyModel && Number(mostCostlyModel.cost_usd || 0) > 0 && Number(mostCostlyModel.avg_quality || 0) < 65) {
+    recommendations.push({
+      type: "model_router",
+      priority: "medium",
+      title: "Review high-cost low-quality model",
+      action: `Reduce routing to ${mostCostlyModel.model_key || "this model"} until quality improves.`
+    });
+  }
+  if (siteCost.status === "warning") {
+    recommendations.push({
+      type: "cost_guardrail",
+      priority: "high",
+      title: "Cost reached 80% of budget",
+      action: "Enable Safe Mode, reduce context length, and route Free users to DeepSeek Chat only."
+    });
+  }
+  if (safeMode.active) {
+    recommendations.push({
+      type: "safe_mode",
+      priority: "critical",
+      title: "Safe Mode is active",
+      action: "Inspect top-cost users and disable images/heavy requests until the budget resets."
+    });
+  }
+  const ragTrend = (quality.rag_vs_non_rag || []).find((row) => String(row.rag_used) === "true" || row.rag_used === true);
+  if (ragTrend && Number(ragTrend.avg_quality || 0) >= 75) {
+    recommendations.push({
+      type: "rag",
+      priority: "medium",
+      title: "RAG improves answer quality",
+      action: "Add more approved KB articles for repeated support and billing questions before considering fine-tuning."
+    });
+  }
+  if (Number(abuse.temporary_blocks || 0) > 0 || Number(abuse.cooldowns || 0) > 0) {
+    recommendations.push({
+      type: "abuse",
+      priority: "high",
+      title: "Abuse signals detected",
+      action: "Keep cooldowns active and inspect prompt-injection/scripted-request patterns in Abuse Detection."
+    });
+  }
+  if (!recommendations.length) {
+    recommendations.push({
+      type: "launch",
+      priority: "normal",
+      title: "Beta telemetry is stable",
+      action: "Keep collecting one week of real data, then tune limits and model routing based on profit per plan."
+    });
+  }
+  return recommendations.slice(0, 12);
+}
+
+async function buildBetaBusinessAnalyticsSnapshot(options = {}) {
+  const health = await buildAiHealthSnapshot();
+  let beta = buildEmptyBetaAnalytics();
+  if (isDatabaseReady() && typeof databaseClient.getBetaBusinessAnalytics === "function") {
+    try {
+      beta = await databaseClient.getBetaBusinessAnalytics(options);
+    } catch (error) {
+      console.warn("[BETA_ANALYTICS_FAILED]", error?.message || error);
+      beta.error = error?.message || "BETA_ANALYTICS_FAILED";
+    }
+  }
+  beta.recommendations = buildProductionRecommendations(beta, health);
+  beta.safe_mode = health.safe_mode;
+  beta.cost_guardrails = health.cost_guardrails;
+  beta.generated_at = new Date().toISOString();
+  beta.fine_tuning_enabled = false;
+  beta.privacy = {
+    raw_user_data_visible: false,
+    secrets_visible: false,
+    prompt_storage: "hashed_or_sanitized"
+  };
+  return beta;
+}
+
 function inferMemoryEntries(userMessage, assistantText) {
   const text = `${String(userMessage || "")}\n${String(assistantText || "")}`.trim();
   if (!text) return [];
@@ -5039,6 +5385,17 @@ async function handleRegister(req, res) {
   });
 
   const token = await issueAuthToken(user, deviceName);
+  req.__businessContext = {
+    user,
+    plan: getUserPlanKey(user),
+    route: "/api/auth/register",
+    operation: "register"
+  };
+  recordBusinessEventSafe(req, {
+    event_type: "signup",
+    reason: "email_password",
+    plan: getUserPlanKey(user)
+  });
 
   sendJson(req, res, 201, {
     success: true,
@@ -5067,6 +5424,7 @@ async function handleLogin(req, res) {
       code: "AUTH_LOOKUP_FAILED"
     });
     recordLoginFailure("AUTH_LOOKUP_FAILED", 503);
+    recordBusinessEventSafe(req, { event_type: "login_failure", reason: "AUTH_LOOKUP_FAILED", route: "/api/auth/login" });
     console.error("[mullem] login user lookup failed", {
       request_id: req.__requestId,
       email,
@@ -5085,6 +5443,7 @@ async function handleLogin(req, res) {
       code: "ACCOUNT_NOT_FOUND"
     });
     recordLoginFailure("ACCOUNT_NOT_FOUND", 404);
+    recordBusinessEventSafe(req, { event_type: "login_failure", reason: "ACCOUNT_NOT_FOUND", route: "/api/auth/login" });
     throw createPublicHttpError(404, "ACCOUNT_NOT_FOUND", "الحساب غير موجود.", {
       provider: "password"
     });
@@ -5097,6 +5456,7 @@ async function handleLogin(req, res) {
       code: "WRONG_PASSWORD"
     });
     recordLoginFailure("WRONG_PASSWORD", 401);
+    recordBusinessEventSafe(req, { event_type: "login_failure", reason: "WRONG_PASSWORD", route: "/api/auth/login" });
     throw createPublicHttpError(401, "WRONG_PASSWORD", "كلمة المرور خاطئة.", {
       provider: "password"
     });
@@ -5111,6 +5471,7 @@ async function handleLogin(req, res) {
       code: "ACCOUNT_BANNED"
     });
     recordLoginFailure("ACCOUNT_BANNED", 403);
+    recordBusinessEventSafe(req, { event_type: "login_failure", reason: "ACCOUNT_BANNED", route: "/api/auth/login" });
     throw createPublicHttpError(403, "ACCOUNT_BANNED", "هذا الحساب محظور.", {
       provider: "password"
     });
@@ -5123,12 +5484,26 @@ async function handleLogin(req, res) {
       code: "ACCOUNT_SUSPENDED"
     });
     recordLoginFailure("ACCOUNT_SUSPENDED", 403);
+    recordBusinessEventSafe(req, { event_type: "login_failure", reason: "ACCOUNT_SUSPENDED", route: "/api/auth/login" });
     throw createPublicHttpError(403, "ACCOUNT_SUSPENDED", "هذا الحساب موقوف مؤقتًا.", {
       provider: "password"
     });
   }
 
   const updatedUser = await syncUserDailyProgressSafely(user, "تم تسجيل الدخول عبر الخادم");
+
+  req.__businessContext = {
+    user: updatedUser || user,
+    plan: getUserPlanKey(updatedUser || user),
+    route: "/api/auth/login",
+    operation: "login"
+  };
+  recordBusinessEventSafe(req, {
+    event_type: "login_success",
+    reason: "password",
+    plan: getUserPlanKey(updatedUser || user),
+    metadata: { device_name: deviceName }
+  });
 
   const token = await issueAuthToken(updatedUser || user, deviceName);
   if (["admin", "super_admin"].includes(normalizeUserRole((updatedUser || user).role))) {
@@ -7022,6 +7397,18 @@ async function handleAdminAiLaunchMonitor(req, res) {
   });
 }
 
+async function handleAdminBetaAnalytics(req, res) {
+  await requireAdminUser(req);
+  const url = new URL(req.url, `http://${req.headers.host || "127.0.0.1"}`);
+  const snapshot = await buildBetaBusinessAnalyticsSnapshot({
+    days: Math.max(1, Math.min(Number(url.searchParams.get("days") || 30), 90))
+  });
+  sendJson(req, res, 200, {
+    success: true,
+    data: snapshot
+  });
+}
+
 async function handleAdminAiSafeMode(req, res) {
   const auth = await requireAdminUser(req);
   const payload = await parseJsonBody(req);
@@ -7652,6 +8039,19 @@ async function handleAssistantV3Protected(req, res) {
   if (!activeUser) {
     throw createHttpError(401, "Authentication is required to use assistant search.");
   }
+  req.__businessContext = {
+    user: activeUser,
+    plan: getUserPlanKey(activeUser),
+    route: "/api/assistant-v3",
+    operation: "assistant_v3",
+    message
+  };
+  const abuseSignal = await enforceAiAbuseProtection(req, {
+    user: activeUser,
+    message,
+    operation: "assistant_v3",
+    plan: getUserPlanKey(activeUser)
+  });
 
   const deepSearch = Boolean(payload.deep || payload.deep_search || payload.deepSearch || payload.advanced);
   const requestedModel = normalizeSelectedModel(payload.selected_model || payload.selectedModel || payload.model || "orlixor");
@@ -7663,6 +8063,11 @@ async function handleAssistantV3Protected(req, res) {
     attachmentNames: [],
     operation: "chat"
   });
+  if (abuseSignal?.shadowLimit) {
+    routing.modelProfile.maxOutputTokens = Math.min(Number(routing.modelProfile.maxOutputTokens || OPENAI_MAX_OUTPUT_TOKENS), 360);
+    routing.modelProfile.maxContextTokens = Math.min(Number(routing.modelProfile.maxContextTokens || FREE_MAX_CONTEXT_TOKENS), FREE_MAX_CONTEXT_TOKENS);
+    routing.routeReason = `${routing.routeReason}|shadow_limit`;
+  }
   await enforceModelUsageLimits(activeUser, routing, {
     confirmOverage: Boolean(payload.confirm_overage || payload.confirmOverage)
   });
@@ -7677,7 +8082,12 @@ async function handleAssistantV3Protected(req, res) {
   const currentXp = Math.max(0, Number(activeUser.xp || 0));
   const totalXpCost = xpCost + overageXpCost;
   if (currentXp < totalXpCost) {
-    throw createHttpError(402, `Insufficient XP balance. This request needs ${totalXpCost} XP.`);
+    throw createPublicHttpError(402, "INSUFFICIENT_XP", `Insufficient XP balance. This request needs ${totalXpCost} XP.`, {
+      plan: routing.planKey,
+      requiredXp: totalXpCost,
+      currentXp,
+      upsell: buildSmartUpsell({ plan: routing.planKey, code: "INSUFFICIENT_XP", analysis: routing.intelligence })
+    });
   }
 
   const assistantKnowledge = await getRetrievedKnowledgeContext({
@@ -7797,6 +8207,21 @@ async function handleAssistantV3Protected(req, res) {
       }
     });
   }
+
+  recordBusinessEventSafe(req, {
+    event_type: "ai_request_success",
+    reason: routing.taskType,
+    plan: routing.planKey,
+    metadata: {
+      model_key: routing.modelKey,
+      provider,
+      rag_used: assistantKnowledge.sources.length > 0,
+      cost_usd: totalCostEstimateUsd,
+      latency_ms: Date.now() - startedAt,
+      quality_score: quality.qualityScore,
+      abuse_shadow_limit: Boolean(abuseSignal?.shadowLimit)
+    }
+  });
 
   sendJson(req, res, 200, {
     ok: true,
@@ -9118,6 +9543,11 @@ async function routeRequest(req, res) {
     return;
   }
 
+  if (req.method === "GET" && requestPath === "/api/admin/beta-analytics") {
+    await handleAdminBetaAnalytics(req, res);
+    return;
+  }
+
   if (req.method === "POST" && requestPath === "/api/admin/ai-safe-mode") {
     await handleAdminAiSafeMode(req, res);
     return;
@@ -9470,6 +9900,7 @@ const server = http.createServer((req, res) => {
         stack: error?.stack
       });
     }
+    recordBusinessErrorSafe(req, error);
     sendJson(req, res, statusCode, {
       success: false,
       request_id: req.__requestId,
@@ -9547,6 +9978,15 @@ function cleanupRateLimitStore() {
   for (const [key, value] of rateLimitStore.entries()) {
     if (!value || value.expiresAt <= now) {
       rateLimitStore.delete(key);
+    }
+  }
+  for (const [key, value] of abuseSignalStore.entries()) {
+    const events = (value?.events || []).filter((item) => now - Number(item.at || 0) <= AI_ABUSE_WINDOW_MS);
+    if (!events.length) {
+      abuseSignalStore.delete(key);
+    } else {
+      value.events = events;
+      abuseSignalStore.set(key, value);
     }
   }
 }

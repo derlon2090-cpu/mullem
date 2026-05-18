@@ -1186,6 +1186,15 @@
     return request(`/admin/ai-launch-monitor${query.toString() ? `?${query.toString()}` : ""}`);
   }
 
+  async function getAdminBetaAnalytics(params = {}) {
+    const query = new URLSearchParams();
+    Object.entries(params || {}).forEach(([key, value]) => {
+      if (value == null || value === "") return;
+      query.set(key, String(value));
+    });
+    return request(`/admin/beta-analytics${query.toString() ? `?${query.toString()}` : ""}`);
+  }
+
   async function setAdminAiSafeMode(enabled) {
     return request("/admin/ai-safe-mode", {
       method: "POST",
@@ -1670,6 +1679,7 @@
     getAdminAiIntelligence,
     getAdminAiHealth,
     getAdminAiLaunchMonitor,
+    getAdminBetaAnalytics,
     setAdminAiSafeMode,
     getAdminAiKnowledge,
     createAdminAiKnowledge,

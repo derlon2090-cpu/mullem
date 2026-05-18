@@ -14,6 +14,7 @@
       analytics: null,
       health: null,
       launch: null,
+      beta: null,
       knowledge: [],
       review: [],
       rag: null,
@@ -62,6 +63,7 @@
     settingsGrid: $("[data-settings-grid]"),
     aiOverview: $("[data-ai-overview]"),
     aiLaunchMonitor: $("[data-ai-launch-monitor]"),
+    aiBetaAnalytics: $("[data-ai-beta-analytics]"),
     aiHealth: $("[data-ai-health]"),
     aiAlerts: $("[data-ai-alerts]"),
     aiFeedback: $("[data-ai-feedback]"),
@@ -193,7 +195,7 @@
   }
 
   async function loadAdminData() {
-    const [stats, users, plans, subscriptions, xpLedger, logs, notifications, toolSuggestions, aiAnalytics, aiHealth, aiLaunch, aiKnowledge, aiReview] = await Promise.all([
+    const [stats, users, plans, subscriptions, xpLedger, logs, notifications, toolSuggestions, aiAnalytics, aiHealth, aiLaunch, aiBeta, aiKnowledge, aiReview] = await Promise.all([
       api.getAdminStats(),
       api.getAdminUsers({ per_page: 200 }),
       api.getAdminPackages(),
@@ -205,6 +207,7 @@
       api.getAdminAiIntelligence?.() || api.request("/admin/ai-intelligence"),
       api.getAdminAiHealth?.() || api.request("/admin/ai-health"),
       api.getAdminAiLaunchMonitor?.() || api.request("/admin/ai-launch-monitor"),
+      api.getAdminBetaAnalytics?.({ days: 30 }) || api.request("/admin/beta-analytics"),
       api.getAdminAiKnowledge?.({ limit: 160 }) || api.request("/admin/ai-knowledge"),
       api.getAdminAiReview?.({ limit: 120 }) || api.request("/admin/ai-review")
     ]);
@@ -221,10 +224,11 @@
     if (notifications.ok) state.notifications = Array.isArray(notifications.data?.items) ? notifications.data.items : [];
     if (toolSuggestions.ok) state.toolSuggestions = Array.isArray(toolSuggestions.data?.items) ? toolSuggestions.data.items : [];
     state.ai.loading = false;
-    state.ai.error = [aiAnalytics, aiHealth, aiLaunch, aiKnowledge, aiReview].find((item) => item && !item.ok)?.message || "";
+    state.ai.error = [aiAnalytics, aiHealth, aiLaunch, aiBeta, aiKnowledge, aiReview].find((item) => item && !item.ok)?.message || "";
     if (aiAnalytics.ok) state.ai.analytics = aiAnalytics.data || null;
     if (aiHealth.ok) state.ai.health = aiHealth.data || null;
     if (aiLaunch.ok) state.ai.launch = aiLaunch.data || null;
+    if (aiBeta.ok) state.ai.beta = aiBeta.data || null;
     if (aiKnowledge.ok) state.ai.knowledge = Array.isArray(aiKnowledge.data?.items) ? aiKnowledge.data.items : [];
     if (aiReview.ok) state.ai.review = Array.isArray(aiReview.data?.items) ? aiReview.data.items : [];
 
@@ -831,6 +835,141 @@
     `;
   }
 
+  function renderAiBetaAnalytics(beta) {
+    if (!nodes.aiBetaAnalytics) return;
+    if (!beta) {
+      nodes.aiBetaAnalytics.innerHTML = `<div class="admin-empty-panel">جاري تحميل Beta Analytics...</div>`;
+      return;
+    }
+    const conversion = beta.conversion || {};
+    const cost = beta.cost || {};
+    const retention = beta.retention || {};
+    const abuse = beta.abuse || {};
+    const trends = beta.quality_trends || {};
+    const topPlan = conversion.most_purchased_plan || {};
+    const topCostUser = (cost.top_users || [])[0] || {};
+    const rag = cost.rag || {};
+    const code = cost.code || {};
+    const recommendations = Array.isArray(beta.recommendations) ? beta.recommendations : [];
+    const modelCosts = (cost.daily_by_model || []).slice(0, 8);
+    const planCosts = (cost.by_plan || []).slice(0, 8);
+    const qualityRows = (trends.daily || []).slice(0, 7);
+    nodes.aiBetaAnalytics.innerHTML = `
+      <div class="admin-kpi-row">
+        <article class="admin-kpi-card">
+          <span>Free Users</span>
+          <strong>${formatNumber(conversion.free_users || 0)}</strong>
+          <small>Paid: ${formatNumber(conversion.paid_users || 0)} آ· CVR ${formatNumber(conversion.conversion_rate_percent || 0)}%</small>
+        </article>
+        <article class="admin-kpi-card">
+          <span>Most Purchased</span>
+          <strong>${escapeHtml(topPlan.plan || "لا يوجد")}</strong>
+          <small>${formatNumber(topPlan.purchases || 0)} شراء آ· ${formatNumber(topPlan.revenue_sar || 0)} SAR</small>
+        </article>
+        <article class="admin-kpi-card">
+          <span>Active Today</span>
+          <strong>${formatNumber(conversion.active_users_today || 0)}</strong>
+          <small>${formatNumber(conversion.avg_messages_per_user || 0)} رسالة / مستخدم</small>
+        </article>
+        <article class="admin-kpi-card">
+          <span>Avg Cost / Message</span>
+          <strong>${formatMoney(cost.avg_cost_per_message_usd || 0)}</strong>
+          <small>${formatNumber(cost.avg_tokens_per_user || 0)} token / user</small>
+        </article>
+        <article class="admin-kpi-card">
+          <span>RAG Cost</span>
+          <strong>${formatMoney(rag.cost_usd || 0)}</strong>
+          <small>${formatNumber(rag.requests || 0)} طلب آ· جودة ${formatNumber(rag.avg_quality || 0)}%</small>
+        </article>
+        <article class="admin-kpi-card">
+          <span>Code Cost</span>
+          <strong>${formatMoney(code.cost_usd || 0)}</strong>
+          <small>${formatNumber(code.requests || 0)} طلب آ· جودة ${formatNumber(code.avg_quality || 0)}%</small>
+        </article>
+        <article class="admin-kpi-card">
+          <span>Retention</span>
+          <strong>${formatNumber(retention.returning_users || 0)}</strong>
+          <small>${formatNumber(retention.avg_session_duration_minutes || 0)} دقيقة جلسة</small>
+        </article>
+        <article class="admin-kpi-card ${abuse.total_events ? "is-warm" : ""}">
+          <span>Abuse Signals</span>
+          <strong>${formatNumber(abuse.total_events || 0)}</strong>
+          <small>${formatNumber(abuse.cooldowns || 0)} cooldown آ· ${formatNumber(abuse.temporary_blocks || 0)} block</small>
+        </article>
+      </div>
+      <section class="admin-dashboard-grid">
+        <div>
+          <h3>AI Cost by Model</h3>
+          <table class="admin-data-table compact">
+            <thead><tr><th>Day</th><th>Model</th><th>Requests</th><th>Cost</th><th>Quality</th></tr></thead>
+            <tbody>${modelCosts.map((row) => `
+              <tr>
+                <td>${escapeHtml(row.day || "")}</td>
+                <td><strong>${escapeHtml(row.model_key || "")}</strong><span>${escapeHtml(row.provider || "")}</span></td>
+                <td>${formatNumber(row.requests || 0)}</td>
+                <td>${formatMoney(row.cost_usd || 0)}</td>
+                <td>${formatNumber(row.avg_quality || 0)}%</td>
+              </tr>
+            `).join("") || `<tr><td colspan="5">لا توجد تكلفة موديلات بعد.</td></tr>`}</tbody>
+          </table>
+        </div>
+        <div>
+          <h3>Cost by Plan</h3>
+          <table class="admin-data-table compact">
+            <thead><tr><th>Plan</th><th>Requests</th><th>Tokens</th><th>Cost</th></tr></thead>
+            <tbody>${planCosts.map((row) => `
+              <tr>
+                <td><strong>${escapeHtml(row.plan || "")}</strong></td>
+                <td>${formatNumber(row.requests || 0)}</td>
+                <td>${formatNumber(row.tokens || 0)}</td>
+                <td>${formatMoney(row.cost_usd || 0)}</td>
+              </tr>
+            `).join("") || `<tr><td colspan="4">لا توجد تكلفة حسب الباقة بعد.</td></tr>`}</tbody>
+          </table>
+          <div class="admin-empty-panel">Top user cost: #${escapeHtml(topCostUser.user_id || "-")} آ· ${formatMoney(topCostUser.cost_usd || 0)}</div>
+        </div>
+        <div>
+          <h3>Quality Trends</h3>
+          <table class="admin-data-table compact">
+            <thead><tr><th>Day</th><th>Requests</th><th>Quality</th><th>Latency</th></tr></thead>
+            <tbody>${qualityRows.map((row) => `
+              <tr>
+                <td>${escapeHtml(row.day || "")}</td>
+                <td>${formatNumber(row.requests || 0)}</td>
+                <td>${formatNumber(row.avg_quality || 0)}%</td>
+                <td>${formatNumber(row.avg_latency_ms || 0)}ms</td>
+              </tr>
+            `).join("") || `<tr><td colspan="4">لا توجد بيانات جودة كافية بعد.</td></tr>`}</tbody>
+          </table>
+        </div>
+      </section>
+      <section class="admin-dashboard-grid">
+        <div>
+          <h3>Top Exit / Stop Points</h3>
+          <div class="admin-empty-panel">
+            Exit: ${escapeHtml(conversion.top_exit_reason?.reason || "لا يوجد")} آ·
+            Stop: ${escapeHtml(conversion.top_stop_point?.route || "لا يوجد")}
+          </div>
+          <table class="admin-data-table compact">
+            <thead><tr><th>Abuse Reason</th><th>Count</th></tr></thead>
+            <tbody>${(abuse.by_reason || []).slice(0, 8).map((row) => `
+              <tr><td>${escapeHtml(row.reason || "")}</td><td>${formatNumber(row.count || 0)}</td></tr>
+            `).join("") || `<tr><td colspan="2">لا توجد إشارات إساءة استخدام.</td></tr>`}</tbody>
+          </table>
+        </div>
+        <div>
+          <h3>Recommendations Engine</h3>
+          ${(recommendations.length ? recommendations : [{ title: "لا توجد توصيات بعد", action: "استمر في جمع بيانات بيتا." }]).map((item) => `
+            <div class="admin-empty-panel">
+              <strong>${escapeHtml(item.priority || "normal")} آ· ${escapeHtml(item.title || "")}</strong><br>
+              <span>${escapeHtml(item.action || "")}</span>
+            </div>
+          `).join("")}
+        </div>
+      </section>
+    `;
+  }
+
   function renderAiAlerts(health) {
     if (!nodes.aiAlerts) return;
     const alerts = Array.isArray(health?.alerts) ? health.alerts : [];
@@ -1015,6 +1154,7 @@
     const feedbackRows = Array.isArray(analytics.feedback_analytics) ? analytics.feedback_analytics : [];
     renderAiOverview(analytics);
     renderAiLaunchMonitor(launch);
+    renderAiBetaAnalytics(state.ai.beta);
     renderAiHealth(health);
     renderAiAlerts(health);
     renderAiFeedbackFilters(feedbackRows, modelRows);
