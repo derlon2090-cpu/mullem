@@ -1159,6 +1159,68 @@
     });
   }
 
+  async function getAdminAiIntelligence(params = {}) {
+    const query = new URLSearchParams();
+    Object.entries(params || {}).forEach(([key, value]) => {
+      if (value == null || value === "") return;
+      query.set(key, String(value));
+    });
+    return request(`/admin/ai-intelligence${query.toString() ? `?${query.toString()}` : ""}`);
+  }
+
+  async function getAdminAiKnowledge(params = {}) {
+    const query = new URLSearchParams();
+    Object.entries(params || {}).forEach(([key, value]) => {
+      if (value == null || value === "") return;
+      query.set(key, String(value));
+    });
+    return request(`/admin/ai-knowledge${query.toString() ? `?${query.toString()}` : ""}`);
+  }
+
+  async function createAdminAiKnowledge(payload) {
+    return request("/admin/ai-knowledge", {
+      method: "POST",
+      body: payload
+    });
+  }
+
+  async function updateAdminAiKnowledge(sourceId, payload) {
+    return request(`/admin/ai-knowledge/${encodeURIComponent(String(sourceId))}`, {
+      method: "PATCH",
+      body: payload
+    });
+  }
+
+  async function getAdminAiReview(params = {}) {
+    const query = new URLSearchParams();
+    Object.entries(params || {}).forEach(([key, value]) => {
+      if (value == null || value === "") return;
+      query.set(key, String(value));
+    });
+    return request(`/admin/ai-review${query.toString() ? `?${query.toString()}` : ""}`);
+  }
+
+  async function approveAdminAiReview(exampleId, payload = {}) {
+    return request(`/admin/ai-review/${encodeURIComponent(String(exampleId))}/approve`, {
+      method: "POST",
+      body: payload
+    });
+  }
+
+  async function rejectAdminAiReview(exampleId, payload = {}) {
+    return request(`/admin/ai-review/${encodeURIComponent(String(exampleId))}/reject`, {
+      method: "POST",
+      body: payload
+    });
+  }
+
+  async function debugAdminAiRag(payload) {
+    return request("/admin/ai-rag-debug", {
+      method: "POST",
+      body: payload
+    });
+  }
+
   async function submitToolSuggestion(payload) {
     return request("/tool-suggestions", {
       method: "POST",
@@ -1580,6 +1642,14 @@
     getAdminNotifications,
     createAdminNotification,
     updateAdminNotification,
+    getAdminAiIntelligence,
+    getAdminAiKnowledge,
+    createAdminAiKnowledge,
+    updateAdminAiKnowledge,
+    getAdminAiReview,
+    approveAdminAiReview,
+    rejectAdminAiReview,
+    debugAdminAiRag,
     submitToolSuggestion,
     getAdminToolSuggestions,
     updateAdminToolSuggestionStatus,

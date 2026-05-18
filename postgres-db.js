@@ -688,6 +688,11 @@ function createPostgresDatabaseClient(rawConfig = {}) {
       )
     `);
     await pool.query("CREATE INDEX IF NOT EXISTS idx_ai_training_examples_quality ON ai_training_examples (approved_by_admin, quality_score DESC, created_at DESC)");
+    await ensureColumn("ai_training_examples", "review_status", "review_status VARCHAR(40) NOT NULL DEFAULT 'pending'");
+    await ensureColumn("ai_training_examples", "admin_note", "admin_note TEXT NULL");
+    await ensureColumn("ai_training_examples", "metadata", "metadata JSONB NULL");
+    await ensureColumn("ai_training_examples", "updated_at", "updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()");
+    await pool.query("CREATE INDEX IF NOT EXISTS idx_ai_training_examples_review ON ai_training_examples (review_status, quality_score DESC, created_at DESC)");
 
     try {
       await pool.query("CREATE EXTENSION IF NOT EXISTS vector");
@@ -710,6 +715,11 @@ function createPostgresDatabaseClient(rawConfig = {}) {
       )
     `);
     await pool.query("CREATE INDEX IF NOT EXISTS idx_ai_knowledge_sources_type ON ai_knowledge_sources (source_type, is_active)");
+    await ensureColumn("ai_knowledge_sources", "category", "category VARCHAR(80) NOT NULL DEFAULT 'faq'");
+    await ensureColumn("ai_knowledge_sources", "status", "status VARCHAR(40) NOT NULL DEFAULT 'draft'");
+    await ensureColumn("ai_knowledge_sources", "source_label", "source_label VARCHAR(255) NULL");
+    await ensureColumn("ai_knowledge_sources", "tags", "tags JSONB NOT NULL DEFAULT '[]'::jsonb");
+    await pool.query("CREATE INDEX IF NOT EXISTS idx_ai_knowledge_sources_status ON ai_knowledge_sources (status, is_active, updated_at DESC)");
 
     await pool.query(`
       CREATE TABLE IF NOT EXISTS ai_knowledge_chunks (
@@ -731,6 +741,10 @@ function createPostgresDatabaseClient(rawConfig = {}) {
     `);
     await pool.query("CREATE INDEX IF NOT EXISTS idx_ai_knowledge_chunks_task ON ai_knowledge_chunks (task_type, quality_score DESC, updated_at DESC)");
     await pool.query("CREATE INDEX IF NOT EXISTS idx_ai_knowledge_chunks_updated ON ai_knowledge_chunks (updated_at DESC)");
+    await ensureColumn("ai_knowledge_chunks", "category", "category VARCHAR(80) NOT NULL DEFAULT 'faq'");
+    await ensureColumn("ai_knowledge_chunks", "status", "status VARCHAR(40) NOT NULL DEFAULT 'draft'");
+    await ensureColumn("ai_knowledge_chunks", "tags", "tags JSONB NOT NULL DEFAULT '[]'::jsonb");
+    await pool.query("CREATE INDEX IF NOT EXISTS idx_ai_knowledge_chunks_status ON ai_knowledge_chunks (status, quality_score DESC, updated_at DESC)");
 
     await pool.query(`
       CREATE TABLE IF NOT EXISTS ai_quality_events (
@@ -1509,6 +1523,32 @@ function createPostgresDatabaseClient(rawConfig = {}) {
     return rows[0] || null;
   }
 
+  function normalizeReviewStatus(value, fallback = "pending") {
+    if (!String(value || "").trim() && fallback === "") return "";
+    const status = String(value || fallback || "pending").trim().toLowerCase();
+    return ["pending", "approved", "rejected"].includes(status) ? status : fallback;
+  }
+
+  function normalizeKnowledgeStatus(value, fallback = "draft") {
+    if (!String(value || "").trim() && fallback === "") return "";
+    const status = String(value || fallback || "draft").trim().toLowerCase();
+    return ["draft", "approved", "rejected"].includes(status) ? status : fallback;
+  }
+
+  function normalizeKnowledgeCategory(value) {
+    const category = String(value || "faq").trim().toLowerCase().replace(/[^a-z0-9_-]+/g, "_").slice(0, 80);
+    return category || "faq";
+  }
+
+  function normalizeKnowledgeTags(value) {
+    const items = Array.isArray(value)
+      ? value
+      : String(value || "")
+        .split(",")
+        .map((item) => item.trim());
+    return [...new Set(items.map((item) => String(item || "").trim().slice(0, 40)).filter(Boolean))].slice(0, 12);
+  }
+
   async function saveAiTrainingExample(payload = {}) {
     const inputText = String(payload.input_text || payload.inputText || "").trim();
     const idealOutput = String(payload.ideal_output || payload.idealOutput || "").trim();
@@ -1516,8 +1556,9 @@ function createPostgresDatabaseClient(rawConfig = {}) {
     const rows = await query(
       `
         INSERT INTO ai_training_examples (
-          input_text, ideal_output, task_type, model_key, quality_score, approved_by_admin
-        ) VALUES ($1, $2, $3, $4, $5, $6)
+          input_text, ideal_output, task_type, model_key, quality_score, approved_by_admin,
+          review_status, admin_note, metadata, updated_at
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, NOW())
         RETURNING *
       `,
       [
@@ -1526,7 +1567,103 @@ function createPostgresDatabaseClient(rawConfig = {}) {
         String(payload.task_type || payload.taskType || "").trim().slice(0, 80) || null,
         String(payload.model_key || payload.modelKey || "").trim().slice(0, 80) || null,
         Math.max(0, Math.min(Math.round(Number(payload.quality_score || payload.qualityScore || 0)), 100)),
-        normalizeBoolean(payload.approved_by_admin || payload.approvedByAdmin)
+        normalizeBoolean(payload.approved_by_admin || payload.approvedByAdmin),
+        normalizeReviewStatus(payload.review_status || payload.reviewStatus),
+        String(payload.admin_note || payload.adminNote || "").trim() || null,
+        payload.metadata ? JSON.stringify(payload.metadata) : null
+      ]
+    );
+    return rows[0] || null;
+  }
+
+  async function listExcellentAnswerCandidates(options = {}) {
+    const limit = Math.max(1, Math.min(Number(options.limit || 80), 250));
+    const status = normalizeReviewStatus(options.status || options.review_status || options.reviewStatus, "");
+    const params = [];
+    const where = [];
+    if (status) {
+      params.push(status);
+      where.push(`COALESCE(review_status, 'pending') = $${params.length}`);
+    }
+    if (options.task_type || options.taskType) {
+      params.push(String(options.task_type || options.taskType).trim().slice(0, 80));
+      where.push(`task_type = $${params.length}`);
+    }
+    if (options.model_key || options.modelKey) {
+      params.push(String(options.model_key || options.modelKey).trim().slice(0, 80));
+      where.push(`model_key = $${params.length}`);
+    }
+    params.push(limit);
+    return query(
+      `
+        SELECT
+          id,
+          input_text,
+          ideal_output,
+          task_type,
+          model_key,
+          quality_score,
+          approved_by_admin,
+          COALESCE(review_status, 'pending') AS review_status,
+          admin_note,
+          metadata,
+          created_at,
+          updated_at
+        FROM ai_training_examples
+        ${where.length ? `WHERE ${where.join(" AND ")}` : ""}
+        ORDER BY
+          CASE COALESCE(review_status, 'pending') WHEN 'pending' THEN 0 WHEN 'approved' THEN 1 ELSE 2 END,
+          quality_score DESC,
+          created_at DESC
+        LIMIT $${params.length}
+      `,
+      params
+    );
+  }
+
+  async function getTrainingExampleById(exampleId) {
+    const id = Number(exampleId);
+    if (!Number.isFinite(id) || id <= 0) return null;
+    const rows = await query(
+      `
+        SELECT *
+        FROM ai_training_examples
+        WHERE id = $1
+        LIMIT 1
+      `,
+      [id]
+    );
+    return rows[0] || null;
+  }
+
+  async function updateTrainingExampleReview(exampleId, payload = {}) {
+    const id = Number(exampleId);
+    if (!Number.isFinite(id) || id <= 0) return null;
+    const status = normalizeReviewStatus(payload.review_status || payload.reviewStatus || payload.status);
+    const inputText = String(payload.input_text || payload.inputText || "").trim();
+    const idealOutput = String(payload.ideal_output || payload.idealOutput || "").trim();
+    const rows = await query(
+      `
+        UPDATE ai_training_examples
+        SET
+          input_text = COALESCE(NULLIF($2, ''), input_text),
+          ideal_output = COALESCE(NULLIF($3, ''), ideal_output),
+          review_status = $4,
+          approved_by_admin = $5,
+          admin_note = NULLIF($6, ''),
+          metadata = COALESCE($7::jsonb, metadata),
+          updated_at = NOW()
+        WHERE id = $1
+        RETURNING *
+      `,
+      [
+        id,
+        inputText,
+        idealOutput,
+        status,
+        status === "approved",
+        String(payload.admin_note || payload.adminNote || "").trim(),
+        payload.metadata ? JSON.stringify(payload.metadata) : null
       ]
     );
     return rows[0] || null;
@@ -1536,11 +1673,13 @@ function createPostgresDatabaseClient(rawConfig = {}) {
     const title = String(payload.title || "").trim().slice(0, 255);
     const sourceKey = String(payload.source_key || payload.sourceKey || title || crypto.randomUUID()).trim().slice(0, 160);
     if (!title) return null;
+    const tags = normalizeKnowledgeTags(payload.tags);
     const rows = await query(
       `
         INSERT INTO ai_knowledge_sources (
-          source_key, source_type, title, url, quality_score, is_active, metadata, updated_at
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, NOW())
+          source_key, source_type, title, url, quality_score, is_active, metadata,
+          category, status, source_label, tags, updated_at
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11::jsonb, NOW())
         ON CONFLICT (source_key) DO UPDATE SET
           source_type = EXCLUDED.source_type,
           title = EXCLUDED.title,
@@ -1548,6 +1687,10 @@ function createPostgresDatabaseClient(rawConfig = {}) {
           quality_score = EXCLUDED.quality_score,
           is_active = EXCLUDED.is_active,
           metadata = EXCLUDED.metadata,
+          category = EXCLUDED.category,
+          status = EXCLUDED.status,
+          source_label = EXCLUDED.source_label,
+          tags = EXCLUDED.tags,
           updated_at = NOW()
         RETURNING *
       `,
@@ -1558,7 +1701,11 @@ function createPostgresDatabaseClient(rawConfig = {}) {
         String(payload.url || "").trim() || null,
         Math.max(0, Math.min(100, Math.round(Number(payload.quality_score || payload.qualityScore || 60)))),
         payload.is_active === undefined ? true : normalizeBoolean(payload.is_active || payload.isActive),
-        payload.metadata ? JSON.stringify(payload.metadata) : null
+        payload.metadata ? JSON.stringify(payload.metadata) : null,
+        normalizeKnowledgeCategory(payload.category),
+        normalizeKnowledgeStatus(payload.status),
+        String(payload.source || payload.source_label || payload.sourceLabel || "").trim().slice(0, 255) || null,
+        JSON.stringify(tags)
       ]
     );
     return rows[0] || null;
@@ -1568,12 +1715,13 @@ function createPostgresDatabaseClient(rawConfig = {}) {
     const content = String(payload.content || payload.chunk_text || payload.text || "").trim();
     if (!content) return null;
     const chunkKey = String(payload.chunk_key || payload.chunkKey || "").trim().slice(0, 180) || null;
+    const tags = normalizeKnowledgeTags(payload.tags);
     const rows = await query(
       `
         INSERT INTO ai_knowledge_chunks (
           source_id, chunk_key, title, content, sanitized_content, embedding, task_type,
-          quality_score, feedback_score, metadata, updated_at
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, NOW())
+          quality_score, feedback_score, metadata, category, status, tags, updated_at
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13::jsonb, NOW())
         ON CONFLICT (chunk_key) DO UPDATE SET
           source_id = EXCLUDED.source_id,
           title = EXCLUDED.title,
@@ -1584,6 +1732,9 @@ function createPostgresDatabaseClient(rawConfig = {}) {
           quality_score = EXCLUDED.quality_score,
           feedback_score = EXCLUDED.feedback_score,
           metadata = EXCLUDED.metadata,
+          category = EXCLUDED.category,
+          status = EXCLUDED.status,
+          tags = EXCLUDED.tags,
           updated_at = NOW()
         RETURNING *
       `,
@@ -1597,10 +1748,93 @@ function createPostgresDatabaseClient(rawConfig = {}) {
         String(payload.task_type || payload.taskType || "").trim().slice(0, 80) || null,
         Math.max(0, Math.min(100, Math.round(Number(payload.quality_score || payload.qualityScore || 60)))),
         Math.max(-100, Math.min(100, Math.round(Number(payload.feedback_score || payload.feedbackScore || 0)))),
-        payload.metadata ? JSON.stringify(payload.metadata) : null
+        payload.metadata ? JSON.stringify(payload.metadata) : null,
+        normalizeKnowledgeCategory(payload.category),
+        normalizeKnowledgeStatus(payload.status),
+        JSON.stringify(tags)
       ]
     );
     return rows[0] || null;
+  }
+
+  async function listKnowledgeSources(options = {}) {
+    const limit = Math.max(1, Math.min(Number(options.limit || 120), 300));
+    const status = normalizeKnowledgeStatus(options.status, "");
+    const category = options.category ? normalizeKnowledgeCategory(options.category) : "";
+    const params = [];
+    const where = [];
+    if (status) {
+      params.push(status);
+      where.push(`s.status = $${params.length}`);
+    }
+    if (category) {
+      params.push(category);
+      where.push(`s.category = $${params.length}`);
+    }
+    params.push(limit);
+    return query(
+      `
+        SELECT
+          s.*,
+          COUNT(c.id)::int AS chunks_count,
+          COALESCE(SUM(c.usage_count), 0)::bigint AS total_usage
+        FROM ai_knowledge_sources s
+        LEFT JOIN ai_knowledge_chunks c ON c.source_id = s.id
+        ${where.length ? `WHERE ${where.join(" AND ")}` : ""}
+        GROUP BY s.id
+        ORDER BY s.updated_at DESC
+        LIMIT $${params.length}
+      `,
+      params
+    );
+  }
+
+  async function updateKnowledgeSource(sourceId, payload = {}) {
+    const id = Number(sourceId);
+    if (!Number.isFinite(id) || id <= 0) return null;
+    const tags = "tags" in payload ? normalizeKnowledgeTags(payload.tags) : null;
+    const rows = await query(
+      `
+        UPDATE ai_knowledge_sources
+        SET
+          title = COALESCE(NULLIF($2, ''), title),
+          source_type = COALESCE(NULLIF($3, ''), source_type),
+          category = COALESCE(NULLIF($4, ''), category),
+          status = COALESCE(NULLIF($5, ''), status),
+          source_label = COALESCE(NULLIF($6, ''), source_label),
+          url = COALESCE(NULLIF($7, ''), url),
+          tags = COALESCE($8::jsonb, tags),
+          is_active = COALESCE($9, is_active),
+          metadata = CASE WHEN $10::jsonb IS NULL THEN metadata ELSE COALESCE(metadata, '{}'::jsonb) || $10::jsonb END,
+          updated_at = NOW()
+        WHERE id = $1
+        RETURNING *
+      `,
+      [
+        id,
+        String(payload.title || "").trim().slice(0, 255),
+        String(payload.source_type || payload.sourceType || "").trim().slice(0, 80),
+        payload.category ? normalizeKnowledgeCategory(payload.category) : "",
+        payload.status ? normalizeKnowledgeStatus(payload.status) : "",
+        String(payload.source || payload.source_label || payload.sourceLabel || "").trim().slice(0, 255),
+        String(payload.url || "").trim(),
+        tags ? JSON.stringify(tags) : null,
+        "is_active" in payload || "isActive" in payload ? normalizeBoolean(payload.is_active || payload.isActive) : null,
+        payload.metadata ? JSON.stringify(payload.metadata) : null
+      ]
+    );
+    const source = rows[0] || null;
+    if (source && payload.status) {
+      await query(
+        `
+          UPDATE ai_knowledge_chunks
+          SET status = $2, updated_at = NOW()
+          WHERE source_id = $1
+        `,
+        [id, normalizeKnowledgeStatus(payload.status)]
+      );
+    }
+    return source;
   }
 
   function extractSearchTerms(value) {
@@ -1617,7 +1851,11 @@ function createPostgresDatabaseClient(rawConfig = {}) {
     const limit = Math.max(1, Math.min(Number(options.limit || 8), 20));
     const terms = extractSearchTerms(options.query || options.text || "");
     const params = [];
-    const where = ["COALESCE(s.is_active, TRUE) = TRUE"];
+    const where = [
+      "COALESCE(s.is_active, TRUE) = TRUE",
+      "COALESCE(s.status, 'draft') = 'approved'",
+      "COALESCE(c.status, s.status, 'draft') = 'approved'"
+    ];
     let keywordScoreSql = "0";
 
     if (options.task_type || options.taskType) {
@@ -1648,6 +1886,9 @@ function createPostgresDatabaseClient(rawConfig = {}) {
           c.title,
           COALESCE(c.sanitized_content, c.content) AS content,
           c.task_type,
+          c.category,
+          c.status,
+          c.tags,
           c.quality_score,
           c.feedback_score,
           c.usage_count,
@@ -1655,6 +1896,10 @@ function createPostgresDatabaseClient(rawConfig = {}) {
           c.updated_at,
           s.title AS source_title,
           s.source_type,
+          s.category AS source_category,
+          s.status AS source_status,
+          s.source_label,
+          s.tags AS source_tags,
           s.url,
           (${keywordScoreSql}) AS keyword_score
         FROM ai_knowledge_chunks c
@@ -1712,55 +1957,195 @@ function createPostgresDatabaseClient(rawConfig = {}) {
     return rows[0] || null;
   }
 
-  async function getAiIntelligenceAnalytics() {
-    const modelRows = await query(`
+  async function getAiIntelligenceAnalytics(options = {}) {
+    const qualityParams = [];
+    const qualityWhere = ["created_at >= NOW() - INTERVAL '30 days'"];
+    if (options.model_key || options.modelKey) {
+      qualityParams.push(String(options.model_key || options.modelKey).trim().slice(0, 80));
+      qualityWhere.push(`model_key = $${qualityParams.length}`);
+    }
+    if (options.task_type || options.taskType) {
+      qualityParams.push(String(options.task_type || options.taskType).trim().slice(0, 80));
+      qualityWhere.push(`task_type = $${qualityParams.length}`);
+    }
+    if (options.from) {
+      qualityParams.push(toSqlDateTime(options.from));
+      qualityWhere.push(`created_at >= $${qualityParams.length}`);
+    }
+    if (options.to) {
+      qualityParams.push(toSqlDateTime(options.to));
+      qualityWhere.push(`created_at <= $${qualityParams.length}`);
+    }
+
+    const feedbackParams = [];
+    const feedbackWhere = ["f.created_at >= NOW() - INTERVAL '30 days'"];
+    if (options.model_key || options.modelKey) {
+      feedbackParams.push(String(options.model_key || options.modelKey).trim().slice(0, 80));
+      feedbackWhere.push(`f.model_key = $${feedbackParams.length}`);
+    }
+    if (options.task_type || options.taskType) {
+      feedbackParams.push(String(options.task_type || options.taskType).trim().slice(0, 80));
+      feedbackWhere.push(`f.task_type = $${feedbackParams.length}`);
+    }
+    if (options.question_type || options.questionType) {
+      feedbackParams.push(String(options.question_type || options.questionType).trim().slice(0, 80));
+      feedbackWhere.push(`f.question_type = $${feedbackParams.length}`);
+    }
+    if (options.plan) {
+      feedbackParams.push(`%${String(options.plan).trim().toLowerCase()}%`);
+      feedbackWhere.push(`LOWER(CONCAT_WS(' ', u.plan_type, u.package_name)) LIKE $${feedbackParams.length}`);
+    }
+    if (options.from) {
+      feedbackParams.push(toSqlDateTime(options.from));
+      feedbackWhere.push(`f.created_at >= $${feedbackParams.length}`);
+    }
+    if (options.to) {
+      feedbackParams.push(toSqlDateTime(options.to));
+      feedbackWhere.push(`f.created_at <= $${feedbackParams.length}`);
+    }
+
+    const overviewRows = await query(
+      `
+        SELECT
+          COUNT(*) FILTER (WHERE created_at >= CURRENT_DATE)::int AS messages_today,
+          COALESCE(SUM(input_tokens + output_tokens) FILTER (WHERE created_at >= CURRENT_DATE), 0)::bigint AS tokens_today,
+          COALESCE(SUM(token_cost) FILTER (WHERE created_at >= CURRENT_DATE), 0)::bigint AS token_cost_today,
+          ROUND(COALESCE(AVG(quality_score), 0))::int AS avg_quality,
+          ROUND(COALESCE(AVG(latency_ms), 0))::int AS avg_latency_ms
+        FROM ai_quality_events
+        WHERE created_at >= NOW() - INTERVAL '30 days'
+      `
+    );
+    const bestModelRows = await query(`
       SELECT
         COALESCE(model_key, 'unknown') AS model_key,
         COALESCE(provider, 'unknown') AS provider,
-        COUNT(*)::int AS events_count,
-        ROUND(AVG(quality_score))::int AS avg_quality,
-        ROUND(AVG(latency_ms))::int AS avg_latency_ms,
-        SUM(input_tokens + output_tokens)::bigint AS total_tokens,
-        SUM(xp_cost)::bigint AS total_xp
+        COUNT(*)::int AS requests,
+        ROUND(AVG(quality_score))::int AS avg_quality
       FROM ai_quality_events
       WHERE created_at >= NOW() - INTERVAL '30 days'
       GROUP BY model_key, provider
-      ORDER BY avg_quality DESC NULLS LAST, events_count DESC
-      LIMIT 20
+      HAVING COUNT(*) > 0
+      ORDER BY AVG(quality_score) DESC NULLS LAST, COUNT(*) DESC
+      LIMIT 1
     `);
-    const feedbackRows = await query(`
+    const mostUsedRows = await query(`
+      SELECT
+        COALESCE(model_key, 'unknown') AS model_key,
+        COALESCE(provider, 'unknown') AS provider,
+        COUNT(*)::int AS requests
+      FROM ai_quality_events
+      WHERE created_at >= NOW() - INTERVAL '30 days'
+      GROUP BY model_key, provider
+      ORDER BY COUNT(*) DESC
+      LIMIT 1
+    `);
+    const dissatisfactionRows = await query(`
       SELECT
         COALESCE(feedback_type, rating, 'unknown') AS reason,
         COUNT(*)::int AS count
       FROM ai_feedback
       WHERE created_at >= NOW() - INTERVAL '30 days'
+        AND COALESCE(feedback_type, rating, '') IN ('dislike', 'inaccurate', 'too_long', 'too_short', 'code_error', 'not_solved')
       GROUP BY reason
       ORDER BY count DESC
-      LIMIT 20
+      LIMIT 10
     `);
-    const taskRows = await query(`
-      SELECT
-        COALESCE(task_type, 'unknown') AS task_type,
-        COUNT(*)::int AS count,
-        ROUND(AVG(quality_score))::int AS avg_quality
-      FROM ai_quality_events
-      WHERE created_at >= NOW() - INTERVAL '30 days'
-      GROUP BY task_type
-      ORDER BY count DESC
-      LIMIT 20
-    `);
+    const modelRows = await query(
+      `
+        SELECT
+          COALESCE(model_key, 'unknown') AS model_key,
+          COALESCE(provider, 'unknown') AS provider,
+          COUNT(*)::int AS requests,
+          COUNT(*)::int AS events_count,
+          ROUND(AVG(quality_score))::int AS avg_quality,
+          ROUND(AVG(latency_ms))::int AS avg_speed_ms,
+          ROUND(AVG(latency_ms))::int AS avg_latency_ms,
+          ROUND(AVG(input_tokens + output_tokens))::int AS avg_tokens,
+          ROUND(AVG(token_cost))::int AS avg_cost,
+          SUM(input_tokens + output_tokens)::bigint AS total_tokens,
+          SUM(token_cost)::bigint AS total_cost,
+          SUM(xp_cost)::bigint AS total_xp,
+          ROUND(
+            100.0 * SUM(CASE WHEN satisfaction_score >= 70 OR user_feedback IN ('like', 'excellent', 'save_worthy', 'solved') THEN 1 ELSE 0 END)
+            / NULLIF(COUNT(*), 0)
+          )::int AS satisfaction_rate
+        FROM ai_quality_events
+        WHERE ${qualityWhere.join(" AND ")}
+        GROUP BY model_key, provider
+        ORDER BY avg_quality DESC NULLS LAST, requests DESC
+        LIMIT 30
+      `,
+      qualityParams
+    );
+    const feedbackRows = await query(
+      `
+        SELECT
+          COALESCE(f.feedback_type, f.rating, 'unknown') AS reason,
+          COALESCE(f.model_key, 'unknown') AS model_key,
+          COALESCE(f.provider, 'unknown') AS provider,
+          COALESCE(f.task_type, 'unknown') AS task_type,
+          COALESCE(f.question_type, 'unknown') AS question_type,
+          COALESCE(NULLIF(u.plan_type, ''), NULLIF(u.package_name, ''), 'free') AS plan,
+          COUNT(*)::int AS count,
+          ROUND(AVG(f.quality_score))::int AS avg_quality
+        FROM ai_feedback f
+        LEFT JOIN app_users u ON u.id = f.user_id
+        WHERE ${feedbackWhere.join(" AND ")}
+        GROUP BY reason, model_key, provider, task_type, question_type, plan
+        ORDER BY count DESC, avg_quality DESC NULLS LAST
+        LIMIT 80
+      `,
+      feedbackParams
+    );
+    const taskRows = await query(
+      `
+        SELECT
+          COALESCE(task_type, 'unknown') AS task_type,
+          COUNT(*)::int AS count,
+          ROUND(AVG(quality_score))::int AS avg_quality
+        FROM ai_quality_events
+        WHERE ${qualityWhere.join(" AND ")}
+        GROUP BY task_type
+        ORDER BY count DESC
+        LIMIT 30
+      `,
+      qualityParams
+    );
     const knowledgeRows = await query(`
       SELECT
         COUNT(*)::int AS chunks_count,
+        COUNT(*) FILTER (WHERE status = 'approved')::int AS approved_chunks_count,
         ROUND(AVG(quality_score))::int AS avg_quality,
-        SUM(usage_count)::bigint AS total_usage
+        COALESCE(SUM(usage_count), 0)::bigint AS total_usage
       FROM ai_knowledge_chunks
     `);
+    const reviewRows = await query(`
+      SELECT
+        COUNT(*)::int AS total,
+        COUNT(*) FILTER (WHERE COALESCE(review_status, 'pending') = 'pending')::int AS pending,
+        COUNT(*) FILTER (WHERE COALESCE(review_status, 'pending') = 'approved')::int AS approved,
+        COUNT(*) FILTER (WHERE COALESCE(review_status, 'pending') = 'rejected')::int AS rejected
+      FROM ai_training_examples
+    `);
+    const overview = overviewRows[0] || {};
     return {
+      overview: {
+        messages_today: Number(overview.messages_today || 0),
+        tokens_today: Number(overview.tokens_today || 0),
+        token_cost_today: Number(overview.token_cost_today || 0),
+        best_model: bestModelRows[0] || null,
+        most_used_model: mostUsedRows[0] || null,
+        avg_quality: Number(overview.avg_quality || 0),
+        avg_latency_ms: Number(overview.avg_latency_ms || 0),
+        top_dissatisfaction_reason: dissatisfactionRows[0] || null
+      },
       model_performance: modelRows,
-      feedback_reasons: feedbackRows,
+      feedback_reasons: dissatisfactionRows.length ? dissatisfactionRows : feedbackRows.slice(0, 20),
+      feedback_analytics: feedbackRows,
       task_quality: taskRows,
-      knowledge_base: knowledgeRows[0] || { chunks_count: 0, avg_quality: 0, total_usage: 0 }
+      knowledge_base: knowledgeRows[0] || { chunks_count: 0, approved_chunks_count: 0, avg_quality: 0, total_usage: 0 },
+      excellent_answers: reviewRows[0] || { total: 0, pending: 0, approved: 0, rejected: 0 }
     };
   }
 
@@ -3734,8 +4119,13 @@ function createPostgresDatabaseClient(rawConfig = {}) {
     saveMessageEmbedding,
     saveFeedback,
     saveAiTrainingExample,
+    listExcellentAnswerCandidates,
+    getTrainingExampleById,
+    updateTrainingExampleReview,
     saveKnowledgeSource,
     saveKnowledgeChunk,
+    listKnowledgeSources,
+    updateKnowledgeSource,
     listKnowledgeChunks,
     recordAiQualityEvent,
     getAiIntelligenceAnalytics,

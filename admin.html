@@ -29,7 +29,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800;900&display=swap" rel="stylesheet">
   <link rel="icon" type="image/svg+xml" href="favicon.svg">
-  <link rel="stylesheet" href="styles.css?v=20260513-tool-suggestions">
+  <link rel="stylesheet" href="styles.css?v=20260515-responsive-3">
 </head>
 <body class="admin-console-body">
   <main class="orlixor-admin-console">
@@ -48,6 +48,7 @@
           <button type="button" data-admin-tab="transactions"><span>▤</span>سجل المعاملات</button>
           <button type="button" data-admin-tab="xp"><span>ϟ</span>إدارة XP</button>
           <button type="button" data-admin-tab="tools"><span>◔</span>الأدوات والتقارير</button>
+          <button type="button" data-admin-tab="ai"><span>AI</span>AI Intelligence</button>
           <button type="button" data-admin-tab="messages"><span>✉</span>الرسائل والإشعارات</button>
           <button type="button" data-admin-tab="support"><span>☏</span>طلبات الدعم</button>
           <button type="button" data-admin-tab="settings"><span>⚙</span>الإعدادات</button>
@@ -218,6 +219,89 @@
             <div class="admin-tools-grid" data-tools-grid></div>
           </section>
 
+          <section class="admin-tab-panel" data-admin-panel="ai" hidden>
+            <div class="admin-section-heading">
+              <div>
+                <h1>AI Admin Dashboard</h1>
+                <p>لوحة تشغيل لإدارة AI Intelligence Layer، مراقبة الجودة، التكلفة، RAG، ومصادر المعرفة المعتمدة.</p>
+              </div>
+              <div class="admin-date-controls">
+                <button type="button">Fine-tuning Disabled</button>
+                <button type="button">RAG Approved Only</button>
+              </div>
+            </div>
+
+            <section class="admin-kpi-row" data-ai-overview></section>
+
+            <section class="admin-dashboard-grid">
+              <article class="admin-glass-panel">
+                <h2>Knowledge Base</h2>
+                <form class="admin-notification-form" data-ai-kb-form>
+                  <div class="admin-notification-form-grid">
+                    <label>العنوان<input class="field" name="title" data-ai-kb-title required maxlength="255"></label>
+                    <label>التصنيف
+                      <select class="field" name="category" data-ai-kb-category>
+                        <option value="faq">FAQ</option>
+                        <option value="article">مقال</option>
+                        <option value="support_reply">رد دعم</option>
+                        <option value="official_instruction">تعليمات رسمية</option>
+                        <option value="excellent_answer">مثال ممتاز</option>
+                      </select>
+                    </label>
+                    <label>الحالة
+                      <select class="field" name="status" data-ai-kb-status>
+                        <option value="draft">Draft</option>
+                        <option value="approved">Approved</option>
+                        <option value="rejected">Rejected</option>
+                      </select>
+                    </label>
+                    <label>المصدر<input class="field" name="source" data-ai-kb-source maxlength="255" placeholder="FAQ / Docs / Support"></label>
+                    <label>Tags<input class="field" name="tags" data-ai-kb-tags placeholder="billing, onboarding"></label>
+                  </div>
+                  <label>المحتوى<textarea class="field" name="content" data-ai-kb-content required rows="6"></textarea></label>
+                  <button class="primary-btn" type="submit">إضافة إلى Knowledge Base</button>
+                </form>
+              </article>
+
+              <article class="admin-glass-panel">
+                <h2>Review Excellent Answers</h2>
+                <div class="admin-table-wrap" data-ai-review-list></div>
+              </article>
+
+              <article class="admin-glass-panel">
+                <h2>RAG Debug</h2>
+                <form class="admin-notification-form" data-ai-rag-form>
+                  <label>سؤال الاختبار<textarea class="field" data-ai-rag-question rows="5" required placeholder="اكتب سؤالاً لاختبار المصادر المسترجعة"></textarea></label>
+                  <button class="primary-btn" type="submit">اختبار RAG</button>
+                </form>
+                <div class="admin-table-wrap" data-ai-rag-result></div>
+              </article>
+            </section>
+
+            <section class="admin-dashboard-grid admin-dashboard-grid-bottom">
+              <article class="admin-glass-panel">
+                <h2>Knowledge Sources</h2>
+                <div class="admin-table-wrap" data-ai-kb-list></div>
+              </article>
+              <article class="admin-glass-panel">
+                <h2>Feedback Analytics</h2>
+                <div class="admin-toolbar-line">
+                  <select class="field" data-ai-feedback-model><option value="">كل الموديلات</option></select>
+                  <select class="field" data-ai-feedback-plan><option value="">كل الباقات</option></select>
+                  <select class="field" data-ai-feedback-question><option value="">كل أنواع الأسئلة</option></select>
+                  <input class="field" type="date" data-ai-feedback-from aria-label="من تاريخ">
+                  <input class="field" type="date" data-ai-feedback-to aria-label="إلى تاريخ">
+                  <button class="mini-btn" type="button" data-ai-feedback-refresh>تطبيق</button>
+                </div>
+                <div class="admin-table-wrap" data-ai-feedback></div>
+              </article>
+              <article class="admin-glass-panel">
+                <h2>Model Performance</h2>
+                <div class="admin-table-wrap" data-ai-model-performance></div>
+              </article>
+            </section>
+          </section>
+
           <section class="admin-tab-panel" data-admin-panel="messages" hidden>
             <div class="admin-section-heading">
               <h1>الرسائل والإشعارات</h1>
@@ -268,7 +352,7 @@
   </main>
 
   <script src="mullem-config.js?v=20260409-5"></script>
-  <script src="api-client.js?v=20260513-tool-suggestions"></script>
-  <script src="admin-dashboard.js?v=20260513-tool-suggestions"></script>
+  <script src="api-client.js?v=20260517-ai-admin"></script>
+  <script src="admin-dashboard.js?v=20260517-ai-admin"></script>
 </body>
 </html>

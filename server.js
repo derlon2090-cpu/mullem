@@ -6318,12 +6318,71 @@ function splitKnowledgeContent(content, maxLength = 1400) {
   });
 }
 
+function normalizeAiAdminStatus(value, allowed, fallback) {
+  const status = String(value || fallback || "").trim().toLowerCase();
+  return allowed.includes(status) ? status : fallback;
+}
+
+function normalizeAiAdminTags(value) {
+  const list = Array.isArray(value)
+    ? value
+    : String(value || "")
+      .split(",")
+      .map((item) => item.trim());
+  return [...new Set(list.map((item) => sanitizeOptionalText(item, 40)).filter(Boolean))].slice(0, 12);
+}
+
+function buildApiKnowledgeSource(row = {}) {
+  return {
+    id: row.id,
+    source_key: row.source_key,
+    source_type: row.source_type || "manual",
+    title: row.title || "",
+    category: row.category || "faq",
+    source: row.source_label || row.source || row.url || "",
+    url: row.url || "",
+    status: row.status || "draft",
+    tags: Array.isArray(row.tags) ? row.tags : [],
+    quality_score: Number(row.quality_score || 0),
+    is_active: row.is_active !== false,
+    chunks_count: Number(row.chunks_count || 0),
+    total_usage: Number(row.total_usage || 0),
+    created_at: row.created_at || null,
+    updated_at: row.updated_at || null
+  };
+}
+
+function buildApiTrainingCandidate(row = {}) {
+  return {
+    id: row.id,
+    input_text: aiIntelligence.sanitizeSensitiveText(row.input_text || "").text,
+    ideal_output: aiIntelligence.sanitizeSensitiveText(row.ideal_output || "").text,
+    task_type: row.task_type || "general",
+    model_key: row.model_key || "unknown",
+    quality_score: Number(row.quality_score || 0),
+    review_status: row.review_status || "pending",
+    approved_by_admin: Boolean(row.approved_by_admin),
+    admin_note: row.admin_note || "",
+    metadata: row.metadata || null,
+    created_at: row.created_at || null,
+    updated_at: row.updated_at || null
+  };
+}
+
 async function handleAdminAiIntelligence(req, res) {
   await requireAdminUser(req);
   if (!isDatabaseReady() || typeof databaseClient.getAiIntelligenceAnalytics !== "function") {
     throw createHttpError(503, "AI intelligence analytics are not available until the database is ready.");
   }
-  const analytics = await databaseClient.getAiIntelligenceAnalytics();
+  const url = new URL(req.url, `http://${req.headers.host || "127.0.0.1"}`);
+  const analytics = await databaseClient.getAiIntelligenceAnalytics({
+    model_key: sanitizeOptionalText(url.searchParams.get("model"), 80),
+    plan: sanitizeOptionalText(url.searchParams.get("plan"), 80),
+    task_type: sanitizeOptionalText(url.searchParams.get("task_type"), 80),
+    question_type: sanitizeOptionalText(url.searchParams.get("question_type"), 80),
+    from: sanitizeOptionalText(url.searchParams.get("from"), 80),
+    to: sanitizeOptionalText(url.searchParams.get("to"), 80)
+  });
   sendJson(req, res, 200, {
     success: true,
     data: {
@@ -6336,8 +6395,27 @@ async function handleAdminAiIntelligence(req, res) {
   });
 }
 
-async function handleAdminKnowledgeIngest(req, res) {
+async function handleAdminKnowledgeList(req, res) {
   await requireAdminUser(req);
+  if (!isDatabaseReady() || typeof databaseClient.listKnowledgeSources !== "function") {
+    throw createHttpError(503, "Knowledge Base storage is not available until the database is ready.");
+  }
+  const url = new URL(req.url, `http://${req.headers.host || "127.0.0.1"}`);
+  const items = await databaseClient.listKnowledgeSources({
+    status: sanitizeOptionalText(url.searchParams.get("status"), 40),
+    category: sanitizeOptionalText(url.searchParams.get("category"), 80),
+    limit: Math.max(1, Math.min(Number(url.searchParams.get("limit") || 160), 300))
+  });
+  sendJson(req, res, 200, {
+    success: true,
+    data: {
+      items: items.map(buildApiKnowledgeSource)
+    }
+  });
+}
+
+async function handleAdminKnowledgeIngest(req, res) {
+  const auth = await requireAdminUser(req);
   if (!isDatabaseReady() || typeof databaseClient.saveKnowledgeSource !== "function" || typeof databaseClient.saveKnowledgeChunk !== "function") {
     throw createHttpError(503, "Knowledge Base storage is not available until the database is ready.");
   }
@@ -6345,23 +6423,33 @@ async function handleAdminKnowledgeIngest(req, res) {
   const payload = await parseJsonBody(req);
   const title = sanitizeOptionalText(payload.title || payload.source_title || payload.sourceTitle, 255);
   const content = String(payload.content || payload.text || payload.body || "").trim();
+  const status = normalizeAiAdminStatus(payload.status, ["draft", "approved", "rejected"], "draft");
+  const category = sanitizeOptionalText(payload.category, 80) || "faq";
+  const tags = normalizeAiAdminTags(payload.tags);
   if (!title || !content) {
     throw createHttpError(422, "title and content are required.");
   }
 
+  const sanitizedContent = aiIntelligence.sanitizeSensitiveText(content);
   const source = await databaseClient.saveKnowledgeSource({
     source_key: payload.source_key || payload.sourceKey || aiIntelligence.hashText(`${title}:${payload.url || ""}`).slice(0, 32),
     source_type: payload.source_type || payload.sourceType || "manual",
     title,
+    category,
+    status,
+    source: payload.source || payload.source_label || payload.sourceLabel || "",
+    tags,
     url: payload.url || "",
     quality_score: payload.quality_score || payload.qualityScore || 70,
     metadata: {
       imported_by: "admin",
-      privacy: "sanitized"
+      imported_by_user_id: auth.user?.id || null,
+      privacy: "sanitized",
+      privacy_findings: sanitizedContent.findings
     }
   });
 
-  const chunks = splitKnowledgeContent(content);
+  const chunks = splitKnowledgeContent(sanitizedContent.text);
   const savedChunks = [];
   for (let index = 0; index < chunks.length; index += 1) {
     const sanitized = aiIntelligence.sanitizeSensitiveText(chunks[index]);
@@ -6374,6 +6462,9 @@ async function handleAdminKnowledgeIngest(req, res) {
       sanitized_content: sanitized.text,
       embedding,
       task_type: payload.task_type || payload.taskType || null,
+      category,
+      status,
+      tags,
       quality_score: payload.quality_score || payload.qualityScore || 70,
       metadata: {
         privacy_findings: sanitized.findings
@@ -6385,8 +6476,252 @@ async function handleAdminKnowledgeIngest(req, res) {
   sendJson(req, res, 201, {
     success: true,
     data: {
-      source,
+      source: buildApiKnowledgeSource(source),
       chunks_count: savedChunks.length
+    }
+  });
+}
+
+async function handleAdminKnowledgeUpdate(req, res, sourceId) {
+  const auth = await requireAdminUser(req);
+  if (!isDatabaseReady() || typeof databaseClient.updateKnowledgeSource !== "function") {
+    throw createHttpError(503, "Knowledge Base storage is not available until the database is ready.");
+  }
+  const payload = await parseJsonBody(req);
+  const status = payload.status
+    ? normalizeAiAdminStatus(payload.status, ["draft", "approved", "rejected"], "draft")
+    : "";
+  const updatePayload = {
+    title: payload.title,
+    source_type: payload.source_type || payload.sourceType,
+    category: payload.category,
+    status,
+    source: payload.source || payload.source_label || payload.sourceLabel,
+    url: payload.url,
+    metadata: {
+      updated_by_user_id: auth.user?.id || null
+    }
+  };
+  if ("is_active" in payload || "isActive" in payload) updatePayload.is_active = payload.is_active ?? payload.isActive;
+  if ("tags" in payload) updatePayload.tags = normalizeAiAdminTags(payload.tags);
+  const item = await databaseClient.updateKnowledgeSource(sourceId, updatePayload);
+  if (!item) {
+    throw createHttpError(404, "Knowledge source was not found.");
+  }
+  await recordAdminAction(req, auth, "UPDATE_AI_KNOWLEDGE", "ai_knowledge_source", sourceId, {
+    status: status || item.status
+  });
+  sendJson(req, res, 200, {
+    success: true,
+    data: {
+      item: buildApiKnowledgeSource(item)
+    }
+  });
+}
+
+async function handleAdminReviewExcellentAnswers(req, res) {
+  await requireAdminUser(req);
+  if (!isDatabaseReady() || typeof databaseClient.listExcellentAnswerCandidates !== "function") {
+    throw createHttpError(503, "AI review queue is not available until the database is ready.");
+  }
+  const url = new URL(req.url, `http://${req.headers.host || "127.0.0.1"}`);
+  const items = await databaseClient.listExcellentAnswerCandidates({
+    status: sanitizeOptionalText(url.searchParams.get("status"), 40),
+    task_type: sanitizeOptionalText(url.searchParams.get("task_type"), 80),
+    model_key: sanitizeOptionalText(url.searchParams.get("model"), 80),
+    limit: Math.max(1, Math.min(Number(url.searchParams.get("limit") || 120), 250))
+  });
+  sendJson(req, res, 200, {
+    success: true,
+    data: {
+      items: items.map(buildApiTrainingCandidate)
+    }
+  });
+}
+
+async function handleAdminApproveExcellentAnswer(req, res, exampleId) {
+  const auth = await requireAdminUser(req);
+  if (
+    !isDatabaseReady() ||
+    typeof databaseClient.getTrainingExampleById !== "function" ||
+    typeof databaseClient.updateTrainingExampleReview !== "function" ||
+    typeof databaseClient.saveKnowledgeSource !== "function" ||
+    typeof databaseClient.saveKnowledgeChunk !== "function"
+  ) {
+    throw createHttpError(503, "AI review queue is not available until the database is ready.");
+  }
+
+  const payload = await parseJsonBody(req);
+  const current = await databaseClient.getTrainingExampleById(exampleId);
+  if (!current) {
+    throw createHttpError(404, "Training example was not found.");
+  }
+  const inputText = aiIntelligence.sanitizeSensitiveText(payload.input_text || payload.inputText || current.input_text || "");
+  const outputText = aiIntelligence.sanitizeSensitiveText(payload.ideal_output || payload.idealOutput || current.ideal_output || "");
+  if (!inputText.text || !outputText.text) {
+    throw createHttpError(422, "Approved examples must include a question and an answer.");
+  }
+  const title = sanitizeOptionalText(payload.title, 255) || `Excellent answer #${current.id}`;
+  const category = sanitizeOptionalText(payload.category, 80) || "excellent_answers";
+  const tags = normalizeAiAdminTags(payload.tags || ["excellent", current.task_type || "general"]);
+  const kbContent = [
+    `Question: ${inputText.text}`,
+    "",
+    `Approved answer: ${outputText.text}`
+  ].join("\n");
+  const source = await databaseClient.saveKnowledgeSource({
+    source_key: `excellent-answer-${current.id}`,
+    source_type: "excellent_answer",
+    title,
+    category,
+    status: "approved",
+    source: "admin_review",
+    tags,
+    quality_score: Math.max(70, Number(current.quality_score || 0)),
+    metadata: {
+      training_example_id: current.id,
+      approved_by_user_id: auth.user?.id || null,
+      privacy_findings: [...new Set([...(inputText.findings || []), ...(outputText.findings || [])])]
+    }
+  });
+  const embedding = ORLIXOR_ENABLE_EMBEDDINGS ? await createEmbedding(kbContent) : null;
+  await databaseClient.saveKnowledgeChunk({
+    source_id: source?.id || null,
+    chunk_key: `excellent-answer-${current.id}:1`,
+    title,
+    content: kbContent,
+    sanitized_content: kbContent,
+    embedding,
+    task_type: current.task_type || "general",
+    category,
+    status: "approved",
+    tags,
+    quality_score: Math.max(70, Number(current.quality_score || 0)),
+    metadata: {
+      training_example_id: current.id
+    }
+  });
+  const updated = await databaseClient.updateTrainingExampleReview(exampleId, {
+    input_text: inputText.text,
+    ideal_output: outputText.text,
+    status: "approved",
+    admin_note: payload.admin_note || payload.adminNote || "",
+    metadata: {
+      approved_by_user_id: auth.user?.id || null,
+      knowledge_source_id: source?.id || null
+    }
+  });
+  await recordAdminAction(req, auth, "APPROVE_AI_EXCELLENT_ANSWER", "ai_training_example", exampleId, {
+    knowledgeSourceId: source?.id || null
+  });
+  sendJson(req, res, 200, {
+    success: true,
+    data: {
+      item: buildApiTrainingCandidate(updated),
+      knowledge_source: buildApiKnowledgeSource(source)
+    }
+  });
+}
+
+async function handleAdminRejectExcellentAnswer(req, res, exampleId) {
+  const auth = await requireAdminUser(req);
+  if (!isDatabaseReady() || typeof databaseClient.updateTrainingExampleReview !== "function") {
+    throw createHttpError(503, "AI review queue is not available until the database is ready.");
+  }
+  const payload = await parseJsonBody(req);
+  const updated = await databaseClient.updateTrainingExampleReview(exampleId, {
+    status: "rejected",
+    admin_note: payload.admin_note || payload.adminNote || "Rejected by admin",
+    metadata: {
+      rejected_by_user_id: auth.user?.id || null
+    }
+  });
+  if (!updated) {
+    throw createHttpError(404, "Training example was not found.");
+  }
+  await recordAdminAction(req, auth, "REJECT_AI_EXCELLENT_ANSWER", "ai_training_example", exampleId, {});
+  sendJson(req, res, 200, {
+    success: true,
+    data: {
+      item: buildApiTrainingCandidate(updated)
+    }
+  });
+}
+
+async function handleAdminRagDebug(req, res) {
+  const auth = await requireAdminUser(req);
+  const payload = await parseJsonBody(req);
+  const question = sanitizeOptionalText(payload.question || payload.query || payload.message, 4000);
+  if (!question) {
+    throw createHttpError(422, "question is required.");
+  }
+  const analysis = {
+    ...aiIntelligence.analyzeRequest({
+      message: question,
+      requestedModel: payload.model || "pro",
+      operation: "admin_rag_debug"
+    }),
+    needsRetrieval: true
+  };
+  const retrievedKnowledge = await getRetrievedKnowledgeContext({
+    message: question,
+    analysis
+  });
+  const adminAiUser = {
+    ...auth.user,
+    plan: "pioneer",
+    package_key: "pioneer",
+    package_name: "Pioneer",
+    plan_type: "pioneer",
+    package_daily_xp: 600
+  };
+  const routing = routeModelForUser({
+    user: adminAiUser,
+    requestedModel: payload.model || (analysis.needsCreativity ? "creative" : "pro"),
+    message: question,
+    operation: "admin_rag_debug"
+  });
+  const systemPrompt = aiIntelligence.buildDynamicSystemPrompt({
+    basePrompt: "You are the Orlixor AI RAG debug assistant for admins. Answer briefly and use the retrieved knowledge when relevant.",
+    audiencePrompt: "The user is an admin testing retrieval quality. Do not expose private user data.",
+    analysis,
+    ragContext: retrievedKnowledge.context
+  });
+  const startedAt = Date.now();
+  const result = await callOpenAI({
+    modelProfile: routing.modelProfile,
+    input: [
+      { role: "system", content: systemPrompt },
+      { role: "user", content: question }
+    ]
+  });
+  const answer = sanitizeModelDisplayText(result.text);
+  sendJson(req, res, 200, {
+    success: true,
+    data: {
+      question,
+      answer,
+      model: {
+        key: routing.modelKey,
+        provider: resolveProfileProvider(routing.modelProfile),
+        provider_model: resolveProviderModel(routing.modelProfile, resolveProfileProvider(routing.modelProfile)),
+        prompt_key: analysis.promptKey,
+        task_type: analysis.taskType,
+        question_type: analysis.questionType
+      },
+      latency_ms: Date.now() - startedAt,
+      usage: result.usage || null,
+      sources: retrievedKnowledge.sources.map((source, index) => ({
+        id: source.id,
+        title: source.title || source.source_title || `Source ${index + 1}`,
+        content: aiIntelligence.sanitizeSensitiveText(source.content || "").text.slice(0, 900),
+        similarity: Number(source.similarity || source.keyword_score || source.keywordScore || 0),
+        rank_score: Number(source.rank_score || 0),
+        reason: `Matched task ${analysis.taskType}; ranked by similarity, quality, feedback, and recency.`,
+        source: source.source_label || source.source_title || source.source_type || "",
+        category: source.category || source.source_category || "",
+        updated_at: source.updated_at || null
+      }))
     }
   });
 }
@@ -8090,8 +8425,41 @@ async function routeRequest(req, res) {
     return;
   }
 
+  if (req.method === "GET" && requestPath === "/api/admin/ai-knowledge") {
+    await handleAdminKnowledgeList(req, res);
+    return;
+  }
+
   if (req.method === "POST" && requestPath === "/api/admin/ai-knowledge") {
     await handleAdminKnowledgeIngest(req, res);
+    return;
+  }
+
+  if (req.method === "PATCH" && requestPath.startsWith("/api/admin/ai-knowledge/")) {
+    const sourceId = decodeURIComponent(requestPath.replace("/api/admin/ai-knowledge/", ""));
+    await handleAdminKnowledgeUpdate(req, res, sourceId);
+    return;
+  }
+
+  if (req.method === "GET" && requestPath === "/api/admin/ai-review") {
+    await handleAdminReviewExcellentAnswers(req, res);
+    return;
+  }
+
+  if (req.method === "POST" && requestPath.startsWith("/api/admin/ai-review/") && requestPath.endsWith("/approve")) {
+    const exampleId = decodeURIComponent(requestPath.replace("/api/admin/ai-review/", "").replace("/approve", ""));
+    await handleAdminApproveExcellentAnswer(req, res, exampleId);
+    return;
+  }
+
+  if (req.method === "POST" && requestPath.startsWith("/api/admin/ai-review/") && requestPath.endsWith("/reject")) {
+    const exampleId = decodeURIComponent(requestPath.replace("/api/admin/ai-review/", "").replace("/reject", ""));
+    await handleAdminRejectExcellentAnswer(req, res, exampleId);
+    return;
+  }
+
+  if (req.method === "POST" && requestPath === "/api/admin/ai-rag-debug") {
+    await handleAdminRagDebug(req, res);
     return;
   }
 

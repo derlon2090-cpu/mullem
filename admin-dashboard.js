@@ -10,6 +10,14 @@
     logs: [],
     notifications: [],
     toolSuggestions: [],
+    ai: {
+      analytics: null,
+      knowledge: [],
+      review: [],
+      rag: null,
+      loading: true,
+      error: ""
+    },
     tab: "dashboard"
   };
 
@@ -50,6 +58,20 @@
     toolsGrid: $("[data-tools-grid]"),
     messagesGrid: $("[data-messages-grid]"),
     settingsGrid: $("[data-settings-grid]"),
+    aiOverview: $("[data-ai-overview]"),
+    aiFeedback: $("[data-ai-feedback]"),
+    aiFeedbackModel: $("[data-ai-feedback-model]"),
+    aiFeedbackPlan: $("[data-ai-feedback-plan]"),
+    aiFeedbackQuestion: $("[data-ai-feedback-question]"),
+    aiFeedbackFrom: $("[data-ai-feedback-from]"),
+    aiFeedbackTo: $("[data-ai-feedback-to]"),
+    aiModelPerformance: $("[data-ai-model-performance]"),
+    aiKbForm: $("[data-ai-kb-form]"),
+    aiKbList: $("[data-ai-kb-list]"),
+    aiReviewList: $("[data-ai-review-list]"),
+    aiRagForm: $("[data-ai-rag-form]"),
+    aiRagQuestion: $("[data-ai-rag-question]"),
+    aiRagResult: $("[data-ai-rag-result]"),
     planDonut: $("[data-plan-donut]"),
     totalUsers: $("[data-total-users]"),
     planLegend: $("[data-plan-legend]"),
@@ -166,7 +188,7 @@
   }
 
   async function loadAdminData() {
-    const [stats, users, plans, subscriptions, xpLedger, logs, notifications, toolSuggestions] = await Promise.all([
+    const [stats, users, plans, subscriptions, xpLedger, logs, notifications, toolSuggestions, aiAnalytics, aiKnowledge, aiReview] = await Promise.all([
       api.getAdminStats(),
       api.getAdminUsers({ per_page: 200 }),
       api.getAdminPackages(),
@@ -174,7 +196,10 @@
       api.getAdminXpLedger?.({ limit: 140 }) || api.request("/admin/xp-ledger"),
       api.getAdminLogs?.({ limit: 140 }) || api.request("/admin/logs"),
       api.getAdminNotifications?.({ limit: 80 }) || api.request("/admin/notifications"),
-      api.getAdminToolSuggestions?.({ limit: 120 }) || api.request("/admin/tool-suggestions")
+      api.getAdminToolSuggestions?.({ limit: 120 }) || api.request("/admin/tool-suggestions"),
+      api.getAdminAiIntelligence?.() || api.request("/admin/ai-intelligence"),
+      api.getAdminAiKnowledge?.({ limit: 160 }) || api.request("/admin/ai-knowledge"),
+      api.getAdminAiReview?.({ limit: 120 }) || api.request("/admin/ai-review")
     ]);
 
     if (stats.ok) {
@@ -188,6 +213,11 @@
     if (logs.ok) state.logs = Array.isArray(logs.data?.items) ? logs.data.items : [];
     if (notifications.ok) state.notifications = Array.isArray(notifications.data?.items) ? notifications.data.items : [];
     if (toolSuggestions.ok) state.toolSuggestions = Array.isArray(toolSuggestions.data?.items) ? toolSuggestions.data.items : [];
+    state.ai.loading = false;
+    state.ai.error = [aiAnalytics, aiKnowledge, aiReview].find((item) => item && !item.ok)?.message || "";
+    if (aiAnalytics.ok) state.ai.analytics = aiAnalytics.data || null;
+    if (aiKnowledge.ok) state.ai.knowledge = Array.isArray(aiKnowledge.data?.items) ? aiKnowledge.data.items : [];
+    if (aiReview.ok) state.ai.review = Array.isArray(aiReview.data?.items) ? aiReview.data.items : [];
 
     renderAll();
   }
@@ -329,6 +359,7 @@
     renderTools();
     renderSettings();
     renderMessages();
+    renderAiDashboard();
   }
 
   function filteredUsers() {
@@ -642,6 +673,224 @@
     `;
   }
 
+  function getAiAnalytics() {
+    return state.ai.analytics?.analytics || {};
+  }
+
+  function getAiStatusLabel(status) {
+    return {
+      draft: "Draft",
+      approved: "Approved",
+      rejected: "Rejected",
+      pending: "Pending"
+    }[String(status || "").toLowerCase()] || status || "Draft";
+  }
+
+  function renderAiOverview(analytics) {
+    if (!nodes.aiOverview) return;
+    if (state.ai.loading) {
+      nodes.aiOverview.innerHTML = `<article class="admin-kpi-card"><strong>Loading</strong><span>جاري تحميل بيانات AI</span></article>`;
+      return;
+    }
+    if (state.ai.error && !analytics.overview) {
+      nodes.aiOverview.innerHTML = `<article class="admin-kpi-card is-warm"><strong>خطأ</strong><span>${escapeHtml(state.ai.error)}</span></article>`;
+      return;
+    }
+    const overview = analytics.overview || {};
+    const bestModel = overview.best_model?.model_key || "غير متاح";
+    const mostUsed = overview.most_used_model?.model_key || "غير متاح";
+    const topReason = overview.top_dissatisfaction_reason?.reason || "لا يوجد";
+    const cards = [
+      { label: "رسائل اليوم", value: formatNumber(overview.messages_today || 0), delta: "AI requests", icon: "AI" },
+      { label: "تكلفة التوكن", value: formatNumber(overview.token_cost_today || 0), delta: `${formatNumber(overview.tokens_today || 0)} token`, icon: "TK" },
+      { label: "أفضل نموذج أداء", value: bestModel, delta: `${formatNumber(overview.best_model?.avg_quality || 0)} جودة`, icon: "Q" },
+      { label: "الأكثر استخدامًا", value: mostUsed, delta: `${formatNumber(overview.most_used_model?.requests || 0)} طلب`, icon: "M" },
+      { label: "متوسط الجودة", value: `${formatNumber(overview.avg_quality || 0)}%`, delta: `سرعة ${formatNumber(overview.avg_latency_ms || 0)}ms`, icon: "%" },
+      { label: "سبب عدم الرضا", value: topReason, delta: `${formatNumber(overview.top_dissatisfaction_reason?.count || 0)} مرة`, icon: "!" }
+    ];
+    nodes.aiOverview.innerHTML = cards.map((card) => `
+      <article class="admin-kpi-card">
+        <span class="admin-kpi-icon">${escapeHtml(card.icon)}</span>
+        <span>${escapeHtml(card.label)}</span>
+        <strong>${escapeHtml(card.value)}</strong>
+        <small>${escapeHtml(card.delta)}</small>
+        <i></i>
+      </article>
+    `).join("");
+  }
+
+  function renderAiFeedbackFilters(feedbackRows, modelRows) {
+    const currentModel = nodes.aiFeedbackModel?.value || "";
+    const currentPlan = nodes.aiFeedbackPlan?.value || "";
+    const currentQuestion = nodes.aiFeedbackQuestion?.value || "";
+    const models = [...new Set([
+      ...modelRows.map((item) => item.model_key),
+      ...feedbackRows.map((item) => item.model_key)
+    ].filter(Boolean))].sort();
+    const plans = [...new Set(feedbackRows.map((item) => item.plan).filter(Boolean))].sort();
+    const questionTypes = [...new Set(feedbackRows.map((item) => item.question_type).filter(Boolean))].sort();
+    if (nodes.aiFeedbackModel) {
+      nodes.aiFeedbackModel.innerHTML = `<option value="">كل الموديلات</option>${models.map((model) => `<option value="${escapeHtml(model)}">${escapeHtml(model)}</option>`).join("")}`;
+      nodes.aiFeedbackModel.value = models.includes(currentModel) ? currentModel : "";
+    }
+    if (nodes.aiFeedbackPlan) {
+      nodes.aiFeedbackPlan.innerHTML = `<option value="">كل الباقات</option>${plans.map((plan) => `<option value="${escapeHtml(plan)}">${escapeHtml(plan)}</option>`).join("")}`;
+      nodes.aiFeedbackPlan.value = plans.includes(currentPlan) ? currentPlan : "";
+    }
+    if (nodes.aiFeedbackQuestion) {
+      nodes.aiFeedbackQuestion.innerHTML = `<option value="">كل أنواع الأسئلة</option>${questionTypes.map((type) => `<option value="${escapeHtml(type)}">${escapeHtml(type)}</option>`).join("")}`;
+      nodes.aiFeedbackQuestion.value = questionTypes.includes(currentQuestion) ? currentQuestion : "";
+    }
+  }
+
+  function renderAiFeedback(analytics) {
+    if (!nodes.aiFeedback) return;
+    const feedbackRows = Array.isArray(analytics.feedback_analytics) ? analytics.feedback_analytics : [];
+    const modelFilter = nodes.aiFeedbackModel?.value || "";
+    const planFilter = nodes.aiFeedbackPlan?.value || "";
+    const questionFilter = nodes.aiFeedbackQuestion?.value || "";
+    const filtered = feedbackRows.filter((row) => {
+      if (modelFilter && String(row.model_key || "") !== modelFilter) return false;
+      if (planFilter && String(row.plan || "") !== planFilter) return false;
+      if (questionFilter && String(row.question_type || "") !== questionFilter) return false;
+      return true;
+    });
+    nodes.aiFeedback.innerHTML = filtered.length ? `
+      <table class="admin-data-table">
+        <thead><tr><th>السبب</th><th>الموديل</th><th>الباقة</th><th>نوع السؤال</th><th>العدد</th><th>الجودة</th></tr></thead>
+        <tbody>${filtered.map((row) => `
+          <tr>
+            <td><strong>${escapeHtml(row.reason)}</strong><span>${escapeHtml(row.task_type || "")}</span></td>
+            <td>${escapeHtml(row.model_key || "")}</td>
+            <td>${escapeHtml(row.plan || "")}</td>
+            <td>${escapeHtml(row.question_type || "")}</td>
+            <td>${formatNumber(row.count || 0)}</td>
+            <td>${formatNumber(row.avg_quality || 0)}%</td>
+          </tr>
+        `).join("")}</tbody>
+      </table>
+    ` : `<div class="admin-empty-panel">لا توجد تقييمات مطابقة للفلاتر الحالية.</div>`;
+  }
+
+  function renderAiModelPerformance(analytics) {
+    if (!nodes.aiModelPerformance) return;
+    const rows = Array.isArray(analytics.model_performance) ? analytics.model_performance : [];
+    nodes.aiModelPerformance.innerHTML = rows.length ? `
+      <table class="admin-data-table">
+        <thead><tr><th>الموديل</th><th>الطلبات</th><th>Avg Tokens</th><th>Avg Cost</th><th>الجودة</th><th>السرعة</th><th>الرضا</th></tr></thead>
+        <tbody>${rows.map((row) => `
+          <tr>
+            <td><strong>${escapeHtml(row.model_key)}</strong><span>${escapeHtml(row.provider || "")}</span></td>
+            <td>${formatNumber(row.requests || row.events_count || 0)}</td>
+            <td>${formatNumber(row.avg_tokens || 0)}</td>
+            <td>${formatNumber(row.avg_cost || 0)}</td>
+            <td>${formatNumber(row.avg_quality || 0)}%</td>
+            <td>${formatNumber(row.avg_speed_ms || row.avg_latency_ms || 0)}ms</td>
+            <td>${formatNumber(row.satisfaction_rate || 0)}%</td>
+          </tr>
+        `).join("")}</tbody>
+      </table>
+    ` : `<div class="admin-empty-panel">لا توجد أحداث جودة بعد.</div>`;
+  }
+
+  function renderAiKnowledgeList() {
+    if (!nodes.aiKbList) return;
+    const items = state.ai.knowledge || [];
+    nodes.aiKbList.innerHTML = items.length ? `
+      <table class="admin-data-table">
+        <thead><tr><th>العنوان</th><th>التصنيف</th><th>الحالة</th><th>Chunks</th><th>الاستخدام</th><th>إجراءات</th></tr></thead>
+        <tbody>${items.map((item) => `
+          <tr>
+            <td><strong>${escapeHtml(item.title)}</strong><span>${escapeHtml((item.tags || []).join(", "))}</span></td>
+            <td>${escapeHtml(item.category || "")}</td>
+            <td><mark class="admin-state">${escapeHtml(getAiStatusLabel(item.status))}</mark></td>
+            <td>${formatNumber(item.chunks_count || 0)}</td>
+            <td>${formatNumber(item.total_usage || 0)}</td>
+            <td class="admin-row-actions">
+              <button type="button" data-ai-kb-status="${escapeHtml(item.id)}" data-status="approved">اعتماد</button>
+              <button type="button" data-ai-kb-status="${escapeHtml(item.id)}" data-status="draft">Draft</button>
+              <button class="admin-danger-btn" type="button" data-ai-kb-status="${escapeHtml(item.id)}" data-status="rejected">رفض</button>
+            </td>
+          </tr>
+        `).join("")}</tbody>
+      </table>
+    ` : `<div class="admin-empty-panel">لا توجد مصادر معرفة بعد. أضف مصدرًا من النموذج بالأعلى.</div>`;
+  }
+
+  function renderAiReviewList() {
+    if (!nodes.aiReviewList) return;
+    const items = state.ai.review || [];
+    nodes.aiReviewList.innerHTML = items.length ? `
+      <table class="admin-data-table">
+        <thead><tr><th>الإجابة</th><th>السؤال</th><th>الجودة</th><th>الحالة</th><th>إجراءات</th></tr></thead>
+        <tbody>${items.map((item) => `
+          <tr data-ai-review-row="${escapeHtml(item.id)}">
+            <td><textarea class="field" rows="4" data-ai-review-output="${escapeHtml(item.id)}">${escapeHtml(item.ideal_output || "")}</textarea></td>
+            <td><textarea class="field" rows="4" data-ai-review-input="${escapeHtml(item.id)}">${escapeHtml(item.input_text || "")}</textarea><span>${escapeHtml(item.task_type || "")} · ${escapeHtml(item.model_key || "")}</span></td>
+            <td>${formatNumber(item.quality_score || 0)}%</td>
+            <td><mark class="admin-state">${escapeHtml(getAiStatusLabel(item.review_status))}</mark></td>
+            <td class="admin-row-actions">
+              <button type="button" data-ai-review-approve="${escapeHtml(item.id)}">اعتماد KB</button>
+              <button class="admin-danger-btn" type="button" data-ai-review-reject="${escapeHtml(item.id)}">رفض</button>
+            </td>
+          </tr>
+        `).join("")}</tbody>
+      </table>
+    ` : `<div class="admin-empty-panel">لا توجد إجابات ممتازة بانتظار المراجعة.</div>`;
+  }
+
+  function renderAiRagResult() {
+    if (!nodes.aiRagResult) return;
+    const result = state.ai.rag;
+    if (!result) {
+      nodes.aiRagResult.innerHTML = `<div class="admin-empty-panel">اكتب سؤالًا لاختبار المصادر المسترجعة والرد النهائي.</div>`;
+      return;
+    }
+    if (result.loading) {
+      nodes.aiRagResult.innerHTML = `<div class="admin-empty-panel">جاري اختبار RAG...</div>`;
+      return;
+    }
+    if (result.error) {
+      nodes.aiRagResult.innerHTML = `<div class="admin-empty-panel">تعذر اختبار RAG: ${escapeHtml(result.error)}</div>`;
+      return;
+    }
+    const sources = Array.isArray(result.sources) ? result.sources : [];
+    nodes.aiRagResult.innerHTML = `
+      <table class="admin-data-table compact">
+        <tbody>
+          <tr><td><strong>الموديل</strong></td><td>${escapeHtml(result.model?.key || "")} · ${escapeHtml(result.model?.provider || "")}</td></tr>
+          <tr><td><strong>الزمن</strong></td><td>${formatNumber(result.latency_ms || 0)}ms</td></tr>
+          <tr><td><strong>الرد النهائي</strong></td><td><span>${escapeHtml(result.answer || "")}</span></td></tr>
+        </tbody>
+      </table>
+      <table class="admin-data-table">
+        <thead><tr><th>المصدر</th><th>Similarity</th><th>Rank</th><th>سبب الاختيار</th><th>مقتطف</th></tr></thead>
+        <tbody>${sources.map((source) => `
+          <tr>
+            <td><strong>${escapeHtml(source.title || "")}</strong><span>${escapeHtml(source.category || source.source || "")}</span></td>
+            <td>${formatNumber(source.similarity || 0)}</td>
+            <td>${formatNumber(source.rank_score || 0)}</td>
+            <td>${escapeHtml(source.reason || "")}</td>
+            <td><span>${escapeHtml(String(source.content || "").slice(0, 180))}</span></td>
+          </tr>
+        `).join("") || `<tr><td colspan="5">لا توجد مصادر مسترجعة. اعتمد مصادر في Knowledge Base أولًا.</td></tr>`}</tbody>
+      </table>
+    `;
+  }
+
+  function renderAiDashboard() {
+    const analytics = getAiAnalytics();
+    const modelRows = Array.isArray(analytics.model_performance) ? analytics.model_performance : [];
+    const feedbackRows = Array.isArray(analytics.feedback_analytics) ? analytics.feedback_analytics : [];
+    renderAiOverview(analytics);
+    renderAiFeedbackFilters(feedbackRows, modelRows);
+    renderAiFeedback(analytics);
+    renderAiModelPerformance(analytics);
+    renderAiKnowledgeList();
+    renderAiReviewList();
+    renderAiRagResult();
+  }
+
   function renderAll() {
     renderStats();
     renderDistribution();
@@ -827,6 +1076,109 @@
     await loadAdminData();
   }
 
+  async function loadAiAnalyticsWithFilters() {
+    const params = {
+      model: nodes.aiFeedbackModel?.value || "",
+      plan: nodes.aiFeedbackPlan?.value || "",
+      question_type: nodes.aiFeedbackQuestion?.value || "",
+      from: nodes.aiFeedbackFrom?.value || "",
+      to: nodes.aiFeedbackTo?.value || ""
+    };
+    const result = await api.getAdminAiIntelligence?.(params);
+    if (!result?.ok) {
+      state.ai.error = result?.message || "تعذر تحديث تحليلات AI.";
+      renderAiDashboard();
+      return;
+    }
+    state.ai.analytics = result.data || null;
+    state.ai.error = "";
+    renderAiDashboard();
+  }
+
+  async function createAiKnowledgeFromForm(form) {
+    const formData = new FormData(form);
+    const payload = {
+      title: String(formData.get("title") || "").trim(),
+      category: String(formData.get("category") || "faq").trim(),
+      source: String(formData.get("source") || "").trim(),
+      status: String(formData.get("status") || "draft").trim(),
+      tags: String(formData.get("tags") || "").split(",").map((item) => item.trim()).filter(Boolean),
+      content: String(formData.get("content") || "").trim()
+    };
+    if (!payload.title || !payload.content) {
+      window.alert("اكتب عنوان ومحتوى المصدر أولًا.");
+      return;
+    }
+    const result = await api.createAdminAiKnowledge?.(payload);
+    if (!result?.ok) {
+      window.alert(result?.message || "تعذر إضافة مصدر المعرفة.");
+      return;
+    }
+    form.reset();
+    await loadAdminData();
+    setTab("ai");
+  }
+
+  async function setAiKnowledgeStatus(sourceId, status) {
+    if (!sourceId || !status) return;
+    const result = await api.updateAdminAiKnowledge?.(sourceId, { status });
+    if (!result?.ok) {
+      window.alert(result?.message || "تعذر تحديث حالة مصدر المعرفة.");
+      return;
+    }
+    await loadAdminData();
+    setTab("ai");
+  }
+
+  async function approveAiReview(exampleId) {
+    if (!exampleId) return;
+    const input = $$("[data-ai-review-input]").find((node) => node.dataset.aiReviewInput === String(exampleId))?.value || "";
+    const output = $$("[data-ai-review-output]").find((node) => node.dataset.aiReviewOutput === String(exampleId))?.value || "";
+    const result = await api.approveAdminAiReview?.(exampleId, {
+      input_text: input,
+      ideal_output: output,
+      status: "approved"
+    });
+    if (!result?.ok) {
+      window.alert(result?.message || "تعذر اعتماد الإجابة في Knowledge Base.");
+      return;
+    }
+    await loadAdminData();
+    setTab("ai");
+  }
+
+  async function rejectAiReview(exampleId) {
+    if (!exampleId) return;
+    const result = await api.rejectAdminAiReview?.(exampleId, {
+      admin_note: "Rejected from AI Admin Dashboard"
+    });
+    if (!result?.ok) {
+      window.alert(result?.message || "تعذر رفض الإجابة.");
+      return;
+    }
+    await loadAdminData();
+    setTab("ai");
+  }
+
+  async function runAiRagDebug(form) {
+    const question = String(nodes.aiRagQuestion?.value || "").trim();
+    if (!question) {
+      window.alert("اكتب سؤال اختبار RAG أولًا.");
+      return;
+    }
+    state.ai.rag = { loading: true };
+    renderAiRagResult();
+    const result = await api.debugAdminAiRag?.({ question });
+    if (!result?.ok) {
+      state.ai.rag = { error: result?.message || "RAG debug failed" };
+      renderAiRagResult();
+      return;
+    }
+    state.ai.rag = result.data || null;
+    renderAiRagResult();
+    form?.reset?.();
+  }
+
   nodes.loginForm?.addEventListener("submit", async (event) => {
     event.preventDefault();
     if (!api) {
@@ -915,6 +1267,26 @@
       await setToolSuggestionStatus(suggestionStatusButton.dataset.toolSuggestionStatus, suggestionStatusButton.dataset.status);
       return;
     }
+    const aiKbStatusButton = event.target.closest("[data-ai-kb-status]");
+    if (aiKbStatusButton) {
+      await setAiKnowledgeStatus(aiKbStatusButton.dataset.aiKbStatus, aiKbStatusButton.dataset.status);
+      return;
+    }
+    const aiReviewApproveButton = event.target.closest("[data-ai-review-approve]");
+    if (aiReviewApproveButton) {
+      await approveAiReview(aiReviewApproveButton.dataset.aiReviewApprove);
+      return;
+    }
+    const aiReviewRejectButton = event.target.closest("[data-ai-review-reject]");
+    if (aiReviewRejectButton) {
+      await rejectAiReview(aiReviewRejectButton.dataset.aiReviewReject);
+      return;
+    }
+    const aiFeedbackRefreshButton = event.target.closest("[data-ai-feedback-refresh]");
+    if (aiFeedbackRefreshButton) {
+      await loadAiAnalyticsWithFilters();
+      return;
+    }
   });
 
   document.addEventListener("submit", async (event) => {
@@ -923,10 +1295,25 @@
       event.preventDefault();
       await createNotificationFromForm(notificationForm);
     }
+    const aiKbForm = event.target.closest("[data-ai-kb-form]");
+    if (aiKbForm) {
+      event.preventDefault();
+      await createAiKnowledgeFromForm(aiKbForm);
+    }
+    const aiRagForm = event.target.closest("[data-ai-rag-form]");
+    if (aiRagForm) {
+      event.preventDefault();
+      await runAiRagDebug(aiRagForm);
+    }
   });
 
   nodes.userSearch?.addEventListener("input", renderUsers);
   nodes.userStatus?.addEventListener("change", renderUsers);
+  nodes.aiFeedbackModel?.addEventListener("change", renderAiDashboard);
+  nodes.aiFeedbackPlan?.addEventListener("change", renderAiDashboard);
+  nodes.aiFeedbackQuestion?.addEventListener("change", renderAiDashboard);
+  nodes.aiFeedbackFrom?.addEventListener("change", loadAiAnalyticsWithFilters);
+  nodes.aiFeedbackTo?.addEventListener("change", loadAiAnalyticsWithFilters);
 
   nodes.assignForm?.addEventListener("submit", async (event) => {
     event.preventDefault();
