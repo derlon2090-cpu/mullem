@@ -10,6 +10,8 @@
     "start": "node render-ensure-runtime.js && node server.js",
     "dev": "node server.js",
     "test:backend": "node backend-smoke-test.js",
+    "ai:seed": "node ai-knowledge-seed.js",
+    "ai:quality": "node ai-quality-validation.js",
     "render:build": "npm ci && node render-build-check.js",
     "render:start": "node render-ensure-runtime.js && node server.js"
   },

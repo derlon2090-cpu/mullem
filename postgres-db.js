@@ -1869,9 +1869,22 @@ function createPostgresDatabaseClient(rawConfig = {}) {
       for (const term of terms) {
         params.push(`%${term}%`);
         const idx = params.length;
-        termClauses.push(`(LOWER(COALESCE(c.sanitized_content, c.content, '')) LIKE $${idx} OR LOWER(COALESCE(c.title, '')) LIKE $${idx} OR LOWER(COALESCE(s.title, '')) LIKE $${idx})`);
+        termClauses.push(`(
+          LOWER(COALESCE(c.sanitized_content, c.content, '')) LIKE $${idx}
+          OR LOWER(COALESCE(c.title, '')) LIKE $${idx}
+          OR LOWER(COALESCE(c.category, '')) LIKE $${idx}
+          OR LOWER(COALESCE(c.tags::text, '')) LIKE $${idx}
+          OR LOWER(COALESCE(s.title, '')) LIKE $${idx}
+          OR LOWER(COALESCE(s.source_key, '')) LIKE $${idx}
+          OR LOWER(COALESCE(s.source_label, '')) LIKE $${idx}
+          OR LOWER(COALESCE(s.category, '')) LIKE $${idx}
+          OR LOWER(COALESCE(s.tags::text, '')) LIKE $${idx}
+        )`);
         scoreParts.push(`CASE WHEN LOWER(COALESCE(c.sanitized_content, c.content, '')) LIKE $${idx} THEN 8 ELSE 0 END`);
         scoreParts.push(`CASE WHEN LOWER(COALESCE(c.title, '')) LIKE $${idx} THEN 5 ELSE 0 END`);
+        scoreParts.push(`CASE WHEN LOWER(COALESCE(c.tags::text, '')) LIKE $${idx} THEN 3 ELSE 0 END`);
+        scoreParts.push(`CASE WHEN LOWER(COALESCE(s.tags::text, '')) LIKE $${idx} THEN 3 ELSE 0 END`);
+        scoreParts.push(`CASE WHEN LOWER(COALESCE(s.source_key, '')) LIKE $${idx} THEN 2 ELSE 0 END`);
       }
       where.push(`(${termClauses.join(" OR ")})`);
       keywordScoreSql = scoreParts.join(" + ");
@@ -1895,6 +1908,7 @@ function createPostgresDatabaseClient(rawConfig = {}) {
           c.created_at,
           c.updated_at,
           s.title AS source_title,
+          s.source_key,
           s.source_type,
           s.category AS source_category,
           s.status AS source_status,

@@ -6,6 +6,7 @@ const { execFile, execSync } = require("child_process");
 const { promisify } = require("util");
 const { openAiWebSearchV2Raw, resolveOpenAiWebSearchV2Model } = require("./openAiWebSearchV2");
 const aiIntelligence = require("./ai-intelligence-layer");
+const { seedAiKnowledgeBase } = require("./ai-knowledge-seed");
 
 const execFileAsync = promisify(execFile);
 
@@ -2163,6 +2164,18 @@ async function ensureDefaultUsers(client = databaseClient) {
   });
 }
 
+async function seedAiKnowledgeBaseSafely(client = databaseClient) {
+  if (!client || typeof client.isReady !== "function" || !client.isReady()) return;
+  try {
+    const result = await seedAiKnowledgeBase(client);
+    if (result && !result.skipped) {
+      console.log(`[mullem] AI Knowledge Base seed ready: ${result.seeded} sources, ${result.chunks} chunks.`);
+    }
+  } catch (error) {
+    console.warn("[mullem] AI Knowledge Base seed skipped:", error?.message || error);
+  }
+}
+
 async function getAuthContext(req) {
   if (req.__mullemAuthContext) {
     return req.__mullemAuthContext;
@@ -2443,6 +2456,7 @@ async function initializeDatabaseLayer() {
       );
     }
     await ensureDefaultUsers(primaryClient);
+    await seedAiKnowledgeBaseSafely(primaryClient);
     databaseClient = primaryClient;
     databaseState = typeof primaryClient.getState === "function"
       ? primaryClient.getState()
@@ -2475,6 +2489,7 @@ async function initializeDatabaseLayer() {
     await fallbackClient.initialize();
     databaseClient = fallbackClient;
     await ensureDefaultUsers(fallbackClient);
+    await seedAiKnowledgeBaseSafely(fallbackClient);
     databaseState = {
       ...fallbackClient.getState(),
       driver: "fallback-file",
@@ -6688,19 +6703,31 @@ async function handleAdminRagDebug(req, res) {
     ragContext: retrievedKnowledge.context
   });
   const startedAt = Date.now();
-  const result = await callOpenAI({
-    modelProfile: routing.modelProfile,
-    input: [
-      { role: "system", content: systemPrompt },
-      { role: "user", content: question }
-    ]
-  });
+  const dryRun = Boolean(payload.dry_run || payload.dryRun);
+  const result = dryRun
+    ? {
+        text: retrievedKnowledge.sources.length
+          ? `Dry-run RAG answer based on: ${retrievedKnowledge.sources[0].title || retrievedKnowledge.sources[0].source_title || "Knowledge Base"}`
+          : "Dry-run RAG answer: no approved source was retrieved.",
+        usage: {
+          input_tokens: aiIntelligence.estimateTokens(`${systemPrompt}\n${question}`),
+          output_tokens: 24
+        }
+      }
+    : await callOpenAI({
+        modelProfile: routing.modelProfile,
+        input: [
+          { role: "system", content: systemPrompt },
+          { role: "user", content: question }
+        ]
+      });
   const answer = sanitizeModelDisplayText(result.text);
   sendJson(req, res, 200, {
     success: true,
     data: {
       question,
       answer,
+      dry_run: dryRun,
       model: {
         key: routing.modelKey,
         provider: resolveProfileProvider(routing.modelProfile),
@@ -6714,6 +6741,7 @@ async function handleAdminRagDebug(req, res) {
       sources: retrievedKnowledge.sources.map((source, index) => ({
         id: source.id,
         title: source.title || source.source_title || `Source ${index + 1}`,
+        source_key: source.source_key || "",
         content: aiIntelligence.sanitizeSensitiveText(source.content || "").text.slice(0, 900),
         similarity: Number(source.similarity || source.keyword_score || source.keywordScore || 0),
         rank_score: Number(source.rank_score || 0),

@@ -166,6 +166,33 @@ function getDailyXpForUserPlan(user = {}, options = {}) {
     : Math.max(0, Math.round(Number(options.defaultDailyXp || 0)));
 }
 
+function normalizeAiStatus(value, fallback = "draft") {
+  if (!String(value || "").trim() && fallback === "") return "";
+  const status = String(value || fallback || "draft").trim().toLowerCase();
+  return ["draft", "approved", "rejected", "pending"].includes(status) ? status : fallback;
+}
+
+function normalizeAiCategory(value) {
+  return String(value || "faq").trim().toLowerCase().replace(/[^a-z0-9_-]+/g, "_").slice(0, 80) || "faq";
+}
+
+function normalizeAiTags(value) {
+  const items = Array.isArray(value)
+    ? value
+    : String(value || "").split(",").map((item) => item.trim());
+  return [...new Set(items.map((item) => String(item || "").trim().slice(0, 40)).filter(Boolean))].slice(0, 12);
+}
+
+function extractSearchTerms(value) {
+  return String(value || "")
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}\s]/gu, " ")
+    .split(/\s+/)
+    .map((term) => term.trim())
+    .filter((term) => term.length >= 3)
+    .slice(0, 12);
+}
+
 function addDays(date, days) {
   return new Date(date.getTime() + (Math.max(0, Number(days) || 0) * 86400000));
 }
@@ -183,7 +210,12 @@ function createEmptyState() {
       xpLedger: 1,
       adminLogs: 1,
       notifications: 1,
-      notificationReads: 1
+      notificationReads: 1,
+      aiFeedback: 1,
+      aiTrainingExamples: 1,
+      aiKnowledgeSources: 1,
+      aiKnowledgeChunks: 1,
+      aiQualityEvents: 1
     },
     packages: clone(DEFAULT_PACKAGES),
     users: [],
@@ -196,7 +228,12 @@ function createEmptyState() {
     xpLedger: [],
     adminLogs: [],
     notifications: [],
-    notificationReads: []
+    notificationReads: [],
+    aiFeedback: [],
+    aiTrainingExamples: [],
+    aiKnowledgeSources: [],
+    aiKnowledgeChunks: [],
+    aiQualityEvents: []
   };
 }
 
@@ -866,6 +903,393 @@ function createFallbackDatabaseClient() {
     return { ...entry };
   }
 
+  async function saveFeedback(payload = {}) {
+    const userId = Number(payload.user_id || payload.userId);
+    const rating = String(payload.rating || "").trim().toLowerCase();
+    if (!userId || !rating) return null;
+    const entry = {
+      id: nextId("aiFeedback"),
+      user_id: userId,
+      conversation_id: payload.conversation_id || payload.conversationId || null,
+      message_id: payload.message_id || payload.messageId ? Number(payload.message_id || payload.messageId) : null,
+      model_key: String(payload.model_key || payload.modelKey || "").trim().slice(0, 80) || null,
+      provider: String(payload.provider || "").trim().slice(0, 40) || null,
+      rating: rating.slice(0, 20),
+      reason: String(payload.reason || payload.note || "").trim() || null,
+      feedback_type: String(payload.feedback_type || payload.feedbackType || "").trim().slice(0, 40) || null,
+      task_type: String(payload.task_type || payload.taskType || "").trim().slice(0, 80) || null,
+      question_type: String(payload.question_type || payload.questionType || "").trim().slice(0, 80) || null,
+      prompt_key: String(payload.prompt_key || payload.promptKey || "").trim().slice(0, 160) || null,
+      prompt_version: String(payload.prompt_version || payload.promptVersion || "").trim().slice(0, 80) || null,
+      quality_score: Math.max(0, Math.min(100, Math.round(Number(payload.quality_score || payload.qualityScore || 0)))),
+      metadata: payload.metadata || null,
+      created_at: nowIso()
+    };
+    data.aiFeedback.push(entry);
+    persist();
+    return { ...entry };
+  }
+
+  async function saveAiTrainingExample(payload = {}) {
+    const inputText = String(payload.input_text || payload.inputText || "").trim();
+    const idealOutput = String(payload.ideal_output || payload.idealOutput || "").trim();
+    if (!inputText || !idealOutput) return null;
+    const entry = {
+      id: nextId("aiTrainingExamples"),
+      input_text: inputText,
+      ideal_output: idealOutput,
+      task_type: String(payload.task_type || payload.taskType || "").trim().slice(0, 80) || null,
+      model_key: String(payload.model_key || payload.modelKey || "").trim().slice(0, 80) || null,
+      quality_score: Math.max(0, Math.min(100, Math.round(Number(payload.quality_score || payload.qualityScore || 0)))),
+      approved_by_admin: normalizeBoolean(payload.approved_by_admin || payload.approvedByAdmin),
+      review_status: normalizeAiStatus(payload.review_status || payload.reviewStatus, "pending"),
+      admin_note: String(payload.admin_note || payload.adminNote || "").trim() || null,
+      metadata: payload.metadata || null,
+      created_at: nowIso(),
+      updated_at: nowIso()
+    };
+    data.aiTrainingExamples.push(entry);
+    persist();
+    return { ...entry };
+  }
+
+  async function listExcellentAnswerCandidates(options = {}) {
+    const status = normalizeAiStatus(options.status || options.review_status || options.reviewStatus, "");
+    const taskType = String(options.task_type || options.taskType || "").trim();
+    const modelKey = String(options.model_key || options.modelKey || "").trim();
+    const limit = Math.max(1, Math.min(Number(options.limit || 80), 250));
+    return [...data.aiTrainingExamples]
+      .filter((item) => !status || String(item.review_status || "pending") === status)
+      .filter((item) => !taskType || String(item.task_type || "") === taskType)
+      .filter((item) => !modelKey || String(item.model_key || "") === modelKey)
+      .sort((a, b) =>
+        String(a.review_status || "pending").localeCompare(String(b.review_status || "pending")) ||
+        Number(b.quality_score || 0) - Number(a.quality_score || 0) ||
+        String(b.created_at || "").localeCompare(String(a.created_at || ""))
+      )
+      .slice(0, limit)
+      .map((item) => ({ ...item }));
+  }
+
+  async function getTrainingExampleById(exampleId) {
+    const item = data.aiTrainingExamples.find((entry) => String(entry.id) === String(exampleId)) || null;
+    return item ? { ...item } : null;
+  }
+
+  async function updateTrainingExampleReview(exampleId, payload = {}) {
+    const index = data.aiTrainingExamples.findIndex((item) => String(item.id) === String(exampleId));
+    if (index < 0) return null;
+    const current = data.aiTrainingExamples[index];
+    const status = normalizeAiStatus(payload.review_status || payload.reviewStatus || payload.status, "pending");
+    const next = {
+      ...current,
+      input_text: String(payload.input_text || payload.inputText || "").trim() || current.input_text,
+      ideal_output: String(payload.ideal_output || payload.idealOutput || "").trim() || current.ideal_output,
+      review_status: status,
+      approved_by_admin: status === "approved",
+      admin_note: String(payload.admin_note || payload.adminNote || "").trim() || current.admin_note || null,
+      metadata: payload.metadata ? { ...(current.metadata || {}), ...payload.metadata } : current.metadata,
+      updated_at: nowIso()
+    };
+    data.aiTrainingExamples[index] = next;
+    persist();
+    return { ...next };
+  }
+
+  async function saveKnowledgeSource(payload = {}) {
+    const title = String(payload.title || "").trim().slice(0, 255);
+    const sourceKey = String(payload.source_key || payload.sourceKey || title || crypto.randomUUID()).trim().slice(0, 160);
+    if (!title || !sourceKey) return null;
+    const existingIndex = data.aiKnowledgeSources.findIndex((item) => String(item.source_key) === sourceKey);
+    const existing = existingIndex >= 0 ? data.aiKnowledgeSources[existingIndex] : null;
+    const item = {
+      ...(existing || {}),
+      id: existing?.id || nextId("aiKnowledgeSources"),
+      source_key: sourceKey,
+      source_type: String(payload.source_type || payload.sourceType || "manual").trim().slice(0, 80),
+      title,
+      url: String(payload.url || "").trim() || null,
+      quality_score: Math.max(0, Math.min(100, Math.round(Number(payload.quality_score || payload.qualityScore || 60)))),
+      is_active: payload.is_active === undefined ? true : normalizeBoolean(payload.is_active || payload.isActive),
+      metadata: payload.metadata ? { ...(existing?.metadata || {}), ...payload.metadata } : existing?.metadata || null,
+      category: normalizeAiCategory(payload.category),
+      status: normalizeAiStatus(payload.status, "draft"),
+      source_label: String(payload.source || payload.source_label || payload.sourceLabel || "").trim().slice(0, 255) || null,
+      tags: normalizeAiTags(payload.tags),
+      created_at: existing?.created_at || nowIso(),
+      updated_at: nowIso()
+    };
+    if (existingIndex >= 0) data.aiKnowledgeSources[existingIndex] = item;
+    else data.aiKnowledgeSources.push(item);
+    persist();
+    return { ...item };
+  }
+
+  async function saveKnowledgeChunk(payload = {}) {
+    const content = String(payload.content || payload.chunk_text || payload.text || "").trim();
+    if (!content) return null;
+    const chunkKey = String(payload.chunk_key || payload.chunkKey || crypto.randomUUID()).trim().slice(0, 180);
+    const existingIndex = data.aiKnowledgeChunks.findIndex((item) => String(item.chunk_key) === chunkKey);
+    const existing = existingIndex >= 0 ? data.aiKnowledgeChunks[existingIndex] : null;
+    const item = {
+      ...(existing || {}),
+      id: existing?.id || nextId("aiKnowledgeChunks"),
+      source_id: payload.source_id || payload.sourceId ? Number(payload.source_id || payload.sourceId) : null,
+      chunk_key: chunkKey,
+      title: String(payload.title || "").trim().slice(0, 255) || null,
+      content,
+      sanitized_content: String(payload.sanitized_content || payload.sanitizedContent || content).trim() || null,
+      embedding: payload.embedding || null,
+      task_type: String(payload.task_type || payload.taskType || "").trim().slice(0, 80) || null,
+      quality_score: Math.max(0, Math.min(100, Math.round(Number(payload.quality_score || payload.qualityScore || 60)))),
+      feedback_score: Math.max(-100, Math.min(100, Math.round(Number(payload.feedback_score || payload.feedbackScore || 0)))),
+      usage_count: Math.max(0, Number(existing?.usage_count || 0)),
+      metadata: payload.metadata ? { ...(existing?.metadata || {}), ...payload.metadata } : existing?.metadata || null,
+      category: normalizeAiCategory(payload.category),
+      status: normalizeAiStatus(payload.status, "draft"),
+      tags: normalizeAiTags(payload.tags),
+      created_at: existing?.created_at || nowIso(),
+      updated_at: nowIso()
+    };
+    if (existingIndex >= 0) data.aiKnowledgeChunks[existingIndex] = item;
+    else data.aiKnowledgeChunks.push(item);
+    persist();
+    return { ...item };
+  }
+
+  async function listKnowledgeSources(options = {}) {
+    const status = normalizeAiStatus(options.status, "");
+    const category = options.category ? normalizeAiCategory(options.category) : "";
+    const limit = Math.max(1, Math.min(Number(options.limit || 120), 300));
+    return [...data.aiKnowledgeSources]
+      .filter((source) => !status || String(source.status || "") === status)
+      .filter((source) => !category || String(source.category || "") === category)
+      .sort((a, b) => String(b.updated_at || "").localeCompare(String(a.updated_at || "")))
+      .slice(0, limit)
+      .map((source) => {
+        const chunks = data.aiKnowledgeChunks.filter((chunk) => Number(chunk.source_id || 0) === Number(source.id || 0));
+        return {
+          ...source,
+          chunks_count: chunks.length,
+          total_usage: chunks.reduce((total, chunk) => total + Number(chunk.usage_count || 0), 0)
+        };
+      });
+  }
+
+  async function updateKnowledgeSource(sourceId, payload = {}) {
+    const index = data.aiKnowledgeSources.findIndex((item) => String(item.id) === String(sourceId));
+    if (index < 0) return null;
+    const current = data.aiKnowledgeSources[index];
+    const nextStatus = payload.status ? normalizeAiStatus(payload.status, "draft") : current.status;
+    const next = {
+      ...current,
+      title: String(payload.title || "").trim() || current.title,
+      source_type: String(payload.source_type || payload.sourceType || "").trim() || current.source_type,
+      category: payload.category ? normalizeAiCategory(payload.category) : current.category,
+      status: nextStatus,
+      source_label: String(payload.source || payload.source_label || payload.sourceLabel || "").trim() || current.source_label,
+      url: String(payload.url || "").trim() || current.url,
+      tags: Object.prototype.hasOwnProperty.call(payload, "tags") ? normalizeAiTags(payload.tags) : current.tags,
+      is_active: Object.prototype.hasOwnProperty.call(payload, "is_active") || Object.prototype.hasOwnProperty.call(payload, "isActive")
+        ? normalizeBoolean(payload.is_active || payload.isActive)
+        : current.is_active,
+      metadata: payload.metadata ? { ...(current.metadata || {}), ...payload.metadata } : current.metadata,
+      updated_at: nowIso()
+    };
+    data.aiKnowledgeSources[index] = next;
+    if (payload.status) {
+      data.aiKnowledgeChunks = data.aiKnowledgeChunks.map((chunk) =>
+        Number(chunk.source_id || 0) === Number(next.id || 0)
+          ? { ...chunk, status: nextStatus, updated_at: nowIso() }
+          : chunk
+      );
+    }
+    persist();
+    return { ...next };
+  }
+
+  async function listKnowledgeChunks(options = {}) {
+    const terms = extractSearchTerms(options.query || options.text || "");
+    const taskType = String(options.task_type || options.taskType || "").trim();
+    const limit = Math.max(1, Math.min(Number(options.limit || 8), 20));
+    const approvedSources = new Map(
+      data.aiKnowledgeSources
+        .filter((source) => source.is_active !== false && source.status === "approved")
+        .map((source) => [Number(source.id), source])
+    );
+
+    return data.aiKnowledgeChunks
+      .filter((chunk) => chunk.status === "approved" && approvedSources.has(Number(chunk.source_id || 0)))
+      .filter((chunk) => !taskType || !chunk.task_type || String(chunk.task_type) === taskType)
+      .map((chunk) => {
+        const source = approvedSources.get(Number(chunk.source_id || 0)) || {};
+        const haystack = [
+          chunk.title || "",
+          chunk.sanitized_content || chunk.content || "",
+          Array.isArray(chunk.tags) ? chunk.tags.join(" ") : chunk.tags || "",
+          source.title || "",
+          source.source_key || "",
+          source.source_label || "",
+          source.category || "",
+          Array.isArray(source.tags) ? source.tags.join(" ") : source.tags || ""
+        ].join(" ").toLowerCase();
+        const keywordScore = terms.reduce((score, term) => score + (haystack.includes(term) ? 10 : 0), 0);
+        return {
+          ...chunk,
+          content: chunk.sanitized_content || chunk.content,
+          source_title: source.title || "",
+          source_key: source.source_key || "",
+          source_type: source.source_type || "",
+          source_category: source.category || "",
+          source_status: source.status || "",
+          source_label: source.source_label || "",
+          source_tags: source.tags || [],
+          url: source.url || null,
+          keyword_score: keywordScore
+        };
+      })
+      .filter((chunk) => !terms.length || Number(chunk.keyword_score || 0) > 0)
+      .sort((a, b) =>
+        Number(b.keyword_score || 0) - Number(a.keyword_score || 0) ||
+        Number(b.quality_score || 0) - Number(a.quality_score || 0) ||
+        Number(b.feedback_score || 0) - Number(a.feedback_score || 0)
+      )
+      .slice(0, limit)
+      .map((chunk) => ({ ...chunk }));
+  }
+
+  async function recordAiQualityEvent(payload = {}) {
+    const entry = {
+      id: nextId("aiQualityEvents"),
+      user_id: payload.user_id || payload.userId ? Number(payload.user_id || payload.userId) : null,
+      conversation_id: payload.conversation_id || payload.conversationId || null,
+      message_id: payload.message_id || payload.messageId ? Number(payload.message_id || payload.messageId) : null,
+      task_type: String(payload.task_type || payload.taskType || "").trim().slice(0, 80) || null,
+      question_type: String(payload.question_type || payload.questionType || "").trim().slice(0, 80) || null,
+      model_key: String(payload.model_key || payload.modelKey || "").trim().slice(0, 80) || null,
+      provider: String(payload.provider || "").trim().slice(0, 40) || null,
+      prompt_key: String(payload.prompt_key || payload.promptKey || "").trim().slice(0, 160) || null,
+      prompt_version: String(payload.prompt_version || payload.promptVersion || "").trim().slice(0, 80) || null,
+      quality_score: Math.max(0, Math.min(100, Math.round(Number(payload.quality_score || payload.qualityScore || 0)))),
+      accuracy_score: Math.max(0, Math.min(100, Math.round(Number(payload.accuracy_score || payload.accuracyScore || 0)))),
+      length_score: Math.max(0, Math.min(100, Math.round(Number(payload.length_score || payload.lengthScore || 0)))),
+      speed_score: Math.max(0, Math.min(100, Math.round(Number(payload.speed_score || payload.speedScore || 0)))),
+      satisfaction_score: Math.max(0, Math.min(100, Math.round(Number(payload.satisfaction_score || payload.satisfactionScore || 0)))),
+      cost_score: Math.max(0, Math.min(100, Math.round(Number(payload.cost_score || payload.costScore || 0)))),
+      latency_ms: Math.max(0, Math.round(Number(payload.latency_ms || payload.latencyMs || 0))),
+      input_tokens: Math.max(0, Math.round(Number(payload.input_tokens || payload.inputTokens || 0))),
+      output_tokens: Math.max(0, Math.round(Number(payload.output_tokens || payload.outputTokens || 0))),
+      token_cost: Math.max(0, Math.round(Number(payload.token_cost || payload.tokenCost || 0))),
+      xp_cost: Math.max(0, Math.round(Number(payload.xp_cost || payload.xpCost || 0))),
+      user_feedback: String(payload.user_feedback || payload.userFeedback || "").trim().slice(0, 40) || null,
+      was_cached: normalizeBoolean(payload.was_cached || payload.wasCached),
+      metadata: payload.metadata || null,
+      created_at: nowIso()
+    };
+    data.aiQualityEvents.push(entry);
+    persist();
+    return { ...entry };
+  }
+
+  async function getAiIntelligenceAnalytics() {
+    const modelMap = new Map();
+    for (const event of data.aiQualityEvents || []) {
+      const key = `${event.model_key || "unknown"}:${event.provider || "unknown"}`;
+      const row = modelMap.get(key) || {
+        model_key: event.model_key || "unknown",
+        provider: event.provider || "unknown",
+        requests: 0,
+        events_count: 0,
+        quality: 0,
+        latency: 0,
+        tokens: 0,
+        cost: 0,
+        xp: 0,
+        satisfied: 0
+      };
+      const tokens = Number(event.input_tokens || 0) + Number(event.output_tokens || 0);
+      row.requests += 1;
+      row.events_count += 1;
+      row.quality += Number(event.quality_score || 0);
+      row.latency += Number(event.latency_ms || 0);
+      row.tokens += tokens;
+      row.cost += Number(event.token_cost || 0);
+      row.xp += Number(event.xp_cost || 0);
+      if (Number(event.satisfaction_score || 0) >= 70 || ["like", "excellent", "save_worthy", "solved"].includes(String(event.user_feedback || ""))) row.satisfied += 1;
+      modelMap.set(key, row);
+    }
+    const modelPerformance = [...modelMap.values()].map((row) => ({
+      model_key: row.model_key,
+      provider: row.provider,
+      requests: row.requests,
+      events_count: row.events_count,
+      avg_quality: Math.round(row.quality / Math.max(1, row.events_count)),
+      avg_speed_ms: Math.round(row.latency / Math.max(1, row.events_count)),
+      avg_latency_ms: Math.round(row.latency / Math.max(1, row.events_count)),
+      avg_tokens: Math.round(row.tokens / Math.max(1, row.events_count)),
+      avg_cost: Math.round(row.cost / Math.max(1, row.events_count)),
+      total_tokens: row.tokens,
+      total_cost: row.cost,
+      total_xp: row.xp,
+      satisfaction_rate: Math.round((row.satisfied * 100) / Math.max(1, row.events_count))
+    }));
+    const feedbackMap = new Map();
+    for (const item of data.aiFeedback || []) {
+      const reason = item.feedback_type || item.rating || "unknown";
+      const key = [reason, item.model_key || "unknown", item.task_type || "unknown", item.question_type || "unknown"].join(":");
+      const row = feedbackMap.get(key) || {
+        reason,
+        model_key: item.model_key || "unknown",
+        provider: item.provider || "unknown",
+        task_type: item.task_type || "unknown",
+        question_type: item.question_type || "unknown",
+        plan: "fallback",
+        count: 0,
+        quality: 0
+      };
+      row.count += 1;
+      row.quality += Number(item.quality_score || 0);
+      feedbackMap.set(key, row);
+    }
+    const feedbackAnalytics = [...feedbackMap.values()].map((row) => ({
+      ...row,
+      avg_quality: Math.round(row.quality / Math.max(1, row.count))
+    }));
+    const chunks = data.aiKnowledgeChunks || [];
+    const approvedChunks = chunks.filter((item) => item.status === "approved");
+    const avgQuality = modelPerformance.length
+      ? Math.round(modelPerformance.reduce((total, row) => total + Number(row.avg_quality || 0), 0) / modelPerformance.length)
+      : 0;
+    return {
+      overview: {
+        messages_today: data.aiQualityEvents.length,
+        tokens_today: data.aiQualityEvents.reduce((total, event) => total + Number(event.input_tokens || 0) + Number(event.output_tokens || 0), 0),
+        token_cost_today: data.aiQualityEvents.reduce((total, event) => total + Number(event.token_cost || 0), 0),
+        best_model: modelPerformance.sort((a, b) => Number(b.avg_quality || 0) - Number(a.avg_quality || 0))[0] || null,
+        most_used_model: modelPerformance.sort((a, b) => Number(b.requests || 0) - Number(a.requests || 0))[0] || null,
+        avg_quality: avgQuality,
+        avg_latency_ms: modelPerformance.length ? Math.round(modelPerformance.reduce((total, row) => total + Number(row.avg_latency_ms || 0), 0) / modelPerformance.length) : 0,
+        top_dissatisfaction_reason: feedbackAnalytics[0] || null
+      },
+      model_performance: modelPerformance,
+      feedback_reasons: feedbackAnalytics,
+      feedback_analytics: feedbackAnalytics,
+      task_quality: [],
+      knowledge_base: {
+        chunks_count: chunks.length,
+        approved_chunks_count: approvedChunks.length,
+        avg_quality: chunks.length ? Math.round(chunks.reduce((total, chunk) => total + Number(chunk.quality_score || 0), 0) / chunks.length) : 0,
+        total_usage: chunks.reduce((total, chunk) => total + Number(chunk.usage_count || 0), 0)
+      },
+      excellent_answers: {
+        total: data.aiTrainingExamples.length,
+        pending: data.aiTrainingExamples.filter((item) => item.review_status === "pending").length,
+        approved: data.aiTrainingExamples.filter((item) => item.review_status === "approved").length,
+        rejected: data.aiTrainingExamples.filter((item) => item.review_status === "rejected").length
+      }
+    };
+  }
+
   async function getAiUsageStats(userId) {
     const safeUserId = Number(userId);
     if (!safeUserId) {
@@ -1500,6 +1924,18 @@ function createFallbackDatabaseClient() {
     listPackages,
     createPackage,
     updatePackage,
+    saveFeedback,
+    saveAiTrainingExample,
+    listExcellentAnswerCandidates,
+    getTrainingExampleById,
+    updateTrainingExampleReview,
+    saveKnowledgeSource,
+    saveKnowledgeChunk,
+    listKnowledgeSources,
+    updateKnowledgeSource,
+    listKnowledgeChunks,
+    recordAiQualityEvent,
+    getAiIntelligenceAnalytics,
     saveToolUsage,
     recordXpLedger,
     listNotificationsForUser,
