@@ -13,6 +13,7 @@
     ai: {
       analytics: null,
       health: null,
+      launch: null,
       knowledge: [],
       review: [],
       rag: null,
@@ -60,6 +61,7 @@
     messagesGrid: $("[data-messages-grid]"),
     settingsGrid: $("[data-settings-grid]"),
     aiOverview: $("[data-ai-overview]"),
+    aiLaunchMonitor: $("[data-ai-launch-monitor]"),
     aiHealth: $("[data-ai-health]"),
     aiAlerts: $("[data-ai-alerts]"),
     aiFeedback: $("[data-ai-feedback]"),
@@ -191,7 +193,7 @@
   }
 
   async function loadAdminData() {
-    const [stats, users, plans, subscriptions, xpLedger, logs, notifications, toolSuggestions, aiAnalytics, aiHealth, aiKnowledge, aiReview] = await Promise.all([
+    const [stats, users, plans, subscriptions, xpLedger, logs, notifications, toolSuggestions, aiAnalytics, aiHealth, aiLaunch, aiKnowledge, aiReview] = await Promise.all([
       api.getAdminStats(),
       api.getAdminUsers({ per_page: 200 }),
       api.getAdminPackages(),
@@ -202,6 +204,7 @@
       api.getAdminToolSuggestions?.({ limit: 120 }) || api.request("/admin/tool-suggestions"),
       api.getAdminAiIntelligence?.() || api.request("/admin/ai-intelligence"),
       api.getAdminAiHealth?.() || api.request("/admin/ai-health"),
+      api.getAdminAiLaunchMonitor?.() || api.request("/admin/ai-launch-monitor"),
       api.getAdminAiKnowledge?.({ limit: 160 }) || api.request("/admin/ai-knowledge"),
       api.getAdminAiReview?.({ limit: 120 }) || api.request("/admin/ai-review")
     ]);
@@ -218,9 +221,10 @@
     if (notifications.ok) state.notifications = Array.isArray(notifications.data?.items) ? notifications.data.items : [];
     if (toolSuggestions.ok) state.toolSuggestions = Array.isArray(toolSuggestions.data?.items) ? toolSuggestions.data.items : [];
     state.ai.loading = false;
-    state.ai.error = [aiAnalytics, aiHealth, aiKnowledge, aiReview].find((item) => item && !item.ok)?.message || "";
+    state.ai.error = [aiAnalytics, aiHealth, aiLaunch, aiKnowledge, aiReview].find((item) => item && !item.ok)?.message || "";
     if (aiAnalytics.ok) state.ai.analytics = aiAnalytics.data || null;
     if (aiHealth.ok) state.ai.health = aiHealth.data || null;
+    if (aiLaunch.ok) state.ai.launch = aiLaunch.data || null;
     if (aiKnowledge.ok) state.ai.knowledge = Array.isArray(aiKnowledge.data?.items) ? aiKnowledge.data.items : [];
     if (aiReview.ok) state.ai.review = Array.isArray(aiReview.data?.items) ? aiReview.data.items : [];
 
@@ -758,6 +762,75 @@
     `;
   }
 
+  function renderAiLaunchMonitor(launch) {
+    if (!nodes.aiLaunchMonitor) return;
+    if (!launch) {
+      nodes.aiLaunchMonitor.innerHTML = `<div class="admin-empty-panel">جاري تحميل Launch Monitor...</div>`;
+      return;
+    }
+    const env = launch.env || {};
+    const readiness = launch.readiness || {};
+    const envRows = Object.entries(env).map(([key, value]) => `
+      <tr>
+        <td><strong>${escapeHtml(key)}</strong></td>
+        <td><mark class="admin-state">${value?.configured || value?.connected || value?.value_present ? "configured" : "missing"}</mark></td>
+        <td>${escapeHtml(value?.enabled === undefined ? "" : String(value.enabled))}</td>
+      </tr>
+    `).join("");
+    const errors = Array.isArray(launch.last_ai_errors) ? launch.last_ai_errors : [];
+    const critical = Array.isArray(readiness.critical_issues) ? readiness.critical_issues : [];
+    const nonCritical = Array.isArray(readiness.non_critical_issues) ? readiness.non_critical_issues : [];
+    nodes.aiLaunchMonitor.innerHTML = `
+      <div class="admin-kpi-row">
+        <article class="admin-kpi-card ${readiness.status === "ready" ? "" : "is-warm"}">
+          <span>Launch Readiness</span>
+          <strong>${escapeHtml(readiness.status === "ready" ? "Ready" : "Not Ready")}</strong>
+          <small>${readiness.can_open_to_users ? "يمكن فتحه للمستخدمين" : "راجع المشاكل الحرجة أولًا"}</small>
+        </article>
+        <article class="admin-kpi-card">
+          <span>تكلفة اليوم</span>
+          <strong>${formatMoney(launch.cost_today_usd || 0)}</strong>
+          <small>${formatNumber(launch.requests_today || 0)} طلب اليوم</small>
+        </article>
+        <article class="admin-kpi-card">
+          <span>أعلى موديل تكلفة</span>
+          <strong>${escapeHtml(launch.highest_cost_model?.model_key || "غير متاح")}</strong>
+          <small>${formatNumber(launch.highest_cost_model?.total_cost || 0)} cost tokens</small>
+        </article>
+        <article class="admin-kpi-card ${launch.safe_mode?.active ? "is-warm" : ""}">
+          <span>Safe Mode</span>
+          <strong>${launch.safe_mode?.active ? "Active" : "Inactive"}</strong>
+          <small>${escapeHtml((launch.safe_mode?.reasons || []).join(", ") || "normal")}</small>
+        </article>
+      </div>
+      <div class="admin-row-actions" style="margin: 12px 0;">
+        <button type="button" data-ai-safe-mode-toggle="1">Enable Safe Mode</button>
+        <button type="button" data-ai-safe-mode-toggle="0">Disable Safe Mode</button>
+        <button type="button" data-ai-safe-mode-toggle="reset">Use Env Default</button>
+      </div>
+      ${critical.length || nonCritical.length ? `
+        <div class="admin-empty-panel">
+          ${critical.map((item) => `<strong>Critical:</strong> ${escapeHtml(item)}`).join("<br>")}
+          ${nonCritical.length ? `<br>${nonCritical.map((item) => `<span>Note: ${escapeHtml(item)}</span>`).join("<br>")}` : ""}
+        </div>
+      ` : `<div class="admin-empty-panel">لا توجد مشاكل إطلاق ظاهرة الآن.</div>`}
+      <table class="admin-data-table compact">
+        <thead><tr><th>Environment</th><th>Status</th><th>Enabled</th></tr></thead>
+        <tbody>${envRows}</tbody>
+      </table>
+      <table class="admin-data-table compact">
+        <thead><tr><th>آخر أخطاء AI</th><th>المصدر</th><th>الوقت</th></tr></thead>
+        <tbody>${errors.map((error) => `
+          <tr>
+            <td><span>${escapeHtml(error.message || "")}</span></td>
+            <td>${escapeHtml(error.source || error.type || "")}</td>
+            <td>${escapeHtml(error.at || "")}</td>
+          </tr>
+        `).join("") || `<tr><td colspan="3">لا توجد أخطاء AI مسجلة في الذاكرة الحالية.</td></tr>`}</tbody>
+      </table>
+    `;
+  }
+
   function renderAiAlerts(health) {
     if (!nodes.aiAlerts) return;
     const alerts = Array.isArray(health?.alerts) ? health.alerts : [];
@@ -937,9 +1010,11 @@
   function renderAiDashboard() {
     const analytics = getAiAnalytics();
     const health = state.ai.health || {};
+    const launch = state.ai.launch || {};
     const modelRows = Array.isArray(analytics.model_performance) ? analytics.model_performance : [];
     const feedbackRows = Array.isArray(analytics.feedback_analytics) ? analytics.feedback_analytics : [];
     renderAiOverview(analytics);
+    renderAiLaunchMonitor(launch);
     renderAiHealth(health);
     renderAiAlerts(health);
     renderAiFeedbackFilters(feedbackRows, modelRows);
@@ -1238,6 +1313,19 @@
     form?.reset?.();
   }
 
+  async function toggleAiSafeMode(value) {
+    if (!api?.setAdminAiSafeMode) return;
+    const enabled = value === "reset" ? null : value === "1";
+    const result = await api.setAdminAiSafeMode(enabled);
+    if (!result?.ok) {
+      window.alert(result?.message || "تعذر تحديث Safe Mode.");
+      return;
+    }
+    state.ai.launch = result.data?.launch_monitor || state.ai.launch;
+    state.ai.health = result.data?.launch_monitor?.health || state.ai.health;
+    renderAiDashboard();
+  }
+
   nodes.loginForm?.addEventListener("submit", async (event) => {
     event.preventDefault();
     if (!api) {
@@ -1344,6 +1432,11 @@
     const aiFeedbackRefreshButton = event.target.closest("[data-ai-feedback-refresh]");
     if (aiFeedbackRefreshButton) {
       await loadAiAnalyticsWithFilters();
+      return;
+    }
+    const aiSafeModeButton = event.target.closest("[data-ai-safe-mode-toggle]");
+    if (aiSafeModeButton) {
+      await toggleAiSafeMode(aiSafeModeButton.dataset.aiSafeModeToggle);
       return;
     }
   });

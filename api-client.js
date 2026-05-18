@@ -1177,6 +1177,22 @@
     return request(`/admin/ai-health${query.toString() ? `?${query.toString()}` : ""}`);
   }
 
+  async function getAdminAiLaunchMonitor(params = {}) {
+    const query = new URLSearchParams();
+    Object.entries(params || {}).forEach(([key, value]) => {
+      if (value == null || value === "") return;
+      query.set(key, String(value));
+    });
+    return request(`/admin/ai-launch-monitor${query.toString() ? `?${query.toString()}` : ""}`);
+  }
+
+  async function setAdminAiSafeMode(enabled) {
+    return request("/admin/ai-safe-mode", {
+      method: "POST",
+      body: { enabled }
+    });
+  }
+
   async function getAdminAiKnowledge(params = {}) {
     const query = new URLSearchParams();
     Object.entries(params || {}).forEach(([key, value]) => {
@@ -1653,6 +1669,8 @@
     updateAdminNotification,
     getAdminAiIntelligence,
     getAdminAiHealth,
+    getAdminAiLaunchMonitor,
+    setAdminAiSafeMode,
     getAdminAiKnowledge,
     createAdminAiKnowledge,
     updateAdminAiKnowledge,

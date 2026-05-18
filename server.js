@@ -270,7 +270,7 @@ const PLAN_LIMITS = Object.freeze({
   }
 });
 const AI_COST_WARNING_RATIO = Math.max(0.1, Math.min(Number(process.env.ORLIXOR_AI_COST_WARNING_RATIO || 0.8), 0.99));
-const AI_SITE_DAILY_COST_LIMIT_USD = Math.max(0, readEnvNumber("ORLIXOR_AI_SITE_DAILY_COST_LIMIT_USD", 25));
+const AI_SITE_DAILY_COST_LIMIT_USD = Math.max(0, readEnvNumber(["ORLIXOR_AI_SITE_DAILY_COST_LIMIT_USD", "AI_DAILY_COST_LIMIT"], 25));
 const AI_USER_DAILY_COST_LIMIT_USD = Math.max(0, readEnvNumber("ORLIXOR_AI_USER_DAILY_COST_LIMIT_USD", 2));
 const AI_PLAN_DAILY_COST_LIMITS_USD = Object.freeze({
   free: Math.max(0, readEnvNumber("ORLIXOR_AI_FREE_DAILY_COST_LIMIT_USD", 1)),
@@ -280,7 +280,8 @@ const AI_PLAN_DAILY_COST_LIMITS_USD = Object.freeze({
 });
 const AI_PROVIDER_DEGRADED_WINDOW_MS = Math.max(30_000, readEnvNumber("ORLIXOR_AI_PROVIDER_DEGRADED_WINDOW_MS", 5 * 60_000));
 const AI_PROVIDER_FAILURE_STREAK_LIMIT = Math.max(1, readEnvNumber("ORLIXOR_AI_PROVIDER_FAILURE_STREAK_LIMIT", 3));
-const ORLIXOR_AI_FORCE_SAFE_MODE = /^(1|true|yes|on)$/i.test(String(process.env.ORLIXOR_AI_FORCE_SAFE_MODE || "").trim());
+const ORLIXOR_AI_FORCE_SAFE_MODE = /^(1|true|yes|on)$/i.test(String(process.env.ORLIXOR_AI_FORCE_SAFE_MODE || process.env.AI_SAFE_MODE_ENABLED || "").trim());
+const SESSION_SECRET = readEnvValue(["SESSION_SECRET", "JWT_SECRET", "NEXTAUTH_SECRET"], "");
 const AI_OPENAI_INPUT_USD_PER_1M = Math.max(0, readEnvNumber("ORLIXOR_AI_OPENAI_INPUT_USD_PER_1M", 0.15));
 const AI_OPENAI_OUTPUT_USD_PER_1M = Math.max(0, readEnvNumber("ORLIXOR_AI_OPENAI_OUTPUT_USD_PER_1M", 0.6));
 const AI_DEEPSEEK_INPUT_USD_PER_1M = Math.max(0, readEnvNumber("ORLIXOR_AI_DEEPSEEK_INPUT_USD_PER_1M", 0.27));
@@ -293,7 +294,10 @@ const aiRuntimeState = {
   },
   rag: { last_success_at: null, last_error_at: null, last_error: null, latency_samples: [] },
   embeddings: { enabled: ORLIXOR_ENABLE_EMBEDDINGS, configured: Boolean(OPENAI_API_KEY), last_success_at: null, last_error_at: null, last_error: null, latency_samples: [] },
-  loginFailures: []
+  loginFailures: [],
+  safeModeOverride: null,
+  safeModeUpdatedAt: null,
+  safeModeUpdatedBy: null
 };
 const DAILY_MOTIVATION_BONUS = Math.max(1, Number(process.env.DAILY_MOTIVATION_BONUS || 5));
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -511,16 +515,24 @@ function isProviderDegradedForSafeMode() {
 
 function buildSafeModeState(costStats = {}, options = {}) {
   const site = getCostLimitStatus(costStats.site_daily_cost_usd, AI_SITE_DAILY_COST_LIMIT_USD);
-  const forced = ORLIXOR_AI_FORCE_SAFE_MODE || Boolean(options.simulateSafeMode);
+  const manualEnabled = aiRuntimeState.safeModeOverride === true;
+  const envForced = ORLIXOR_AI_FORCE_SAFE_MODE;
+  const simulated = Boolean(options.simulateSafeMode);
+  const forced = envForced || manualEnabled || simulated;
   const providerDegraded = isProviderDegradedForSafeMode();
   const active = forced || site.status === "blocked" || providerDegraded;
   const reasons = [];
-  if (forced) reasons.push(options.simulateSafeMode ? "simulation" : "forced_by_env");
+  if (simulated) reasons.push("simulation");
+  if (envForced) reasons.push("forced_by_env");
+  if (manualEnabled) reasons.push("manual_admin_override");
   if (site.status === "blocked") reasons.push("site_daily_cost_limit");
   if (providerDegraded) reasons.push("provider_degraded");
   return {
     active,
     reasons,
+    manual_override: aiRuntimeState.safeModeOverride,
+    manual_updated_at: aiRuntimeState.safeModeUpdatedAt,
+    env_forced: envForced,
     site_cost: site,
     restrictions: active ? {
       free_deepseek_only: true,
@@ -4649,6 +4661,150 @@ async function buildAiHealthSnapshot(options = {}) {
   return health;
 }
 
+function buildEnvLaunchStatus() {
+  return {
+    DEEPSEEK_API_KEY: { configured: Boolean(DEEPSEEK_API_KEY), secret: true },
+    OPENAI_API_KEY: { configured: Boolean(OPENAI_API_KEY), secret: true },
+    AI_DAILY_COST_LIMIT: {
+      configured: Boolean(process.env.AI_DAILY_COST_LIMIT || process.env.ORLIXOR_AI_SITE_DAILY_COST_LIMIT_USD),
+      value_present: AI_SITE_DAILY_COST_LIMIT_USD > 0,
+      secret: false
+    },
+    AI_SAFE_MODE_ENABLED: {
+      configured: Boolean(process.env.AI_SAFE_MODE_ENABLED || process.env.ORLIXOR_AI_FORCE_SAFE_MODE),
+      enabled: ORLIXOR_AI_FORCE_SAFE_MODE,
+      manual_override: aiRuntimeState.safeModeOverride,
+      secret: false
+    },
+    ORLIXOR_ENABLE_EMBEDDINGS: {
+      configured: Object.prototype.hasOwnProperty.call(process.env, "ORLIXOR_ENABLE_EMBEDDINGS"),
+      enabled: ORLIXOR_ENABLE_EMBEDDINGS,
+      secret: false
+    },
+    DATABASE_URL: {
+      configured: Boolean(DATABASE_URL || (DB_HOST && DB_DATABASE && DB_USERNAME)),
+      connected: Boolean(databaseState?.connected),
+      driver: databaseState?.driver || "unknown",
+      secret: true
+    },
+    SESSION_SECRET: {
+      configured: Boolean(SESSION_SECRET),
+      accepted_aliases: ["SESSION_SECRET", "JWT_SECRET", "NEXTAUTH_SECRET"],
+      secret: true
+    }
+  };
+}
+
+function collectLastAiErrors() {
+  const errors = [];
+  for (const provider of ["deepseek", "openai"]) {
+    const health = buildProviderHealth(provider);
+    if (health.last_error) {
+      errors.push({
+        at: health.last_error_at,
+        type: "provider",
+        source: provider,
+        message: health.last_error
+      });
+    }
+  }
+  for (const subsystem of ["rag", "embeddings"]) {
+    const state = aiRuntimeState[subsystem] || {};
+    if (state.last_error) {
+      errors.push({
+        at: state.last_error_at,
+        type: "subsystem",
+        source: subsystem,
+        message: state.last_error
+      });
+    }
+  }
+  return errors
+    .filter((item) => item.message)
+    .sort((a, b) => String(b.at || "").localeCompare(String(a.at || "")))
+    .slice(0, 10);
+}
+
+function buildLaunchReadiness(health, envStatus) {
+  const critical = [];
+  const nonCritical = [];
+  const recommendations = [];
+
+  if (!envStatus.DEEPSEEK_API_KEY.configured && !envStatus.OPENAI_API_KEY.configured) {
+    critical.push("No text AI provider key is configured.");
+  }
+  if (!envStatus.DATABASE_URL.connected) {
+    critical.push("Database is not connected.");
+  }
+  if (!envStatus.SESSION_SECRET.configured) {
+    critical.push("SESSION_SECRET/JWT_SECRET is missing.");
+  }
+  if (health.rag?.status !== "ok") {
+    critical.push("RAG retrieval is unavailable.");
+  }
+  if (health.cost_guardrails?.site?.status === "blocked") {
+    critical.push("Site AI daily cost limit is already exhausted.");
+  }
+  if (!envStatus.DEEPSEEK_API_KEY.configured) {
+    nonCritical.push("DeepSeek key is missing; low-cost routing may fall back to OpenAI.");
+  }
+  if (!envStatus.OPENAI_API_KEY.configured) {
+    nonCritical.push("OpenAI key is missing; images, embeddings, or GPT-4 Mini paths may be unavailable.");
+  }
+  if (!envStatus.ORLIXOR_ENABLE_EMBEDDINGS.enabled) {
+    nonCritical.push("Embeddings are disabled; RAG is using keyword/fallback retrieval.");
+  }
+  if (health.safe_mode?.active) {
+    nonCritical.push("Safe Mode is currently active.");
+  }
+  if (health.cost_guardrails?.site?.status === "warning") {
+    nonCritical.push("AI cost is above 80% of the daily site budget.");
+  }
+
+  recommendations.push("Keep Fine-tuning disabled until a reviewed, sanitized dataset exists.");
+  recommendations.push("Run a real production smoke test after Render deploy with Free, Spark, Tuwaiq, and Pioneer accounts.");
+  recommendations.push("Tune cost limits after the first 24-48 hours of real usage.");
+  recommendations.push("Rotate provider keys if they were ever exposed outside Render secrets.");
+
+  return {
+    status: critical.length ? "not_ready" : "ready",
+    can_open_to_users: critical.length === 0,
+    critical_issues: critical,
+    non_critical_issues: nonCritical,
+    recommendations
+  };
+}
+
+async function buildAiLaunchMonitorSnapshot() {
+  const health = await buildAiHealthSnapshot();
+  const env = buildEnvLaunchStatus();
+  const analytics = isDatabaseReady() && typeof databaseClient.getAiIntelligenceAnalytics === "function"
+    ? await databaseClient.getAiIntelligenceAnalytics({}).catch(() => ({}))
+    : {};
+  const modelRows = Array.isArray(analytics.model_performance) ? analytics.model_performance : [];
+  const highestCostModel = modelRows
+    .slice()
+    .sort((a, b) => Number(b.total_cost || b.avg_cost || 0) - Number(a.total_cost || a.avg_cost || 0))[0] || null;
+  return {
+    generated_at: new Date().toISOString(),
+    fine_tuning_enabled: false,
+    env,
+    keys: {
+      deepseek_present: env.DEEPSEEK_API_KEY.configured,
+      openai_present: env.OPENAI_API_KEY.configured
+    },
+    rag_working: health.rag?.status === "ok",
+    safe_mode: health.safe_mode,
+    cost_today_usd: Number(health.cost_guardrails?.site?.used || 0),
+    requests_today: Number(health.cost_guardrails?.stats?.events_today || analytics.overview?.messages_today || 0),
+    highest_cost_model: highestCostModel,
+    last_ai_errors: collectLastAiErrors(),
+    alerts: health.alerts || [],
+    readiness: buildLaunchReadiness(health, env),
+    health
+  };
+}
+
 function inferMemoryEntries(userMessage, assistantText) {
   const text = `${String(userMessage || "")}\n${String(assistantText || "")}`.trim();
   if (!text) return [];
@@ -6854,6 +7010,37 @@ async function handleAdminAiHealth(req, res) {
   });
 }
 
+async function handleAdminAiLaunchMonitor(req, res) {
+  await requireAdminUser(req);
+  const snapshot = await buildAiLaunchMonitorSnapshot();
+  sendJson(req, res, 200, {
+    success: true,
+    data: snapshot
+  });
+}
+
+async function handleAdminAiSafeMode(req, res) {
+  const auth = await requireAdminUser(req);
+  const payload = await parseJsonBody(req);
+  if (!Object.prototype.hasOwnProperty.call(payload, "enabled")) {
+    throw createHttpError(422, "enabled is required.");
+  }
+  aiRuntimeState.safeModeOverride = payload.enabled === null ? null : Boolean(payload.enabled);
+  aiRuntimeState.safeModeUpdatedAt = new Date().toISOString();
+  aiRuntimeState.safeModeUpdatedBy = auth.user?.id || null;
+  await recordAdminAction(req, auth, "UPDATE_AI_SAFE_MODE", "ai_runtime", "safe_mode", {
+    enabled: aiRuntimeState.safeModeOverride
+  });
+  const health = await buildAiHealthSnapshot();
+  sendJson(req, res, 200, {
+    success: true,
+    data: {
+      safe_mode: health.safe_mode,
+      launch_monitor: await buildAiLaunchMonitorSnapshot()
+    }
+  });
+}
+
 async function handleAdminKnowledgeList(req, res) {
   await requireAdminUser(req);
   if (!isDatabaseReady() || typeof databaseClient.listKnowledgeSources !== "function") {
@@ -8920,6 +9107,16 @@ async function routeRequest(req, res) {
 
   if (req.method === "GET" && requestPath === "/api/admin/ai-health") {
     await handleAdminAiHealth(req, res);
+    return;
+  }
+
+  if (req.method === "GET" && requestPath === "/api/admin/ai-launch-monitor") {
+    await handleAdminAiLaunchMonitor(req, res);
+    return;
+  }
+
+  if (req.method === "POST" && requestPath === "/api/admin/ai-safe-mode") {
+    await handleAdminAiSafeMode(req, res);
     return;
   }
 
