@@ -1,4 +1,4 @@
-﻿(() => {
+(() => {
   const app = document.getElementById("sectionApp");
   if (!app) return;
   const mobileV2Root = document.getElementById("orlixor-mobile-v2") || (() => {
@@ -11690,7 +11690,7 @@
     const newUserMessage = { role: "user", body: displayUserMessage };
     const pendingAssistant = {
       role: "assistant",
-      body: assistantReply("جاري تجهيز الرد...", ["نعالج رسالتك الآن ونرتب الإجابة من الخادم."])
+      body: assistantReply("جاري معالجة رسالتك...", ["نعالج طلبك الآن ونرتب الرد."])
     };
 
     threadEntry.messages.push(newUserMessage, pendingAssistant);
@@ -11719,12 +11719,15 @@
       if (/LIMIT|QUEUE|PLAN_UPGRADE|CONFIRMATION/i.test(code)) {
         return "وصلت إلى الحد المتاح في باقتك اليوم. يمكنك المحاولة لاحقًا أو ترقية الباقة.";
       }
+      if (/IMAGE_GENERATION_DISABLED/i.test(code) || /توليد الصور غير متاح/i.test(message)) {
+        return "توليد الصور غير متاح حاليًا. يمكنك استخدام Orlixor AI للكتابة، الشرح، التحليل، والأفكار النصية.";
+      }
       if (status === 401 || status === 403) return "انتهت الجلسة، سجّل الدخول من جديد.";
       if (status === 413) return hasImageAttachments ? "الصورة أو الملف كبير جدًا. جرّب صورة أصغر." : "الطلب كبير جدًا. اختصر الرسالة ثم أعد المحاولة.";
       if (status === 429) return message || "طلبات كثيرة، حاول بعد قليل.";
-      if (status === 404) return "مسار الشات غير موجود على هذا الدومين. تحقق من API backend أو رابط النشر.";
-      if (status >= 500) return message || (hasImageAttachments ? "حدث خطأ في خادم تحليل الصور." : "حدث خطأ في الخادم.");
-      if (result?.networkError || status === 0) return "تعذر الاتصال بالـ Backend. تحقق من رابط API أو اتصالك ثم أعد المحاولة.";
+      if (status === 404) return "تعذر الاتصال بالخادم حاليًا. حاول مرة أخرى بعد قليل.";
+      if (status >= 500) return "الخدمة مشغولة الآن، نعمل على معالجة طلبك. حاول بعد لحظات.";
+      if (result?.networkError || status === 0) return "تعذر الاتصال بالخادم حاليًا. حاول مرة أخرى بعد قليل.";
       return message || "تعذر تنفيذ الطلب.";
     };
 
@@ -11795,12 +11798,13 @@
 
       if (!result.ok || !result.data?.assistant_message?.body) {
         const hasImageAttachments = outgoingFiles.some(isVisionImageFile);
-        state.chatSendError = "تعذر إرسال الرسالة، حاول مرة أخرى.";
+        state.chatSendError = "تعذر إرسال الرسالة. حاول مرة أخرى.";
         threadEntry.messages.push({
           role: "assistant",
-          body: assistantReply(hasImageAttachments ? "تعذر تحليل الصورة الآن." : "تعذر الوصول إلى خدمة الشات الآن.", [
-            formatChatFailureMessage(result, hasImageAttachments)
-          ])
+          body: assistantReply(
+            hasImageAttachments ? "تعذر تحليل الصورة الآن." : "تعذر إرسال الرسالة.",
+            [formatChatFailureMessage(result, hasImageAttachments)]
+          )
         });
       } else {
         if (result.data.conversation_id) {
@@ -11862,17 +11866,17 @@
       threadEntry.messages.pop();
       const hasImageAttachments = outgoingFiles.some(isVisionImageFile);
       const errorMessage = String(error?.message || "").trim();
-      state.chatSendError = "تعذر إرسال الرسالة، حاول مرة أخرى.";
+      state.chatSendError = "تعذر إرسال الرسالة. حاول مرة أخرى.";
       showToast(state.chatSendError);
       threadEntry.messages.push({
         role: "assistant",
         body: assistantReply(
-          hasImageAttachments ? "تعذر تحليل الصورة الآن." : "تعذر الوصول إلى خدمة الشات الآن.",
+          hasImageAttachments ? "تعذر تحليل الصورة الآن." : "تعذر إرسال الرسالة.",
           [
             errorMessage ||
               (hasImageAttachments
-                ? "لم يكتمل إرسال الصورة إلى الخادم. تحقق من خدمة تحليل الصور ثم أعد المحاولة."
-                : "تعذر الاتصال بالـ Backend. تحقق من رابط API أو أعد المحاولة بعد قليل.")
+                ? "لم يكتمل إرسال الصورة إلى الخادم. حاول مرة أخرى بعد قليل."
+                : "تعذر الاتصال بالخادم حاليًا. حاول مرة أخرى بعد قليل.")
           ]
         )
       });

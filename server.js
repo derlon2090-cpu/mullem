@@ -7716,6 +7716,17 @@ async function handleChatSend(req, res) {
   const hasOnlyImageAttachments = attachmentCount > 0
     && (attachmentImages.length > 0 || attachmentNames.length > 0)
     && attachmentNames.every(isImageAttachmentName);
+  const initialAnalysis = aiIntelligence.analyzeRequest({
+    message,
+    attachmentCount,
+    attachmentNames,
+    requestedModel: payload.selected_model || payload.selectedModel || payload.model
+  });
+  if (initialAnalysis.questionType === "image" || initialAnalysis.taskType === "image") {
+    throw createPublicHttpError(422, "IMAGE_GENERATION_DISABLED", "توليد الصور غير متاح حاليًا. يمكنك استخدام Orlixor AI للكتابة، الشرح، التحليل، والأفكار النصية.", {
+      taskType: "image"
+    });
+  }
   const auth = await getAuthContext(req);
   const activeUser = auth?.user ? await syncUserDailyProgressSafely(auth.user, "بدأ جلسة شات جديدة") : null;
 

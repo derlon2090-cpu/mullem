@@ -53,7 +53,7 @@
     : "";
   const presetBase = explicitWindowBase || fallbackBase;
 
-  const resolvedBase = queryBase || metaBase || storedBase || presetBase || "";
+  const resolvedBase = queryBase || metaBase || presetBase || (isLocalHost(host) ? storedBase : "");
   const deploymentMode = resolvedBase
     ? "external-backend"
     : (isStaticHost ? "static-host-needs-backend" : "same-origin-or-external-backend");

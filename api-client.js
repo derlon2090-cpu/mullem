@@ -1,4 +1,4 @@
-﻿(() => {
+(() => {
   if (window.mullemApiClient) return;
 
   const storageKeys = {
@@ -246,25 +246,22 @@
     if (typeof value === "string") {
       const message = value.trim();
       if (message.includes("Invalid value: 'input_text'")) {
-        return "���� ������ ��� ���� ����� ����. ��� �������� ��� ����.";
+        return "النص المدخل غير صالح. جرّب رسالة أوضح ثم أعد المحاولة.";
       }
       if (/authentication is required to use chat/i.test(message)) {
-        return "����� ���� ��� ����� ������ ���. ���� ����� ���� �������� ���� �����.";
+        return "سجّل دخولك أولًا لاستخدام الشات.";
       }
       if (/authentication is required/i.test(message)) {
-        return "����� ���� ����� ������ �� �� ��� ������ ����. ���� ����� ��� ���� ��������.";
+        return "سجّل دخولك أولًا ثم أعد المحاولة.";
       }
       if (/admin access is required/i.test(message)) {
-        return "��� ������� ����� ����� ������ ���.";
+        return "هذه الصفحة متاحة للأدمن فقط.";
       }
-      if (/the page could not be found/i.test(message)) {
-        return "���� ������ ��� ������ �������� ����. ���� ������ �� ��� �������� ��� ����.";
-      }
-      if (/static hosting detected/i.test(message)) {
-        return "���� ������ ��� ���� ������ ����. ���� ������ �� ��� �������� ��� ����.";
+      if (/the page could not be found|route not found|static hosting detected/i.test(message)) {
+        return "تعذر الاتصال بالخادم حاليًا. حاول مرة أخرى بعد قليل.";
       }
       if (/getState|cannot read propert/i.test(message)) {
-        return "���� ����� ���� ����� ������ ����. ��� �������� ��� ����.";
+        return "تعذر تنفيذ الطلب الآن. حاول مرة أخرى بعد قليل.";
       }
       return message;
     }

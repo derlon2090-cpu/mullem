@@ -63,6 +63,8 @@
   const projectListNode = document.querySelector("[data-project-list]");
   const projectNewChatButton = document.querySelector("[data-project-new-chat]");
   const projectConversationsNode = document.querySelector("[data-project-conversations]");
+  const workspaceSidebarToggle = document.querySelector("[data-workspace-sidebar-toggle]");
+  const workspaceSidebar = document.querySelector(".workspace-sidebar");
 
   if (!form || !messageList || !promptInput) return;
 
@@ -81,6 +83,7 @@
     intentErrors: "mlm_runtime_intent_errors"
   };
   const runtimeProjectSelectionKey = "mlm_runtime_selected_project";
+  const workspaceSidebarMobileBreakpoint = 1024;
 
   const LOGIN_REQUIRED_DAILY_XP = 5;
   const fallbackRuntimePackages = [
@@ -3645,11 +3648,51 @@
     window.setTimeout(restore, 220);
   }
 
+  function setWorkspaceSidebarOpen(value) {
+    if (!workspaceSidebar || !workspaceSidebarToggle) return;
+    const isOpen = Boolean(value);
+    document.body.classList.toggle("workspace-sidebar-open", isOpen);
+    workspaceSidebarToggle.setAttribute("aria-expanded", isOpen ? "true" : "false");
+    workspaceSidebarToggle.setAttribute("aria-label", isOpen ? "إغلاق الشريط الجانبي" : "فتح الشريط الجانبي");
+  }
+
+  function syncWorkspaceSidebarState() {
+    if (!workspaceSidebar || !workspaceSidebarToggle) return;
+    if (window.innerWidth > workspaceSidebarMobileBreakpoint) {
+      document.body.classList.remove("workspace-sidebar-open");
+      workspaceSidebarToggle.setAttribute("aria-expanded", "false");
+      workspaceSidebarToggle.setAttribute("aria-label", "فتح الشريط الجانبي");
+    }
+  }
+
   function scrollToChatSection() {
     const chatSection = document.getElementById("chat") || document.querySelector(".chat-shell");
     if (!chatSection) return;
     chatSection.scrollIntoView({ behavior: "smooth", block: "start" });
   }
+
+  workspaceSidebarToggle?.addEventListener("click", () => {
+    const isOpen = document.body.classList.contains("workspace-sidebar-open");
+    setWorkspaceSidebarOpen(!isOpen);
+  });
+
+  window.addEventListener("resize", syncWorkspaceSidebarState);
+  document.addEventListener("click", (event) => {
+    if (!document.body.classList.contains("workspace-sidebar-open")) return;
+    if (window.innerWidth > workspaceSidebarMobileBreakpoint) return;
+    if (event.target.closest(".workspace-sidebar") || event.target.closest("[data-workspace-sidebar-toggle]")) return;
+    document.body.classList.remove("workspace-sidebar-open");
+    workspaceSidebarToggle?.setAttribute("aria-expanded", "false");
+    workspaceSidebarToggle?.setAttribute("aria-label", "فتح الشريط الجانبي");
+  });
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape") {
+      document.body.classList.remove("workspace-sidebar-open");
+      workspaceSidebarToggle?.setAttribute("aria-expanded", "false");
+      workspaceSidebarToggle?.setAttribute("aria-label", "فتح الشريط الجانبي");
+    }
+  });
+  syncWorkspaceSidebarState();
 
   async function logoutUser() {
     const apiClient = getRuntimeApiClient();
@@ -6441,9 +6484,9 @@
           const dbState = healthPayload?.db || {};
 
           if (aiConfigured === false) {
-            failureMessage = "OPENAI_API_KEY is not configured on the server.";
+            failureMessage = "الخدمة غير جاهزة الآن. حاول مرة أخرى بعد قليل.";
           } else if (dbState?.connected === false) {
-            failureMessage = failureMessage || "بعض ميزات الحفظ غير متاحة مؤقتًا على الخادم.";
+            failureMessage = failureMessage || "الخدمة غير متاحة الآن. حاول مرة أخرى بعد قليل.";
           }
         } catch (_) {
           // Ignore health probe failures and keep original error details.
@@ -6478,6 +6521,57 @@
       failed: false
     };
   };
+
+  function normalizeRuntimeUnavailableMessage(reason, readableDetails, currentMessage, hasAttachment = false) {
+    const details = String(readableDetails || "").toLowerCase();
+
+    if (/quota|billing details|exceeded your current quota|insufficient_quota/i.test(readableDetails)) {
+      return "وصلت إلى الحد المتاح في باقتك اليوم. يمكنك المحاولة لاحقًا أو ترقية الباقة.";
+    }
+
+    if (reason === "missing_auth" || reason === "unauthorized") {
+      return "يلزم تسجيل الدخول أولًا لمتابعة هذه المحادثة.";
+    }
+
+    if (reason === "missing_api_client") {
+      return "تعذر إعداد خدمة الشات الآن. حاول مرة أخرى بعد قليل.";
+    }
+
+    if (reason === "attachment_not_supported") {
+      return hasAttachment
+        ? "هذا النوع من المرفقات غير متاح حاليًا."
+        : "هذا النوع من الطلبات غير متاح حاليًا.";
+    }
+
+    if (reason === "server_unavailable") {
+      if (details.includes("openai_api_key")) {
+        return "خدمة الشات غير جاهزة الآن. حاول مرة أخرى بعد قليل.";
+      }
+
+      if (
+        details.includes("static hosting detected") ||
+        details.includes("page could not be found") ||
+        details.includes("route not found") ||
+        details.includes("not found")
+      ) {
+        return "تعذر الاتصال بالخادم حاليًا. حاول مرة أخرى بعد قليل.";
+      }
+
+      if (details.includes("invalid api response")) {
+        return "تعذر تنفيذ الطلب الآن. حاول مرة أخرى بعد قليل.";
+      }
+
+      return "الخدمة غير متاحة الآن. حاول مرة أخرى بعد قليل.";
+    }
+
+    if (reason === "request_failed") {
+      return currentMessage && !/openai_api_key|static hosting detected|page could not be found|route not found|not found|invalid api response/i.test(readableDetails)
+        ? currentMessage
+        : "تعذر الاتصال بالخادم حاليًا. حاول مرة أخرى بعد قليل.";
+    }
+
+    return currentMessage || "تعذر الاتصال بالخادم حاليًا. حاول مرة أخرى بعد قليل.";
+  }
 
   function buildRuntimeApiUnavailableResponse(question, route, reason = "request_failed", details = "") {
     const readableDetails = (() => {
@@ -6520,6 +6614,8 @@
     } else if (reason === "attachment_not_supported") {
       message = "رفع الصور والملفات لم يُربط بعد مع Laravel API في هذه النسخة. اكتب السؤال نصًا الآن وسيتم إرساله إلى الـ AI مباشرة.";
     }
+
+    message = normalizeRuntimeUnavailableMessage(reason, readableDetails, message, reason === "attachment_not_supported");
 
     if (readableDetails && (reason === "request_failed" || (reason === "server_unavailable" && !/openai_api_key|route not found|not found|invalid api response|static hosting detected|page could not be found/i.test(readableDetails)))) {
       message = `${message} ${readableDetails}`.trim();

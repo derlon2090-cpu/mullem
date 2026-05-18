@@ -75,6 +75,22 @@ function includesAny(text, terms) {
 function classifyQuestionType(message) {
   const text = normalizeArabic(message);
   if (/[?؟]/.test(text) || /^(ما|ماذا|كيف|لماذا|هل|اين|متي|مين|من)\b/.test(text)) return "question";
+  if (includesAny(text, [
+    "اعمل لي صورة",
+    "اصنع صورة",
+    "صمم صورة",
+    "ولد صورة",
+    "انشئ صورة",
+    "أنشئ صورة",
+    "ارسم",
+    "generate image",
+    "create image",
+    "create an image",
+    "make an image",
+    "make me an image",
+    "draw me",
+    "image generation"
+  ])) return "image";
   if (includesAny(text, ["اكتب", "صغ", "انشئ", "سوي", "اكتب لي", "generate", "write"])) return "generation";
   if (includesAny(text, ["حلل", "تحليل", "قارن", "استنتج", "اشرح السبب", "reason", "analyze"])) return "analysis";
   if (includesAny(text, ["لخص", "تلخيص", "اختصر", "summary", "summarize"])) return "summary";
