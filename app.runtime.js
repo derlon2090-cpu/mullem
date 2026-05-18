@@ -4630,7 +4630,7 @@
     const normalized = typeof normalizeText === "function"
       ? normalizeText(text || "")
       : String(text || "").toLowerCase();
-    return /(\bgenerate image\b|\bimage generation\b|صورة|ارسم|صمم|ولد صورة|اعمل لي صورة|صمم لي صورة|ولد صورة لي)/i.test(normalized);
+    return /(\bgenerate\s+(an\s+)?image\b|\bcreate\s+(an\s+)?image\b|\bimage generation\b|\bdraw\b|\bdesign\s+(an\s+)?image\b|ارسم|صمم|صمّم|ولد\s*صورة|ولّد\s*صورة|اعمل\s*(لي)?\s*صورة|تعمل\s*(لي)?\s*صورة|سو[ّي]?ي\s*(لي)?\s*صورة|أنشئ\s*(لي)?\s*صورة)/i.test(normalized);
   }
 
   const runtimeApiConversationMapKey = "mlm_api_chat_session_map";

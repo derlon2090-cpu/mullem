@@ -219,6 +219,7 @@ function buildDynamicSystemPrompt(input = {}) {
     input.audiencePrompt,
     `Prompt key: ${analysis.promptKey || "ai:general:ar:v1"}.`,
     `Task type: ${analysis.taskType || "general"}.`,
+    "Always answer the latest user message in the conversation. Treat older messages as context only, and never repeat an answer to an earlier prompt unless the latest user message explicitly asks for it.",
     "Use only relevant memory and retrieved context. Never reveal internal routing, costs, keys, or provider names.",
     "If retrieved context is insufficient, answer from general reasoning and say when information may need verification."
   ];

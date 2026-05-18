@@ -7655,6 +7655,10 @@ async function buildChatMessages(conversation, payload) {
     ragContext: retrievedKnowledge.context
   });
   const history = await listConversationHistory(conversation);
+  const historyItems = (Array.isArray(history) ? history : [])
+    .filter((item) => item?.role && item?.text)
+    .slice(-MAX_HISTORY_MESSAGES);
+  payload.__historyMessageCount = historyItems.length;
   const attachmentContext = buildAttachmentContext(payload);
   const attachmentImages = sanitizeAttachmentImages(payload.attachment_images || payload.attachmentImages);
   const messages = [
@@ -7677,8 +7681,14 @@ async function buildChatMessages(conversation, payload) {
     messages.push(memoryMessage);
   }
 
-  for (const item of history) {
-    if (!item?.role || !item?.text) continue;
+  if (historyItems.length) {
+    messages.push({
+      role: "system",
+      content: "سجل المحادثة السابق للمرجعية فقط. أجب دائمًا على آخر رسالة من المستخدم في نهاية السياق، ولا تكرر إجابة أول رسالة إلا إذا طلب المستخدم ذلك صراحة."
+    });
+  }
+
+  for (const item of historyItems) {
     messages.push({
       role: item.role,
       content: item.text
@@ -7828,7 +7838,10 @@ async function handleChatSend(req, res) {
   };
   const chatMessages = await buildChatMessages(conversation, chatPayload);
   const retrievedKnowledge = chatPayload.__retrievedKnowledge || { context: "", sources: [] };
-  const cacheKey = !attachmentImages.length ? buildModelCacheKey({ user: activeUser, routing, messages: chatMessages }) : "";
+  const hasConversationHistory = Number(chatPayload.__historyMessageCount || 0) > 0;
+  const cacheKey = !attachmentImages.length && !hasConversationHistory
+    ? buildModelCacheKey({ user: activeUser, routing, messages: chatMessages })
+    : "";
   const cachedResult = cacheKey ? await getCachedModelResponseAny(cacheKey, {
     plan: routing.planKey,
     model: selectedModel,

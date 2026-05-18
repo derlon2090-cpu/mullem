@@ -11643,6 +11643,12 @@
     return removeThreadById(threadId, sectionKey);
   }
 
+  function isImageGenerationPrompt(text) {
+    const normalized = String(text || "").trim().toLowerCase();
+    if (!normalized) return false;
+    return /(\bgenerate\s+(an\s+)?image\b|\bcreate\s+(an\s+)?image\b|\bimage generation\b|\bdraw\b|\bdesign\s+(an\s+)?image\b|ارسم|صمم|صمّم|ولد\s*صورة|ولّد\s*صورة|اعمل\s*(لي)?\s*صورة|تعمل\s*(لي)?\s*صورة|سو[ّي]?ي\s*(لي)?\s*صورة|أنشئ\s*(لي)?\s*صورة)/i.test(normalized);
+  }
+
   async function submitMessage() {
     state.currentUser = getActiveUser() || state.currentUser;
     const input = (getComposerValue() || "").trim();
@@ -11666,6 +11672,46 @@
 
     const outgoingFiles = [...state.selectedFiles];
     const outboundMessage = input || "حلل المرفقات المرسلة.";
+    if (isImageGenerationPrompt(outboundMessage)) {
+      ensureThreadState();
+      let threadEntry = getActiveThread();
+      const draftTitle = input.slice(0, 28) || "طلب صورة غير مدعوم";
+      if (isHomeWorkspace && !state.homeConversationOpen) {
+        createNewThreadFromDraft(draftTitle);
+        threadEntry = getActiveThread();
+      } else if (!threadEntry) {
+        createNewThreadFromDraft(draftTitle);
+        threadEntry = getActiveThread();
+      }
+      threadEntry.messages.push(
+        { role: "user", body: input || outboundMessage },
+        {
+          role: "assistant",
+          body: assistantReply(
+            "توليد الصور غير متاح حاليًا.",
+            ["يمكنك استخدام Orlixor AI للكتابة، الشرح، التحليل، والأفكار النصية."]
+          )
+        }
+      );
+      const sentAtMs = Date.now();
+      threadEntry.time = "الآن";
+      threadEntry.sortTime = sentAtMs;
+      threadEntry.updatedAtMs = sentAtMs;
+      threadEntry.stats = {
+        ...(threadEntry.stats || {}),
+        updated: "الآن",
+        messages: `${Math.max(1, threadEntry.messages.length)} رسالة`,
+        sortTime: sentAtMs
+      };
+      sortThreadGroupsByNewest(state.section);
+      state.homeConversationOpen = true;
+      state.sending = false;
+      state.chatSendError = "";
+      setComposerValue("");
+      render();
+      scrollConversationToLatest();
+      return;
+    }
     const canSendLargeRequest = await confirmLargeChatRequest(outboundMessage);
     if (!canSendLargeRequest) {
       state.sending = false;
@@ -11728,7 +11774,7 @@
       if (status === 404) return "تعذر الاتصال بالخادم حاليًا. حاول مرة أخرى بعد قليل.";
       if (status >= 500) return "الخدمة مشغولة الآن، نعمل على معالجة طلبك. حاول بعد لحظات.";
       if (result?.networkError || status === 0) return "تعذر الاتصال بالخادم حاليًا. حاول مرة أخرى بعد قليل.";
-      return message || "تعذر تنفيذ الطلب.";
+      return "تعذر إرسال الرسالة. حاول مرة أخرى.";
     };
 
     try {
@@ -11865,7 +11911,6 @@
     } catch (error) {
       threadEntry.messages.pop();
       const hasImageAttachments = outgoingFiles.some(isVisionImageFile);
-      const errorMessage = String(error?.message || "").trim();
       state.chatSendError = "تعذر إرسال الرسالة. حاول مرة أخرى.";
       showToast(state.chatSendError);
       threadEntry.messages.push({
@@ -11873,10 +11918,9 @@
         body: assistantReply(
           hasImageAttachments ? "تعذر تحليل الصورة الآن." : "تعذر إرسال الرسالة.",
           [
-            errorMessage ||
-              (hasImageAttachments
-                ? "لم يكتمل إرسال الصورة إلى الخادم. حاول مرة أخرى بعد قليل."
-                : "تعذر الاتصال بالخادم حاليًا. حاول مرة أخرى بعد قليل.")
+            hasImageAttachments
+              ? "لم يكتمل إرسال الصورة إلى الخادم. حاول مرة أخرى بعد قليل."
+              : "تعذر الاتصال بالخادم حاليًا. حاول مرة أخرى بعد قليل."
           ]
         )
       });
