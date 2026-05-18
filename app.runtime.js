@@ -4626,6 +4626,13 @@
     timeoutMs: 5500
   };
 
+  function isRuntimeImageGenerationRequest(text) {
+    const normalized = typeof normalizeText === "function"
+      ? normalizeText(text || "")
+      : String(text || "").toLowerCase();
+    return /(\bgenerate image\b|\bimage generation\b|صورة|ارسم|صمم|ولد صورة|اعمل لي صورة|صمم لي صورة|ولد صورة لي)/i.test(normalized);
+  }
+
   const runtimeApiConversationMapKey = "mlm_api_chat_session_map";
   const runtimeGuestSessionKey = "mlm_api_guest_session_id";
 
@@ -6472,6 +6479,15 @@
       };
     }
 
+    if (isRuntimeImageGenerationRequest(question)) {
+      return {
+        content: "",
+        failed: true,
+        errorType: "unsupported_image",
+        message: "توليد الصور غير متاح حاليًا. يمكنك استخدام Orlixor AI للكتابة، الشرح، التحليل، والأفكار النصية."
+      };
+    }
+
     const result = await apiClient.sendChat(buildRuntimeApiChatPayload(question, route));
     if (!result.ok || !result.data?.assistant_message?.body) {
       let failureMessage = result?.message || "";
@@ -6524,6 +6540,9 @@
 
   function normalizeRuntimeUnavailableMessage(reason, readableDetails, currentMessage, hasAttachment = false) {
     const details = String(readableDetails || "").toLowerCase();
+    const genericConnection = "تعذر الاتصال بالخادم حاليًا. حاول مرة أخرى بعد قليل.";
+    const genericBusy = "الخدمة مشغولة حاليًا. حاول بعد قليل.";
+    const genericUnavailable = "الخدمة غير متاحة الآن. حاول مرة أخرى بعد قليل.";
 
     if (/quota|billing details|exceeded your current quota|insufficient_quota/i.test(readableDetails)) {
       return "وصلت إلى الحد المتاح في باقتك اليوم. يمكنك المحاولة لاحقًا أو ترقية الباقة.";
@@ -6537,10 +6556,10 @@
       return "تعذر إعداد خدمة الشات الآن. حاول مرة أخرى بعد قليل.";
     }
 
-    if (reason === "attachment_not_supported") {
+    if (reason === "attachment_not_supported" || reason === "unsupported_image") {
       return hasAttachment
-        ? "هذا النوع من المرفقات غير متاح حاليًا."
-        : "هذا النوع من الطلبات غير متاح حاليًا.";
+        ? "توليد الصور غير متاح حاليًا."
+        : "توليد الصور غير متاح حاليًا.";
     }
 
     if (reason === "server_unavailable") {
@@ -6561,16 +6580,14 @@
         return "تعذر تنفيذ الطلب الآن. حاول مرة أخرى بعد قليل.";
       }
 
-      return "الخدمة غير متاحة الآن. حاول مرة أخرى بعد قليل.";
+      return genericUnavailable;
     }
 
     if (reason === "request_failed") {
-      return currentMessage && !/openai_api_key|static hosting detected|page could not be found|route not found|not found|invalid api response/i.test(readableDetails)
-        ? currentMessage
-        : "تعذر الاتصال بالخادم حاليًا. حاول مرة أخرى بعد قليل.";
+      return genericConnection;
     }
 
-    return currentMessage || "تعذر الاتصال بالخادم حاليًا. حاول مرة أخرى بعد قليل.";
+    return genericConnection;
   }
 
   function buildRuntimeApiUnavailableResponse(question, route, reason = "request_failed", details = "") {
