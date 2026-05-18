@@ -7,6 +7,7 @@ const { promisify } = require("util");
 const { openAiWebSearchV2Raw, resolveOpenAiWebSearchV2Model } = require("./openAiWebSearchV2");
 const aiIntelligence = require("./ai-intelligence-layer");
 const { seedAiKnowledgeBase } = require("./ai-knowledge-seed");
+const { createRealScaleInfra } = require("./ai-real-scale-infra");
 
 const execFileAsync = promisify(execFile);
 
@@ -15,6 +16,7 @@ loadEnvFile(path.join(ROOT_DIR, ".env"));
 const ASSISTANT_V3_VERSION = "ASSISTANT_V3_ROUTE_WORKING";
 const OPENAI_ONLY_FINAL_999 = "OPENAI_ONLY_FINAL_999";
 const PORT = Number(process.env.PORT || 3000);
+const realScaleInfra = createRealScaleInfra({ serviceName: "mullem-main" });
 const IS_CLOUD_RUNTIME = Boolean(
   process.env.RENDER ||
   process.env.RENDER_EXTERNAL_URL ||
@@ -447,11 +449,13 @@ function recordAiProviderHealth(provider, ok, latencyMs = 0, error = null) {
     target.last_success_at = new Date().toISOString();
     target.last_error = null;
     target.failure_streak = 0;
+    realScaleInfra.recordProviderSuccess(key, latencyMs);
     return;
   }
   target.last_error_at = new Date().toISOString();
   target.last_error = String(error?.message || error || "Unknown AI provider error").slice(0, 500);
   target.failure_streak = Math.max(1, Number(target.failure_streak || 0) + 1);
+  realScaleInfra.recordProviderFailure(key, error);
 }
 
 function recordAiSubsystemHealth(subsystem, ok, latencyMs = 0, error = null) {
@@ -798,6 +802,11 @@ async function enforceAiAbuseProtection(req, { user, message = "", operation = "
     score: signal.score,
     prompt_hash: signal.promptHash
   });
+  await realScaleInfra.trackAbuseSignal(
+    `${user?.id || getClientIp(req)}:${operation}`,
+    signal.reasons.join(",") || signal.action,
+    AI_ABUSE_WINDOW_MS
+  );
   if (signal.action === "temporary_block") {
     throw createPublicHttpError(429, "ABUSE_TEMPORARY_BLOCK", "تم إيقاف الطلب مؤقتًا بسبب نمط استخدام غير طبيعي. حاول لاحقًا.", {
       reasons: signal.reasons,
@@ -943,6 +952,36 @@ function buildOpenAiFallbackProfile(profile = {}) {
 async function callAiWithSessionRecovery({ input, modelProfile, routing = {}, operation = "chat" } = {}) {
   const primaryProfile = modelProfile || routing.modelProfile || modelProfiles.orlixor;
   const primaryProvider = resolveProfileProvider(primaryProfile);
+  const primaryCircuit = realScaleInfra.canCallProvider(primaryProvider);
+  if (!primaryCircuit.allowed) {
+    const circuitFallbackProfile = primaryProvider === "openai"
+      ? buildDeepSeekFallbackProfile(primaryProfile)
+      : buildOpenAiFallbackProfile(primaryProfile);
+    if (!circuitFallbackProfile) {
+      throw createPublicHttpError(503, "AI_PROVIDER_CIRCUIT_OPEN", "AI provider is temporarily unavailable. Please try again shortly.", {
+        provider: primaryProvider,
+        retry_after_ms: primaryCircuit.retry_after_ms || 0
+      });
+    }
+    console.warn("[AI_CIRCUIT_FALLBACK]", {
+      operation,
+      from: primaryProvider,
+      to: resolveProfileProvider(circuitFallbackProfile),
+      retry_after_ms: primaryCircuit.retry_after_ms || 0
+    });
+    const recovered = await callOpenAI({ input, modelProfile: circuitFallbackProfile });
+    aiRuntimeState.scaling.fallbackRecoveries += 1;
+    return {
+      ...recovered,
+      recovered: true,
+      provider: recovered.provider || resolveProfileProvider(circuitFallbackProfile),
+      fallback: {
+        from_provider: primaryProvider,
+        to_provider: resolveProfileProvider(circuitFallbackProfile),
+        reason: "provider_circuit_open"
+      }
+    };
+  }
   try {
     const primaryResult = await callOpenAI({ input, modelProfile: primaryProfile });
     return { ...primaryResult, recovered: false, provider: primaryResult.provider || primaryProvider };
@@ -1252,6 +1291,28 @@ function sendText(req, res, statusCode, text, contentType = "text/plain; charset
   }
   res.writeHead(statusCode, { "Content-Type": contentType });
   res.end(text);
+}
+
+function sendSseHeaders(req, res) {
+  setCorsHeaders(req, res);
+  res.writeHead(200, {
+    "Content-Type": "text/event-stream; charset=utf-8",
+    "Cache-Control": "no-cache, no-transform",
+    Connection: "keep-alive",
+    "X-Accel-Buffering": "no"
+  });
+}
+
+function writeSse(res, event, data) {
+  res.write(`event: ${event}\n`);
+  res.write(`data: ${JSON.stringify(data || {})}\n\n`);
+}
+
+function streamTextAsSse(res, text) {
+  const chunks = String(text || "").match(/[\s\S]{1,96}/g) || [];
+  for (const chunk of chunks) {
+    writeSse(res, "delta", { text: chunk });
+  }
 }
 
 function readRequestBody(req) {
@@ -1587,19 +1648,38 @@ function getRateLimitConfig(requestPath) {
   if (requestPath === "/api/solve-question") {
     return { limit: RATE_LIMIT_SOLVE_MAX, windowMs: RATE_LIMIT_WINDOW_MS, bucket: "solve" };
   }
+  if (requestPath.startsWith("/api/admin/")) {
+    return { limit: Math.max(RATE_LIMIT_GENERAL_MAX, 300), windowMs: RATE_LIMIT_WINDOW_MS, bucket: "admin_api" };
+  }
   if (requestPath.startsWith("/api/")) {
     return { limit: RATE_LIMIT_GENERAL_MAX, windowMs: RATE_LIMIT_WINDOW_MS, bucket: "api" };
   }
   return null;
 }
 
-function applyRateLimit(req, res, requestPath) {
+async function applyRateLimit(req, res, requestPath) {
   const config = getRateLimitConfig(requestPath);
   if (!config) return false;
 
   const now = Date.now();
   const ip = getClientIp(req);
   const key = `${config.bucket}:${ip}`;
+  const distributed = await realScaleInfra.consumeRateLimit(key, config.limit, config.windowMs);
+  if (!distributed.allowed) {
+    const retryAfterSeconds = Math.max(1, Math.ceil(Number(distributed.retry_after_ms || config.windowMs) / 1000));
+    sendJson(req, res, 429, {
+      success: false,
+      code: "rate_limited",
+      message: "Too many requests. Please try again shortly.",
+      distributed: true
+    }, {
+      "Retry-After": retryAfterSeconds
+    });
+    return true;
+  }
+  if (distributed.count > 0) {
+    return false;
+  }
   const current = rateLimitStore.get(key);
 
   if (!current || current.expiresAt <= now) {
@@ -2687,6 +2767,27 @@ function setCachedModelResponse(cacheKey, value) {
   });
 }
 
+async function getCachedModelResponseAny(cacheKey, metadata = {}) {
+  if (!cacheKey) return null;
+  const local = getCachedModelResponse(cacheKey);
+  if (local) return { ...local, __cacheLayer: "memory" };
+  const remote = await realScaleInfra.getAiCache("prompt", {
+    ...metadata,
+    prompt: cacheKey
+  });
+  const value = remote?.value?.value;
+  return value?.text ? { ...value, __cacheLayer: remote.layer || "redis" } : null;
+}
+
+async function setCachedModelResponseAny(cacheKey, value, metadata = {}) {
+  if (!cacheKey || !value?.text) return;
+  setCachedModelResponse(cacheKey, value);
+  await realScaleInfra.setAiCache("prompt", {
+    ...metadata,
+    prompt: cacheKey
+  }, value, 10 * 60 * 1000);
+}
+
 function buildModelCacheKey({ user, routing, messages }) {
   const source = JSON.stringify({
     plan: routing?.planKey,
@@ -2939,8 +3040,14 @@ async function getAuthContext(req) {
 
   const tokenHash = hashApiToken(rawToken);
   let user = null;
+  const cachedSession = await realScaleInfra.getJson(`session:${tokenHash}`);
+  if (cachedSession?.user?.id && Number(cachedSession.expiresAt || 0) > Date.now()) {
+    user = cachedSession.user;
+  }
   try {
-    user = await databaseClient.findUserByTokenHash(tokenHash);
+    if (!user) {
+      user = await databaseClient.findUserByTokenHash(tokenHash);
+    }
   } catch (error) {
     console.warn("[mullem] persistent auth lookup failed:", error?.message || error);
   }
@@ -2962,6 +3069,10 @@ async function getAuthContext(req) {
   } catch (error) {
     console.warn("[mullem] auth token touch skipped:", error?.message || error);
   }
+  await realScaleInfra.setJson(`session:${tokenHash}`, {
+    user,
+    expiresAt: Date.now() + 60_000
+  }, 60_000);
   req.__mullemAuthContext = { token: rawToken, tokenHash, user };
   return req.__mullemAuthContext;
 }
@@ -5253,6 +5364,7 @@ async function buildAiHealthSnapshot(options = {}) {
     },
     safe_mode: safeMode,
     scaling: buildScalingSnapshot(),
+    real_scale: realScaleInfra.getStatus(),
     alerts: []
   };
   health.alerts = buildAiAlerts({ costStats, safeMode, analytics });
@@ -7458,7 +7570,11 @@ async function handleChatSend(req, res) {
   const chatMessages = await buildChatMessages(conversation, chatPayload);
   const retrievedKnowledge = chatPayload.__retrievedKnowledge || { context: "", sources: [] };
   const cacheKey = !attachmentImages.length ? buildModelCacheKey({ user: activeUser, routing, messages: chatMessages }) : "";
-  const cachedResult = cacheKey ? getCachedModelResponse(cacheKey) : null;
+  const cachedResult = cacheKey ? await getCachedModelResponseAny(cacheKey, {
+    plan: routing.planKey,
+    model: selectedModel,
+    message
+  }) : null;
   const result = cachedResult || (attachmentImages.length
     ? await withAiQueueSlot({ routing, operation: "vision_chat" }, () => callOpenAIVision({
         modelProfile,
@@ -7472,7 +7588,11 @@ async function handleChatSend(req, res) {
         input: buildResponsesInput(chatMessages)
       })));
   if (!cachedResult && cacheKey) {
-    setCachedModelResponse(cacheKey, result);
+    await setCachedModelResponseAny(cacheKey, result, {
+      plan: routing.planKey,
+      model: selectedModel,
+      message
+    });
   }
   const assistantText = sanitizeModelDisplayText(result.text);
   const xpCost = calculateFinalXpCost(modelProfile, assistantText, attachmentCount, attachmentNames, result.usage) + overageXpCost;
@@ -7484,6 +7604,16 @@ async function handleChatSend(req, res) {
   });
   const provider = normalizeProviderKey(result.provider || resolveProfileProvider(modelProfile));
   const totalCostEstimateUsd = estimateAiCostUsd(provider, result.usage);
+  realScaleInfra.recordAiRequest({
+    provider,
+    model: selectedModel,
+    plan: routing.planKey,
+    routeReason: routing.routeReason,
+    ragUsed: retrievedKnowledge.sources.length > 0,
+    latencyMs: Date.now() - startedAt,
+    costUsd: totalCostEstimateUsd,
+    cached: Boolean(cachedResult)
+  });
   await notifyUsageSignals(req, {
     user: activeUser,
     routing,
@@ -7937,6 +8067,7 @@ async function buildScaleGrowthSnapshot(options = {}) {
     knowledge_expansion: dbAnalytics.knowledge_expansion || { suggestions: [] },
     reputation: dbAnalytics.reputation || { shadow_banned_users: 0, avg_trust_score: 0, avg_abuse_score: 0, high_abuse_users: 0 },
     scaling,
+    real_scale: realScaleInfra.getStatus(),
     safe_mode: health.safe_mode,
     cost_guardrails: health.cost_guardrails,
     recommendations
@@ -7953,6 +8084,54 @@ async function handleAdminScaleGrowth(req, res) {
     success: true,
     data: snapshot
   });
+}
+
+async function buildRealScaleSnapshot() {
+  const health = await buildAiHealthSnapshot();
+  return {
+    generated_at: new Date().toISOString(),
+    readiness: {
+      redis_ready: Boolean(health.real_scale?.redis?.connected),
+      queue_ready: ["bullmq", "memory"].includes(String(health.real_scale?.queue?.mode || "")),
+      ai_service_ready: Boolean(health.real_scale?.separate_ai_service),
+      streaming_ready: Boolean(health.real_scale?.streaming?.sse_enabled),
+      monitoring_ready: Boolean(health.real_scale?.monitoring?.prometheus_enabled),
+      sentry_ready: Boolean(health.real_scale?.monitoring?.sentry_enabled),
+      real_embeddings_ready: Boolean(health.real_scale?.embeddings?.production_ready),
+      fallback_safe: true
+    },
+    real_scale: health.real_scale,
+    cost_guardrails: health.cost_guardrails,
+    safe_mode: health.safe_mode,
+    disaster_protection: health.real_scale?.disaster_protection || {},
+    alerts: health.alerts || [],
+    recommendations: [
+      health.real_scale?.redis?.connected ? "" : "Configure REDIS_URL in production to move rate limits, queue state, cache, abuse tracking, and live metrics out of process memory.",
+      health.real_scale?.queue?.mode === "bullmq" ? "" : "Run npm run ai:worker after Redis is configured to process heavy AI jobs outside the main web process.",
+      health.real_scale?.embeddings?.production_ready ? "" : "Enable ORLIXOR_ENABLE_EMBEDDINGS=true with pgvector or Qdrant before high-traffic semantic RAG.",
+      health.real_scale?.monitoring?.sentry_enabled ? "" : "Set SENTRY_DSN to capture provider failures and production exceptions.",
+      "Keep Fine-tuning disabled until sanitized, reviewed datasets are approved by admins."
+    ].filter(Boolean)
+  };
+}
+
+async function handleAdminRealScale(req, res) {
+  await requireAdminUser(req);
+  sendJson(req, res, 200, {
+    success: true,
+    data: await buildRealScaleSnapshot()
+  });
+}
+
+async function handleAdminPrometheusMetrics(req, res) {
+  await requireAdminUser(req);
+  const body = await realScaleInfra.getPrometheusMetrics();
+  setCorsHeaders(req, res);
+  res.writeHead(200, {
+    "Content-Type": "text/plain; version=0.0.4; charset=utf-8",
+    "Cache-Control": "no-store"
+  });
+  res.end(body);
 }
 
 async function handleReferralMe(req, res) {
@@ -8098,6 +8277,17 @@ async function handleAdminKnowledgeIngest(req, res) {
       }
     });
     if (chunk) savedChunks.push(chunk);
+  }
+  if (status === "approved" && savedChunks.length) {
+    await realScaleInfra.enqueueJob("embeddings:generation", {
+      source_id: source?.id || null,
+      source_key: source?.source_key || null,
+      chunks: savedChunks.map((chunk) => ({
+        id: chunk.id,
+        chunk_key: chunk.chunk_key || chunk.chunkKey || null
+      })),
+      mode: ORLIXOR_ENABLE_EMBEDDINGS ? "refresh_embedding" : "awaiting_embeddings_enablement"
+    });
   }
 
   sendJson(req, res, 201, {
@@ -8733,7 +8923,11 @@ async function handleAssistantV3Protected(req, res) {
     }
   ]);
   const cacheKey = buildModelCacheKey({ user: activeUser, routing, messages: prompt });
-  const cachedResult = getCachedModelResponse(cacheKey);
+  const cachedResult = await getCachedModelResponseAny(cacheKey, {
+    plan: routing.planKey,
+    model: routing.modelKey,
+    message
+  });
   const result = cachedResult || await withAiQueueSlot({ routing, operation: "assistant_v3" }, () => callAiWithSessionRecovery({
     modelProfile,
     routing,
@@ -8741,7 +8935,11 @@ async function handleAssistantV3Protected(req, res) {
     input: prompt
   }));
   if (!cachedResult) {
-    setCachedModelResponse(cacheKey, result);
+    await setCachedModelResponseAny(cacheKey, result, {
+      plan: routing.planKey,
+      model: routing.modelKey,
+      message
+    });
   }
 
   const answer = sanitizeModelDisplayText(result.text);
@@ -8756,6 +8954,16 @@ async function handleAssistantV3Protected(req, res) {
   });
   const provider = normalizeProviderKey(result.provider || resolveProfileProvider(modelProfile));
   const totalCostEstimateUsd = estimateAiCostUsd(provider, result.usage);
+  realScaleInfra.recordAiRequest({
+    provider,
+    model: routing.modelKey,
+    plan: routing.planKey,
+    routeReason: routing.routeReason,
+    ragUsed: assistantKnowledge.sources.length > 0,
+    latencyMs: Date.now() - startedAt,
+    costUsd: totalCostEstimateUsd,
+    cached: Boolean(cachedResult)
+  });
   await notifyUsageSignals(req, {
     user: activeUser,
     routing,
@@ -9739,7 +9947,17 @@ async function handleSolveQuestion(req, res) {
     lesson,
     attachment_images: attachmentImages
   });
-  const result = attachmentImages.length
+  const solveCacheKey = !attachmentImages.length ? buildModelCacheKey({
+    user: activeUser,
+    routing,
+    messages: solvePrompt
+  }) : "";
+  const solveCachedResult = solveCacheKey ? await getCachedModelResponseAny(solveCacheKey, {
+    plan: routing.planKey,
+    model: selectedModel,
+    message: question
+  }) : null;
+  const result = solveCachedResult || (attachmentImages.length
     ? await withAiQueueSlot({ routing, operation: "vision_solve" }, () => callOpenAIVision({
         modelProfile,
         messages: [{ role: "user", content: solvePrompt }],
@@ -9750,7 +9968,14 @@ async function handleSolveQuestion(req, res) {
         routing,
         operation: "solve",
         input: solvePrompt
-      }));
+      })));
+  if (!solveCachedResult && solveCacheKey) {
+    await setCachedModelResponseAny(solveCacheKey, result, {
+      plan: routing.planKey,
+      model: selectedModel,
+      message: question
+    });
+  }
 
   const cleanedSolveText = sanitizeModelDisplayText(result.text);
   const parsed = extractJsonObject(cleanedSolveText);
@@ -9766,7 +9991,19 @@ async function handleSolveQuestion(req, res) {
     answer: normalized.display_text || cleanedSolveText,
     usage: result.usage,
     latencyMs: Date.now() - startedAt,
-    cached: false
+    cached: Boolean(solveCachedResult)
+  });
+  const solveProvider = normalizeProviderKey(result.provider || resolveProfileProvider(modelProfile));
+  const solveCostEstimateUsd = estimateAiCostUsd(solveProvider, result.usage);
+  realScaleInfra.recordAiRequest({
+    provider: solveProvider,
+    model: selectedModel,
+    plan: routing.planKey,
+    routeReason: routing.routeReason,
+    ragUsed: false,
+    latencyMs: Date.now() - startedAt,
+    costUsd: solveCostEstimateUsd,
+    cached: Boolean(solveCachedResult)
   });
   await notifyUsageSignals(req, {
     user: activeUser,
@@ -9849,6 +10086,179 @@ async function handleSolveQuestion(req, res) {
     overage_tokens: Number(routing.extraTokens || 0),
     remaining_xp: Number(chargedUser?.xp ?? activeUser.xp ?? 0)
   });
+}
+
+async function handleChatStream(req, res) {
+  const startedAt = Date.now();
+  const payload = await parseJsonBody(req);
+  const message = requireTextField(payload.message || payload.prompt || payload.text, "message", MAX_MESSAGE_LENGTH);
+  const attachmentNames = sanitizeAttachmentNames(payload.attachment_names || payload.attachmentNames);
+  const attachmentCount = Math.max(attachmentNames.length, Number(payload.attachment_count || payload.attachmentCount || 0) || 0);
+  const auth = await getAuthContext(req);
+  const activeUser = auth?.user ? await syncUserDailyProgressSafely(auth.user, "streaming_chat") : null;
+  if (!activeUser) {
+    throw createHttpError(401, "Authentication is required to use streaming chat.");
+  }
+
+  req.__businessContext = {
+    user: activeUser,
+    plan: getUserPlanKey(activeUser),
+    route: "/api/chat/stream",
+    operation: "chat_stream",
+    message
+  };
+
+  const abuseSignal = await enforceAiAbuseProtection(req, {
+    user: activeUser,
+    message,
+    operation: "chat_stream",
+    plan: getUserPlanKey(activeUser)
+  });
+  const requestedModel = normalizeSelectedModel(payload.selected_model || payload.selectedModel || payload.model || "orlixor");
+  const routing = routeModelForUser({
+    user: activeUser,
+    requestedModel,
+    message,
+    attachmentCount,
+    attachmentNames,
+    operation: "chat"
+  });
+  if (abuseSignal?.shadowLimit) {
+    routing.modelProfile.maxOutputTokens = Math.min(Number(routing.modelProfile.maxOutputTokens || OPENAI_MAX_OUTPUT_TOKENS), 360);
+    routing.modelProfile.maxContextTokens = Math.min(Number(routing.modelProfile.maxContextTokens || FREE_MAX_CONTEXT_TOKENS), FREE_MAX_CONTEXT_TOKENS);
+    routing.routeReason = `${routing.routeReason}|shadow_limit`;
+  }
+
+  const usageStatsBefore = await getUserUsageStats(activeUser);
+  await enforceModelUsageLimits(activeUser, routing, {
+    confirmOverage: Boolean(payload.confirm_overage || payload.confirmOverage)
+  });
+  await enforceAiProductionGuardrails(activeUser, routing, {
+    operation: "chat_stream",
+    attachmentCount
+  });
+  const selectedModel = routing.modelKey;
+  const modelProfile = applyUserModelLimits(routing.modelProfile, activeUser);
+  const overageXpCost = Math.max(0, Number(routing.extraXpCost || 0));
+  const preflightXpCost = getPreflightXpCost(modelProfile, attachmentCount, attachmentNames) + overageXpCost;
+  const currentXp = Math.max(0, Number(activeUser.xp || 0));
+  if (currentXp < preflightXpCost) {
+    throw createHttpError(402, `Insufficient XP balance. This request needs ${preflightXpCost} XP.`);
+  }
+
+  const retrievedKnowledge = await getRetrievedKnowledgeContext({
+    message,
+    analysis: routing.intelligence,
+    user: activeUser
+  });
+  const streamMessages = [
+    {
+      role: "system",
+      content: aiIntelligence.buildDynamicSystemPrompt({
+        basePrompt: modelProfile.systemPrompt,
+        analysis: routing.intelligence,
+        planKey: routing.planKey,
+        ragContext: retrievedKnowledge.context
+      })
+    },
+    {
+      role: "user",
+      content: retrievedKnowledge.context
+        ? `${message}\n\nRelevant approved context:\n${retrievedKnowledge.context}`
+        : message
+    }
+  ];
+  const cacheKey = buildModelCacheKey({ user: activeUser, routing, messages: streamMessages });
+
+  sendSseHeaders(req, res);
+  writeSse(res, "route", {
+    model: selectedModel,
+    provider: normalizeProviderKey(resolveProfileProvider(modelProfile)),
+    plan: routing.planKey,
+    route_reason: routing.routeReason,
+    rag_used: retrievedKnowledge.sources.length > 0
+  });
+
+  try {
+    const cachedResult = await getCachedModelResponseAny(cacheKey, {
+      plan: routing.planKey,
+      model: selectedModel,
+      message
+    });
+    const result = cachedResult || await withAiQueueSlot({ routing, operation: "chat_stream" }, () => callAiWithSessionRecovery({
+      modelProfile,
+      routing,
+      operation: "chat_stream",
+      input: buildResponsesInput(streamMessages)
+    }));
+    if (!cachedResult) {
+      await setCachedModelResponseAny(cacheKey, result, {
+        plan: routing.planKey,
+        model: selectedModel,
+        message
+      });
+    }
+
+    const assistantText = sanitizeModelDisplayText(result.text);
+    const xpCost = calculateFinalXpCost(modelProfile, assistantText, attachmentCount, attachmentNames, result.usage) + overageXpCost;
+    const quality = aiIntelligence.scoreResponse({
+      answer: assistantText,
+      usage: result.usage,
+      latencyMs: Date.now() - startedAt,
+      cached: Boolean(cachedResult)
+    });
+    const provider = normalizeProviderKey(result.provider || resolveProfileProvider(modelProfile));
+    const totalCostEstimateUsd = estimateAiCostUsd(provider, result.usage);
+    realScaleInfra.recordAiRequest({
+      provider,
+      model: selectedModel,
+      plan: routing.planKey,
+      routeReason: routing.routeReason,
+      ragUsed: retrievedKnowledge.sources.length > 0,
+      latencyMs: Date.now() - startedAt,
+      costUsd: totalCostEstimateUsd,
+      cached: Boolean(cachedResult)
+    });
+    await notifyUsageSignals(req, {
+      user: activeUser,
+      routing,
+      stats: usageStatsBefore,
+      usage: result.usage,
+      xpCost,
+      quality,
+      result
+    });
+    await recordKnowledgeExpansionCandidate(req, {
+      message,
+      routing,
+      ragSources: retrievedKnowledge.sources.length
+    });
+    const chargedUser = await chargeUserForMessage(activeUser, xpCost, `stream:${modelProfile.name}`);
+
+    writeSse(res, "meta", {
+      cached: Boolean(cachedResult),
+      xp_spent: xpCost,
+      remaining_xp: Number(chargedUser?.xp ?? activeUser.xp ?? 0),
+      quality_score: quality.qualityScore,
+      usage: result.usage || {},
+      fallback: result.fallback || null,
+      queue: result.queue || null
+    });
+    streamTextAsSse(res, assistantText);
+    writeSse(res, "done", {
+      success: true,
+      latency_ms: Date.now() - startedAt
+    });
+    res.end();
+  } catch (error) {
+    realScaleInfra.captureError(error, { route: "/api/chat/stream" });
+    writeSse(res, "error", {
+      success: false,
+      code: error?.code || "CHAT_STREAM_FAILED",
+      message: error?.message || String(error)
+    });
+    res.end();
+  }
 }
 
 async function handleListChatSessions(req, res) {
@@ -10071,7 +10481,7 @@ async function routeRequest(req, res) {
     return;
   }
 
-  if (applyRateLimit(req, res, requestPath)) {
+  if (await applyRateLimit(req, res, requestPath)) {
     return;
   }
 
@@ -10367,6 +10777,16 @@ async function routeRequest(req, res) {
 
   if (req.method === "GET" && requestPath === "/api/admin/scale-growth") {
     await handleAdminScaleGrowth(req, res);
+    return;
+  }
+
+  if (req.method === "GET" && requestPath === "/api/admin/real-scale") {
+    await handleAdminRealScale(req, res);
+    return;
+  }
+
+  if (req.method === "GET" && requestPath === "/api/admin/prometheus") {
+    await handleAdminPrometheusMetrics(req, res);
     return;
   }
 
@@ -10678,11 +11098,7 @@ async function routeRequest(req, res) {
   }
 
   if (req.method === "POST" && requestPath === "/api/chat/stream") {
-    sendJson(req, res, 501, {
-      success: false,
-      request_id: requestId,
-      message: "Streaming is not enabled in this server build."
-    });
+    await handleChatStream(req, res);
     return;
   }
 
@@ -10747,7 +11163,11 @@ function startServer(port = PORT) {
     return serverStartPromise;
   }
 
-  serverStartPromise = initializeDatabaseLayerWithTimeout()
+  serverStartPromise = realScaleInfra.initialize()
+    .catch((error) => {
+      console.warn("[mullem] real scale infra warning:", error?.message || error);
+    })
+    .then(() => initializeDatabaseLayerWithTimeout())
     .then(() => new Promise((resolve, reject) => {
       const handleError = (error) => {
         server.off("listening", handleListening);
@@ -10779,6 +11199,11 @@ function stopServer() {
         } catch (_) {
           // Ignore shutdown errors.
         }
+      }
+      try {
+        await realScaleInfra.close();
+      } catch (_) {
+        // Ignore shutdown errors.
       }
       serverStartPromise = null;
       resolve();

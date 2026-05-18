@@ -16,11 +16,18 @@
     "ai:launch-check": "node ai-launch-readiness.js",
     "ai:beta-report": "node ai-beta-weekly-report.js",
     "ai:scale-check": "node ai-scale-growth-check.js",
+    "ai:real-scale-check": "node ai-real-scale-check.js",
+    "ai:worker": "node ai-worker.js",
+    "ai:service": "node ai-service.js",
     "render:build": "npm ci && node render-build-check.js",
     "render:start": "node render-ensure-runtime.js && node server.js"
   },
   "dependencies": {
+    "@sentry/node": "^10.53.1",
+    "bullmq": "^5.76.10",
+    "ioredis": "^5.10.1",
     "openai": "^6.37.0",
-    "pg": "^8.20.0"
+    "pg": "^8.20.0",
+    "prom-client": "^15.1.3"
   }
 }
