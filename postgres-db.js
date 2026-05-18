@@ -273,6 +273,10 @@ function hydrateUserRow(row) {
     trust_score: Number(row.trust_score ?? 70),
     abuse_score: Number(row.abuse_score || 0),
     shadow_banned: normalizeBoolean(row.shadow_banned),
+    allow_conversation_improvement: row.allow_conversation_improvement !== false,
+    memory_enabled: row.memory_enabled !== false,
+    privacy_settings: row.privacy_settings && typeof row.privacy_settings === "object" ? row.privacy_settings : {},
+    deleted_at: row.deleted_at || null,
     last_reset: row.last_reset || row.last_active_date || null,
     last_daily_xp_claimed_date: row.last_daily_xp_claimed_date || row.last_reset || row.last_active_date || null,
     last_daily_xp_granted_at: row.last_daily_xp_granted_at || null,
@@ -287,16 +291,16 @@ function buildAssignments(changes = {}, mappings = {}) {
 
   for (const [key, column] of Object.entries(mappings)) {
     if (!(key in changes)) continue;
-    if (key === "achievements") {
+    if (key === "achievements" || key === "privacy_settings") {
       sets.push(`${column} = $${values.length + 1}::jsonb`);
-      values.push(JSON.stringify(normalizeAchievements(changes[key])));
+      values.push(JSON.stringify(key === "achievements" ? normalizeAchievements(changes[key]) : (changes[key] || {})));
     } else if (key === "benefits") {
       sets.push(`${column} = $${values.length + 1}`);
       values.push(serializeBenefits(changes[key]));
-    } else if (key === "is_active" || key === "is_default" || key === "is_archived" || key === "signup_bonus_claimed") {
+    } else if (key === "is_active" || key === "is_default" || key === "is_archived" || key === "signup_bonus_claimed" || key === "allow_conversation_improvement" || key === "memory_enabled") {
       sets.push(`${column} = $${values.length + 1}`);
       values.push(Boolean(changes[key]));
-    } else if (key === "package_started_at" || key === "package_expires_at" || key === "last_daily_xp_granted_at" || key === "last_daily_reward_at" || key === "last_daily_reward_claimed_at") {
+    } else if (key === "package_started_at" || key === "package_expires_at" || key === "last_daily_xp_granted_at" || key === "last_daily_reward_at" || key === "last_daily_reward_claimed_at" || key === "deleted_at") {
       sets.push(`${column} = $${values.length + 1}`);
       values.push(toSqlDateTime(changes[key]));
     } else {
@@ -466,6 +470,10 @@ function createPostgresDatabaseClient(rawConfig = {}) {
         trust_score INTEGER NOT NULL DEFAULT 70,
         abuse_score INTEGER NOT NULL DEFAULT 0,
         shadow_banned BOOLEAN NOT NULL DEFAULT FALSE,
+        allow_conversation_improvement BOOLEAN NOT NULL DEFAULT TRUE,
+        memory_enabled BOOLEAN NOT NULL DEFAULT TRUE,
+        privacy_settings JSONB NOT NULL DEFAULT '{}'::jsonb,
+        deleted_at TIMESTAMPTZ NULL,
         last_active_date DATE NULL,
         last_reset DATE NULL,
         last_daily_reward_claimed_at TIMESTAMPTZ NULL,
@@ -507,6 +515,10 @@ function createPostgresDatabaseClient(rawConfig = {}) {
     await ensureColumn("app_users", "trust_score", "trust_score INTEGER NOT NULL DEFAULT 70");
     await ensureColumn("app_users", "abuse_score", "abuse_score INTEGER NOT NULL DEFAULT 0");
     await ensureColumn("app_users", "shadow_banned", "shadow_banned BOOLEAN NOT NULL DEFAULT FALSE");
+    await ensureColumn("app_users", "allow_conversation_improvement", "allow_conversation_improvement BOOLEAN NOT NULL DEFAULT TRUE");
+    await ensureColumn("app_users", "memory_enabled", "memory_enabled BOOLEAN NOT NULL DEFAULT TRUE");
+    await ensureColumn("app_users", "privacy_settings", "privacy_settings JSONB NOT NULL DEFAULT '{}'::jsonb");
+    await ensureColumn("app_users", "deleted_at", "deleted_at TIMESTAMPTZ NULL");
     await pool.query("CREATE UNIQUE INDEX IF NOT EXISTS uq_app_users_referral_code ON app_users (referral_code) WHERE referral_code IS NOT NULL");
     await pool.query("ALTER TABLE app_users ALTER COLUMN signup_bonus_claimed SET DEFAULT FALSE");
     await pool.query(`
@@ -996,9 +1008,11 @@ function createPostgresDatabaseClient(rawConfig = {}) {
         target_id VARCHAR(120) NULL,
         details_json JSONB NULL,
         ip_address VARCHAR(80) NULL,
+        user_agent VARCHAR(300) NULL,
         created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
       )
     `);
+    await ensureColumn("admin_logs", "user_agent", "user_agent VARCHAR(300) NULL");
     await pool.query("CREATE INDEX IF NOT EXISTS idx_admin_logs_admin_created ON admin_logs (admin_id, created_at DESC)");
     await pool.query("CREATE INDEX IF NOT EXISTS idx_admin_logs_target ON admin_logs (target_type, target_id)");
 
@@ -3698,8 +3712,8 @@ function createPostgresDatabaseClient(rawConfig = {}) {
     if (!action) return null;
     const rows = await query(
       `
-        INSERT INTO admin_logs (admin_id, action, target_type, target_id, details_json, ip_address)
-        VALUES ($1, $2, $3, $4, $5::jsonb, $6)
+        INSERT INTO admin_logs (admin_id, action, target_type, target_id, details_json, ip_address, user_agent)
+        VALUES ($1, $2, $3, $4, $5::jsonb, $6, $7)
         RETURNING *
       `,
       [
@@ -3708,7 +3722,8 @@ function createPostgresDatabaseClient(rawConfig = {}) {
         String(payload.target_type || payload.targetType || "").trim().slice(0, 80) || null,
         payload.target_id || payload.targetId ? String(payload.target_id || payload.targetId).slice(0, 120) : null,
         payload.details_json || payload.details || payload.detailsJson ? JSON.stringify(payload.details_json || payload.details || payload.detailsJson) : null,
-        String(payload.ip_address || payload.ipAddress || "").trim().slice(0, 80) || null
+        String(payload.ip_address || payload.ipAddress || "").trim().slice(0, 80) || null,
+        String(payload.user_agent || payload.userAgent || "").trim().slice(0, 300) || null
       ]
     );
     return rows[0] || null;
@@ -4346,13 +4361,14 @@ function createPostgresDatabaseClient(rawConfig = {}) {
         [userId, amount, type, reason, adminId]
       );
       await client.query(
-        "INSERT INTO admin_logs (admin_id, action, target_type, target_id, details_json, ip_address) VALUES ($1, $2, 'user', $3, $4::jsonb, $5)",
+        "INSERT INTO admin_logs (admin_id, action, target_type, target_id, details_json, ip_address, user_agent) VALUES ($1, $2, 'user', $3, $4::jsonb, $5, $6)",
         [
           adminId,
           amount >= 0 ? "ADMIN_ADD_XP" : "ADMIN_REMOVE_XP",
           String(userId),
           JSON.stringify({ amount, reason }),
-          String(payload.ip_address || payload.ipAddress || "").slice(0, 80) || null
+          String(payload.ip_address || payload.ipAddress || "").slice(0, 80) || null,
+          String(payload.user_agent || payload.userAgent || "").slice(0, 300) || null
         ]
       );
       await client.query("COMMIT");
@@ -4580,6 +4596,9 @@ function createPostgresDatabaseClient(rawConfig = {}) {
     if ("last_daily_xp_claimed_date" in nextChanges) nextChanges.last_daily_xp_claimed_date = nextChanges.last_daily_xp_claimed_date || null;
     if ("last_daily_xp_granted_at" in nextChanges) nextChanges.last_daily_xp_granted_at = nextChanges.last_daily_xp_granted_at || null;
     if ("signup_bonus_claimed" in nextChanges) nextChanges.signup_bonus_claimed = normalizeBoolean(nextChanges.signup_bonus_claimed);
+    if ("allow_conversation_improvement" in nextChanges) nextChanges.allow_conversation_improvement = normalizeBoolean(nextChanges.allow_conversation_improvement);
+    if ("memory_enabled" in nextChanges) nextChanges.memory_enabled = normalizeBoolean(nextChanges.memory_enabled);
+    if ("privacy_settings" in nextChanges && (!nextChanges.privacy_settings || typeof nextChanges.privacy_settings !== "object")) nextChanges.privacy_settings = {};
     if ("xp" in nextChanges && !("balance" in nextChanges)) nextChanges.balance = nextChanges.xp;
     if ("balance" in nextChanges && !("xp" in nextChanges)) nextChanges.xp = nextChanges.balance;
     if ("xp" in nextChanges && !("total_xp" in nextChanges)) nextChanges.total_xp = nextChanges.xp;
@@ -4613,6 +4632,10 @@ function createPostgresDatabaseClient(rawConfig = {}) {
       trust_score: "trust_score",
       abuse_score: "abuse_score",
       shadow_banned: "shadow_banned",
+      allow_conversation_improvement: "allow_conversation_improvement",
+      memory_enabled: "memory_enabled",
+      privacy_settings: "privacy_settings",
+      deleted_at: "deleted_at",
       last_active_date: "last_active_date",
       last_reset: "last_reset",
       last_daily_reward_claimed_at: "last_daily_reward_claimed_at",
@@ -5020,6 +5043,210 @@ function createPostgresDatabaseClient(rawConfig = {}) {
     };
   }
 
+  function publicPrivacyUser(user = {}) {
+    return {
+      id: String(user.id || ""),
+      name: user.name || "",
+      email: user.email || "",
+      role: user.role || "student",
+      plan_type: user.plan_type || "",
+      package_name: user.package_name || "",
+      allow_conversation_improvement: user.allow_conversation_improvement !== false,
+      memory_enabled: user.memory_enabled !== false,
+      privacy_settings: user.privacy_settings || {},
+      deleted_at: user.deleted_at || null,
+      created_at: user.created_at || null,
+      updated_at: user.updated_at || null
+    };
+  }
+
+  async function getUserPrivacySnapshot(userId) {
+    const safeUserId = Number(userId);
+    const user = await findUserById(safeUserId);
+    if (!user) return null;
+    const [conversationRows, messageRows, memoryRows, feedbackRows, qualityRows] = await Promise.all([
+      query("SELECT COUNT(*)::int AS count FROM conversations WHERE user_id = $1", [safeUserId]),
+      query("SELECT COUNT(*)::int AS count FROM messages WHERE user_id = $1", [safeUserId]),
+      query("SELECT id, memory_type, content, importance, created_at, updated_at FROM user_memory WHERE user_id = $1 ORDER BY importance DESC, updated_at DESC LIMIT 50", [safeUserId]),
+      query("SELECT COUNT(*)::int AS count FROM ai_feedback WHERE user_id = $1", [safeUserId]),
+      query("SELECT COUNT(*)::int AS count FROM ai_quality_events WHERE user_id = $1", [safeUserId])
+    ]);
+    return {
+      user: publicPrivacyUser(user),
+      saved_data: {
+        conversations_count: Number(conversationRows[0]?.count || 0),
+        messages_count: Number(messageRows[0]?.count || 0),
+        memory_items: memoryRows,
+        feedback_count: Number(feedbackRows[0]?.count || 0),
+        ai_quality_events_count: Number(qualityRows[0]?.count || 0)
+      }
+    };
+  }
+
+  async function exportUserData(userId) {
+    const safeUserId = Number(userId);
+    const snapshot = await getUserPrivacySnapshot(safeUserId);
+    if (!snapshot) return null;
+    const conversations = await listUserConversations(safeUserId, { limit: 100 });
+    const conversationExports = [];
+    for (const conversation of conversations) {
+      conversationExports.push({
+        conversation,
+        messages: await listMessages(conversation.id, 100)
+      });
+    }
+    const [projects, xpLedger, feedback, aiQuality, toolUsage] = await Promise.all([
+      query("SELECT id, title, subject, stage, grade, term, lesson, description, is_archived, created_at, updated_at FROM app_projects WHERE user_id = $1 ORDER BY updated_at DESC LIMIT 100", [safeUserId]),
+      query("SELECT id, amount, type, reason, created_at FROM xp_ledger WHERE user_id = $1 ORDER BY created_at DESC LIMIT 300", [safeUserId]),
+      query("SELECT id, rating, feedback_type, task_type, question_type, model_key, provider, reason, quality_score, created_at FROM ai_feedback WHERE user_id = $1 ORDER BY created_at DESC LIMIT 300", [safeUserId]),
+      query("SELECT id, task_type, question_type, model_key, provider, quality_score, latency_ms, input_tokens, output_tokens, xp_cost, user_feedback, created_at FROM ai_quality_events WHERE user_id = $1 ORDER BY created_at DESC LIMIT 300", [safeUserId]),
+      query("SELECT id, tool_key, task_type, xp_cost, input_tokens, output_tokens, created_at FROM tool_usage WHERE user_id = $1 ORDER BY created_at DESC LIMIT 300", [safeUserId])
+    ]);
+    return {
+      exported_at: new Date().toISOString(),
+      policy: "privacy-export-v1",
+      user: snapshot.user,
+      saved_data: snapshot.saved_data,
+      projects,
+      conversations: conversationExports,
+      xp_ledger: xpLedger,
+      feedback,
+      ai_quality_events: aiQuality,
+      tool_usage: toolUsage
+    };
+  }
+
+  async function updateUserPrivacySettings(userId, settings = {}) {
+    const user = await findUserById(userId);
+    if (!user) return null;
+    const current = user.privacy_settings && typeof user.privacy_settings === "object" ? user.privacy_settings : {};
+    const changes = {
+      privacy_settings: {
+        ...current,
+        allow_product_analytics: settings.allow_product_analytics !== false,
+        updated_at: new Date().toISOString()
+      }
+    };
+    if ("allow_conversation_improvement" in settings) {
+      changes.allow_conversation_improvement = normalizeBoolean(settings.allow_conversation_improvement);
+    }
+    if ("memory_enabled" in settings) {
+      changes.memory_enabled = normalizeBoolean(settings.memory_enabled);
+    }
+    return updateUser(userId, changes);
+  }
+
+  async function clearUserMemory(userId) {
+    const safeUserId = Number(userId);
+    const memory = await pool.query("DELETE FROM user_memory WHERE user_id = $1", [safeUserId]);
+    const embeddings = await pool.query("DELETE FROM message_embeddings WHERE user_id = $1", [safeUserId]);
+    await updateUser(safeUserId, { memory_enabled: false });
+    return {
+      memory_deleted: Number(memory.rowCount || 0),
+      embeddings_deleted: Number(embeddings.rowCount || 0)
+    };
+  }
+
+  async function anonymizeUserAccount(userId) {
+    const safeUserId = Number(userId);
+    if (!safeUserId) return null;
+    const client = await pool.connect();
+    try {
+      await client.query("BEGIN");
+      const userRows = await client.query("SELECT * FROM app_users WHERE id = $1 FOR UPDATE", [safeUserId]);
+      const user = userRows.rows[0] || null;
+      if (!user) {
+        await client.query("ROLLBACK");
+        return null;
+      }
+      await client.query("DELETE FROM app_api_tokens WHERE user_id = $1", [safeUserId]);
+      await client.query("DELETE FROM notification_reads WHERE user_id = $1", [safeUserId]);
+      await client.query("DELETE FROM user_memory WHERE user_id = $1", [safeUserId]);
+      await client.query("DELETE FROM message_embeddings WHERE user_id = $1", [safeUserId]);
+      await client.query("DELETE FROM feedback WHERE user_id = $1", [safeUserId]);
+      await client.query("DELETE FROM ai_feedback WHERE user_id = $1", [safeUserId]);
+      await client.query("DELETE FROM tool_usage WHERE user_id = $1", [safeUserId]);
+      await client.query("DELETE FROM xp_ledger WHERE user_id = $1", [safeUserId]);
+      await client.query("DELETE FROM app_projects WHERE user_id = $1", [safeUserId]);
+      await client.query("DELETE FROM conversations WHERE user_id = $1", [safeUserId]);
+      await client.query("DELETE FROM app_referrals WHERE referrer_user_id = $1 OR referred_user_id = $1", [safeUserId]);
+      await client.query("UPDATE app_business_events SET user_id = NULL WHERE user_id = $1", [safeUserId]);
+      await client.query("UPDATE app_abuse_events SET user_id = NULL WHERE user_id = $1", [safeUserId]);
+      await client.query("UPDATE ai_quality_events SET user_id = NULL, conversation_id = NULL, message_id = NULL WHERE user_id = $1", [safeUserId]);
+      await client.query(
+        `
+          UPDATE app_users
+          SET
+            name = 'Deleted User',
+            email = $2,
+            password_hash = 'deleted',
+            role = 'student',
+            stage = NULL,
+            grade = NULL,
+            subject = NULL,
+            package_id = NULL,
+            package_name = 'Deleted',
+            plan_type = 'deleted',
+            balance = 0,
+            xp = 0,
+            total_xp = 0,
+            daily_reward_amount = 0,
+            referral_code = NULL,
+            referred_by_user_id = NULL,
+            trust_score = 0,
+            abuse_score = 0,
+            shadow_banned = FALSE,
+            allow_conversation_improvement = FALSE,
+            memory_enabled = FALSE,
+            privacy_settings = '{"account_deleted":true}'::jsonb,
+            status = 'deleted',
+            activity = 'Account deleted by user privacy request',
+            deleted_at = NOW(),
+            updated_at = NOW()
+          WHERE id = $1
+        `,
+        [safeUserId, `deleted-${safeUserId}-${Date.now().toString(36)}@deleted.local`]
+      );
+      await client.query("COMMIT");
+      return { id: String(safeUserId), deleted: true };
+    } catch (error) {
+      await client.query("ROLLBACK").catch(() => {});
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
+  async function applyDataRetentionPolicy(policy = {}) {
+    const retention = {
+      conversations_days: Number(policy.conversations_days || 180),
+      ai_quality_events_days: Number(policy.ai_quality_events_days || 365),
+      feedback_days: Number(policy.feedback_days || 365),
+      analytics_days: Number(policy.analytics_days || 400),
+      abuse_logs_days: Number(policy.abuse_logs_days || 180),
+      admin_logs_days: Number(policy.admin_logs_days || 730),
+      deleted_account_purge_days: Number(policy.deleted_account_purge_days || 30)
+    };
+    const results = {};
+    async function run(key, sql, params) {
+      const result = await pool.query(sql, params);
+      results[key] = Number(result.rowCount || 0);
+    }
+    await run("conversations_deleted", "DELETE FROM conversations WHERE COALESCE(last_message_at, updated_at, created_at) < NOW() - ($1::text || ' days')::interval", [retention.conversations_days]);
+    await run("ai_quality_events_deleted", "DELETE FROM ai_quality_events WHERE created_at < NOW() - ($1::text || ' days')::interval", [retention.ai_quality_events_days]);
+    await run("ai_feedback_deleted", "DELETE FROM ai_feedback WHERE created_at < NOW() - ($1::text || ' days')::interval", [retention.feedback_days]);
+    await run("feedback_deleted", "DELETE FROM feedback WHERE created_at < NOW() - ($1::text || ' days')::interval", [retention.feedback_days]);
+    await run("business_events_deleted", "DELETE FROM app_business_events WHERE created_at < NOW() - ($1::text || ' days')::interval", [retention.analytics_days]);
+    await run("abuse_events_deleted", "DELETE FROM app_abuse_events WHERE created_at < NOW() - ($1::text || ' days')::interval", [retention.abuse_logs_days]);
+    await run("admin_logs_deleted", "DELETE FROM admin_logs WHERE created_at < NOW() - ($1::text || ' days')::interval", [retention.admin_logs_days]);
+    await run("deleted_accounts_purged", "DELETE FROM app_users WHERE status = 'deleted' AND deleted_at IS NOT NULL AND deleted_at < NOW() - ($1::text || ' days')::interval", [retention.deleted_account_purge_days]);
+    return {
+      ran_at: new Date().toISOString(),
+      retention,
+      results
+    };
+  }
+
   async function close() {
     if (pool) {
       await pool.end();
@@ -5114,6 +5341,12 @@ function createPostgresDatabaseClient(rawConfig = {}) {
     getAiUsageStats,
     getAdminStats,
     getStudentDashboard,
+    getUserPrivacySnapshot,
+    exportUserData,
+    updateUserPrivacySettings,
+    clearUserMemory,
+    anonymizeUserAccount,
+    applyDataRetentionPolicy,
     close
   };
 }

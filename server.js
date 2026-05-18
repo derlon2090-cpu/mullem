@@ -9,11 +9,13 @@ const aiIntelligence = require("./ai-intelligence-layer");
 const { seedAiKnowledgeBase } = require("./ai-knowledge-seed");
 const { createRealScaleInfra } = require("./ai-real-scale-infra");
 const aiOps = require("./ai-operational-governance");
+const securityCompliance = require("./security-compliance");
 
 const execFileAsync = promisify(execFile);
 
 const ROOT_DIR = __dirname;
 loadEnvFile(path.join(ROOT_DIR, ".env"));
+securityCompliance.installConsoleRedaction(process.env);
 const ASSISTANT_V3_VERSION = "ASSISTANT_V3_ROUTE_WORKING";
 const OPENAI_ONLY_FINAL_999 = "OPENAI_ONLY_FINAL_999";
 const PORT = Number(process.env.PORT || 3000);
@@ -1338,7 +1340,19 @@ function getClientIp(req) {
 
 function parseAllowedOrigins() {
   if (!CORS_ALLOWED_ORIGINS || CORS_ALLOWED_ORIGINS === "*") {
-    return { allowAll: true, values: [] };
+    if (!IS_CLOUD_RUNTIME) {
+      return { allowAll: true, values: [] };
+    }
+    const runtimeOrigins = [
+      process.env.RENDER_EXTERNAL_URL,
+      process.env.PUBLIC_APP_URL,
+      process.env.APP_URL,
+      process.env.NEXTAUTH_URL
+    ].map((item) => String(item || "").trim()).filter(Boolean);
+    return {
+      allowAll: false,
+      values: Array.from(new Set([...DEFAULT_ALLOWED_FRONTEND_ORIGINS, ...runtimeOrigins]))
+    };
   }
 
   const values = CORS_ALLOWED_ORIGINS
@@ -1372,7 +1386,19 @@ function setCorsHeaders(req, res) {
   res.setHeader("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS");
 }
 
+function setSecurityHeaders(req, res) {
+  const isHttps = String(req.headers["x-forwarded-proto"] || "").split(",")[0].trim() === "https";
+  const headers = securityCompliance.buildSecurityHeaders({
+    isCloud: IS_CLOUD_RUNTIME,
+    isHttps
+  });
+  for (const [key, value] of Object.entries(headers)) {
+    res.setHeader(key, value);
+  }
+}
+
 function sendJson(req, res, statusCode, payload, extraHeaders = {}) {
+  setSecurityHeaders(req, res);
   setCorsHeaders(req, res);
   for (const [key, value] of Object.entries(extraHeaders)) {
     if (value != null) {
@@ -1384,6 +1410,7 @@ function sendJson(req, res, statusCode, payload, extraHeaders = {}) {
 }
 
 function sendText(req, res, statusCode, text, contentType = "text/plain; charset=utf-8", extraHeaders = {}) {
+  setSecurityHeaders(req, res);
   setCorsHeaders(req, res);
   for (const [key, value] of Object.entries(extraHeaders)) {
     if (value != null) {
@@ -1395,6 +1422,7 @@ function sendText(req, res, statusCode, text, contentType = "text/plain; charset
 }
 
 function sendSseHeaders(req, res) {
+  setSecurityHeaders(req, res);
   setCorsHeaders(req, res);
   res.writeHead(200, {
     "Content-Type": "text/event-stream; charset=utf-8",
@@ -1508,7 +1536,8 @@ async function parseMultipartFormData(req, options = {}) {
     const fieldName = String(disposition.name || "").trim();
     if (!fieldName) continue;
 
-    const filename = String(disposition.filename || "").trim();
+    const rawFilename = String(disposition.filename || "").trim();
+    const filename = rawFilename ? securityCompliance.sanitizeUploadedFilename(rawFilename) : "";
     if (filename) {
       const content = Buffer.from(bodyBinary, "binary");
       if (content.length > maxFileBytes) {
@@ -1863,9 +1892,9 @@ function requireDatabaseConnection() {
 function normalizeUserRole(value) {
   const normalized = String(value || "").trim().toLowerCase();
   if (!normalized) return "student";
-  if (normalized.includes("super") && normalized.includes("admin")) return "super_admin";
-  if (normalized.includes("admin")) return "admin";
-  if (normalized === "user") return "student";
+  const rbacRole = securityCompliance.normalizeRbacRole(normalized);
+  if (rbacRole === "owner") return "super_admin";
+  if (["admin", "support", "analyst"].includes(rbacRole)) return rbacRole;
   return "student";
 }
 
@@ -1879,9 +1908,23 @@ function normalizeUserStatus(value) {
 
 function formatUserRole(role) {
   const normalized = normalizeUserRole(role);
-  if (normalized === "super_admin") return "Super Admin";
+  if (normalized === "super_admin") return "Owner";
   if (normalized === "admin") return "Admin";
-  return "Student";
+  if (normalized === "support") return "Support";
+  if (normalized === "analyst") return "Analyst";
+  return "User";
+}
+
+function getUserRbacRole(user) {
+  return securityCompliance.normalizeRbacRole(user?.role || "user");
+}
+
+function getUserPermissions(user) {
+  return securityCompliance.getRolePermissions(getUserRbacRole(user));
+}
+
+function userHasPermission(user, permission) {
+  return securityCompliance.hasPermission(getUserRbacRole(user), permission);
 }
 
 function formatUserStatus(status) {
@@ -2414,7 +2457,7 @@ function hasAlphaModelAccess(user) {
     user.plan_type
   ].map((item) => String(item || "").trim().toLowerCase());
 
-  if (role === "admin" || role === "super_admin") return true;
+  if (userHasPermission(user, "admin:read")) return true;
   if (planKey === "pioneer") return true;
   return ORLIXOR_ALPHA_ACCESS.some((key) => labels.some((label) => label === key || label.includes(key)));
 }
@@ -2980,6 +3023,8 @@ function buildApiUser(user) {
     name: String(user.name || "").trim(),
     email: normalizeEmail(user.email),
     role: formatUserRole(user.role),
+    rbacRole: getUserRbacRole(user),
+    permissions: getUserPermissions(user),
     stage: String(user.stage || "").trim(),
     grade: String(user.grade || "").trim(),
     subject: String(user.subject || "").trim(),
@@ -3055,6 +3100,17 @@ async function issueAuthToken(user, deviceName = "mullem-web") {
     });
   }
   return rawToken;
+}
+
+function setAuthCookie(res, token, maxAgeSeconds = 30 * 24 * 60 * 60) {
+  const secure = IS_CLOUD_RUNTIME ? "; Secure" : "";
+  const encoded = `${encodeURIComponent("mlm_auth_token")}=${encodeURIComponent(String(token || ""))}`;
+  res.setHeader("Set-Cookie", `${encoded}; Path=/; Max-Age=${Math.max(0, Number(maxAgeSeconds) || 0)}; HttpOnly; SameSite=Lax${secure}`);
+}
+
+function clearAuthCookie(res) {
+  const secure = IS_CLOUD_RUNTIME ? "; Secure" : "";
+  res.setHeader("Set-Cookie", `${encodeURIComponent("mlm_auth_token")}=; Path=/; Max-Age=0; HttpOnly; SameSite=Lax${secure}`);
 }
 
 function getRequestCookie(req, name) {
@@ -3189,11 +3245,19 @@ async function requireAuthenticatedUser(req) {
 
 async function requireAdminUser(req) {
   const auth = await requireAuthenticatedUser(req);
-  const role = normalizeUserRole(auth.user.role);
-  if (role !== "admin" && role !== "super_admin") {
+  if (!userHasPermission(auth.user, "admin:read")) {
     throw createHttpError(403, "Admin access is required.");
   }
   req.admin = auth.user;
+  return auth;
+}
+
+async function requireAdminRoutePermission(req, method, requestPath) {
+  const auth = await requireAdminUser(req);
+  const permission = securityCompliance.getAdminRoutePermission(method, requestPath);
+  securityCompliance.requirePermission(getUserRbacRole(auth.user), permission);
+  req.admin = auth.user;
+  req.adminPermission = permission;
   return auth;
 }
 
@@ -3354,13 +3418,23 @@ async function handleAuthProviderCallback(req, res, provider) {
 async function recordAdminAction(req, auth, action, targetType = "", targetId = "", details = {}) {
   if (!databaseClient || typeof databaseClient.recordAdminLog !== "function") return;
   try {
+    const safeDetails = securityCompliance.redactDeep(details || {}, { redactPii: false });
     await databaseClient.recordAdminLog({
       admin_id: auth?.user?.id || req?.admin?.id || null,
       action,
       target_type: targetType,
       target_id: targetId,
-      details,
-      ip_address: getRequestIp(req)
+      details: {
+        ...safeDetails,
+        actor: {
+          id: auth?.user?.id || req?.admin?.id || null,
+          role: getUserRbacRole(auth?.user || req?.admin || {})
+        },
+        request_id: req?.__requestId || null,
+        user_agent: String(req?.headers?.["user-agent"] || "").slice(0, 300)
+      },
+      ip_address: getRequestIp(req),
+      user_agent: String(req?.headers?.["user-agent"] || "").slice(0, 300)
     });
   } catch (error) {
     console.warn("Admin log write failed:", error.message);
@@ -5995,6 +6069,7 @@ async function handleRegister(req, res) {
   });
 
   const token = await issueAuthToken(user, deviceName);
+  setAuthCookie(res, token);
   req.__businessContext = {
     user,
     plan: getUserPlanKey(user),
@@ -6140,7 +6215,8 @@ async function handleLogin(req, res) {
   });
 
   const token = await issueAuthToken(updatedUser || user, deviceName);
-  if (["admin", "super_admin"].includes(normalizeUserRole((updatedUser || user).role))) {
+  setAuthCookie(res, token);
+  if (userHasPermission(updatedUser || user, "admin:read")) {
     try {
       await recordAdminAction(req, { user: updatedUser || user }, "ADMIN_LOGIN", "admin", (updatedUser || user).id, {
         deviceName
@@ -6416,6 +6492,7 @@ async function handleLogout(req, res) {
     await databaseClient.revokeApiToken(auth.tokenHash);
   }
 
+  clearAuthCookie(res);
   sendJson(req, res, 200, {
     success: true,
     message: "Logged out successfully."
@@ -6432,6 +6509,7 @@ function sanitizeDownloadFileName(value, fallback = "orlixor-file.pdf") {
 }
 
 function sendBinaryDownload(req, res, statusCode, buffer, fileName, contentType = "application/octet-stream") {
+  setSecurityHeaders(req, res);
   setCorsHeaders(req, res);
   const safeName = sanitizeDownloadFileName(fileName);
   res.writeHead(statusCode, {
@@ -7174,7 +7252,11 @@ async function handleAdminCreateNotification(req, res) {
   }
   const payload = normalizeAdminNotificationPayload(await parseJsonBody(req));
   const item = await databaseClient.createNotification(payload);
-  await recordAdminAction(req, auth, "CREATE_NOTIFICATION", "notification", item?.id || "", payload);
+  await recordAdminAction(req, auth, "CREATE_NOTIFICATION", "notification", item?.id || "", {
+    before: null,
+    after: item,
+    input: payload
+  });
 
   sendJson(req, res, 201, {
     success: true,
@@ -7189,12 +7271,19 @@ async function handleAdminUpdateNotification(req, res, notificationId) {
   if (typeof databaseClient.updateNotification !== "function") {
     throw createHttpError(501, "Admin notifications are not available.");
   }
+  const before = typeof databaseClient.listAdminNotifications === "function"
+    ? (await databaseClient.listAdminNotifications({ limit: 500 })).find((item) => String(item.id) === String(notificationId)) || null
+    : null;
   const payload = normalizeAdminNotificationPayload(await parseJsonBody(req), true);
   const item = await databaseClient.updateNotification(notificationId, payload);
   if (!item) {
     throw createHttpError(404, "Notification was not found.");
   }
-  await recordAdminAction(req, auth, "UPDATE_NOTIFICATION", "notification", notificationId, payload);
+  await recordAdminAction(req, auth, "UPDATE_NOTIFICATION", "notification", notificationId, {
+    before,
+    after: item,
+    changes: payload
+  });
 
   sendJson(req, res, 200, {
     success: true,
@@ -7243,6 +7332,9 @@ async function handleAdminUpdatePackage(req, res, packageId) {
   const auth = await requireAdminUser(req);
   const payload = await parseJsonBody(req);
   const changes = {};
+  const before = typeof databaseClient.listPackages === "function"
+    ? (await databaseClient.listPackages({ include_inactive: true })).find((item) => String(item.id) === String(packageId)) || null
+    : null;
 
   if ("name" in payload || "display_name" in payload) {
     changes.display_name = requireTextField(payload.display_name || payload.name, "name", 160);
@@ -7316,7 +7408,11 @@ async function handleAdminUpdatePackage(req, res, packageId) {
     throw createHttpError(404, "Package not found.");
   }
 
-  await recordAdminAction(req, auth, "UPDATE_PLAN", "plan", updated.id, changes);
+  await recordAdminAction(req, auth, "UPDATE_PLAN", "plan", updated.id, {
+    before,
+    after: updated,
+    changes
+  });
 
   sendJson(req, res, 200, {
     success: true,
@@ -7395,8 +7491,8 @@ async function handleAdminUpdateUser(req, res, userId) {
   }
 
   if ("role" in payload) {
-    if (normalizeUserRole(auth.user.role) !== "super_admin") {
-      throw createHttpError(403, "Only super_admin can change admin roles.");
+    if (getUserRbacRole(auth.user) !== "owner") {
+      throw createHttpError(403, "Only owner can change admin roles.");
     }
     changes.role = normalizeUserRole(payload.role);
   }
@@ -7475,7 +7571,11 @@ async function handleAdminUpdateUser(req, res, userId) {
   }
 
   const updated = await databaseClient.updateUser(userId, changes);
-  await recordAdminAction(req, auth, "UPDATE_USER", "user", userId, changes);
+  await recordAdminAction(req, auth, "UPDATE_USER", "user", userId, {
+    before: buildApiUser(existingUser),
+    after: buildApiUser(updated),
+    changes
+  });
 
   sendJson(req, res, 200, {
     success: true,
@@ -8379,6 +8479,8 @@ async function handleAdminFeatureFlags(req, res) {
   }
   await saveFeatureFlagOverrides(current);
   await recordAdminAction(req, auth, "UPDATE_AI_FEATURE_FLAGS", "ai_runtime", "feature_flags", {
+    before: aiRuntimeState.featureFlagOverrides || {},
+    after: current,
     overrides: current
   });
   sendJson(req, res, 200, {
@@ -8416,6 +8518,8 @@ async function handleAdminIncidents(req, res) {
   const incidents = await listOpsIncidents();
   await saveOpsIncidents([incident, ...incidents]);
   await recordAdminAction(req, auth, "CREATE_INCIDENT", "ops_incident", incident.id, {
+    before: null,
+    after: incident,
     severity: incident.severity,
     title: incident.title
   });
@@ -8433,6 +8537,7 @@ async function handleAdminIncidentEvent(req, res, incidentId) {
   if (index < 0) {
     throw createHttpError(404, "Incident was not found.");
   }
+  const before = incidents[index];
   const updated = aiOps.appendIncidentEvent(incidents[index], {
     type: payload.type,
     status: payload.status,
@@ -8441,6 +8546,8 @@ async function handleAdminIncidentEvent(req, res, incidentId) {
   incidents[index] = updated;
   await saveOpsIncidents(incidents);
   await recordAdminAction(req, auth, "UPDATE_INCIDENT", "ops_incident", updated.id, {
+    before,
+    after: updated,
     status: updated.status,
     event_type: payload.type || "update"
   });
@@ -8953,6 +9060,7 @@ async function handleAdminAssignPlan(req, res) {
     throw createHttpError(422, "user_id and plan_key are required.");
   }
 
+  const before = typeof databaseClient.findUserById === "function" ? await databaseClient.findUserById(userId) : null;
   const updated = await databaseClient.assignPackageToUser({
     user_id: userId,
     package_id: packageId,
@@ -8991,6 +9099,8 @@ async function handleAdminAssignPlan(req, res) {
   }
 
   await recordAdminAction(req, auth, "ASSIGN_PLAN", "user", userId, {
+    before: buildApiUser(before),
+    after: buildApiUser(updated),
     planKey,
     packageId,
     durationDays,
@@ -9031,7 +9141,176 @@ async function handleAdminLogs(req, res) {
     : [];
   sendJson(req, res, 200, {
     success: true,
-    data: { items }
+    data: { items: items.map((item) => securityCompliance.redactDeep(item, { redactPii: true })) }
+  });
+}
+
+async function handleAdminSecurityAudit(req, res) {
+  await requireAdminUser(req);
+  const snapshot = securityCompliance.buildSecurityAuditSnapshot({
+    env: process.env,
+    databaseConnected: Boolean(databaseState?.connected),
+    corsAllowAll: parseAllowedOrigins().allowAll,
+    isCloudRuntime: IS_CLOUD_RUNTIME,
+    securityHeadersEnabled: true,
+    csrfProtectionEnabled: true,
+    adminActionLogsEnabled: true,
+    privacyControlsEnabled: Boolean(databaseClient && typeof databaseClient.getUserPrivacySnapshot === "function"),
+    retentionJobEnabled: Boolean(databaseClient && typeof databaseClient.applyDataRetentionPolicy === "function"),
+    fileUploadSafetyEnabled: true,
+    promptInjectionProtectionEnabled: true,
+    rbacEnabled: true,
+    rateLimitsEnabled: true
+  });
+  snapshot.headers = securityCompliance.buildSecurityHeaders({ isCloud: IS_CLOUD_RUNTIME, isHttps: true });
+  snapshot.cors = {
+    allow_all: CORS_ALLOWED_ORIGINS === "*" && !IS_CLOUD_RUNTIME,
+    configured_origins: parseAllowedOrigins().values || []
+  };
+  sendJson(req, res, 200, {
+    success: true,
+    data: snapshot
+  });
+}
+
+async function handleAdminPermissions(req, res) {
+  const auth = await requireAdminUser(req);
+  sendJson(req, res, 200, {
+    success: true,
+    data: {
+      current_role: getUserRbacRole(auth.user),
+      permissions: getUserPermissions(auth.user),
+      roles: securityCompliance.ROLE_PERMISSIONS,
+      route_permissions: {
+        "/api/admin/*": "admin:read",
+        "/api/admin/security-audit": "security:read",
+        "/api/admin/logs": "action_logs:read",
+        "/api/admin/permissions": "security:read",
+        "/api/admin/compliance/retention/run": "retention:run",
+        "/api/privacy/*": "self:*"
+      }
+    }
+  });
+}
+
+async function handleAdminCompliance(req, res) {
+  await requireAdminUser(req);
+  sendJson(req, res, 200, {
+    success: true,
+    data: {
+      retention_policy: securityCompliance.DATA_RETENTION_POLICY,
+      privacy_documents: [
+        "/docs/privacy-policy.md",
+        "/docs/terms-of-service.md",
+        "/docs/data-processing-overview.md",
+        "/docs/security-overview.md"
+      ]
+    }
+  });
+}
+
+async function handleAdminRetentionRun(req, res) {
+  const auth = await requireAdminUser(req);
+  if (!databaseClient || typeof databaseClient.applyDataRetentionPolicy !== "function") {
+    throw createHttpError(503, "Data retention is unavailable.");
+  }
+  const result = await databaseClient.applyDataRetentionPolicy(securityCompliance.DATA_RETENTION_POLICY);
+  await recordAdminAction(req, auth, "RUN_DATA_RETENTION", "compliance", "retention_policy", result);
+  sendJson(req, res, 200, {
+    success: true,
+    data: result
+  });
+}
+
+async function handlePrivacyMe(req, res) {
+  const auth = await requireAuthenticatedUser(req);
+  if (!databaseClient || typeof databaseClient.getUserPrivacySnapshot !== "function") {
+    throw createHttpError(503, "Privacy controls are unavailable.");
+  }
+  const snapshot = await databaseClient.getUserPrivacySnapshot(auth.user.id);
+  sendJson(req, res, 200, {
+    success: true,
+    data: snapshot
+  });
+}
+
+async function handlePrivacyExport(req, res) {
+  const auth = await requireAuthenticatedUser(req);
+  if (!databaseClient || typeof databaseClient.exportUserData !== "function") {
+    throw createHttpError(503, "Privacy export is unavailable.");
+  }
+  const payload = await databaseClient.exportUserData(auth.user.id);
+  sendJson(req, res, 200, {
+    success: true,
+    data: payload
+  });
+}
+
+async function handlePrivacySettings(req, res) {
+  const auth = await requireAuthenticatedUser(req);
+  if (!databaseClient || typeof databaseClient.updateUserPrivacySettings !== "function") {
+    throw createHttpError(503, "Privacy settings are unavailable.");
+  }
+  const payload = await parseJsonBody(req);
+  const updated = await databaseClient.updateUserPrivacySettings(auth.user.id, {
+    allow_conversation_improvement: payload.allow_conversation_improvement ?? payload.allowConversationImprovement,
+    memory_enabled: payload.memory_enabled ?? payload.memoryEnabled,
+    allow_product_analytics: payload.allow_product_analytics ?? payload.allowProductAnalytics
+  });
+  await recordBusinessEventSafe(req, {
+    event_type: "privacy_settings_updated",
+    reason: "user_request",
+    plan: getUserPlanKey(updated || auth.user),
+    metadata: {
+      allow_conversation_improvement: updated?.allow_conversation_improvement !== false,
+      memory_enabled: updated?.memory_enabled !== false
+    }
+  });
+  sendJson(req, res, 200, {
+    success: true,
+    data: { user: buildApiUser(updated || auth.user) }
+  });
+}
+
+async function handlePrivacyClearMemory(req, res) {
+  const auth = await requireAuthenticatedUser(req);
+  if (!databaseClient || typeof databaseClient.clearUserMemory !== "function") {
+    throw createHttpError(503, "Memory controls are unavailable.");
+  }
+  const result = await databaseClient.clearUserMemory(auth.user.id);
+  await recordBusinessEventSafe(req, {
+    event_type: "privacy_memory_cleared",
+    reason: "user_request",
+    plan: getUserPlanKey(auth.user),
+    metadata: result
+  });
+  sendJson(req, res, 200, {
+    success: true,
+    data: result
+  });
+}
+
+async function handlePrivacyDeleteAccount(req, res) {
+  const auth = await requireAuthenticatedUser(req);
+  if (!databaseClient || typeof databaseClient.anonymizeUserAccount !== "function") {
+    throw createHttpError(503, "Account deletion is unavailable.");
+  }
+  const result = await databaseClient.anonymizeUserAccount(auth.user.id);
+  if (auth?.tokenHash && isDatabaseReady()) {
+    await databaseClient.revokeApiToken(auth.tokenHash).catch(() => null);
+  }
+  clearAuthCookie(res);
+  await recordBusinessEventSafe(req, {
+    event_type: "account_deleted",
+    reason: "privacy_request",
+    plan: getUserPlanKey(auth.user),
+    metadata: {
+      deleted: Boolean(result?.deleted)
+    }
+  });
+  sendJson(req, res, 200, {
+    success: true,
+    data: result
   });
 }
 
@@ -9041,6 +9320,7 @@ async function handleAdminLogout(req, res) {
     await databaseClient.revokeApiToken(auth.tokenHash);
   }
   await recordAdminAction(req, auth, "ADMIN_LOGOUT", "admin", auth.user.id, {});
+  clearAuthCookie(res);
   sendJson(req, res, 200, {
     success: true,
     message: "Logged out successfully."
@@ -9069,7 +9349,10 @@ async function handleAdminCreatePackage(req, res) {
     throw createHttpError(422, "Could not create package.");
   }
 
-  await recordAdminAction(req, auth, "CREATE_PLAN", "plan", item.id, item);
+  await recordAdminAction(req, auth, "CREATE_PLAN", "plan", item.id, {
+    before: null,
+    after: item
+  });
   sendJson(req, res, 201, {
     success: true,
     data: { item }
@@ -10627,7 +10910,7 @@ async function handleGetChatSession(req, res, conversationId) {
   const messagesLimit = Math.max(1, Math.min(Number(url.searchParams.get("messages_limit") || 50), 100));
   const canAccessConversation = (conversation) => {
     if (!conversation) return false;
-    if (normalizeUserRole(auth.user.role) === "admin") return true;
+    if (userHasPermission(auth.user, "conversations:read")) return true;
     return Boolean(conversation.user_id && String(conversation.user_id) === String(auth.user.id));
   };
 
@@ -10755,6 +11038,7 @@ function serveStatic(req, res) {
     headers.Pragma = "no-cache";
     headers.Expires = "0";
   }
+  setSecurityHeaders(req, res);
   setCorsHeaders(req, res);
   res.writeHead(200, headers);
   fs.createReadStream(filePath).pipe(res);
@@ -10766,6 +11050,7 @@ async function routeRequest(req, res) {
   res.setHeader("X-Request-Id", requestId);
 
   if (req.method === "OPTIONS") {
+    setSecurityHeaders(req, res);
     setCorsHeaders(req, res);
     res.writeHead(204);
     res.end();
@@ -10773,6 +11058,16 @@ async function routeRequest(req, res) {
   }
 
   const requestPath = String(req.url || "/").split("?")[0];
+
+  if (!securityCompliance.isSafeSameOriginRequest(req, isOriginAllowed)) {
+    sendJson(req, res, 403, {
+      success: false,
+      request_id: requestId,
+      code: "CSRF_ORIGIN_REJECTED",
+      message: "Request origin is not trusted for cookie-authenticated writes."
+    });
+    return;
+  }
 
   if (req.method === "GET" && requestPath === "/api/_proof") {
     sendJson(req, res, 200, {
@@ -10856,7 +11151,6 @@ async function routeRequest(req, res) {
       model: DEEPSEEK_API_KEY ? DEEPSEEK_CHAT_MODEL : (OPENAI_MODEL_DEFAULT || OPENAI_MODEL || "gpt-4.1-mini"),
       hasOpenAIKey: Boolean(OPENAI_API_KEY),
       hasDeepSeekKey: Boolean(DEEPSEEK_API_KEY),
-      keyPrefix: OPENAI_API_KEY ? OPENAI_API_KEY.slice(0, 7) : null,
       timestamp: new Date().toISOString(),
       build: process.env.RENDER_GIT_COMMIT ||
         process.env.VERCEL_GIT_COMMIT_SHA ||
@@ -10996,6 +11290,31 @@ async function routeRequest(req, res) {
     return;
   }
 
+  if (req.method === "GET" && requestPath === "/api/privacy/me") {
+    await handlePrivacyMe(req, res);
+    return;
+  }
+
+  if (req.method === "GET" && requestPath === "/api/privacy/export") {
+    await handlePrivacyExport(req, res);
+    return;
+  }
+
+  if (req.method === "POST" && requestPath === "/api/privacy/settings") {
+    await handlePrivacySettings(req, res);
+    return;
+  }
+
+  if (req.method === "POST" && (requestPath === "/api/privacy/clear-memory" || requestPath === "/api/privacy/memory/clear")) {
+    await handlePrivacyClearMemory(req, res);
+    return;
+  }
+
+  if (req.method === "DELETE" && (requestPath === "/api/privacy/account" || requestPath === "/api/privacy/delete-account")) {
+    await handlePrivacyDeleteAccount(req, res);
+    return;
+  }
+
   if (req.method === "POST" && requestPath === "/api/auth/logout") {
     await handleLogout(req, res);
     return;
@@ -11074,11 +11393,31 @@ async function routeRequest(req, res) {
   }
 
   if (requestPath.startsWith("/api/admin")) {
-    await requireAdminUser(req);
+    await requireAdminRoutePermission(req, req.method, requestPath);
   }
 
   if (req.method === "GET" && requestPath === "/api/admin/stats") {
     await handleAdminStats(req, res);
+    return;
+  }
+
+  if (req.method === "GET" && requestPath === "/api/admin/security-audit") {
+    await handleAdminSecurityAudit(req, res);
+    return;
+  }
+
+  if (req.method === "GET" && requestPath === "/api/admin/permissions") {
+    await handleAdminPermissions(req, res);
+    return;
+  }
+
+  if (req.method === "GET" && requestPath === "/api/admin/compliance") {
+    await handleAdminCompliance(req, res);
+    return;
+  }
+
+  if (req.method === "POST" && requestPath === "/api/admin/compliance/retention/run") {
+    await handleAdminRetentionRun(req, res);
     return;
   }
 
@@ -11291,7 +11630,7 @@ async function routeRequest(req, res) {
     return;
   }
 
-  if (req.method === "GET" && requestPath === "/api/admin/logs") {
+  if (req.method === "GET" && (requestPath === "/api/admin/logs" || requestPath === "/api/admin/action-logs")) {
     await handleAdminLogs(req, res);
     return;
   }
@@ -11515,6 +11854,34 @@ const server = http.createServer((req, res) => {
 });
 
 let serverStartPromise = null;
+let dataRetentionTimer = null;
+
+async function runDataRetentionSweep(reason = "scheduled") {
+  if (!databaseClient || typeof databaseClient.applyDataRetentionPolicy !== "function") return null;
+  try {
+    const result = await databaseClient.applyDataRetentionPolicy(securityCompliance.DATA_RETENTION_POLICY);
+    console.log("[mullem] data retention sweep completed", {
+      reason,
+      results: result?.results || null
+    });
+    return result;
+  } catch (error) {
+    console.warn("[mullem] data retention sweep failed:", error?.message || error);
+    return null;
+  }
+}
+
+function startDataRetentionScheduler() {
+  if (dataRetentionTimer || !databaseClient || typeof databaseClient.applyDataRetentionPolicy !== "function") return;
+  const intervalMs = Math.max(6 * 60 * 60 * 1000, Number(process.env.DATA_RETENTION_INTERVAL_MS || 24 * 60 * 60 * 1000));
+  dataRetentionTimer = setInterval(() => {
+    runDataRetentionSweep("timer");
+  }, intervalMs);
+  if (typeof dataRetentionTimer.unref === "function") {
+    dataRetentionTimer.unref();
+  }
+  runDataRetentionSweep("startup");
+}
 
 function startServer(port = PORT) {
   if (server.listening) {
@@ -11530,6 +11897,7 @@ function startServer(port = PORT) {
       console.warn("[mullem] real scale infra warning:", error?.message || error);
     })
     .then(() => initializeDatabaseLayerWithTimeout())
+    .then(() => startDataRetentionScheduler())
     .then(() => new Promise((resolve, reject) => {
       const handleError = (error) => {
         server.off("listening", handleListening);
@@ -11555,6 +11923,10 @@ function startServer(port = PORT) {
 function stopServer() {
   return new Promise((resolve) => {
     const finalize = async () => {
+      if (dataRetentionTimer) {
+        clearInterval(dataRetentionTimer);
+        dataRetentionTimer = null;
+      }
       if (databaseClient && typeof databaseClient.close === "function") {
         try {
           await databaseClient.close();

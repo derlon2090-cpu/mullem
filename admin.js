@@ -1464,7 +1464,8 @@ adminLoginForm?.addEventListener("submit", async (event) => {
   }
 
   if (apiResult.ok && apiResult.data?.user) {
-    if (String(apiResult.data.user.role || "").toLowerCase() !== "admin") {
+    const role = String(apiResult.data.user.rbacRole || apiResult.data.user.role || "").toLowerCase();
+    if (!["owner", "admin", "super_admin"].includes(role) && !role.includes("admin")) {
       apiClient.clearSession();
       if (adminLoginState) {
         adminLoginState.textContent = "هذا الحساب لا يملك صلاحية دخول لوحة الأدمن.";
@@ -3417,11 +3418,17 @@ if (isAdminLoggedIn()) {
   }
 
   function normalizeAdminRoleLabel(value) {
-    return String(value || "").trim().toLowerCase().includes("admin") ? "أدمن مساعد" : "طالب";
+    const role = String(value || "").trim().toLowerCase();
+    if (role === "owner" || role === "super_admin") return "مالك";
+    if (role === "admin") return "أدمن";
+    if (role === "support") return "دعم";
+    if (role === "analyst") return "محلل";
+    return "مستخدم";
   }
 
   function isAdminRole(value) {
-    return String(value || "").trim().toLowerCase().includes("admin");
+    const role = String(value || "").trim().toLowerCase();
+    return ["owner", "admin", "super_admin"].includes(role) || role.includes("admin");
   }
 
   function normalizeAdminStatusValue(value) {

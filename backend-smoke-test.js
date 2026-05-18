@@ -1,24 +1,24 @@
+"use strict";
+
+const { requestJson } = require("./request-lite");
+
 const BASE_URL = String(process.env.MULLEM_TEST_BASE_URL || "http://127.0.0.1:3000").replace(/\/+$/, "");
 
 async function expectJson(path, expectedStatus) {
-  const response = await fetch(`${BASE_URL}${path}`, {
+  const response = await requestJson(`${BASE_URL}${path}`, {
     headers: { Accept: "application/json" }
   });
-  const text = await response.text();
-  let payload = null;
 
-  try {
-    payload = JSON.parse(text);
-  } catch (_) {
-    throw new Error(`${path} did not return JSON. Status=${response.status} Body=${text.slice(0, 200)}`);
+  if (response.payload && Object.prototype.hasOwnProperty.call(response.payload, "raw")) {
+    throw new Error(`${path} did not return JSON. Status=${response.status} Body=${String(response.text || "").slice(0, 200)}`);
   }
 
   if (response.status !== expectedStatus) {
-    throw new Error(`${path} returned ${response.status} instead of ${expectedStatus}. Payload=${JSON.stringify(payload)}`);
+    throw new Error(`${path} returned ${response.status} instead of ${expectedStatus}. Payload=${JSON.stringify(response.payload)}`);
   }
 
   console.log(`PASS ${path} -> ${response.status}`);
-  return payload;
+  return response.payload;
 }
 
 async function main() {
@@ -27,10 +27,9 @@ async function main() {
     throw new Error("/api/health response is missing expected fields.");
   }
 
-  const ready = await fetch(`${BASE_URL}/api/ready`, {
+  const ready = await requestJson(`${BASE_URL}/api/ready`, {
     headers: { Accept: "application/json" }
   });
-  const readyPayload = await ready.json();
   if (![200, 503].includes(ready.status)) {
     throw new Error(`/api/ready returned unexpected status ${ready.status}`);
   }

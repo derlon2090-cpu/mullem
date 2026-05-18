@@ -148,8 +148,8 @@
   }
 
   function isAdminRole(user) {
-    const role = String(user?.role || "").toLowerCase();
-    return role.includes("admin");
+    const role = String(user?.rbacRole || user?.role || "").toLowerCase();
+    return ["owner", "admin", "super_admin"].includes(role) || role.includes("admin");
   }
 
   function setLoginVisible(visible) {
@@ -160,7 +160,9 @@
   function setAdminIdentity(user) {
     state.admin = user || state.admin;
     const name = state.admin?.name || "أحمد السبيعي";
-    const role = String(state.admin?.role || "Super Admin");
+    const role = String(state.admin?.rbacRole || state.admin?.role || "Owner")
+      .replace(/_/g, " ")
+      .replace(/\b\w/g, (char) => char.toUpperCase());
     const initial = name.trim().slice(0, 1) || "أ";
     [nodes.adminName, nodes.adminNameSide].forEach((node) => {
       if (node) node.textContent = name;

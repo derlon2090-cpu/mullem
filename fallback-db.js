@@ -536,6 +536,10 @@ function createFallbackDatabaseClient() {
       last_daily_reward_claimed_at: payload.last_daily_reward_claimed_at || payload.lastDailyRewardClaimedAt || null,
       last_daily_reward_at: payload.last_daily_reward_at || payload.lastDailyRewardAt || payload.last_daily_xp_granted_at || null,
       signup_bonus_claimed: "signup_bonus_claimed" in payload ? normalizeBoolean(payload.signup_bonus_claimed) : false,
+      allow_conversation_improvement: payload.allow_conversation_improvement !== false,
+      memory_enabled: payload.memory_enabled !== false,
+      privacy_settings: payload.privacy_settings && typeof payload.privacy_settings === "object" ? payload.privacy_settings : {},
+      deleted_at: payload.deleted_at || null,
       achievements: Array.isArray(payload.achievements) ? payload.achievements : [],
       status: String(payload.status || "active").trim().toLowerCase() || "active",
       activity: String(payload.activity || "").trim(),
@@ -570,6 +574,10 @@ function createFallbackDatabaseClient() {
     if ("dailyRewardAmount" in normalizedChanges && !("daily_reward_amount" in normalizedChanges)) {
       normalizedChanges.daily_reward_amount = normalizedChanges.dailyRewardAmount;
     }
+    if ("allow_conversation_improvement" in normalizedChanges) normalizedChanges.allow_conversation_improvement = normalizeBoolean(normalizedChanges.allow_conversation_improvement);
+    if ("memory_enabled" in normalizedChanges) normalizedChanges.memory_enabled = normalizeBoolean(normalizedChanges.memory_enabled);
+    if ("privacy_settings" in normalizedChanges && (!normalizedChanges.privacy_settings || typeof normalizedChanges.privacy_settings !== "object")) normalizedChanges.privacy_settings = {};
+    if ("deleted_at" in normalizedChanges) normalizedChanges.deleted_at = normalizedChanges.deleted_at || null;
     if ("balance" in normalizedChanges) normalizedChanges.balance = Math.max(0, Math.round(Number(normalizedChanges.balance || 0) || 0));
     if ("daily_reward_amount" in normalizedChanges) normalizedChanges.daily_reward_amount = Math.max(0, Math.round(Number(normalizedChanges.daily_reward_amount || 0) || 0));
     if ("last_daily_reward_claimed_at" in normalizedChanges) normalizedChanges.last_daily_reward_claimed_at = normalizedChanges.last_daily_reward_claimed_at || null;
@@ -1392,6 +1400,7 @@ function createFallbackDatabaseClient() {
       target_id: payload.target_id || payload.targetId ? String(payload.target_id || payload.targetId).slice(0, 120) : "",
       details_json: payload.details_json || payload.details || payload.detailsJson || null,
       ip_address: String(payload.ip_address || payload.ipAddress || "").trim().slice(0, 80),
+      user_agent: String(payload.user_agent || payload.userAgent || "").trim().slice(0, 300),
       created_at: nowIso()
     };
     data.adminLogs.push(entry);
@@ -1951,6 +1960,173 @@ function createFallbackDatabaseClient() {
     };
   }
 
+  function publicPrivacyUser(user = {}) {
+    return {
+      id: String(user.id || ""),
+      name: user.name || "",
+      email: user.email || "",
+      role: user.role || "student",
+      plan_type: user.plan_type || "",
+      package_name: user.package_name || "",
+      allow_conversation_improvement: user.allow_conversation_improvement !== false,
+      memory_enabled: user.memory_enabled !== false,
+      privacy_settings: user.privacy_settings || {},
+      deleted_at: user.deleted_at || null,
+      created_at: user.created_at || null,
+      updated_at: user.updated_at || null
+    };
+  }
+
+  async function getUserPrivacySnapshot(userId) {
+    const user = findUserByIdSync(userId);
+    if (!user) return null;
+    return {
+      user: publicPrivacyUser(user),
+      saved_data: {
+        conversations_count: data.conversations.filter((item) => String(item.user_id) === String(userId)).length,
+        messages_count: data.messages.filter((item) => {
+          const conversation = findConversationSync(item.conversation_id);
+          return conversation && String(conversation.user_id) === String(userId);
+        }).length,
+        memory_items: [],
+        feedback_count: data.aiFeedback.filter((item) => String(item.user_id) === String(userId)).length,
+        ai_quality_events_count: data.aiQualityEvents.filter((item) => String(item.user_id) === String(userId)).length
+      }
+    };
+  }
+
+  async function exportUserData(userId) {
+    const snapshot = await getUserPrivacySnapshot(userId);
+    if (!snapshot) return null;
+    const conversations = await listUserConversations(userId, { limit: 100 });
+    return {
+      exported_at: nowIso(),
+      policy: "privacy-export-v1",
+      user: snapshot.user,
+      saved_data: snapshot.saved_data,
+      projects: data.projects.filter((item) => String(item.user_id) === String(userId)).map((item) => ({ ...item })),
+      conversations: conversations.map((conversation) => ({
+        conversation,
+        messages: listConversationMessages(conversation.id, 100)
+      })),
+      xp_ledger: data.xpLedger.filter((item) => String(item.user_id) === String(userId)).map((item) => ({ ...item })),
+      feedback: data.aiFeedback.filter((item) => String(item.user_id) === String(userId)).map((item) => ({ ...item })),
+      ai_quality_events: data.aiQualityEvents.filter((item) => String(item.user_id) === String(userId)).map((item) => ({ ...item })),
+      tool_usage: data.toolUsage.filter((item) => String(item.user_id) === String(userId)).map((item) => ({ ...item }))
+    };
+  }
+
+  async function updateUserPrivacySettings(userId, settings = {}) {
+    const user = findUserByIdSync(userId);
+    if (!user) return null;
+    return updateUser(userId, {
+      allow_conversation_improvement: settings.allow_conversation_improvement !== false,
+      memory_enabled: settings.memory_enabled !== false,
+      privacy_settings: {
+        ...(user.privacy_settings || {}),
+        allow_product_analytics: settings.allow_product_analytics !== false,
+        updated_at: nowIso()
+      }
+    });
+  }
+
+  async function clearUserMemory(userId) {
+    const user = findUserByIdSync(userId);
+    if (!user) return null;
+    return updateUser(userId, {
+      memory_enabled: false
+    });
+  }
+
+  async function anonymizeUserAccount(userId) {
+    const index = data.users.findIndex((item) => String(item.id) === String(userId));
+    if (index === -1) return null;
+    const user = data.users[index];
+    const deletedConversationIds = data.conversations
+      .filter((item) => String(item.user_id) === String(userId))
+      .map((item) => String(item.id));
+    data.projects = data.projects.filter((item) => String(item.user_id) !== String(userId));
+    data.conversations = data.conversations.filter((item) => String(item.user_id) !== String(userId));
+    data.messages = data.messages.filter((item) => !deletedConversationIds.includes(String(item.conversation_id)));
+    data.toolUsage = data.toolUsage.filter((item) => String(item.user_id) !== String(userId));
+    data.xpLedger = data.xpLedger.filter((item) => String(item.user_id) !== String(userId));
+    data.aiFeedback = data.aiFeedback.filter((item) => String(item.user_id) !== String(userId));
+    data.aiQualityEvents = data.aiQualityEvents.filter((item) => String(item.user_id) !== String(userId));
+    data.users[index] = {
+      ...user,
+      name: "Deleted User",
+      email: `deleted-${userId}-${Date.now().toString(36)}@deleted.local`,
+      password_hash: "deleted",
+      role: "student",
+      balance: 0,
+      xp: 0,
+      total_xp: 0,
+      daily_reward_amount: 0,
+      allow_conversation_improvement: false,
+      memory_enabled: false,
+      privacy_settings: { account_deleted: true },
+      status: "deleted",
+      deleted_at: nowIso(),
+      updated_at: nowIso()
+    };
+    persist();
+    return { id: String(userId), deleted: true };
+  }
+
+  async function applyDataRetentionPolicy(policy = {}) {
+    const conversationsDays = Math.max(1, Number(policy.conversations_days || 180));
+    const feedbackDays = Math.max(1, Number(policy.feedback_days || 365));
+    const analyticsDays = Math.max(1, Number(policy.analytics_days || 400));
+    const abuseDays = Math.max(1, Number(policy.abuse_logs_days || 180));
+    const adminDays = Math.max(1, Number(policy.admin_logs_days || 730));
+    const deletedDays = Math.max(1, Number(policy.deleted_account_purge_days || 30));
+    const cutoff = (days) => new Date(Date.now() - days * 86400000).toISOString();
+    const results = {};
+    const removeByDate = (items, field, beforeIso) => items.filter((item) => String(item[field] || "") >= beforeIso);
+
+    const conversationsBefore = data.conversations.length;
+    const deletedConversationIds = data.conversations
+      .filter((item) => String(item.updated_at || "") < cutoff(conversationsDays))
+      .map((item) => String(item.id));
+    data.conversations = removeByDate(data.conversations, "updated_at", cutoff(conversationsDays));
+    results.conversations_deleted = conversationsBefore - data.conversations.length;
+    data.messages = data.messages.filter((item) => !deletedConversationIds.includes(String(item.conversation_id)));
+
+    const aiQualityBefore = data.aiQualityEvents.length;
+    data.aiQualityEvents = removeByDate(data.aiQualityEvents, "created_at", cutoff(analyticsDays));
+    results.ai_quality_events_deleted = aiQualityBefore - data.aiQualityEvents.length;
+
+    const aiFeedbackBefore = data.aiFeedback.length;
+    data.aiFeedback = removeByDate(data.aiFeedback, "created_at", cutoff(feedbackDays));
+    results.ai_feedback_deleted = aiFeedbackBefore - data.aiFeedback.length;
+
+    const adminLogsBefore = data.adminLogs.length;
+    data.adminLogs = removeByDate(data.adminLogs, "created_at", cutoff(adminDays));
+    results.admin_logs_deleted = adminLogsBefore - data.adminLogs.length;
+
+    const abuseBefore = data.abuseEvents ? data.abuseEvents.length : 0;
+    if (Array.isArray(data.abuseEvents)) data.abuseEvents = removeByDate(data.abuseEvents, "created_at", cutoff(abuseDays));
+    results.abuse_events_deleted = abuseBefore - (Array.isArray(data.abuseEvents) ? data.abuseEvents.length : 0);
+
+    const deletedBefore = data.users.length;
+    data.users = data.users.filter((item) => !(String(item.status || "") === "deleted" && String(item.deleted_at || "") < cutoff(deletedDays)));
+    results.deleted_accounts_purged = deletedBefore - data.users.length;
+
+    persist();
+    return {
+      ran_at: nowIso(),
+      retention: {
+        conversations_days: conversationsDays,
+        feedback_days: feedbackDays,
+        analytics_days: analyticsDays,
+        abuse_logs_days: abuseDays,
+        admin_logs_days: adminDays,
+        deleted_account_purge_days: deletedDays
+      },
+      results
+    };
+  }
+
   async function close() {
     persist();
   }
@@ -2021,6 +2197,12 @@ function createFallbackDatabaseClient() {
     getAiUsageStats,
     getAdminStats,
     getStudentDashboard,
+    getUserPrivacySnapshot,
+    exportUserData,
+    updateUserPrivacySettings,
+    clearUserMemory,
+    anonymizeUserAccount,
+    applyDataRetentionPolicy,
     close
   };
 }

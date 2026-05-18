@@ -5,6 +5,7 @@ const fs = require("fs");
 const path = require("path");
 const aiIntelligence = require("./ai-intelligence-layer");
 const { AI_QUALITY_TEST_SET, seedAiKnowledgeBase } = require("./ai-knowledge-seed");
+const { requestJson } = require("./request-lite");
 
 const BASE_URL = String(process.env.MULLEM_TEST_BASE_URL || "http://127.0.0.1:3000").replace(/\/+$/, "");
 const ADMIN_EMAIL = String(process.env.DEFAULT_ADMIN_EMAIL || "super.admin.orlixor.2026@orlixor.ai").trim();
@@ -44,7 +45,7 @@ async function startLocalServer() {
 
   for (let index = 0; index < 40; index += 1) {
     try {
-      const response = await fetch(`${BASE_URL}/api/health`, { headers: { Accept: "application/json" } });
+      const response = await requestJson(`${BASE_URL}/api/health`, { headers: { Accept: "application/json" } });
       if (response.ok) return { child, getLogs: () => ({ stdout, stderr }) };
     } catch (_) {
       // Wait for the server to bind.
@@ -57,23 +58,13 @@ async function startLocalServer() {
 }
 
 async function api(pathname, options = {}) {
-  const response = await fetch(`${BASE_URL}${pathname}`, {
+  const response = await requestJson(`${BASE_URL}${pathname}`, {
     method: options.method || "GET",
-    headers: {
-      Accept: "application/json",
-      "Content-Type": "application/json",
-      ...(options.token ? { Authorization: `Bearer ${options.token}` } : {})
-    },
-    body: options.body ? JSON.stringify(options.body) : undefined
+    headers: { Accept: "application/json" },
+    body: options.body,
+    token: options.token
   });
-  const text = await response.text();
-  let payload = {};
-  try {
-    payload = text ? JSON.parse(text) : {};
-  } catch (_) {
-    payload = { raw: text };
-  }
-  return { status: response.status, ok: response.ok && payload?.success !== false, payload };
+  return { status: response.status, ok: response.ok, payload: response.payload };
 }
 
 async function loginAdmin() {

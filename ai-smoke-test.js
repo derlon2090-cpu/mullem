@@ -2,6 +2,7 @@
 
 const fs = require("fs");
 const path = require("path");
+const { requestJson } = require("./request-lite");
 
 const BASE_URL = String(process.env.MULLEM_TEST_BASE_URL || "http://127.0.0.1:3000").replace(/\/+$/, "");
 const ADMIN_EMAIL = String(process.env.DEFAULT_ADMIN_EMAIL || "super.admin.orlixor.2026@orlixor.ai").trim();
@@ -13,28 +14,12 @@ const WAIT_SECONDS = Math.max(0, Math.min(Number(process.env.AI_SMOKE_WAIT_SECON
 const REPORT_PATH = path.join(__dirname, ".tmp", "ai-smoke-test-report.json");
 
 async function request(pathname, options = {}) {
-  const response = await fetch(`${BASE_URL}${pathname}`, {
+  return requestJson(`${BASE_URL}${pathname}`, {
     method: options.method || "GET",
-    headers: {
-      Accept: options.accept || "application/json",
-      "Content-Type": "application/json",
-      ...(options.token ? { Authorization: `Bearer ${options.token}` } : {})
-    },
-    body: options.body ? JSON.stringify(options.body) : undefined
+    headers: { Accept: options.accept || "application/json" },
+    body: options.body,
+    token: options.token
   });
-  const text = await response.text();
-  let payload = {};
-  try {
-    payload = text ? JSON.parse(text) : {};
-  } catch (_) {
-    payload = { raw: text };
-  }
-  return {
-    status: response.status,
-    ok: response.ok && payload?.success !== false && payload?.ok !== false,
-    payload,
-    text
-  };
 }
 
 async function loginAdmin() {

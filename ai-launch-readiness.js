@@ -3,6 +3,7 @@
 const { spawn } = require("child_process");
 const fs = require("fs");
 const path = require("path");
+const { requestJson } = require("./request-lite");
 
 const BASE_URL = String(process.env.MULLEM_TEST_BASE_URL || "http://127.0.0.1:3000").replace(/\/+$/, "");
 const ADMIN_EMAIL = String(process.env.DEFAULT_ADMIN_EMAIL || "super.admin.orlixor.2026@orlixor.ai").trim();
@@ -14,23 +15,13 @@ function wait(ms) {
 }
 
 async function request(pathname, options = {}) {
-  const response = await fetch(`${BASE_URL}${pathname}`, {
+  const response = await requestJson(`${BASE_URL}${pathname}`, {
     method: options.method || "GET",
-    headers: {
-      Accept: "application/json",
-      "Content-Type": "application/json",
-      ...(options.token ? { Authorization: `Bearer ${options.token}` } : {})
-    },
-    body: options.body ? JSON.stringify(options.body) : undefined
+    headers: { Accept: "application/json" },
+    body: options.body,
+    token: options.token
   });
-  const text = await response.text();
-  let payload = {};
-  try {
-    payload = text ? JSON.parse(text) : {};
-  } catch (_) {
-    payload = { raw: text };
-  }
-  return { status: response.status, ok: response.ok && payload?.success !== false && payload?.ok !== false, payload };
+  return { status: response.status, ok: response.ok, payload: response.payload };
 }
 
 async function serverReady() {
