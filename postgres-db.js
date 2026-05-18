@@ -1477,7 +1477,7 @@ function createPostgresDatabaseClient(rawConfig = {}) {
     const rating = String(payload.rating || "").trim().toLowerCase();
     if (!userId || !rating) return null;
     const rawMessageId = Number(payload.message_id);
-    const messageId = Number.isFinite(rawMessageId) ? rawMessageId : null;
+    const messageId = Number.isFinite(rawMessageId) && rawMessageId > 0 ? rawMessageId : null;
     const rows = await query(
       `
         INSERT INTO feedback (user_id, message_id, rating, note)
