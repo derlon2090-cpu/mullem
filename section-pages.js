@@ -1164,8 +1164,14 @@
   }
 
   function isAdminRole(value) {
-    const role = normalizeRoleKey(value);
-    return role === "admin" || role === "super_admin" || (role.includes("super") && role.includes("admin"));
+    const roleValue = value && typeof value === "object"
+      ? value.rbacRole || value.rbac_role || value.role || ""
+      : value;
+    const role = normalizeRoleKey(roleValue);
+    return role === "owner" ||
+      role === "admin" ||
+      role === "super_admin" ||
+      (role.includes("super") && role.includes("admin"));
   }
 
   function redirectToAdminDashboard() {
@@ -1248,7 +1254,7 @@
       id: String(user.id || ""),
       name: String(user.name || "").trim() || "مستخدم",
       email: String(user.email || "").trim(),
-      role: normalizeRoleKey(user.role || "student"),
+      role: normalizeRoleKey(user.rbacRole || user.rbac_role || user.role || "student"),
       stage: String(user.stage || "").trim(),
       grade: String(user.grade || "").trim(),
       subject: String(user.subject || "").trim(),
@@ -1346,7 +1352,7 @@
       user: payload.user
     });
 
-    if (isAdminRole(payload.user?.role || payload.role)) {
+    if (isAdminRole(payload.user || payload.role)) {
       redirectToAdminDashboard();
       return null;
     }
@@ -14981,7 +14987,7 @@
           user: payload.user
         });
       }
-      if (isAdminRole(payload.user?.role || payload.role)) {
+      if (isAdminRole(payload.user || payload.role)) {
         redirectToAdminDashboard();
         return;
       }

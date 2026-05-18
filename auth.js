@@ -77,14 +77,25 @@ function normalizeAuthRoleKey(value) {
   return String(value || "").trim().toLowerCase().replace(/[\s-]+/g, "_");
 }
 
+function getAuthRoleValue(value) {
+  if (value && typeof value === "object") {
+    return value.rbacRole || value.rbac_role || value.role || "";
+  }
+  return value;
+}
+
 function isAuthAdminRole(value) {
-  const role = normalizeAuthRoleKey(value);
-  return role === "admin" || role === "super_admin" || (role.includes("super") && role.includes("admin"));
+  const role = normalizeAuthRoleKey(getAuthRoleValue(value));
+  return role === "owner" ||
+    role === "admin" ||
+    role === "super_admin" ||
+    (role.includes("super") && role.includes("admin"));
 }
 
 function formatAuthRole(value) {
   if (!isAuthAdminRole(value)) return "Student";
-  return normalizeAuthRoleKey(value).includes("super") ? "Super Admin" : "Admin";
+  const role = normalizeAuthRoleKey(getAuthRoleValue(value));
+  return role === "owner" || role.includes("super") ? "Super Admin" : "Admin";
 }
 
 try {
@@ -100,7 +111,7 @@ try {
   const apiClient = getApiClient();
   const hasApiSession = Boolean(apiClient?.hasToken?.());
   const sessionUser = apiClient?.getSessionUser?.();
-  const isStudentSession = Boolean(hasApiSession && sessionUser && !isAuthAdminRole(sessionUser.role));
+  const isStudentSession = Boolean(hasApiSession && sessionUser && !isAuthAdminRole(sessionUser));
   if (!isEmbeddedAuth && activeAdminSession === "1" && hasApiSession) {
     window.location.href = "admin.html";
   } else if (!isEmbeddedAuth && isStudentSession && !window.location.pathname.endsWith("admin.html")) {
@@ -357,7 +368,7 @@ function completeAdminApiLogin(message, user = null) {
   clearPendingAuth();
   setSuccessState(message || "تم تسجيل دخول الأدمن بنجاح عبر الخادم.");
   const sessionUser = user || window.mullemApiClient?.getSessionUser?.() || null;
-  finishAuthSuccess({ role: formatAuthRole(sessionUser?.role || "admin"), user: sessionUser }, "admin.html");
+  finishAuthSuccess({ role: formatAuthRole(sessionUser || "admin"), user: sessionUser }, "admin.html");
 }
 
 function shouldFallbackToLocalAuth(result) {
@@ -922,7 +933,7 @@ loginForm?.addEventListener("submit", async (event) => {
   }
 
   if (apiResult.ok && apiResult.data?.user) {
-    if (isAuthAdminRole(apiResult.data.user.role)) {
+    if (isAuthAdminRole(apiResult.data.user)) {
       completeAdminApiLogin("تم تسجيل دخول الأدمن بنجاح.", apiResult.data.user);
       return;
     }
@@ -1287,7 +1298,7 @@ if (isEmbeddedAuth) {
   const activeAdminSession = localStorage.getItem(storageKeys.adminSession);
   if (activeAdminSession === "1" && hasApiSession) {
     notifyEmbeddedAuthSuccess({ role: "admin" });
-  } else if (hasApiSession && !isAuthAdminRole(sessionUser.role)) {
+  } else if (hasApiSession && !isAuthAdminRole(sessionUser)) {
     notifyEmbeddedAuthSuccess(buildSessionPayload({ role: "student", user: sessionUser }));
   }
 }

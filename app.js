@@ -18,9 +18,19 @@ function normalizeAppRoleKey(value) {
   return String(value || "").trim().toLowerCase().replace(/[\s-]+/g, "_");
 }
 
+function getAppRoleValue(value) {
+  if (value && typeof value === "object") {
+    return value.rbacRole || value.rbac_role || value.role || "";
+  }
+  return value;
+}
+
 function isAppAdminRole(value) {
-  const role = normalizeAppRoleKey(value);
-  return role === "admin" || role === "super_admin" || (role.includes("super") && role.includes("admin"));
+  const role = normalizeAppRoleKey(getAppRoleValue(value));
+  return role === "owner" ||
+    role === "admin" ||
+    role === "super_admin" ||
+    (role.includes("super") && role.includes("admin"));
 }
 
 function redirectAdminSessionFromLegacyPage() {
@@ -521,7 +531,7 @@ function getSessionBackedUser() {
       return null;
     }
 
-    if (isAppAdminRole(sessionUser.role)) {
+    if (isAppAdminRole(sessionUser)) {
       redirectAdminSessionFromLegacyPage();
       return null;
     }
@@ -555,7 +565,7 @@ function getActiveUser() {
   try {
     const apiClient = window.mullemApiClient;
     const sessionUser = apiClient?.getSessionUser?.();
-    if (apiClient?.hasToken?.() && isAppAdminRole(sessionUser?.role)) {
+    if (apiClient?.hasToken?.() && isAppAdminRole(sessionUser)) {
       redirectAdminSessionFromLegacyPage();
       return null;
     }
