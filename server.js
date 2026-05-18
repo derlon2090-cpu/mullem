@@ -7838,14 +7838,39 @@ async function handleAdminAiIntelligence(req, res) {
     throw createHttpError(503, "AI intelligence analytics are not available until the database is ready.");
   }
   const url = new URL(req.url, `http://${req.headers.host || "127.0.0.1"}`);
-  const analytics = await databaseClient.getAiIntelligenceAnalytics({
-    model_key: sanitizeOptionalText(url.searchParams.get("model"), 80),
-    plan: sanitizeOptionalText(url.searchParams.get("plan"), 80),
-    task_type: sanitizeOptionalText(url.searchParams.get("task_type"), 80),
-    question_type: sanitizeOptionalText(url.searchParams.get("question_type"), 80),
-    from: sanitizeOptionalText(url.searchParams.get("from"), 80),
-    to: sanitizeOptionalText(url.searchParams.get("to"), 80)
-  });
+  let analytics = {};
+  try {
+    analytics = await databaseClient.getAiIntelligenceAnalytics({
+      model_key: sanitizeOptionalText(url.searchParams.get("model"), 80),
+      plan: sanitizeOptionalText(url.searchParams.get("plan"), 80),
+      task_type: sanitizeOptionalText(url.searchParams.get("task_type"), 80),
+      question_type: sanitizeOptionalText(url.searchParams.get("question_type"), 80),
+      from: sanitizeOptionalText(url.searchParams.get("from"), 80),
+      to: sanitizeOptionalText(url.searchParams.get("to"), 80)
+    });
+  } catch (error) {
+    console.warn("[AI_INTELLIGENCE_ANALYTICS_DEGRADED]", error?.message || error);
+    analytics = {
+      overview: {
+        messages_today: 0,
+        tokens_today: 0,
+        token_cost_today: 0,
+        best_model: null,
+        most_used_model: null,
+        avg_quality: 0,
+        avg_latency_ms: 0,
+        top_dissatisfaction_reason: null
+      },
+      model_performance: [],
+      feedback_reasons: [],
+      feedback_analytics: [],
+      task_quality: [],
+      knowledge_base: { chunks_count: 0, approved_chunks_count: 0, avg_quality: 0, total_usage: 0 },
+      excellent_answers: { total: 0, pending: 0, approved: 0, rejected: 0 },
+      degraded: true,
+      error: "AI_INTELLIGENCE_ANALYTICS_DEGRADED"
+    };
+  }
   sendJson(req, res, 200, {
     success: true,
     data: {
