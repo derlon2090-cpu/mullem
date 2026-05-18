@@ -4,7 +4,7 @@ const http = require("http");
 const { createRealScaleInfra } = require("./ai-real-scale-infra");
 const aiIntelligence = require("./ai-intelligence-layer");
 
-const PORT = Number(process.env.AI_SERVICE_PORT || 3020);
+const PORT = Number(process.env.AI_SERVICE_PORT || process.env.PORT || 3020);
 const infra = createRealScaleInfra({ serviceName: "mullem-ai-service" });
 
 function sendJson(res, statusCode, payload, headers = {}) {

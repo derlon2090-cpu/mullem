@@ -74,16 +74,22 @@ This repository already includes [render.yaml](C:\mullem\render.yaml).
 
 Recommended setup:
 
-- Create a new Render Web Service from the repository root
-- Runtime: Node
-- Build command: `npm run render:build`
-- Start command: `npm run render:start`
-- Health check path: `/api/health`
+- Sync the Blueprint from the repository root.
+- The Blueprint defines:
+  - `mullem` Web Service for the main app.
+  - `mullem-ai-worker` Background Worker running `npm run ai:worker`.
+  - `mullem-ai-service` Private Service running `npm run ai:service`.
+  - `mullem-ai-redis` Render Key Value for Redis-compatible cache, BullMQ queue state, sessions, abuse tracking, and live metrics.
+- Health check paths:
+  - Web Service: `/api/health`
+  - AI Service: `/health`
 
 Set these environment variables in Render:
 
 ```env
 OPENAI_API_KEY=your_real_key
+DEEPSEEK_API_KEY=your_real_key
+SENTRY_DSN=your_sentry_dsn
 ORLIXOR_DEFAULT_MODEL=gpt-4.1-mini
 ORLIXOR_TURBO_MODEL=gpt-4.1-nano
 ORLIXOR_PRO_MODEL=gpt-4.1
@@ -94,6 +100,32 @@ ORLIXOR_ENABLE_EMBEDDINGS=false
 DB_CLIENT=postgres
 DATABASE_URL=your_neon_postgres_connection_string
 CORS_ALLOWED_ORIGINS=https://your-frontend-domain.com
+```
+
+For an existing Render Blueprint, values marked `sync: false` are not filled automatically during later Blueprint syncs. Add `SENTRY_DSN`, `OPENAI_API_KEY`, `DEEPSEEK_API_KEY`, and database secrets manually to every service that needs them. `REDIS_URL` and `AI_SERVICE_HOSTPORT` are referenced from Render services in `render.yaml`.
+
+Do not enable production embeddings yet. Keep:
+
+```env
+ORLIXOR_ENABLE_EMBEDDINGS=false
+```
+
+Enable embeddings only after staging confirms pgvector or Qdrant is ready, the Knowledge Base has been indexed, and semantic retrieval beats the current keyword fallback.
+
+After deploy, run:
+
+```bash
+npm run ai:launch-check
+npm run ai:scale-check
+npm run ai:real-scale-check
+npm run ai:load-test
+npm run ai:production-activation-check
+```
+
+To send one controlled Sentry test event:
+
+```bash
+AI_SEND_SENTRY_TEST=1 npm run ai:production-activation-check
 ```
 
 Production storage is Neon/PostgreSQL only. Use `DATABASE_URL` from Neon.

@@ -8088,12 +8088,15 @@ async function handleAdminScaleGrowth(req, res) {
 
 async function buildRealScaleSnapshot() {
   const health = await buildAiHealthSnapshot();
+  const aiService = await probeAiServiceHealth();
+  const worker = await probeAiWorkerHeartbeat();
   return {
     generated_at: new Date().toISOString(),
     readiness: {
       redis_ready: Boolean(health.real_scale?.redis?.connected),
-      queue_ready: ["bullmq", "memory"].includes(String(health.real_scale?.queue?.mode || "")),
-      ai_service_ready: Boolean(health.real_scale?.separate_ai_service),
+      queue_ready: health.real_scale?.queue?.mode === "bullmq",
+      worker_ready: Boolean(worker.ready),
+      ai_service_ready: Boolean(aiService.ok),
       streaming_ready: Boolean(health.real_scale?.streaming?.sse_enabled),
       monitoring_ready: Boolean(health.real_scale?.monitoring?.prometheus_enabled),
       sentry_ready: Boolean(health.real_scale?.monitoring?.sentry_enabled),
@@ -8101,6 +8104,8 @@ async function buildRealScaleSnapshot() {
       fallback_safe: true
     },
     real_scale: health.real_scale,
+    worker,
+    ai_service: aiService,
     cost_guardrails: health.cost_guardrails,
     safe_mode: health.safe_mode,
     disaster_protection: health.real_scale?.disaster_protection || {},
@@ -8115,11 +8120,126 @@ async function buildRealScaleSnapshot() {
   };
 }
 
+function getAiServiceBaseUrl() {
+  const explicit = readEnvValue("AI_SERVICE_URL", "");
+  if (explicit) return explicit.replace(/\/+$/, "");
+  const hostport = readEnvValue("AI_SERVICE_HOSTPORT", "");
+  return hostport ? `http://${hostport.replace(/^https?:\/\//i, "").replace(/\/+$/, "")}` : "";
+}
+
+async function fetchJsonWithTimeout(url, timeoutMs = 4500) {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), Math.max(1000, Number(timeoutMs || 4500)));
+  try {
+    const response = await fetch(url, {
+      headers: { Accept: "application/json" },
+      signal: controller.signal
+    });
+    const text = await response.text();
+    let data = {};
+    try {
+      data = text ? JSON.parse(text) : {};
+    } catch (_) {
+      data = { raw: text };
+    }
+    return {
+      status: response.status,
+      ok: response.ok && data?.ok !== false && data?.success !== false,
+      data
+    };
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+async function probeAiServiceHealth() {
+  const baseUrl = getAiServiceBaseUrl();
+  if (!baseUrl) {
+    return {
+      configured: false,
+      ok: false,
+      status: "not_configured",
+      url_source: "none"
+    };
+  }
+  const startedAt = Date.now();
+  try {
+    const result = await fetchJsonWithTimeout(`${baseUrl}/health`, 5000);
+    return {
+      configured: true,
+      ok: result.ok,
+      status: result.ok ? "ok" : `http_${result.status}`,
+      latency_ms: Date.now() - startedAt,
+      url_source: process.env.AI_SERVICE_URL ? "AI_SERVICE_URL" : "AI_SERVICE_HOSTPORT",
+      service: result.data?.service || null,
+      infra: result.data?.infra ? {
+        redis: result.data.infra.redis || null,
+        queue: result.data.infra.queue || null,
+        monitoring: result.data.infra.monitoring || null,
+        memory_pressure: result.data.infra.memory_pressure || null
+      } : null
+    };
+  } catch (error) {
+    return {
+      configured: true,
+      ok: false,
+      status: "unreachable",
+      latency_ms: Date.now() - startedAt,
+      url_source: process.env.AI_SERVICE_URL ? "AI_SERVICE_URL" : "AI_SERVICE_HOSTPORT",
+      error: String(error?.message || error).slice(0, 500)
+    };
+  }
+}
+
+async function probeAiWorkerHeartbeat() {
+  const heartbeat = await realScaleInfra.getJson("worker:heartbeat");
+  const heartbeatMs = heartbeat?.heartbeat_at ? new Date(heartbeat.heartbeat_at).getTime() : 0;
+  const ageMs = heartbeatMs ? Date.now() - heartbeatMs : null;
+  const ready = Boolean(heartbeat?.ok && Number.isFinite(ageMs) && ageMs <= 60_000);
+  return {
+    configured: Boolean(process.env.REDIS_URL || process.env.ORLIXOR_REDIS_URL || process.env.UPSTASH_REDIS_URL),
+    ready,
+    status: ready ? "ok" : heartbeat ? "stale_or_memory_isolated" : "missing_heartbeat",
+    heartbeat_age_ms: ageMs,
+    heartbeat: heartbeat ? {
+      service: heartbeat.service || null,
+      pid: heartbeat.pid || null,
+      started_at: heartbeat.started_at || null,
+      heartbeat_at: heartbeat.heartbeat_at || null,
+      worker: heartbeat.worker || null,
+      redis: heartbeat.redis || null,
+      queue: heartbeat.queue || null,
+      memory_pressure: heartbeat.memory_pressure || null
+    } : null
+  };
+}
+
 async function handleAdminRealScale(req, res) {
   await requireAdminUser(req);
   sendJson(req, res, 200, {
     success: true,
     data: await buildRealScaleSnapshot()
+  });
+}
+
+async function handleAdminRealScaleSentryTest(req, res) {
+  await requireAdminUser(req);
+  const payload = await parseJsonBody(req).catch(() => ({}));
+  if (payload.confirm !== "send_test_error") {
+    throw createHttpError(422, "confirm must be send_test_error.");
+  }
+  const sent = realScaleInfra.captureMessage("Mullem real scale Sentry production test", {
+    level: "warning",
+    route: "/api/admin/real-scale/sentry-test",
+    request_id: req.__requestId || null,
+    sent_at: new Date().toISOString()
+  });
+  sendJson(req, res, sent ? 200 : 503, {
+    success: sent,
+    data: {
+      sent,
+      sentry_configured: Boolean(process.env.SENTRY_DSN)
+    }
   });
 }
 
@@ -10782,6 +10902,11 @@ async function routeRequest(req, res) {
 
   if (req.method === "GET" && requestPath === "/api/admin/real-scale") {
     await handleAdminRealScale(req, res);
+    return;
+  }
+
+  if (req.method === "POST" && requestPath === "/api/admin/real-scale/sentry-test") {
+    await handleAdminRealScaleSentryTest(req, res);
     return;
   }
 

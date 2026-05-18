@@ -3,6 +3,8 @@
 const { createRealScaleInfra } = require("./ai-real-scale-infra");
 
 const infra = createRealScaleInfra({ serviceName: "mullem-ai-worker" });
+const startedAt = new Date().toISOString();
+let lastWorkerState = null;
 
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -18,6 +20,23 @@ async function acknowledgeJob(name, payload = {}) {
     latency_ms: Date.now() - startedAt,
     payload_keys: Object.keys(payload || {}).slice(0, 20)
   };
+}
+
+async function publishHeartbeat() {
+  const status = infra.getStatus();
+  const heartbeat = {
+    ok: true,
+    service: "mullem-ai-worker",
+    pid: process.pid,
+    started_at: startedAt,
+    heartbeat_at: new Date().toISOString(),
+    worker: lastWorkerState,
+    redis: status.redis,
+    queue: status.queue,
+    memory_pressure: status.memory_pressure
+  };
+  await infra.setJson("worker:heartbeat", heartbeat, 45_000);
+  return heartbeat;
 }
 
 const handlers = {
@@ -50,6 +69,14 @@ const handlers = {
 async function main() {
   await infra.initialize();
   const workerState = infra.startWorkers(handlers);
+  lastWorkerState = workerState;
+  await publishHeartbeat();
+  const heartbeatTimer = setInterval(() => {
+    publishHeartbeat().catch((error) => {
+      infra.captureError(error, { service: "mullem-ai-worker", subsystem: "heartbeat" });
+    });
+  }, 15_000);
+  heartbeatTimer.unref?.();
   console.log(JSON.stringify({
     ok: true,
     service: "mullem-ai-worker",

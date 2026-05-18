@@ -17,6 +17,7 @@
     "ai:beta-report": "node ai-beta-weekly-report.js",
     "ai:scale-check": "node ai-scale-growth-check.js",
     "ai:real-scale-check": "node ai-real-scale-check.js",
+    "ai:production-activation-check": "node ai-production-activation-check.js",
     "ai:worker": "node ai-worker.js",
     "ai:service": "node ai-service.js",
     "render:build": "npm ci && node render-build-check.js",

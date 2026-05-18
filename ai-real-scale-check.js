@@ -113,6 +113,8 @@ async function main() {
     assertShape("real scale cache", data.real_scale?.cache && typeof data.real_scale.cache === "object");
     assertShape("real scale providers", data.real_scale?.providers && typeof data.real_scale.providers === "object");
     assertShape("disaster protection", data.disaster_protection && typeof data.disaster_protection === "object");
+    assertShape("worker probe", data.worker && typeof data.worker === "object");
+    assertShape("ai service probe", data.ai_service && typeof data.ai_service === "object");
     assertShape("prometheus metrics", prometheus.status === 200 && /mullem_/i.test(prometheus.text));
 
     const report = {
@@ -139,6 +141,8 @@ async function main() {
         streaming: data.real_scale.streaming,
         monitoring: data.real_scale.monitoring,
         embeddings: data.real_scale.embeddings,
+        worker: data.worker,
+        ai_service: data.ai_service,
         disaster_protection: data.disaster_protection,
         recommendations: data.recommendations || []
       }
@@ -152,6 +156,8 @@ async function main() {
       statuses: report.statuses,
       redis_mode: report.real_scale.redis.mode,
       queue_mode: report.real_scale.queue.mode,
+      worker_status: report.real_scale.worker.status,
+      ai_service_status: report.real_scale.ai_service.status,
       streaming: report.real_scale.streaming,
       monitoring: report.real_scale.monitoring,
       recommendations: report.real_scale.recommendations

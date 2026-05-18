@@ -263,6 +263,17 @@ function createRealScaleInfra(options = {}) {
     }
   }
 
+  function captureMessage(message, context = {}) {
+    if (Sentry && sentryInitialized) {
+      Sentry.captureMessage(String(message || "Mullem real scale event"), {
+        level: context.level || "info",
+        extra: context
+      });
+      return true;
+    }
+    return false;
+  }
+
   async function initialize() {
     setupPrometheus();
     setupSentry();
@@ -704,8 +715,9 @@ function createRealScaleInfra(options = {}) {
       monitoring: { ...state.monitoring },
       memory_pressure: getMemoryPressure(),
       separate_ai_service: {
-        enabled: Boolean(process.env.AI_SERVICE_URL || process.env.AI_SERVICE_PORT),
-        url_configured: Boolean(process.env.AI_SERVICE_URL),
+        enabled: Boolean(process.env.AI_SERVICE_URL || process.env.AI_SERVICE_HOSTPORT || process.env.AI_SERVICE_PORT),
+        url_configured: Boolean(process.env.AI_SERVICE_URL || process.env.AI_SERVICE_HOSTPORT),
+        hostport_configured: Boolean(process.env.AI_SERVICE_HOSTPORT),
         port: Number(process.env.AI_SERVICE_PORT || 3020)
       },
       last_error: state.last_error
@@ -741,6 +753,7 @@ function createRealScaleInfra(options = {}) {
     providerTimeoutSignal,
     recordAiRequest,
     captureError,
+    captureMessage,
     normalizePromptForCache
   };
 }

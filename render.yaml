@@ -1,11 +1,20 @@
 services:
+  - type: keyvalue
+    name: mullem-ai-redis
+    plan: starter
+    region: oregon
+    ipAllowList: []
+    maxmemoryPolicy: noeviction
+
   - type: web
     name: mullem
     runtime: node
     plan: starter
+    region: oregon
     buildCommand: npm run render:build
     startCommand: npm run render:start
     healthCheckPath: /api/health
+    autoDeployTrigger: commit
     envVars:
       - key: NODE_VERSION
         value: 20
@@ -35,6 +44,18 @@ services:
         sync: false
       - key: JWT_SECRET
         sync: false
+      - key: REDIS_URL
+        fromService:
+          type: keyvalue
+          name: mullem-ai-redis
+          property: connectionString
+      - key: SENTRY_DSN
+        sync: false
+      - key: AI_SERVICE_HOSTPORT
+        fromService:
+          type: pserv
+          name: mullem-ai-service
+          property: hostport
       - key: DEEPSEEK_API_KEY
         sync: false
       - key: OPENAI_API_KEY
@@ -43,5 +64,58 @@ services:
         value: "25"
       - key: AI_SAFE_MODE_ENABLED
         value: "false"
+      - key: ORLIXOR_ENABLE_EMBEDDINGS
+        value: "false"
+
+  - type: worker
+    name: mullem-ai-worker
+    runtime: node
+    plan: starter
+    region: oregon
+    buildCommand: npm run render:build
+    startCommand: npm run ai:worker
+    autoDeployTrigger: commit
+    envVars:
+      - key: NODE_VERSION
+        value: 20
+      - key: REDIS_URL
+        fromService:
+          type: keyvalue
+          name: mullem-ai-redis
+          property: connectionString
+      - key: SENTRY_DSN
+        sync: false
+      - key: DATABASE_URL
+        sync: false
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: DEEPSEEK_API_KEY
+        sync: false
+      - key: ORLIXOR_ENABLE_EMBEDDINGS
+        value: "false"
+
+  - type: pserv
+    name: mullem-ai-service
+    runtime: node
+    plan: starter
+    region: oregon
+    buildCommand: npm run render:build
+    startCommand: npm run ai:service
+    healthCheckPath: /health
+    autoDeployTrigger: commit
+    envVars:
+      - key: NODE_VERSION
+        value: 20
+      - key: REDIS_URL
+        fromService:
+          type: keyvalue
+          name: mullem-ai-redis
+          property: connectionString
+      - key: SENTRY_DSN
+        sync: false
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: DEEPSEEK_API_KEY
+        sync: false
       - key: ORLIXOR_ENABLE_EMBEDDINGS
         value: "false"
