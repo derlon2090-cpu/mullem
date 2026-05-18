@@ -6813,6 +6813,9 @@ async function handleMessageFeedback(req, res, messageId) {
   }
 
   const numericMessageId = Number(messageId);
+  const feedbackMessageId = Number.isFinite(numericMessageId) && numericMessageId > 0
+    ? numericMessageId
+    : null;
   const modelKey = normalizeSelectedModel(payload.model_key || payload.modelKey || payload.model);
   const provider = payload.provider ? normalizeProviderKey(payload.provider) : resolveProfileProvider(getModelProfile(modelKey));
   const quality = aiIntelligence.scoreResponse({
@@ -6822,7 +6825,7 @@ async function handleMessageFeedback(req, res, messageId) {
   if (isDatabaseReady() && typeof databaseClient.saveFeedback === "function") {
     await databaseClient.saveFeedback({
       user_id: auth.user.id,
-      message_id: Number.isFinite(numericMessageId) ? numericMessageId : null,
+      message_id: feedbackMessageId,
       conversation_id: sanitizeOptionalText(payload.conversation_id || payload.conversationId, MAX_METADATA_LENGTH) || null,
       model_key: modelKey,
       provider,
@@ -6845,7 +6848,7 @@ async function handleMessageFeedback(req, res, messageId) {
   if (isDatabaseReady() && typeof databaseClient.recordAiQualityEvent === "function") {
     await databaseClient.recordAiQualityEvent({
       user_id: auth.user.id,
-      message_id: Number.isFinite(numericMessageId) ? numericMessageId : null,
+      message_id: feedbackMessageId,
       conversation_id: sanitizeOptionalText(payload.conversation_id || payload.conversationId, MAX_METADATA_LENGTH) || null,
       task_type: sanitizeOptionalText(payload.task_type || payload.taskType, 80) || null,
       question_type: sanitizeOptionalText(payload.question_type || payload.questionType, 80) || null,
