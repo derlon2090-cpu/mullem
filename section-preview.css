@@ -5268,7 +5268,7 @@ body[data-workspace-mode="home"] .guest-root {
   .guest-shell.is-home-workspace .guest-main {
     order: initial;
     padding-inline: 24px;
-    grid-template-rows: 54px auto auto minmax(240px, 1fr) 150px 30px;
+    grid-template-rows: 54px auto auto auto 150px 30px;
   }
 
   .guest-shell.is-home-workspace .guest-sidepanel {
@@ -5350,7 +5350,7 @@ body[data-workspace-mode="home"] .guest-root {
 
   .guest-shell.is-home-workspace .guest-main {
     padding: 14px 12px;
-    grid-template-rows: 46px auto auto minmax(240px, 1fr) 142px 28px;
+    grid-template-rows: 46px auto auto auto 142px 28px;
   }
 
   .guest-shell.is-home-workspace .guest-sidepanel {
@@ -16610,7 +16610,7 @@ body {
 
   .guest-shell.is-home-workspace .guest-main {
     padding: 14px 12px;
-    grid-template-rows: 46px auto auto minmax(240px, 1fr) 142px 28px;
+    grid-template-rows: 46px auto auto auto 142px 28px;
     min-width: 0;
     width: 100%;
   }
