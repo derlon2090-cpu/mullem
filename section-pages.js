@@ -58,6 +58,7 @@
   let dailyRewardInitStarted = false;
   let dailyRewardTimer = null;
   let dailyRewardCountdownEndAt = 0;
+  let conversationScrollButtonRaf = 0;
 
   const icons = {
     logo: `<img src="${brandMarkUrl}" alt="" aria-hidden="true">`,
@@ -101,7 +102,8 @@
     refresh: '<svg viewBox="0 0 24 24"><path d="M3 12a9 9 0 0 1 15.4-6.4L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-15.4 6.4L3 16"/><path d="M3 21v-5h5"/></svg>',
     thumbsUp: '<svg viewBox="0 0 24 24"><path d="M7 10v11H4V10h3Z"/><path d="M10 21h6a2 2 0 0 0 2-1.6l1.2-6a2 2 0 0 0-2-2.4h-4.5l.7-3.6A2.3 2.3 0 0 0 11 5l-4 5v11h3Z"/></svg>',
     filePdf: '<svg viewBox="0 0 24 24"><path d="M7 3h8l4 4v14H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2Z"/><path d="M15 3v5h5"/><path d="M8 15h8M8 18h5"/></svg>',
-    star: '<svg viewBox="0 0 24 24"><path d="m12 3 2.8 5.7 6.2.9-4.5 4.4 1 6.2L12 17.2 6.5 20l1-6.2L3 9.6l6.2-.9Z"/></svg>'
+    star: '<svg viewBox="0 0 24 24"><path d="m12 3 2.8 5.7 6.2.9-4.5 4.4 1 6.2L12 17.2 6.5 20l1-6.2L3 9.6l6.2-.9Z"/></svg>',
+    arrowDown: '<svg viewBox="0 0 24 24"><path d="M12 5v14"/><path d="m6 13 6 6 6-6"/></svg>'
   };
 
   const navItems = [
@@ -705,6 +707,7 @@
     toolSuggestionDraft: {},
     likedReplies: {},
     feedbackReplies: {},
+    scrollToBottomVisible: false,
     openThreadMenuId: "",
     authReason: "",
     conversationIds: {},
@@ -5587,6 +5590,21 @@
     `;
   }
 
+  function renderScrollToBottomButton() {
+    return `
+      <button
+        class="guest-scroll-bottom ${state.scrollToBottomVisible ? "is-visible" : ""}"
+        type="button"
+        data-scroll-chat-bottom
+        aria-label="النزول لآخر المحادثة"
+        aria-hidden="${state.scrollToBottomVisible ? "false" : "true"}"
+        tabindex="${state.scrollToBottomVisible ? "0" : "-1"}"
+      >
+        ${icons.arrowDown}
+      </button>
+    `;
+  }
+
   function renderConversation(profile) {
     const thread = getActiveThread();
     const messages = thread?.messages || [];
@@ -5594,7 +5612,7 @@
       return "";
     }
     return `
-      <section class="guest-conversation-card ${isHomeWorkspace ? "is-home-conversation" : ""}">
+      <section class="guest-conversation-card ${isHomeWorkspace ? "is-home-conversation" : ""}" data-conversation-scroll>
         ${isHomeWorkspace ? "" : `
           <header class="guest-conversation-head">
             <div>
@@ -5607,6 +5625,7 @@
         <div class="guest-messages">
           ${messages.map(renderMessage).join("")}
         </div>
+        ${renderScrollToBottomButton()}
       </section>
     `;
   }
@@ -11430,7 +11449,7 @@
   function getScrollSnapshot() {
     const pageScroller = document.scrollingElement || document.documentElement;
     const mainScroller = mobileV2Root.querySelector(".guest-main") || app.querySelector(".guest-main");
-    const conversationScroller = mobileV2Root.querySelector(".guest-conversation-card") || app.querySelector(".guest-conversation-card");
+    const conversationScroller = getConversationScroller();
     return {
       windowX: window.scrollX || 0,
       windowY: window.scrollY || 0,
@@ -11447,7 +11466,7 @@
     if (!snapshot) return;
     const pageScroller = document.scrollingElement || document.documentElement;
     const mainScroller = mobileV2Root.querySelector(".guest-main") || app.querySelector(".guest-main");
-    const conversationScroller = mobileV2Root.querySelector(".guest-conversation-card") || app.querySelector(".guest-conversation-card");
+    const conversationScroller = getConversationScroller();
     if (pageScroller) {
       pageScroller.scrollTop = snapshot.pageTop;
       pageScroller.scrollLeft = snapshot.pageLeft;
@@ -11493,11 +11512,81 @@
     return true;
   }
 
-  function scrollConversationToLatest() {
+  function getConversationScroller() {
+    return mobileV2Root.querySelector("[data-conversation-scroll]") || app.querySelector("[data-conversation-scroll]");
+  }
+
+  function getPageScroller() {
+    return document.scrollingElement || document.documentElement;
+  }
+
+  function getScrollMetrics(scroller) {
+    if (!scroller) {
+      return {
+        scrollable: false,
+        distanceToBottom: 0
+      };
+    }
+
+    const scrollableDistance = Math.max(0, Number(scroller.scrollHeight || 0) - Number(scroller.clientHeight || 0));
+    const distanceToBottom = Math.max(0, scrollableDistance - Number(scroller.scrollTop || 0));
+    return {
+      scrollable: scrollableDistance > 24,
+      distanceToBottom
+    };
+  }
+
+  function setScrollToBottomVisible(visible) {
+    const nextVisible = Boolean(visible);
+    state.scrollToBottomVisible = nextVisible;
+    uiRoots.forEach((root) => {
+      root.querySelectorAll("[data-scroll-chat-bottom]").forEach((button) => {
+        button.classList.toggle("is-visible", nextVisible);
+        button.setAttribute("aria-hidden", nextVisible ? "false" : "true");
+        button.tabIndex = nextVisible ? 0 : -1;
+      });
+    });
+  }
+
+  function updateScrollToBottomButton(scroller = getConversationScroller()) {
+    const conversationMetrics = getScrollMetrics(scroller);
+    const pageMetrics = getScrollMetrics(getPageScroller());
+    setScrollToBottomVisible(
+      (conversationMetrics.scrollable && conversationMetrics.distanceToBottom > 32)
+      || (pageMetrics.scrollable && pageMetrics.distanceToBottom > 32)
+    );
+  }
+
+  function scheduleScrollToBottomButtonUpdate(scroller) {
+    if (conversationScrollButtonRaf) {
+      window.cancelAnimationFrame(conversationScrollButtonRaf);
+    }
+    conversationScrollButtonRaf = window.requestAnimationFrame(() => {
+      conversationScrollButtonRaf = 0;
+      updateScrollToBottomButton(scroller);
+    });
+  }
+
+  function scrollConversationToLatest(options = {}) {
     window.requestAnimationFrame(() => {
-      const conversation = mobileV2Root.querySelector(".guest-conversation-card") || app.querySelector(".guest-conversation-card");
+      const conversation = getConversationScroller();
+      const pageScroller = getPageScroller();
       if (!conversation) return;
-      conversation.scrollTop = conversation.scrollHeight;
+      const behavior = options?.smooth ? "smooth" : "auto";
+      if (typeof conversation.scrollTo === "function") {
+        conversation.scrollTo({ top: conversation.scrollHeight, behavior });
+      } else {
+        conversation.scrollTop = conversation.scrollHeight;
+      }
+      if (pageScroller && pageScroller !== conversation && getScrollMetrics(pageScroller).scrollable) {
+        if (typeof pageScroller.scrollTo === "function") {
+          pageScroller.scrollTo({ top: pageScroller.scrollHeight, behavior });
+        } else {
+          pageScroller.scrollTop = pageScroller.scrollHeight;
+        }
+      }
+      setScrollToBottomVisible(false);
+      window.setTimeout(() => updateScrollToBottomButton(conversation), options?.smooth ? 320 : 0);
     });
   }
 
@@ -13069,6 +13158,20 @@
       });
     });
 
+    bindUiEvent("scroll", (event) => {
+      const scroller = event.target?.matches?.("[data-conversation-scroll]") ? event.target : null;
+      if (!scroller) return;
+      scheduleScrollToBottomButtonUpdate(scroller);
+    }, true);
+
+    window.addEventListener("scroll", () => {
+      scheduleScrollToBottomButtonUpdate();
+    }, { passive: true });
+
+    window.addEventListener("resize", () => {
+      scheduleScrollToBottomButtonUpdate();
+    });
+
     bindUiEvent("click", async (event) => {
       const shouldCloseBalance = state.balancePanelOpen
         && !event.target.closest("[data-balance]")
@@ -13097,6 +13200,13 @@
       ) {
         state.mobileSidebarOpen = false;
         render();
+        return;
+      }
+
+      if (event.target.closest("[data-scroll-chat-bottom]")) {
+        event.preventDefault();
+        event.stopPropagation();
+        scrollConversationToLatest({ smooth: true });
         return;
       }
 
@@ -15487,6 +15597,7 @@
     syncDailyRewardPanel();
     drawImageCropperPreview();
     scheduleSavedConversationSync();
+    scheduleScrollToBottomButtonUpdate();
   }
 
   window.addEventListener("popstate", () => {
