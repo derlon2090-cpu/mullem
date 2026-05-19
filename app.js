@@ -5288,9 +5288,8 @@ function createImageResultMarkup({
         <p style="margin:0;color:var(--muted-text,#7b7f99);line-height:1.8;">${safeRevisedPrompt}</p>
       </div>
       <div class="message-tools image-result-actions">
-        <button class="mini-btn" type="button" data-download-image>↓ تحميل</button>
-        <button class="mini-btn" type="button" data-regenerate-image>↻ إعادة توليد</button>
-        <button class="mini-btn" type="button" data-copy-image-prompt>⧉ نسخ الوصف</button>
+        <button class="mini-btn image-action-btn" type="button" data-download-image>تحميل</button>
+        <button class="mini-btn image-action-btn" type="button" data-regenerate-image>إعادة</button>
       </div>
     </div>
   `;

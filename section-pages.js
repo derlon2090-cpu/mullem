@@ -5400,9 +5400,8 @@
                 <p>${escapeHtml("تعذر عرض الصورة الآن.")}</p>
               `}
               <div class="guest-message-actions">
-                <button class="ghost-action ${isAuthenticated() ? "" : "requires-auth"}" type="button" data-download-image="${actionKey}">تحميل</button>
-                <button class="ghost-action ${isAuthenticated() ? "" : "requires-auth"}" type="button" data-regenerate-image="${actionKey}">${image.mode === "edit" ? "إعادة التعديل" : "إعادة توليد"}</button>
-                <button class="ghost-action ${isAuthenticated() ? "" : "requires-auth"}" type="button" data-copy-image-prompt="${actionKey}">نسخ الوصف</button>
+                <button class="ghost-action text-action ${isAuthenticated() ? "" : "requires-auth"}" type="button" data-download-image="${actionKey}">تحميل</button>
+                <button class="ghost-action text-action ${isAuthenticated() ? "" : "requires-auth"}" type="button" data-regenerate-image="${actionKey}">إعادة</button>
               </div>
             </div>
           </article>
@@ -5435,15 +5434,10 @@
               <button class="ghost-action ${isAuthenticated() ? "" : "requires-auth"}" type="button" data-refresh-reply>${icons.refresh}</button>
               <button class="ghost-action feedback-btn ${isLiked ? "liked" : ""} ${isAuthenticated() ? "" : "requires-auth"}" type="button" data-like-reply="${escapeHtml(feedbackKey)}" aria-pressed="${isLiked ? "true" : "false"}">${icons.thumbsUp}</button>
               ${[
-                ["excellent", "ممتاز"],
                 ["inaccurate", "غير دقيق"],
-                ["too_long", "طويل"],
-                ["too_short", "قصير"],
-                ["save_worthy", "للحفظ"],
-                ["code_error", "خطأ برمجي"],
                 ["solved", "تم الحل"]
               ].map(([type, label]) => `
-                <button class="ghost-action feedback-chip ${activeFeedback === type ? "liked" : ""} ${isAuthenticated() ? "" : "requires-auth"}" type="button" data-feedback-reply="${escapeHtml(feedbackKey)}" data-feedback-type="${escapeHtml(type)}">${escapeHtml(label)}</button>
+                <button class="ghost-action feedback-chip text-action ${activeFeedback === type ? "liked" : ""} ${isAuthenticated() ? "" : "requires-auth"}" type="button" data-feedback-reply="${escapeHtml(feedbackKey)}" data-feedback-type="${escapeHtml(type)}">${escapeHtml(label)}</button>
               `).join("")}
             </div>
           </div>
