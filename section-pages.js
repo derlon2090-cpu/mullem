@@ -1080,8 +1080,12 @@
   function normalizeConversationCacheItem(item) {
     const id = String(item?.id || "").trim();
     if (!id) return null;
+    const serverConversationId = String(item.server_conversation_id || item.conversation_id || item.conversationId || "").trim();
     return {
       id,
+      thread_id: String(item.thread_id || item.threadId || item.local_thread_id || "").trim() || null,
+      server_conversation_id: serverConversationId || null,
+      is_local: Boolean(item.is_local ?? item.isLocal ?? (!serverConversationId && String(id).startsWith("thread-"))),
       guest_session_id: item.guest_session_id || item.guestSessionId || null,
       user_id: item.user_id != null ? String(item.user_id) : null,
       project_id: item.project_id != null ? String(item.project_id) : null,
@@ -1093,8 +1097,88 @@
       status: item.status || "active",
       last_message_at: item.last_message_at || item.lastMessageAt || item.updated_at || item.updatedAt || null,
       created_at: item.created_at || item.createdAt || null,
-      updated_at: item.updated_at || item.updatedAt || null
+      updated_at: item.updated_at || item.updatedAt || null,
+      messages: Array.isArray(item.messages) ? item.messages.map((message) => normalizeCachedThreadMessage(message)).filter(Boolean) : []
     };
+  }
+
+  function clonePlainValue(value) {
+    if (value == null || typeof value !== "object") return value;
+    try {
+      return JSON.parse(JSON.stringify(value));
+    } catch (_) {
+      if (Array.isArray(value)) {
+        return value.map((entry) => clonePlainValue(entry));
+      }
+      return { ...value };
+    }
+  }
+
+  function normalizeCachedThreadMessage(message) {
+    if (!message || typeof message !== "object") return null;
+    const role = String(message.role || "").toLowerCase() === "assistant" ? "assistant" : "user";
+    const normalized = {
+      ...clonePlainValue(message),
+      role
+    };
+
+    if (role === "assistant") {
+      const text = coerceDisplayText(message.text || message.body || message.content || message.rawText || "");
+      const imageSource = message.image && typeof message.image === "object" ? clonePlainValue(message.image) : {};
+      const imageUrl = String(imageSource.url || message.imageUrl || message.image_url || "").trim();
+      const imageMode = String(imageSource.mode || message.mode || "").trim();
+      if (message.kind === "image" || imageUrl) {
+        const prompt = coerceDisplayText(
+          imageSource.prompt ||
+          message.prompt ||
+          message.revisedPrompt ||
+          message.revised_prompt ||
+          message.rawText ||
+          text
+        );
+        const revisedPrompt = coerceDisplayText(
+          imageSource.revisedPrompt ||
+          imageSource.revised_prompt ||
+          message.revisedPrompt ||
+          message.revised_prompt ||
+          prompt
+        );
+        normalized.kind = "image";
+        normalized.rawText = revisedPrompt || prompt;
+        normalized.body = {
+          heading: coerceDisplayText(message.body?.heading || (imageMode === "edit" ? "تم تعديل الصورة بنجاح." : "تم إنشاء الصورة بنجاح.")),
+          bullets: ["يمكنك تحميل الصورة أو إعادة توليدها من الأزرار أسفلها."]
+        };
+        normalized.image = {
+          ...imageSource,
+          url: imageUrl,
+          prompt,
+          revisedPrompt,
+          mode: imageMode || "generate",
+          size: String(imageSource.size || message.size || "1024x1024"),
+          quality: String(imageSource.quality || message.quality || "standard"),
+          sourceImageDataUrl: String(imageSource.sourceImageDataUrl || message.sourceImageDataUrl || ""),
+          sourceImageName: String(imageSource.sourceImageName || message.sourceImageName || ""),
+          sourceImageMime: String(imageSource.sourceImageMime || message.sourceImageMime || "")
+        };
+        return normalized;
+      }
+
+      if (normalized.body && typeof normalized.body === "object" && !Array.isArray(normalized.body)) {
+        normalized.body = {
+          heading: coerceDisplayText(normalized.body.heading || ""),
+          bullets: Array.isArray(normalized.body.bullets)
+            ? normalized.body.bullets.map((item) => coerceDisplayText(item)).filter(Boolean)
+            : []
+        };
+      } else {
+        normalized.body = assistantReply("رد محفوظ", splitReplyToBullets(text));
+      }
+      return normalized;
+    }
+
+    normalized.body = coerceDisplayText(message.body || message.text || message.content || "");
+    return normalized;
   }
 
   function readSavedConversationCacheForUser(userId = state.currentUser?.id) {
@@ -1128,6 +1212,26 @@
     const existing = readSavedConversationCacheForUser()
       .filter((entry) => String(entry.id) !== String(normalized.id));
     writeSavedConversationCacheForCurrentUser([normalized, ...existing]);
+  }
+
+  function persistThreadSnapshot(threadEntry, { isLocal = false } = {}) {
+    if (!threadEntry?.id) return;
+    const snapshotTime = new Date().toISOString();
+    mergeSavedConversationCacheItem({
+      id: String(threadEntry.id),
+      thread_id: String(threadEntry.id),
+      is_local: Boolean(isLocal),
+      title: String(threadEntry.title || "").trim() || null,
+      subject: String(threadEntry.subject || "").trim() || null,
+      stage: String(threadEntry.stage || "").trim() || null,
+      grade: String(threadEntry.grade || "").trim() || null,
+      term: String(threadEntry.term || "").trim() || null,
+      status: "active",
+      last_message_at: snapshotTime,
+      created_at: threadEntry.createdAt || snapshotTime,
+      updated_at: snapshotTime,
+      messages: Array.isArray(threadEntry.messages) ? threadEntry.messages : []
+    });
   }
 
   function removeSavedConversationCacheItem(conversationId) {
@@ -2170,15 +2274,7 @@
 
   function normalizeApiMessages(messages) {
     return (Array.isArray(messages) ? messages : [])
-      .map((message) => {
-        const role = String(message.role || "").toLowerCase() === "assistant" ? "assistant" : "user";
-        const text = coerceDisplayText(message.text || message.body || message.content || "");
-        if (!text) return null;
-        if (role === "assistant") {
-          return { role, body: assistantReply("رد محفوظ", splitReplyToBullets(text)) };
-        }
-        return { role, body: text };
-      })
+      .map((message) => normalizeCachedThreadMessage(message))
       .filter(Boolean);
   }
 
@@ -2188,9 +2284,16 @@
   }
 
   function upsertSavedConversationThread(summary, messages = []) {
-    const apiId = String(summary?.id || "").trim();
-    if (!apiId) return null;
-    const normalizedMessages = normalizeApiMessages(messages);
+    const summaryMessages = Array.isArray(messages) && messages.length
+      ? messages
+      : Array.isArray(summary?.messages)
+        ? summary.messages
+        : [];
+    const normalizedMessages = normalizeApiMessages(summaryMessages);
+    const apiId = String(summary?.is_local ? "" : (summary?.server_conversation_id || summary?.conversation_id || summary?.conversationId || summary?.id || "")).trim();
+    const localThreadId = String(summary?.thread_id || summary?.threadId || summary?.local_thread_id || "").trim();
+    const localFallbackId = String(summary?.is_local ? (summary?.id || "") : "").trim();
+    if (!apiId && !localThreadId && !localFallbackId) return null;
     const updatedAt = summary.last_message_at || summary.updated_at || summary.created_at;
     const sortTime = getConversationSortTime(updatedAt);
     const stats = {
@@ -2202,11 +2305,19 @@
     let primaryThread = null;
 
     getSavedConversationSections().forEach((sectionKey) => {
-      const existing = getAllThreads(sectionKey).find((item) => state.conversationIds[item.id] === apiId);
-      const threadId = existing?.id || `server-${apiId}`;
+      const existing = getAllThreads(sectionKey).find((item) =>
+        (apiId && state.conversationIds[item.id] === apiId) ||
+        (localThreadId && item.id === localThreadId) ||
+        (summary?.is_local && String(item.id) === String(summary.id || ""))
+      );
+      const threadId =
+        existing?.id ||
+        localThreadId ||
+        localFallbackId ||
+        (apiId ? `server-${apiId}` : `thread-${Date.now()}`);
       const nextThread = existing || {
         id: threadId,
-        fromServer: true,
+        fromServer: !summary?.is_local && Boolean(apiId),
         messages: []
       };
       nextThread.title = getThreadTitleFromMessages(normalizedMessages, summary.title);
@@ -2215,10 +2326,17 @@
       nextThread.stats = stats;
       nextThread.sortTime = sortTime;
       nextThread.updatedAtMs = sortTime;
-      if (normalizedMessages.length || !nextThread.messages?.length) {
-        nextThread.messages = normalizedMessages;
+      if (normalizedMessages.length) {
+        const keepExistingImageThread = hasImageThreadMessage(nextThread.messages) && !hasImageThreadMessage(normalizedMessages);
+        if (!keepExistingImageThread || !nextThread.messages?.length) {
+          nextThread.messages = normalizedMessages;
+        }
+      } else if (!nextThread.messages?.length) {
+        nextThread.messages = [];
       }
-      state.conversationIds[threadId] = apiId;
+      if (apiId && !summary?.is_local) {
+        state.conversationIds[threadId] = apiId;
+      }
       if (!existing) {
         getSavedConversationGroup(sectionKey).items.unshift(nextThread);
       }
@@ -2229,6 +2347,10 @@
     });
 
     return primaryThread;
+  }
+
+  function hasImageThreadMessage(messages = []) {
+    return Array.isArray(messages) && messages.some((message) => Boolean(message?.kind === "image" || message?.image?.url || message?.imageUrl || message?.image_url));
   }
 
   function primeSavedConversationsFromCache(userId = state.currentUser?.id) {
@@ -11912,6 +12034,7 @@
 
       Object.assign(pendingAssistant, imageMessage, { pending: false });
       updateThreadActivity(threadEntry);
+      persistThreadSnapshot(threadEntry, { isLocal: true });
       state.chatSendError = "";
       state.sending = false;
       render();
