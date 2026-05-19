@@ -2393,7 +2393,8 @@ body[data-workspace-mode="home"] .guest-root {
 
 .guest-scroll-bottom {
   position: fixed;
-  right: clamp(18px, 6vw, 92px);
+  left: 50%;
+  right: auto;
   bottom: clamp(112px, 17vh, 172px);
   width: 42px;
   height: 42px;
@@ -2407,7 +2408,7 @@ body[data-workspace-mode="home"] .guest-root {
   opacity: 0;
   pointer-events: none;
   visibility: hidden;
-  transform: translateY(8px);
+  transform: translate(-50%, 8px);
   transition: opacity 0.18s ease, transform 0.18s ease, visibility 0.18s ease;
   z-index: 2300;
 }
@@ -2416,7 +2417,7 @@ body[data-workspace-mode="home"] .guest-root {
   opacity: 1;
   pointer-events: auto;
   visibility: visible;
-  transform: translateY(0);
+  transform: translate(-50%, 0);
 }
 
 .guest-scroll-bottom svg {
