@@ -708,6 +708,36 @@
     likedReplies: {},
     feedbackReplies: {},
     scrollToBottomVisible: false,
+    mobilePage: "",
+    mobileDetailSection: "",
+    mobileDetailId: "",
+    mobileSearch: {
+      messages: "",
+      files: "",
+      help: ""
+    },
+    mobileFilters: {
+      messages: "all",
+      files: "all"
+    },
+    mobilePageLoading: {
+      messages: false,
+      files: false,
+      tools: false,
+      models: false,
+      settings: false,
+      help: false,
+      logout: false
+    },
+    mobilePageError: {
+      messages: "",
+      files: "",
+      tools: "",
+      models: "",
+      settings: "",
+      help: "",
+      logout: ""
+    },
     openThreadMenuId: "",
     authReason: "",
     conversationIds: {},
@@ -5921,7 +5951,7 @@
     `;
   }
 
-  function renderMobileV2(profile) {
+  function renderLegacyMobileV2(profile) {
     const cards = [
       ["كتابة المحتوى", "إنشاء محتوى احترافي", "sparkle"],
       ["أفكار وإبداع", "الحصول على أفكار جديدة", "star"],
@@ -5989,6 +6019,592 @@
             <button class="omv2-tool ${isAuthenticated() ? "" : "requires-auth"}" type="button" data-pick-file>إرفاق ملف</button>
           </div>
         </form>
+        ${renderAuthModal()}
+        ${renderUpgradeModal()}
+        ${renderSettingsModal()}
+        ${renderNotificationsModal()}
+        <input type="file" id="guestFilePicker" hidden multiple accept=".pdf,.doc,.docx,.png,.jpg,.jpeg,.txt,.md,.ppt,.pptx">
+        <div class="guest-toast-stack" aria-live="polite"></div>
+      </div>
+    `;
+  }
+
+  function getDefaultMobilePage(sectionKey = state.section) {
+    if (sectionKey === "library") return "files";
+    if (sectionKey === "ai-tools") return "tools";
+    if (sectionKey === "settings") return "settings";
+    return "messages";
+  }
+
+  function getMobilePageKey() {
+    return state.mobilePage || getDefaultMobilePage(state.section);
+  }
+
+  function getMobileActiveNavKey() {
+    const pageKey = getMobilePageKey();
+    if (pageKey === "chat") return "messages";
+    if (pageKey === "file-detail") return "files";
+    return pageKey;
+  }
+
+  function mobileTrim(value, length = 86) {
+    const text = coerceDisplayText(value).replace(/\s+/g, " ").trim();
+    if (!text) return "";
+    return text.length > length ? `${text.slice(0, length - 1)}…` : text;
+  }
+
+  function getMobileThreadById(sectionKey, threadId) {
+    return getAllThreads(sectionKey).find((item) => item.id === threadId) || null;
+  }
+
+  function getMobileThreadSnippet(thread) {
+    const userMessage = (thread?.messages || []).find((message) => message.role === "user");
+    return mobileTrim(userMessage?.body || thread?.prompt || thread?.fileLabel || thread?.title || "محادثة", 92);
+  }
+
+  function getMobileThreadTime(thread) {
+    return String(thread?.stats?.updated || thread?.time || thread?.stats?.created || "الآن");
+  }
+
+  function isMobileTodayThread(thread) {
+    const source = `${thread?.time || ""} ${thread?.stats?.created || ""} ${thread?.stats?.updated || ""}`;
+    return /اليوم|الآن|منذ|AM|PM|ص|م/.test(source);
+  }
+
+  function getMobileFileMeta(thread) {
+    const rawName = String(thread?.fileLabel || thread?.title || "ملف").trim();
+    const extMatch = rawName.match(/\.([a-zA-Z0-9]+)\s*$/);
+    const ext = (extMatch?.[1] || "").toLowerCase();
+    const type = ["jpg", "jpeg", "png", "webp", "gif"].includes(ext)
+      ? "images"
+      : ["doc", "docx"].includes(ext)
+        ? "word"
+        : ["xls", "xlsx", "csv"].includes(ext)
+          ? "excel"
+          : ext === "pdf"
+            ? "pdf"
+            : "other";
+    const labels = {
+      pdf: "PDF",
+      images: "صورة",
+      word: "Word",
+      excel: "Excel",
+      other: ext ? ext.toUpperCase() : "ملف"
+    };
+    return {
+      name: rawName,
+      ext,
+      type,
+      label: labels[type] || labels.other,
+      icon: type === "pdf" ? icons.filePdf : icons.document
+    };
+  }
+
+  function getMobileFilteredThreads(sectionKey, searchKey, filterKey) {
+    const query = String(state.mobileSearch?.[searchKey] || "").trim().toLowerCase();
+    const activeFilter = String(state.mobileFilters?.[filterKey] || "all");
+    return getAllThreads(sectionKey).filter((thread) => {
+      const fileMeta = getMobileFileMeta(thread);
+      const haystack = [
+        thread?.title,
+        thread?.fileLabel,
+        thread?.time,
+        thread?.stats?.created,
+        thread?.stats?.updated,
+        (thread?.messages || []).map((message) => coerceDisplayText(message?.body)).join(" ")
+      ].filter(Boolean).join(" ").toLowerCase();
+
+      if (query && !haystack.includes(query)) return false;
+      if (filterKey === "messages") {
+        if (activeFilter === "today") return isMobileTodayThread(thread);
+        if (activeFilter === "favorites") return Boolean(thread?.pinned);
+        return true;
+      }
+      if (filterKey === "files") {
+        if (activeFilter === "all") return true;
+        return fileMeta.type === activeFilter;
+      }
+      return true;
+    });
+  }
+
+  function renderMobileV2Drawer() {
+    const activeKey = getMobileActiveNavKey();
+    const drawerItems = [
+      ["messages", "المحادثات", icons.chat],
+      ["files", "الملفات", icons.projects],
+      ["tools", "الأدوات", icons.ai],
+      ["models", "النماذج", icons.library],
+      ["settings", "الإعدادات", icons.settings],
+      ["help", "المساعدة", icons.eye],
+      ["logout", "تسجيل الخروج", icons.login]
+    ];
+
+    return `
+      <aside class="omv2-drawer" aria-hidden="${state.mobileSidebarOpen ? "false" : "true"}">
+        <header class="omv2-drawer-head">
+          <button class="omv2-menu omv2-menu-head" type="button" data-toggle-sidebar aria-label="القائمة">☰</button>
+          <img src="${brandMarkUrl}" alt="Orlixor" class="omv2-drawer-logo">
+          <button class="omv2-close" type="button" data-toggle-sidebar aria-label="إغلاق القائمة">×</button>
+        </header>
+        <nav class="omv2-drawer-list" aria-label="قائمة الجوال">
+          ${drawerItems.map(([key, label, icon]) => `
+            <button type="button" class="omv2-drawer-item ${activeKey === key ? "is-active" : ""}" data-mobile-nav="${escapeHtml(key)}" ${activeKey === key ? "aria-current=\"page\"" : ""}>
+              <span class="omv2-drawer-icon" aria-hidden="true">${icon}</span>
+              <b>${escapeHtml(label)}</b>
+            </button>
+          `).join("")}
+        </nav>
+      </aside>
+    `;
+  }
+
+  function renderMobilePageHead({ title, subtitle, backTo = "", action = "" }) {
+    return `
+      <header class="omv2-page-head">
+        <div class="omv2-page-head-row">
+          ${backTo ? `<button class="omv2-back-btn" type="button" data-mobile-back="${escapeHtml(backTo)}" aria-label="رجوع">${icons.arrowDown}</button>` : "<span></span>"}
+          <div>
+            <h1>${escapeHtml(title)}</h1>
+            ${subtitle ? `<p>${escapeHtml(subtitle)}</p>` : ""}
+          </div>
+          <span></span>
+        </div>
+        ${action}
+      </header>
+    `;
+  }
+
+  function renderMobileSearch(searchKey, placeholder) {
+    const value = state.mobileSearch?.[searchKey] || "";
+    return `
+      <label class="omv2-search">
+        <span aria-hidden="true">${icons.search}</span>
+        <input type="search" data-mobile-search="${escapeHtml(searchKey)}" placeholder="${escapeHtml(placeholder)}" value="${escapeHtml(value)}">
+      </label>
+    `;
+  }
+
+  function renderMobileFilters(filterKey, filters) {
+    const active = state.mobileFilters?.[filterKey] || "all";
+    return `
+      <div class="omv2-filters" role="tablist" aria-label="فلاتر">
+        ${filters.map(([key, label]) => `
+          <button class="omv2-chip ${active === key ? "is-active" : ""}" type="button" data-mobile-filter="${escapeHtml(filterKey)}" data-mobile-filter-value="${escapeHtml(key)}">
+            ${escapeHtml(label)}
+          </button>
+        `).join("")}
+      </div>
+    `;
+  }
+
+  function renderMobileStateCard(pageKey, emptyTitle, emptyBody, icon = icons.sparkle) {
+    const loading = Boolean(state.mobilePageLoading?.[pageKey]);
+    const error = String(state.mobilePageError?.[pageKey] || "").trim();
+    if (loading) {
+      return `
+        <section class="omv2-state-card">
+          <span>${icons.sparkle}</span>
+          <strong>جاري التحميل...</strong>
+          <p>نرتب البيانات لك الآن.</p>
+        </section>
+      `;
+    }
+    if (error) {
+      return `
+        <section class="omv2-state-card is-error">
+          <span>${icons.bell}</span>
+          <strong>تعذر تحميل هذا القسم</strong>
+          <p>${escapeHtml(error)}</p>
+        </section>
+      `;
+    }
+    return `
+      <section class="omv2-state-card">
+        <span>${icon}</span>
+        <strong>${escapeHtml(emptyTitle)}</strong>
+        <p>${escapeHtml(emptyBody)}</p>
+      </section>
+    `;
+  }
+
+  function renderMobileMessagesPage() {
+    const pageKey = "messages";
+    const threads = getMobileFilteredThreads("messages", "messages", "messages");
+    const action = `
+      <button class="omv2-primary-action" type="button" data-mobile-new-chat>
+        <span>${icons.plus}</span>
+        <b>محادثة جديدة</b>
+      </button>
+    `;
+    const body = threads.length
+      ? `<div class="omv2-list">
+          ${threads.map((thread) => `
+            <button class="omv2-list-card" type="button" data-mobile-thread="${escapeHtml(thread.id)}" data-mobile-thread-section="messages">
+              <span class="omv2-list-icon">${icons.chat}</span>
+              <span class="omv2-list-copy">
+                <b>${escapeHtml(thread.title || "محادثة")}</b>
+                <small>${escapeHtml(getMobileThreadSnippet(thread) || "ابدأ المتابعة من هنا.")}</small>
+              </span>
+              <span class="omv2-list-meta">
+                <b>${escapeHtml(getMobileThreadTime(thread))}</b>
+                <small>${thread.pinned ? "مفضلة" : escapeHtml(thread.fileLabel || "محادثة")}</small>
+              </span>
+            </button>
+          `).join("")}
+        </div>`
+      : renderMobileStateCard(pageKey, "لا توجد محادثات", "ابدأ محادثة جديدة وستظهر هنا.", icons.chat);
+
+    return `
+      <section class="omv2-page" data-mobile-page="${pageKey}">
+        ${renderMobilePageHead({ title: "المحادثات", subtitle: "عرض جميع محادثاتك والبحث فيها وإدارتها بسهولة." })}
+        ${renderMobileSearch("messages", "ابحث في محادثاتك...")}
+        ${renderMobileFilters("messages", [["all", "الكل"], ["today", "اليوم"], ["favorites", "المفضلة"]])}
+        ${action}
+        ${state.mobilePageLoading?.[pageKey] || state.mobilePageError?.[pageKey] ? renderMobileStateCard(pageKey, "لا توجد محادثات", "ابدأ محادثة جديدة وستظهر هنا.", icons.chat) : body}
+      </section>
+    `;
+  }
+
+  function renderMobileFilesPage() {
+    const pageKey = "files";
+    const files = getMobileFilteredThreads("library", "files", "files");
+    const body = files.length
+      ? `<div class="omv2-list">
+          ${files.map((thread) => {
+            const fileMeta = getMobileFileMeta(thread);
+            return `
+              <button class="omv2-list-card is-file" type="button" data-mobile-file="${escapeHtml(thread.id)}">
+                <span class="omv2-list-icon file-${escapeHtml(fileMeta.type)}">${fileMeta.icon}</span>
+                <span class="omv2-list-copy">
+                  <b>${escapeHtml(fileMeta.name || thread.title || "ملف")}</b>
+                  <small>${escapeHtml(getMobileThreadSnippet(thread) || "تفاصيل الملف وتحليله.")}</small>
+                </span>
+                <span class="omv2-list-meta">
+                  <b>${escapeHtml(fileMeta.label)}</b>
+                  <small>${escapeHtml(getMobileThreadTime(thread))}</small>
+                </span>
+              </button>
+            `;
+          }).join("")}
+        </div>`
+      : renderMobileStateCard(pageKey, "لا توجد ملفات", "ارفع ملفًا وسيظهر هنا مع تفاصيله وتحليله.", icons.projects);
+
+    return `
+      <section class="omv2-page" data-mobile-page="${pageKey}">
+        ${renderMobilePageHead({ title: "الملفات", subtitle: "رفع وإدارة جميع ملفاتك والوصول إليها بسرعة." })}
+        ${renderMobileSearch("files", "ابحث في ملفاتك...")}
+        ${renderMobileFilters("files", [["all", "الكل"], ["pdf", "PDF"], ["images", "صور"], ["word", "Word"], ["excel", "Excel"]])}
+        <button class="omv2-primary-action ${isAuthenticated() ? "" : "requires-auth"}" type="button" data-pick-file>
+          <span>${icons.attach}</span>
+          <b>رفع ملف</b>
+        </button>
+        ${state.mobilePageLoading?.[pageKey] || state.mobilePageError?.[pageKey] ? renderMobileStateCard(pageKey, "لا توجد ملفات", "ارفع ملفًا وسيظهر هنا مع تفاصيله وتحليله.", icons.projects) : body}
+      </section>
+    `;
+  }
+
+  function renderMobileChatDetailPage() {
+    const sectionKey = state.mobileDetailSection || "messages";
+    const thread = getMobileThreadById(sectionKey, state.mobileDetailId) || getActiveThread(sectionKey);
+    const profile = getProfile(sectionKey);
+    if (!thread) return renderMobileMessagesPage();
+    const detailTitle = sectionKey === "library" ? "تفاصيل الملف" : "المحادثة";
+    return `
+      <section class="omv2-page has-conversation has-composer" data-mobile-page="chat">
+        ${renderMobilePageHead({
+          title: detailTitle,
+          subtitle: thread.title || "متابعة المحادثة",
+          backTo: sectionKey === "library" ? "files" : "messages"
+        })}
+        <article class="omv2-detail-card">
+          <span class="omv2-detail-icon">${sectionKey === "library" ? icons.projects : icons.chat}</span>
+          <div>
+            <strong>${escapeHtml(thread.title || "محادثة")}</strong>
+            <small>${escapeHtml(thread.fileLabel || getMobileThreadTime(thread))}</small>
+          </div>
+        </article>
+        ${renderConversation(profile)}
+        ${renderAttachmentPills()}
+      </section>
+    `;
+  }
+
+  function renderMobileFileDetailPage() {
+    const thread = getMobileThreadById("library", state.mobileDetailId) || getActiveThread("library");
+    if (!thread) return renderMobileFilesPage();
+    const profile = getProfile("library");
+    const fileMeta = getMobileFileMeta(thread);
+    return `
+      <section class="omv2-page has-conversation" data-mobile-page="file-detail">
+        ${renderMobilePageHead({ title: "تفاصيل الملف", subtitle: fileMeta.name, backTo: "files" })}
+        <article class="omv2-file-summary">
+          <span class="omv2-file-summary-icon file-${escapeHtml(fileMeta.type)}">${fileMeta.icon}</span>
+          <div>
+            <strong>${escapeHtml(fileMeta.name)}</strong>
+            <small>${escapeHtml(fileMeta.label)} • ${escapeHtml(getMobileThreadTime(thread))}</small>
+          </div>
+        </article>
+        ${renderConversation(profile)}
+      </section>
+    `;
+  }
+
+  function renderMobileToolsPage() {
+    if (state.mobilePageLoading?.tools || state.mobilePageError?.tools) {
+      return `
+        <section class="omv2-page" data-mobile-page="tools">
+          ${renderMobilePageHead({ title: "الأدوات", subtitle: "مجموعة أدوات ذكية تساعدك في إنجاز مهام مختلفة." })}
+          ${renderMobileStateCard("tools", "لا توجد أدوات", "ستظهر الأدوات المتاحة هنا عند توفرها.", icons.ai)}
+        </section>
+      `;
+    }
+    const tools = [
+      ["summary", "تلخيص النصوص", "اختصار النصوص الطويلة إلى نقاط واضحة.", "document"],
+      ["translate", "ترجمة", "ترجمة النصوص بدقة مع الحفاظ على المعنى.", "internet"],
+      ["article", "كتابة مقال", "إنشاء مقال منظم بأسلوب احترافي.", "edit"],
+      ["file", "تحليل ملف", "قراءة الملفات واستخراج أهم النتائج.", "ai"],
+      ["ideas", "توليد أفكار", "اقتراح أفكار جديدة لمشاريعك ومحتواك.", "sparkle"],
+      ["improve", "تحسين نص", "تهذيب الصياغة وجعلها أوضح وأقوى.", "star"]
+    ];
+    return `
+      <section class="omv2-page" data-mobile-page="tools">
+        ${renderMobilePageHead({ title: "الأدوات", subtitle: "مجموعة أدوات ذكية تساعدك في إنجاز مهام مختلفة." })}
+        <div class="omv2-grid">
+          ${tools.map(([key, title, desc, icon]) => `
+            <button class="omv2-tool-card" type="button" data-mobile-tool="${escapeHtml(key)}">
+              <span>${icons[icon] || icons.sparkle}</span>
+              <b>${escapeHtml(title)}</b>
+              <small>${escapeHtml(desc)}</small>
+            </button>
+          `).join("")}
+        </div>
+      </section>
+    `;
+  }
+
+  function renderMobileModelsPage() {
+    if (state.mobilePageLoading?.models || state.mobilePageError?.models) {
+      return `
+        <section class="omv2-page" data-mobile-page="models">
+          ${renderMobilePageHead({ title: "النماذج", subtitle: "اختر النموذج الذكي المناسب لكل نوع من المهام." })}
+          ${renderMobileStateCard("models", "لا توجد نماذج", "ستظهر النماذج المتاحة هنا عند توفرها.", icons.library)}
+        </section>
+      `;
+    }
+    const modelKeys = ["orlixor", "turbo", "pro", "creative"];
+    return `
+      <section class="omv2-page" data-mobile-page="models">
+        ${renderMobilePageHead({ title: "النماذج", subtitle: "اختر النموذج الذكي المناسب لكل نوع من المهام." })}
+        <div class="omv2-model-list">
+          ${modelKeys.map((key) => {
+            const model = modelProfiles[key];
+            const active = state.selectedModel === key;
+            return `
+              <button class="omv2-model-card ${active ? "is-active" : ""}" type="button" data-select-model="${escapeHtml(key)}">
+                <span class="omv2-model-icon">${icons[model.icon] || icons.logo}</span>
+                <span class="omv2-model-copy">
+                  <b>${escapeHtml(model.label)}</b>
+                  <small>${escapeHtml(model.description)}</small>
+                </span>
+                <span class="omv2-model-state">${active ? "مختار" : "اختيار"}</span>
+              </button>
+            `;
+          }).join("")}
+        </div>
+      </section>
+    `;
+  }
+
+  function renderMobileSettingsPage() {
+    if (state.mobilePageLoading?.settings || state.mobilePageError?.settings) {
+      return `
+        <section class="omv2-page" data-mobile-page="settings">
+          ${renderMobilePageHead({ title: "الإعدادات", subtitle: "إدارة إعدادات حسابك والتطبيق والخصوصية." })}
+          ${renderMobileStateCard("settings", "لا توجد إعدادات", "ستظهر إعدادات الحساب هنا عند توفرها.", icons.settings)}
+        </section>
+      `;
+    }
+    const preferences = {
+      ...defaultAppPreferences,
+      ...(state.appPreferences || {})
+    };
+    const userName = String(state.currentUser?.name || "ضيف").trim() || "ضيف";
+    const userEmail = String(state.currentUser?.email || "غير متاح").trim();
+    const packageLabel = getUserPackageLabel(state.currentUser);
+
+    return `
+      <section class="omv2-page" data-mobile-page="settings">
+        ${renderMobilePageHead({ title: "الإعدادات", subtitle: "إدارة إعدادات حسابك والتطبيق والخصوصية." })}
+        <article class="omv2-account-card">
+          ${renderUserAvatar("omv2-account-avatar")}
+          <div>
+            <strong>${escapeHtml(userName)}</strong>
+            <small>${escapeHtml(userEmail)}</small>
+          </div>
+          <span>${escapeHtml(packageLabel)}</span>
+        </article>
+        <div class="omv2-settings-list">
+          <article class="omv2-settings-row">
+            <span>${icons.internet}</span>
+            <div><b>اللغة</b><small>اختر لغة واجهة التطبيق</small></div>
+            <select data-preference-select="language">
+              ${["العربية", "English"].map((item) => `<option value="${escapeHtml(item)}" ${preferences.language === item ? "selected" : ""}>${escapeHtml(item)}</option>`).join("")}
+            </select>
+          </article>
+          <article class="omv2-settings-row">
+            <span>${icons.moon}</span>
+            <div><b>الوضع الليلي</b><small>غيّر مظهر التطبيق</small></div>
+            <button type="button" data-theme-toggle>${getEffectiveTheme() === "dark" ? "مفعل" : "إيقاف"}</button>
+          </article>
+          <article class="omv2-settings-row">
+            <span>${icons.lock}</span>
+            <div><b>الخصوصية</b><small>حفظ المحادثات والذاكرة</small></div>
+            <button type="button" data-preference-toggle="saveChats">${getPreferenceLabel("saveChats")}</button>
+          </article>
+          <article class="omv2-settings-row">
+            <span>${icons.bell}</span>
+            <div><b>الإشعارات</b><small>تنبيهات الرصيد والمحادثات</small></div>
+            <button type="button" data-preference-toggle="notifications">${getPreferenceLabel("notifications")}</button>
+          </article>
+          <article class="omv2-settings-row">
+            <span>${icons.crown}</span>
+            <div><b>إدارة الاشتراك</b><small>عرض الباقة والترقية</small></div>
+            <button type="button" data-open-upgrade>إدارة</button>
+          </article>
+          <article class="omv2-settings-row">
+            <span>${icons.document}</span>
+            <div><b>تصدير البيانات</b><small>تحميل نسخة من بياناتك</small></div>
+            <button type="button" data-mobile-export-data>تصدير</button>
+          </article>
+          <article class="omv2-settings-row is-danger">
+            <span>${icons.delete}</span>
+            <div><b>حذف الحساب</b><small>طلب حذف الحساب وبياناته</small></div>
+            <button type="button" data-mobile-delete-account>حذف</button>
+          </article>
+        </div>
+      </section>
+    `;
+  }
+
+  function renderMobileHelpPage() {
+    if (state.mobilePageLoading?.help || state.mobilePageError?.help) {
+      return `
+        <section class="omv2-page" data-mobile-page="help">
+          ${renderMobilePageHead({ title: "المساعدة", subtitle: "مركز المساعدة والدعم والإجابة على استفساراتك." })}
+          ${renderMobileStateCard("help", "لا توجد عناصر مساعدة", "ستظهر مقالات المساعدة هنا عند توفرها.", icons.eye)}
+        </section>
+      `;
+    }
+    const query = String(state.mobileSearch?.help || "").trim().toLowerCase();
+    const items = [
+      ["faq", "الأسئلة الشائعة", "أجوبة سريعة على الأسئلة المتكررة.", "eye"],
+      ["login", "مشاكل تسجيل الدخول", "حلول أخطاء البريد وكلمة المرور ومزودي الدخول.", "lock"],
+      ["billing", "الاشتراكات والدفع", "معلومات الباقات والترقية والفواتير.", "crown"],
+      ["support", "التواصل مع الدعم", "افتح محادثة دعم أو ارسل لنا تفاصيل المشكلة.", "chat"],
+      ["report", "الإبلاغ عن مشكلة", "شاركنا الخطأ لنحسّن التجربة بسرعة.", "bell"]
+    ].filter(([, title, desc]) => !query || `${title} ${desc}`.toLowerCase().includes(query));
+
+    const body = items.length
+      ? `<div class="omv2-list">
+          ${items.map(([key, title, desc, icon]) => `
+            <button class="omv2-list-card" type="button" data-mobile-help="${escapeHtml(key)}">
+              <span class="omv2-list-icon">${icons[icon] || icons.eye}</span>
+              <span class="omv2-list-copy">
+                <b>${escapeHtml(title)}</b>
+                <small>${escapeHtml(desc)}</small>
+              </span>
+              <span class="omv2-chevron" aria-hidden="true">›</span>
+            </button>
+          `).join("")}
+        </div>`
+      : renderMobileStateCard("help", "لا توجد نتائج", "جرّب كلمة بحث مختلفة أو تواصل مع الدعم.", icons.eye);
+
+    return `
+      <section class="omv2-page" data-mobile-page="help">
+        ${renderMobilePageHead({ title: "المساعدة", subtitle: "مركز المساعدة والدعم والإجابة على استفساراتك." })}
+        ${renderMobileSearch("help", "ابحث في المساعدة...")}
+        ${body}
+        <article class="omv2-help-cta">
+          <strong>لا تجد ما تبحث عنه؟</strong>
+          <p>تواصل مع فريق الدعم وسنساعدك خطوة بخطوة.</p>
+          <button type="button" data-mobile-help-support>بدء محادثة دعم</button>
+        </article>
+      </section>
+    `;
+  }
+
+  function renderMobileLogoutPage() {
+    if (state.mobilePageLoading?.logout || state.mobilePageError?.logout) {
+      return `
+        <section class="omv2-page omv2-logout-page" data-mobile-page="logout">
+          ${renderMobileStateCard("logout", "تعذر تجهيز تسجيل الخروج", "حاول مرة أخرى بعد قليل.", icons.login)}
+        </section>
+      `;
+    }
+    return `
+      <section class="omv2-page omv2-logout-page" data-mobile-page="logout">
+        <div class="omv2-logout-card">
+          <span class="omv2-logout-mark">${icons.logo}</span>
+          <h1>تسجيل الخروج</h1>
+          <p>هل أنت متأكد من تسجيل الخروج؟</p>
+          <small>سيتم تسجيل خروجك من هذا الجهاز فقط، ويمكنك الدخول مرة أخرى في أي وقت.</small>
+          <button class="omv2-danger-action" type="button" data-mobile-logout-confirm>تسجيل الخروج</button>
+          <button class="omv2-muted-action" type="button" data-mobile-back="messages">إلغاء</button>
+        </div>
+      </section>
+    `;
+  }
+
+  function renderMobileCurrentPage(profile) {
+    const pageKey = getMobilePageKey();
+    if (pageKey === "chat") return renderMobileChatDetailPage(profile);
+    if (pageKey === "file-detail") return renderMobileFileDetailPage(profile);
+    if (pageKey === "files") return renderMobileFilesPage(profile);
+    if (pageKey === "tools") return renderMobileToolsPage(profile);
+    if (pageKey === "models") return renderMobileModelsPage(profile);
+    if (pageKey === "settings") return renderMobileSettingsPage(profile);
+    if (pageKey === "help") return renderMobileHelpPage(profile);
+    if (pageKey === "logout") return renderMobileLogoutPage(profile);
+    return renderMobileMessagesPage(profile);
+  }
+
+  function renderMobileChatComposer() {
+    if (getMobilePageKey() !== "chat") return "";
+    return `
+      <form class="omv2-composer guest-compose home-compose" data-compose-form>
+        <input class="compose-input omv2-input" type="text" data-compose-input value="${escapeHtml(getComposerValue())}" placeholder="اكتب رسالتك هنا..." ${state.sending ? "disabled" : ""}>
+        ${renderComposeStatus()}
+        <div class="omv2-actions">
+          <button class="omv2-send" type="submit" aria-label="إرسال" ${state.sending ? "disabled" : ""}>${state.sending ? '<span class="compose-loading-dots" aria-hidden="true"><i></i><i></i><i></i></span>' : icons.send}</button>
+          <button class="omv2-tool" type="button" data-open-tools>أدوات</button>
+          <button class="omv2-tool ${isAuthenticated() ? "" : "requires-auth"}" type="button" data-pick-file>إرفاق ملف</button>
+        </div>
+      </form>
+    `;
+  }
+
+  function renderMobileV2(profile) {
+    const accountButton = isAuthenticated()
+      ? `<button class="omv2-icon-btn" type="button" data-open-account aria-label="الحساب">${icons.user}</button>`
+      : `<button class="omv2-icon-btn" type="button" data-open-account aria-label="تسجيل الدخول">${icons.user}</button>`;
+
+    return `
+      <div class="omv2-shell ${getEffectiveTheme() === "dark" ? "theme-dark" : ""} ${state.mobileSidebarOpen ? "is-open" : ""}">
+        ${renderMobileV2Drawer()}
+        <div class="omv2-backdrop" data-toggle-sidebar aria-hidden="${state.mobileSidebarOpen ? "false" : "true"}"></div>
+        <header class="omv2-header">
+          <button class="omv2-menu" type="button" data-toggle-sidebar aria-label="${state.mobileSidebarOpen ? "إغلاق القائمة" : "فتح القائمة"}">☰</button>
+          <img src="${brandMarkUrl}" alt="Orlixor" class="omv2-logo">
+          <div class="omv2-icons">
+            <button class="omv2-icon-btn" type="button" data-open-notifications aria-label="الإشعارات">${icons.bell}${renderNotificationBellBadge()}</button>
+            ${accountButton}
+          </div>
+        </header>
+        <main class="omv2-main">
+          ${renderMobileCurrentPage(profile)}
+        </main>
+        ${renderMobileChatComposer()}
         ${renderAuthModal()}
         ${renderUpgradeModal()}
         ${renderSettingsModal()}
@@ -11700,8 +12316,9 @@
     return mobileV2Root.querySelector("#guestFilePicker") || app.querySelector("#guestFilePicker");
   }
 
-  function createNewThreadFromDraft(title = "محادثة جديدة") {
-    const sectionKey = state.section;
+  function createNewThreadFromDraft(title = "محادثة جديدة", sectionKey = state.section) {
+    state.threadState[sectionKey] = state.threadState[sectionKey] || [];
+    ensureThreadState(sectionKey);
     const nowSortTime = Date.now();
     const newThread = thread(
       `thread-${Date.now()}`,
@@ -13242,6 +13859,202 @@
         return;
       }
 
+      const mobileBackButton = event.target.closest("[data-mobile-back]");
+      if (mobileBackButton) {
+        event.preventDefault();
+        event.stopPropagation();
+        const target = mobileBackButton.getAttribute("data-mobile-back") || "messages";
+        state.mobileDetailId = "";
+        state.mobileDetailSection = "";
+        state.homeConversationOpen = false;
+        if (target === "files") {
+          state.mobilePage = "files";
+          state.section = "library";
+        } else if (target === "tools") {
+          state.mobilePage = "tools";
+          state.section = "ai-tools";
+        } else if (["models", "settings", "help", "logout"].includes(target)) {
+          state.mobilePage = target;
+        } else {
+          state.mobilePage = "messages";
+          state.section = "messages";
+        }
+        state.mobileSidebarOpen = false;
+        ensureThreadState(state.section);
+        render();
+        return;
+      }
+
+      if (event.target.closest("[data-mobile-new-chat]")) {
+        event.preventDefault();
+        event.stopPropagation();
+        if (!isAuthenticated()) {
+          openAuthModal("أنشئ محادثة جديدة بعد تسجيل الدخول.");
+          return;
+        }
+        state.section = "messages";
+        createNewThreadFromDraft("محادثة جديدة", "messages");
+        state.mobilePage = "chat";
+        state.mobileDetailSection = "messages";
+        state.mobileDetailId = state.activeThreadId.messages || "";
+        state.homeConversationOpen = true;
+        state.mobileSidebarOpen = false;
+        render();
+        window.setTimeout(() => mobileV2Root.querySelector("[data-compose-input]")?.focus(), 0);
+        return;
+      }
+
+      const mobileThreadButton = event.target.closest("[data-mobile-thread]");
+      if (mobileThreadButton) {
+        event.preventDefault();
+        event.stopPropagation();
+        const threadId = mobileThreadButton.getAttribute("data-mobile-thread") || "";
+        const sectionKey = mobileThreadButton.getAttribute("data-mobile-thread-section") || "messages";
+        if (!getMobileThreadById(sectionKey, threadId)) return;
+        state.section = sectionKey;
+        ensureThreadState(sectionKey);
+        state.activeThreadId[sectionKey] = threadId;
+        state.mobilePage = "chat";
+        state.mobileDetailSection = sectionKey;
+        state.mobileDetailId = threadId;
+        state.homeConversationOpen = true;
+        state.mobileSidebarOpen = false;
+        render();
+        hydrateSavedConversation(threadId);
+        window.setTimeout(() => scrollConversationToLatest({ smooth: false }), 0);
+        return;
+      }
+
+      const mobileFileButton = event.target.closest("[data-mobile-file]");
+      if (mobileFileButton) {
+        event.preventDefault();
+        event.stopPropagation();
+        const threadId = mobileFileButton.getAttribute("data-mobile-file") || "";
+        if (!getMobileThreadById("library", threadId)) return;
+        state.section = "library";
+        ensureThreadState("library");
+        state.activeThreadId.library = threadId;
+        state.mobilePage = "file-detail";
+        state.mobileDetailSection = "library";
+        state.mobileDetailId = threadId;
+        state.homeConversationOpen = true;
+        state.mobileSidebarOpen = false;
+        render();
+        hydrateSavedConversation(threadId);
+        return;
+      }
+
+      const mobileFilterButton = event.target.closest("[data-mobile-filter]");
+      if (mobileFilterButton) {
+        event.preventDefault();
+        event.stopPropagation();
+        const filterKey = mobileFilterButton.getAttribute("data-mobile-filter") || "";
+        const filterValue = mobileFilterButton.getAttribute("data-mobile-filter-value") || "all";
+        if (filterKey) {
+          state.mobileFilters[filterKey] = filterValue;
+          render();
+        }
+        return;
+      }
+
+      const mobileToolButton = event.target.closest("[data-mobile-tool]");
+      if (mobileToolButton) {
+        event.preventDefault();
+        event.stopPropagation();
+        const toolKey = mobileToolButton.getAttribute("data-mobile-tool") || "";
+        if (toolKey === "file") {
+          pickFiles();
+          return;
+        }
+        if (!isAuthenticated()) {
+          openAuthModal("سجّل دخولك لاستخدام أدوات Orlixor.");
+          return;
+        }
+        const toolPrompts = {
+          summary: ["تلخيص النصوص", "لخّص النص التالي في نقاط واضحة:\n"],
+          translate: ["ترجمة", "ترجم النص التالي بدقة:\n"],
+          article: ["كتابة مقال", "اكتب مقالًا منظمًا عن:\n"],
+          ideas: ["توليد أفكار", "اقترح أفكارًا عملية حول:\n"],
+          improve: ["تحسين نص", "حسّن النص التالي واجعله أوضح:\n"]
+        };
+        const [title, prompt] = toolPrompts[toolKey] || ["أداة جديدة", ""];
+        state.section = "messages";
+        createNewThreadFromDraft(title, "messages");
+        setComposerValue(prompt, "messages");
+        state.mobilePage = "chat";
+        state.mobileDetailSection = "messages";
+        state.mobileDetailId = state.activeThreadId.messages || "";
+        state.homeConversationOpen = true;
+        render();
+        window.setTimeout(() => mobileV2Root.querySelector("[data-compose-input]")?.focus(), 0);
+        return;
+      }
+
+      if (event.target.closest("[data-mobile-help-support]")) {
+        event.preventDefault();
+        event.stopPropagation();
+        if (!isAuthenticated()) {
+          openAuthModal("سجّل دخولك لفتح محادثة دعم.");
+          return;
+        }
+        state.section = "messages";
+        createNewThreadFromDraft("دعم ومساعدة", "messages");
+        setComposerValue("أحتاج مساعدة بخصوص: ", "messages");
+        state.mobilePage = "chat";
+        state.mobileDetailSection = "messages";
+        state.mobileDetailId = state.activeThreadId.messages || "";
+        state.homeConversationOpen = true;
+        render();
+        window.setTimeout(() => mobileV2Root.querySelector("[data-compose-input]")?.focus(), 0);
+        return;
+      }
+
+      const mobileHelpButton = event.target.closest("[data-mobile-help]");
+      if (mobileHelpButton) {
+        event.preventDefault();
+        event.stopPropagation();
+        showToast("اكتب سؤالك في محادثة الدعم وسنساعدك مباشرة.");
+        return;
+      }
+
+      if (event.target.closest("[data-mobile-export-data]")) {
+        event.preventDefault();
+        event.stopPropagation();
+        showToast("سيتم تجهيز تصدير البيانات من لوحة الخصوصية قريبًا.");
+        return;
+      }
+
+      if (event.target.closest("[data-mobile-delete-account]")) {
+        event.preventDefault();
+        event.stopPropagation();
+        showToast("حذف الحساب يحتاج تأكيدًا إضافيًا من إعدادات الخصوصية.");
+        return;
+      }
+
+      if (event.target.closest("[data-mobile-logout-confirm]")) {
+        event.preventDefault();
+        event.stopPropagation();
+        const apiClient = getApiClient();
+        const finishLogout = () => {
+          resetAccountConversationThreads();
+          localStorage.removeItem(legacyStorageKeys.currentUser);
+          state.currentUser = getActiveUser();
+          state.balancePanelOpen = false;
+          state.settingsModalOpen = false;
+          state.notificationsOpen = false;
+          state.mobilePage = "messages";
+          state.mobileDetailId = "";
+          state.mobileDetailSection = "";
+          render();
+        };
+        if (apiClient?.logout) {
+          apiClient.logout().finally(finishLogout);
+        } else {
+          finishLogout();
+        }
+        return;
+      }
+
       const mobileNavButton = event.target.closest("[data-mobile-nav]");
       if (mobileNavButton) {
         event.preventDefault();
@@ -13249,48 +14062,55 @@
         const target = mobileNavButton.getAttribute("data-mobile-nav") || "";
         state.mobileSidebarOpen = false;
         if (target === "messages") {
+          state.mobilePage = "messages";
+          state.mobileDetailId = "";
+          state.mobileDetailSection = "";
+          state.homeConversationOpen = false;
           setSection("messages");
           return;
         }
         if (target === "files") {
+          state.mobilePage = "files";
+          state.mobileDetailId = "";
+          state.mobileDetailSection = "";
+          state.homeConversationOpen = false;
           setSection("library");
           return;
         }
         if (target === "tools") {
+          state.mobilePage = "tools";
+          state.mobileDetailId = "";
+          state.mobileDetailSection = "";
+          state.homeConversationOpen = false;
           setSection("ai-tools");
           return;
         }
         if (target === "models") {
-          state.modelMenuOpen = true;
+          state.mobilePage = "models";
+          state.mobileDetailId = "";
+          state.mobileDetailSection = "";
           render();
           return;
         }
         if (target === "settings") {
-          state.settingsModalOpen = true;
-          render();
+          state.mobilePage = "settings";
+          state.mobileDetailId = "";
+          state.mobileDetailSection = "";
+          setSection("settings");
           return;
         }
         if (target === "help") {
-          showToast("فريق Orlixor قريب منك. اكتب سؤالك وسنساعدك.");
+          state.mobilePage = "help";
+          state.mobileDetailId = "";
+          state.mobileDetailSection = "";
           render();
           return;
         }
         if (target === "logout") {
-          const apiClient = getApiClient();
-          const finishLogout = () => {
-            resetAccountConversationThreads();
-            localStorage.removeItem(legacyStorageKeys.currentUser);
-            state.currentUser = getActiveUser();
-            state.balancePanelOpen = false;
-            state.settingsModalOpen = false;
-            state.notificationsOpen = false;
-            render();
-          };
-          if (apiClient?.logout) {
-            apiClient.logout().finally(finishLogout);
-          } else {
-            finishLogout();
-          }
+          state.mobilePage = "logout";
+          state.mobileDetailId = "";
+          state.mobileDetailSection = "";
+          render();
           return;
         }
       }
@@ -14769,6 +15589,16 @@
     });
 
     bindUiEvent("input", (event) => {
+      const mobileSearchInput = event.target.closest("[data-mobile-search]");
+      if (mobileSearchInput) {
+        const key = mobileSearchInput.getAttribute("data-mobile-search") || "";
+        if (key) {
+          state.mobileSearch[key] = mobileSearchInput.value;
+          render();
+        }
+        return;
+      }
+
       const searchInput = event.target.closest("[data-history-search]");
       if (searchInput) {
         state.historySearch[state.section] = searchInput.value;

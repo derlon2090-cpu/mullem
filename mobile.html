@@ -573,6 +573,384 @@
         padding: 24px 24px 24px 22px;
       }
     }
+    .mobile-page.has-mobile-section {
+      padding-bottom: 34px;
+    }
+
+    .mobile-page.has-mobile-section .device-pill,
+    .mobile-page.has-mobile-section .hero,
+    .mobile-page.has-mobile-section .cards {
+      display: none;
+    }
+
+    .mobile-page.has-mobile-section .composer {
+      display: none;
+    }
+
+    .mobile-section {
+      padding: 22px 0 28px;
+      display: grid;
+      gap: 14px;
+    }
+
+    .section-head {
+      text-align: center;
+      display: grid;
+      gap: 7px;
+      margin-bottom: 4px;
+    }
+
+    .section-head h1 {
+      margin: 0;
+      color: var(--text);
+      font-size: 23px;
+      font-weight: 900;
+      line-height: 1.25;
+      letter-spacing: 0;
+    }
+
+    .section-head p {
+      margin: 0;
+      color: var(--muted);
+      font-size: 13px;
+      font-weight: 700;
+      line-height: 1.6;
+    }
+
+    .section-search {
+      min-height: 46px;
+      border: 1px solid var(--line);
+      border-radius: 15px;
+      background: #ffffff;
+      box-shadow: var(--soft-shadow);
+      display: grid;
+      grid-template-columns: 22px minmax(0, 1fr);
+      align-items: center;
+      gap: 10px;
+      padding: 0 14px;
+      color: #a0a6bf;
+    }
+
+    .section-search svg {
+      width: 18px;
+      height: 18px;
+      stroke-width: 2.15;
+    }
+
+    .section-search input {
+      min-width: 0;
+      width: 100%;
+      border: 0;
+      outline: 0;
+      background: transparent;
+      color: var(--text);
+      text-align: right;
+      font-size: 13px;
+      font-weight: 800;
+    }
+
+    .section-search input::placeholder {
+      color: #b8bdd0;
+    }
+
+    .filter-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      overflow-x: auto;
+      padding: 2px 1px 4px;
+      scrollbar-width: none;
+    }
+
+    .filter-row::-webkit-scrollbar {
+      display: none;
+    }
+
+    .filter-chip {
+      min-height: 34px;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: #ffffff;
+      color: var(--muted);
+      padding: 7px 13px;
+      white-space: nowrap;
+      font-size: 12px;
+      font-weight: 900;
+      box-shadow: var(--soft-shadow);
+    }
+
+    .filter-chip.active {
+      color: var(--primary);
+      background: var(--primary-soft);
+      border-color: rgba(109, 74, 255, 0.32);
+    }
+
+    .primary-section-btn {
+      min-height: 50px;
+      width: 100%;
+      border: 0;
+      border-radius: 17px;
+      background: linear-gradient(135deg, var(--primary-2), var(--primary));
+      color: #ffffff;
+      box-shadow: 0 15px 30px rgba(109, 74, 255, 0.25);
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 9px;
+      font-size: 14px;
+      font-weight: 900;
+    }
+
+    .section-list {
+      display: grid;
+      gap: 11px;
+    }
+
+    .section-card,
+    .tool-card,
+    .settings-row,
+    .state-card,
+    .logout-card {
+      border: 1px solid var(--line);
+      border-radius: 17px;
+      background: #ffffff;
+      box-shadow: var(--soft-shadow);
+    }
+
+    .section-card {
+      width: 100%;
+      min-height: 74px;
+      padding: 12px;
+      display: grid;
+      grid-template-columns: 44px minmax(0, 1fr) auto;
+      align-items: center;
+      gap: 12px;
+      text-align: right;
+      color: var(--text);
+    }
+
+    .section-icon,
+    .tool-icon,
+    .settings-icon {
+      width: 44px;
+      height: 44px;
+      border-radius: 14px;
+      background: var(--primary-soft);
+      color: var(--primary);
+      display: grid;
+      place-items: center;
+    }
+
+    .section-icon svg,
+    .tool-icon svg,
+    .settings-icon svg {
+      width: 21px;
+      height: 21px;
+    }
+
+    .section-copy {
+      min-width: 0;
+      display: grid;
+      gap: 4px;
+    }
+
+    .section-copy b,
+    .tool-card b,
+    .settings-row b {
+      color: var(--text);
+      font-size: 14px;
+      font-weight: 900;
+      line-height: 1.35;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .section-copy small,
+    .tool-card small,
+    .settings-row small,
+    .state-card p,
+    .logout-card p,
+    .logout-card small {
+      color: var(--muted);
+      font-size: 11px;
+      font-weight: 700;
+      line-height: 1.55;
+    }
+
+    .section-meta {
+      color: #9aa0bd;
+      font-size: 10px;
+      font-weight: 900;
+      white-space: nowrap;
+    }
+
+    .tool-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 12px;
+    }
+
+    .tool-card {
+      min-height: 132px;
+      padding: 14px 12px;
+      display: grid;
+      justify-items: center;
+      align-content: center;
+      text-align: center;
+      gap: 8px;
+      color: var(--text);
+    }
+
+    .model-card.is-active {
+      border-color: rgba(109, 74, 255, 0.4);
+      background: #fbf9ff;
+    }
+
+    .model-pill {
+      border-radius: 999px;
+      background: var(--primary-soft);
+      color: var(--primary);
+      padding: 7px 11px;
+      font-size: 10px;
+      font-weight: 900;
+    }
+
+    .settings-list {
+      display: grid;
+      gap: 11px;
+    }
+
+    .settings-row {
+      min-height: 72px;
+      padding: 12px;
+      display: grid;
+      grid-template-columns: 44px minmax(0, 1fr) auto;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .settings-row button,
+    .settings-row select {
+      min-height: 32px;
+      max-width: 96px;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      background: #ffffff;
+      color: var(--primary);
+      padding: 6px 10px;
+      font-size: 11px;
+      font-weight: 900;
+    }
+
+    .state-card,
+    .logout-card {
+      padding: 24px 18px;
+      text-align: center;
+      display: grid;
+      justify-items: center;
+      gap: 10px;
+    }
+
+    .logout-card {
+      margin-top: 48px;
+      padding: 36px 22px;
+    }
+
+    .logout-mark {
+      width: 60px;
+      height: 60px;
+      border-radius: 20px;
+      background: var(--primary-soft);
+      display: grid;
+      place-items: center;
+    }
+
+    .logout-mark img {
+      width: 38px;
+      height: 38px;
+    }
+
+    .logout-card h2 {
+      margin: 0;
+      font-size: 20px;
+      font-weight: 900;
+      color: var(--text);
+    }
+
+    .logout-actions {
+      width: 100%;
+      display: grid;
+      gap: 10px;
+      margin-top: 10px;
+    }
+
+    .logout-confirm,
+    .logout-cancel {
+      min-height: 48px;
+      border: 0;
+      border-radius: 15px;
+      font-size: 14px;
+      font-weight: 900;
+    }
+
+    .logout-confirm {
+      color: #ffffff;
+      background: linear-gradient(135deg, var(--primary-2), var(--primary));
+      box-shadow: 0 15px 30px rgba(109, 74, 255, 0.25);
+    }
+
+    .logout-cancel {
+      color: #666d89;
+      background: #f5f6fb;
+    }
+
+    .drawer-link.is-active {
+      color: var(--primary);
+      background: var(--primary-soft);
+    }
+
+    @media (prefers-color-scheme: dark) {
+      html,
+      body,
+      .mobile-page {
+        background: #11131f;
+        color: #f7f5ff;
+      }
+
+      .mobile-header,
+      .drawer,
+      .section-search,
+      .filter-chip,
+      .section-card,
+      .tool-card,
+      .settings-row,
+      .state-card,
+      .logout-card {
+        background: #191b2a;
+        border-color: rgba(167, 145, 255, 0.18);
+      }
+
+      .section-head h1,
+      .section-copy b,
+      .tool-card b,
+      .settings-row b,
+      .logout-card h2,
+      .drawer-link {
+        color: #f7f5ff;
+      }
+
+      .section-search input,
+      .section-search input::placeholder,
+      .section-copy small,
+      .tool-card small,
+      .settings-row small,
+      .state-card p,
+      .logout-card p,
+      .logout-card small {
+        color: #b8bdd3;
+      }
+    }
   </style>
 </head>
 <body>
@@ -616,7 +994,7 @@
       </div>
     </header>
 
-    <main>
+    <main data-mobile-main>
       <div class="device-pill">
         <span>جوال</span>
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect x="7" y="2.5" width="10" height="19" rx="2.4"/><path d="M10 5.5h4"/><circle cx="12" cy="18" r=".8"/></svg>
@@ -666,15 +1044,264 @@
     (function () {
       var composer = document.getElementById("mobileComposer");
       var body = document.body;
+      var mobilePage = document.querySelector(".mobile-page");
+      var main = document.querySelector("[data-mobile-main]");
       var openButtons = document.querySelectorAll("[data-drawer-open]");
       var closeButtons = document.querySelectorAll("[data-drawer-close]");
       var backdrop = document.querySelector("[data-drawer-backdrop]");
+      var drawerLinks = Array.prototype.slice.call(document.querySelectorAll(".drawer-link"));
+      var homeMarkup = main ? main.innerHTML : "";
+      var activeModel = getSavedModel();
+      var navSections = [
+        { key: "messages", label: "المحادثات" },
+        { key: "files", label: "الملفات" },
+        { key: "tools", label: "الأدوات" },
+        { key: "models", label: "النماذج" },
+        { key: "settings", label: "الإعدادات" },
+        { key: "help", label: "المساعدة" },
+        { key: "logout", label: "تسجيل الخروج" }
+      ];
+
+      function getSavedModel() {
+        try {
+          return localStorage.getItem("orlixorMobileModel") || "orlixor-ai";
+        } catch (error) {
+          return "orlixor-ai";
+        }
+      }
+
+      function saveModel(modelKey) {
+        activeModel = modelKey || "orlixor-ai";
+        try {
+          localStorage.setItem("orlixorMobileModel", activeModel);
+        } catch (error) {
+          // Storage can be unavailable in some private browsing modes.
+        }
+      }
 
       function setDrawerOpen(isOpen) {
         body.classList.toggle("is-drawer-open", isOpen);
         openButtons.forEach(function (button) {
           button.setAttribute("aria-expanded", isOpen ? "true" : "false");
         });
+      }
+
+      function iconSvg(name) {
+        var icons = {
+          messages: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M21 15a4 4 0 0 1-4 4H8l-5 3V7a4 4 0 0 1 4-4h10a4 4 0 0 1 4 4z"/></svg>',
+          files: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M14 2H7a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7z"/><path d="M14 2v5h5"/></svg>',
+          tools: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect x="4" y="4" width="6" height="6" rx="1.5"/><rect x="14" y="4" width="6" height="6" rx="1.5"/><rect x="4" y="14" width="6" height="6" rx="1.5"/><rect x="14" y="14" width="6" height="6" rx="1.5"/></svg>',
+          models: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M12 3 4 7l8 4 8-4-8-4z"/><path d="M4 12l8 4 8-4M4 17l8 4 8-4"/></svg>',
+          settings: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M12 15.5A3.5 3.5 0 1 0 12 8a3.5 3.5 0 0 0 0 7.5z"/><path d="M19.4 15a1.7 1.7 0 0 0 .34 1.88l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06A1.7 1.7 0 0 0 15 19.4a1.7 1.7 0 0 0-1 .6l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.7 1.7 0 0 0 8.6 15a1.7 1.7 0 0 0-1.88-.34l-.08.03a2 2 0 1 1-1.53-3.7l.08-.03A1.7 1.7 0 0 0 5.6 9a1.7 1.7 0 0 0-.6-1l-.06-.06A2 2 0 1 1 7.77 5.1l.06.06A1.7 1.7 0 0 0 9 5.6a1.7 1.7 0 0 0 1-.6l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.7 1.7 0 0 0 15 8.6c.4 0 .78-.12 1.1-.36l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.7 1.7 0 0 0 18.4 13c0 .4.12.78.36 1.1z"/></svg>',
+          help: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="12" cy="12" r="9"/><path d="M9.8 9a2.4 2.4 0 0 1 4.6 1.2c0 1.8-2.4 2.1-2.4 3.8M12 17h.01"/></svg>',
+          logout: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M10 17l-5-5 5-5M5 12h13M19 4v16"/></svg>',
+          search: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>',
+          plus: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M12 5v14M5 12h14"/></svg>',
+          upload: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M12 16V4M7 9l5-5 5 5"/><path d="M5 20h14"/></svg>',
+          shield: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>'
+        };
+
+        return icons[name] || icons.tools;
+      }
+
+      function searchBox(placeholder) {
+        return '<label class="section-search">' + iconSvg("search") + '<input type="search" data-section-search placeholder="' + placeholder + '"></label>';
+      }
+
+      function filterRow(items) {
+        return '<div class="filter-row" role="tablist">' + items.map(function (item, index) {
+          return '<button class="filter-chip' + (index === 0 ? " active" : "") + '" type="button" data-filter-chip="' + item + '">' + item + '</button>';
+        }).join("") + '</div>';
+      }
+
+      function stateBlocks(emptyText) {
+        return '<div class="state-card" data-loading-state hidden><p>جاري التحميل...</p></div>' +
+          '<div class="state-card" data-error-state hidden><p>تعذر تحميل هذا القسم الآن.</p></div>' +
+          '<div class="state-card" data-empty-state hidden><p>' + emptyText + '</p></div>' +
+          '<div class="state-card" data-section-notice hidden><p></p></div>';
+      }
+
+      function sectionShell(key, title, subtitle, bodyHtml) {
+        return '<section class="mobile-section" data-section-key="' + key + '">' +
+          '<header class="section-head"><h1>' + title + '</h1><p>' + subtitle + '</p></header>' +
+          bodyHtml +
+          '</section>';
+      }
+
+      function listCard(iconName, title, subtitle, meta, action) {
+        return '<button class="section-card" type="button" data-section-action="' + (action || title) + '">' +
+          '<span class="section-icon">' + iconSvg(iconName) + '</span>' +
+          '<span class="section-copy"><b>' + title + '</b><small>' + subtitle + '</small></span>' +
+          '<span class="section-meta">' + meta + '</span>' +
+          '</button>';
+      }
+
+      function renderMessages() {
+        var cards = [
+          listCard("messages", "محادثة جديدة", "ابدأ جلسة Orlixor AI مرتبة وسريعة", "الآن", "new-chat"),
+          listCard("messages", "كتابة محتوى", "أفكار وصياغة منشورات احترافية", "اليوم", "open-chat"),
+          listCard("messages", "تحليل البيانات", "تحليل مبسط للملف والنتائج", "أمس", "open-chat"),
+          listCard("messages", "مساعدة برمجية", "حل مشكلة كود ومراجعة منطقية", "هذا الأسبوع", "open-chat"),
+          listCard("messages", "تلخيص مقال", "تلخيص واضح مع نقاط مهمة", "المفضلة", "open-chat")
+        ].join("");
+
+        return sectionShell("messages", "المحادثات", "عرض جميع محادثاتك والبحث فيها وإدارتها بسهولة.",
+          searchBox("ابحث في محادثاتك...") +
+          filterRow(["الكل", "اليوم", "المفضلة"]) +
+          '<button class="primary-section-btn" type="button" data-section-action="new-chat">' + iconSvg("plus") + 'محادثة جديدة</button>' +
+          '<div class="section-list" data-search-list>' + cards + '</div>' +
+          stateBlocks("لا توجد محادثات مطابقة لبحثك."));
+      }
+
+      function renderFiles() {
+        var cards = [
+          listCard("files", "تقرير تحليل البيانات.pdf", "PDF - 1.4 MB", "PDF", "file-detail"),
+          listCard("files", "ملخص المشروع.docx", "Word - 2.1 MB", "Word", "file-detail"),
+          listCard("files", "الجداول.xlsx", "Excel - 900 KB", "Excel", "file-detail"),
+          listCard("files", "المخطط.png", "صورة - 1.8 MB", "صور", "file-detail")
+        ].join("");
+
+        return sectionShell("files", "الملفات", "رفع وإدارة جميع ملفاتك والوصول إليها بسرعة.",
+          searchBox("ابحث في ملفاتك...") +
+          filterRow(["الكل", "PDF", "صور", "Word", "Excel"]) +
+          '<button class="primary-section-btn" type="button" data-section-action="upload-file">' + iconSvg("upload") + 'رفع ملف</button>' +
+          '<div class="section-list" data-search-list>' + cards + '</div>' +
+          stateBlocks("لا توجد ملفات مطابقة."));
+      }
+
+      function toolCard(iconName, title, subtitle) {
+        return '<button class="tool-card" type="button" data-section-action="' + title + '">' +
+          '<span class="tool-icon">' + iconSvg(iconName) + '</span>' +
+          '<b>' + title + '</b><small>' + subtitle + '</small>' +
+          '</button>';
+      }
+
+      function renderTools() {
+        return sectionShell("tools", "الأدوات", "مجموعة أدوات ذكية متنوعة لإنجاز مهام مختلفة.",
+          '<div class="tool-grid">' +
+          toolCard("files", "تلخيص النصوص", "اختصر النصوص الطويلة بوضوح") +
+          toolCard("help", "ترجمة", "ترجمة النصوص بدقة وسياق") +
+          toolCard("messages", "كتابة مقال", "بناء مقال منظم واحترافي") +
+          toolCard("files", "تحليل ملف", "قراءة وتحليل الملفات المهمة") +
+          toolCard("models", "توليد أفكار", "اقتراح أفكار جديدة وسريعة") +
+          toolCard("tools", "تحسين نص", "تنقيح وصياغة أفضل للنص") +
+          '</div>' +
+          stateBlocks("لا توجد أدوات متاحة حاليًا."));
+      }
+
+      function modelCard(key, title, subtitle, pill) {
+        return '<button class="section-card model-card' + (activeModel === key ? " is-active" : "") + '" type="button" data-model-key="' + key + '">' +
+          '<span class="section-icon">' + iconSvg("models") + '</span>' +
+          '<span class="section-copy"><b>' + title + '</b><small>' + subtitle + '</small></span>' +
+          '<span class="model-pill">' + pill + '</span>' +
+          '</button>';
+      }
+
+      function renderModels() {
+        return sectionShell("models", "النماذج", "اختر النموذج المناسب لاحتياجك بدون عرض تفاصيل التكلفة.",
+          '<div class="section-list" data-search-list>' +
+          modelCard("orlixor-ai", "Orlixor AI", "للشرح والكتابة والأسئلة العامة", "الافتراضي") +
+          modelCard("orlixor-turbo", "Orlixor AI Turbo", "أسرع استجابة للمهام اليومية", "سريع") +
+          modelCard("orlixor-pro", "Orlixor AI Pro", "لتحليل أعمق ونتائج دقيقة", "تحليل") +
+          modelCard("orlixor-creative", "Orlixor AI Creative", "للكتابة الإبداعية وصناعة المحتوى", "إبداع") +
+          '</div>' +
+          stateBlocks("لا توجد نماذج متاحة."));
+      }
+
+      function settingsRow(iconName, title, subtitle, action) {
+        return '<button class="settings-row" type="button" data-section-action="' + (action || title) + '">' +
+          '<span class="settings-icon">' + iconSvg(iconName) + '</span>' +
+          '<span class="section-copy"><b>' + title + '</b><small>' + subtitle + '</small></span>' +
+          '<span class="section-meta">›</span>' +
+          '</button>';
+      }
+
+      function renderSettings() {
+        return sectionShell("settings", "الإعدادات", "إدارة إعدادات حسابك والتطبيق والخصوصية.",
+          '<div class="settings-list">' +
+          settingsRow("messages", "معلومات الحساب", "اسمك، بريدك، وحالة الحساب") +
+          settingsRow("help", "اللغة", "العربية") +
+          settingsRow("settings", "الوضع الليلي", "يتبع إعدادات جهازك") +
+          settingsRow("shield", "الخصوصية", "إدارة الذاكرة والبيانات") +
+          settingsRow("messages", "الإشعارات", "تنبيهات الاستخدام والاشتراك") +
+          settingsRow("models", "إدارة الاشتراك", "الباقة والترقية والفواتير") +
+          settingsRow("files", "تصدير البيانات", "تنزيل نسخة من بياناتك") +
+          settingsRow("logout", "حذف الحساب", "طلب حذف آمن للحساب") +
+          '</div>' +
+          stateBlocks("لا توجد إعدادات إضافية."));
+      }
+
+      function renderHelp() {
+        var cards = [
+          listCard("help", "الأسئلة الشائعة", "إجابات سريعة على الأسئلة المتكررة", "فتح", "help-faq"),
+          listCard("settings", "مشاكل تسجيل الدخول", "حل مشاكل الدخول وكلمة المرور", "فتح", "help-login"),
+          listCard("models", "الاشتراكات والدفع", "معلومات الباقات والفواتير", "فتح", "help-billing"),
+          listCard("messages", "التواصل مع الدعم", "أرسل طلب مساعدة للفريق", "دعم", "help-support"),
+          listCard("shield", "الإبلاغ عن مشكلة", "أبلغنا عن خلل أو اقتراح", "إبلاغ", "help-report")
+        ].join("");
+
+        return sectionShell("help", "المساعدة", "مركز المساعدة والإجابة على استفساراتك.",
+          searchBox("ابحث في المساعدة...") +
+          '<div class="section-list" data-search-list>' + cards + '</div>' +
+          '<button class="primary-section-btn" type="button" data-section-action="help-support">بدء محادثة دعم</button>' +
+          stateBlocks("لا توجد نتائج في المساعدة."));
+      }
+
+      function renderLogout() {
+        return sectionShell("logout", "تسجيل الخروج", "تسجيل الخروج من حسابك بأمان من جميع الأجهزة.",
+          '<article class="logout-card">' +
+          '<span class="section-icon">' + iconSvg("logout") + '</span>' +
+          '<h2>هل أنت متأكد من تسجيل الخروج؟</h2>' +
+          '<p>سيتم تسجيل خروجك من الجلسة الحالية. يمكنك تسجيل الدخول مرة أخرى في أي وقت.</p>' +
+          '<button class="primary-section-btn" type="button" data-logout-confirm>تسجيل الخروج</button>' +
+          '<button class="filter-chip" type="button" data-mobile-cancel>إلغاء</button>' +
+          '<small>بياناتك ومحادثاتك تبقى محفوظة في حسابك.</small>' +
+          '</article>' +
+          stateBlocks("لا توجد إجراءات."));
+      }
+
+      function renderSection(sectionKey) {
+        if (!main || !mobilePage) return;
+        var renderers = {
+          messages: renderMessages,
+          files: renderFiles,
+          tools: renderTools,
+          models: renderModels,
+          settings: renderSettings,
+          help: renderHelp,
+          logout: renderLogout
+        };
+        var renderer = renderers[sectionKey] || renderMessages;
+        mobilePage.classList.add("has-mobile-section");
+        main.innerHTML = renderer();
+        drawerLinks.forEach(function (link) {
+          link.classList.toggle("is-active", link.dataset.mobileSection === sectionKey);
+        });
+        setDrawerOpen(false);
+        window.scrollTo({ top: 0, behavior: "smooth" });
+      }
+
+      function showNotice(message) {
+        var notice = main ? main.querySelector("[data-section-notice]") : null;
+        if (!notice) return;
+        var paragraph = notice.querySelector("p");
+        if (paragraph) paragraph.textContent = message;
+        notice.hidden = false;
+      }
+
+      function filterCurrentSection(query) {
+        var cards = main ? Array.prototype.slice.call(main.querySelectorAll("[data-search-list] > button")) : [];
+        var empty = main ? main.querySelector("[data-empty-state]") : null;
+        var value = String(query || "").trim().toLowerCase();
+        var visibleCount = 0;
+        cards.forEach(function (card) {
+          var isVisible = !value || card.textContent.toLowerCase().indexOf(value) !== -1;
+          card.hidden = !isVisible;
+          if (isVisible) visibleCount += 1;
+        });
+        if (empty) {
+          empty.hidden = visibleCount !== 0;
+        }
       }
 
       openButtons.forEach(function (button) {
@@ -700,6 +1327,61 @@
           setDrawerOpen(false);
         }
       });
+
+      drawerLinks.forEach(function (button, index) {
+        var section = navSections[index];
+        if (!section) return;
+        button.dataset.mobileSection = section.key;
+        button.setAttribute("aria-label", section.label);
+        button.addEventListener("click", function () {
+          renderSection(section.key);
+        });
+      });
+
+      if (main) {
+        main.addEventListener("click", function (event) {
+          var filter = event.target.closest("[data-filter-chip]");
+          var model = event.target.closest("[data-model-key]");
+          var action = event.target.closest("[data-section-action]");
+          var logout = event.target.closest("[data-logout-confirm]");
+          var cancel = event.target.closest("[data-mobile-cancel]");
+
+          if (filter) {
+            Array.prototype.slice.call(filter.parentElement.querySelectorAll(".filter-chip")).forEach(function (chip) {
+              chip.classList.toggle("active", chip === filter);
+            });
+            showNotice("تم تطبيق الفلتر: " + filter.textContent);
+          }
+
+          if (model) {
+            saveModel(model.dataset.modelKey);
+            renderSection("models");
+            showNotice("تم اختيار النموذج بنجاح.");
+          }
+
+          if (action) {
+            showNotice("تم تجهيز القسم. يمكنك المتابعة من هنا.");
+          }
+
+          if (logout) {
+            showNotice("تم تجهيز طلب تسجيل الخروج.");
+          }
+
+          if (cancel) {
+            mobilePage.classList.remove("has-mobile-section");
+            main.innerHTML = homeMarkup;
+            drawerLinks.forEach(function (link) {
+              link.classList.remove("is-active");
+            });
+          }
+        });
+
+        main.addEventListener("input", function (event) {
+          if (event.target.matches("[data-section-search]")) {
+            filterCurrentSection(event.target.value);
+          }
+        });
+      }
 
       if (composer) {
         composer.addEventListener("submit", function (event) {
