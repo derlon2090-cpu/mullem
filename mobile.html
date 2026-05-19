@@ -350,7 +350,7 @@
       bottom: calc(14px + env(safe-area-inset-bottom));
       width: auto;
       max-width: 398px;
-      min-height: 148px;
+      min-height: 186px;
       margin: 0 auto;
       border: 1px solid var(--line);
       border-radius: 26px;
@@ -360,6 +360,38 @@
       display: grid;
       gap: 14px;
       z-index: 30;
+    }
+
+    .composer-lock {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 12px 14px;
+      border: 1px solid rgba(109, 74, 255, 0.12);
+      border-radius: 18px;
+      background: linear-gradient(135deg, rgba(111, 76, 255, 0.08), rgba(111, 76, 255, 0.03));
+      color: var(--text);
+      font-size: 13px;
+      font-weight: 900;
+      line-height: 1.3;
+    }
+
+    .composer-lock[hidden] {
+      display: none !important;
+    }
+
+    .composer-login-btn {
+      flex: 0 0 auto;
+      border: 0;
+      border-radius: 999px;
+      padding: 10px 14px;
+      background: linear-gradient(135deg, #784dff, #6035f0);
+      color: #ffffff;
+      box-shadow: 0 12px 26px rgba(109, 74, 255, 0.22);
+      font-size: 13px;
+      font-weight: 900;
+      white-space: nowrap;
     }
 
     .composer input {
@@ -373,6 +405,12 @@
       font-size: 16px;
       font-weight: 700;
       padding: 0;
+    }
+
+    .composer.is-locked input,
+    .composer.is-locked .send-btn,
+    .composer.is-locked .chip-btn {
+      opacity: 0.52;
     }
 
     .composer input::placeholder {
@@ -1787,7 +1825,7 @@
       <button class="drawer-link" type="button"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect x="4" y="4" width="6" height="6" rx="1.5"/><rect x="14" y="4" width="6" height="6" rx="1.5"/><rect x="4" y="14" width="6" height="6" rx="1.5"/><rect x="14" y="14" width="6" height="6" rx="1.5"/></svg><span>النماذج</span></button>
       <button class="drawer-link" type="button"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M12 15.5A3.5 3.5 0 1 0 12 8a3.5 3.5 0 0 0 0 7.5z"/><path d="M19.4 15a1.7 1.7 0 0 0 .34 1.88l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06A1.7 1.7 0 0 0 15 19.4a1.7 1.7 0 0 0-1 .6l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.7 1.7 0 0 0 8.6 15a1.7 1.7 0 0 0-1.88-.34l-.08.03a2 2 0 1 1-1.53-3.7l.08-.03A1.7 1.7 0 0 0 5.6 9a1.7 1.7 0 0 0-.6-1l-.06-.06A2 2 0 1 1 7.77 5.1l.06.06A1.7 1.7 0 0 0 9 5.6a1.7 1.7 0 0 0 1-.6l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.7 1.7 0 0 0 15 8.6c.4 0 .78-.12 1.1-.36l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.7 1.7 0 0 0 18.4 13c0 .4.12.78.36 1.1z"/></svg><span>الإعدادات</span></button>
       <button class="drawer-link" type="button"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="12" cy="12" r="9"/><path d="M9.8 9a2.4 2.4 0 0 1 4.6 1.2c0 1.8-2.4 2.1-2.4 3.8M12 17h.01"/></svg><span>المساعدة</span></button>
-      <button class="drawer-link" type="button"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M10 17l-5-5 5-5M5 12h13M19 4v16"/></svg><span>تسجيل الخروج</span></button>
+      <button class="drawer-link" type="button"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M10 17l5-5-5-5M15 12H4M11 5V3H5v18h6v-2"/></svg><span>تسجيل الدخول</span></button>
     </nav>
   </aside>
 
@@ -1808,7 +1846,7 @@
         <button class="plain-icon-btn" type="button" aria-label="الإشعارات">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M18 8a6 6 0 1 0-12 0c0 7-3 7-3 7h18s-3 0-3-7"/><path d="M10 19a2 2 0 0 0 4 0"/></svg>
         </button>
-        <button class="plain-icon-btn avatar-btn" type="button" aria-label="الحساب">
+        <button class="plain-icon-btn avatar-btn" type="button" data-avatar-open aria-label="تسجيل الدخول">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M20 21a8 8 0 0 0-16 0"/><circle cx="12" cy="7" r="4"/></svg>
         </button>
       </div>
@@ -1840,14 +1878,18 @@
       </section>
     </main>
 
-    <form class="composer" id="mobileComposer">
-      <input type="text" name="message" placeholder="اكتب رسالتك هنا..." autocomplete="off">
+    <form class="composer is-locked" id="mobileComposer">
+      <div class="composer-lock" data-auth-lock hidden>
+        <span>سجّل الدخول لاستخدام الشات</span>
+        <button class="composer-login-btn" type="button" data-auth-login-cta>تسجيل الدخول</button>
+      </div>
+      <input type="text" name="message" placeholder="سجّل الدخول لاستخدام الشات" autocomplete="off" disabled>
       <div class="composer-actions">
-        <button class="send-btn" type="submit" aria-label="إرسال">
+        <button class="send-btn" type="submit" aria-label="إرسال" disabled>
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M22 2 11 13"/><path d="m22 2-7 20-4-9-9-4z"/></svg>
         </button>
-        <button class="chip-btn" type="button">أدوات</button>
-        <button class="chip-btn" type="button">
+        <button class="chip-btn" type="button" disabled>أدوات</button>
+        <button class="chip-btn" type="button" disabled>
           <span>إرفاق ملف</span>
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="m21.4 11.6-8.5 8.5a6 6 0 0 1-8.5-8.5l9.2-9.2a4 4 0 0 1 5.7 5.7l-9.2 9.2a2 2 0 1 1-2.8-2.8l8.5-8.5"/></svg>
         </button>
@@ -1875,9 +1917,16 @@
       var xpOpen = document.querySelector("[data-xp-open]");
       var xpCloseButtons = document.querySelectorAll("[data-xp-close]");
       var drawerLinks = Array.prototype.slice.call(document.querySelectorAll(".drawer-link"));
+      var avatarButton = document.querySelector("[data-avatar-open]");
       var homeMarkup = main ? main.innerHTML : "";
       var activeModel = getSavedModel();
       var settingsState = getSettingsState();
+      var authState = {
+        loaded: false,
+        loggedIn: false,
+        user: null
+      };
+      var authSyncPromise = null;
       var xpState = {
         view: "balance",
         history: [],
@@ -1893,7 +1942,7 @@
         { key: "models", label: "النماذج" },
         { key: "settings", label: "الإعدادات" },
         { key: "help", label: "المساعدة" },
-        { key: "logout", label: "تسجيل الخروج" }
+        { key: "login", label: "تسجيل الدخول" }
       ];
 
       function getSavedModel() {
@@ -1937,6 +1986,110 @@
         } catch (error) {
           // ignore storage failures
         }
+      }
+
+      function getLoginUrl() {
+        var url = new URL("login.html", window.location.href);
+        url.searchParams.set("mode", "login");
+        url.searchParams.set("return", "mobile.html");
+        return url.href;
+      }
+
+      function goToLoginPage() {
+        setDrawerOpen(false);
+        window.location.href = getLoginUrl();
+      }
+
+      function goHome() {
+        if (!main || !mobilePage) return;
+        mobilePage.classList.remove("has-mobile-section");
+        main.innerHTML = homeMarkup;
+        drawerLinks.forEach(function (link) {
+          link.classList.remove("is-active");
+        });
+        window.scrollTo({ top: 0, behavior: "smooth" });
+      }
+
+      function setComposerAuthLocked(locked) {
+        if (!composer) return;
+        var input = composer.querySelector("input[name=\"message\"]");
+        var sendButton = composer.querySelector(".send-btn");
+        var chips = Array.prototype.slice.call(composer.querySelectorAll(".chip-btn"));
+        var lockBanner = composer.querySelector("[data-auth-lock]");
+        composer.classList.toggle("is-locked", locked);
+        if (lockBanner) lockBanner.hidden = !locked;
+        if (input) {
+          input.disabled = locked;
+          input.placeholder = locked ? "سجّل الدخول لاستخدام الشات" : "اكتب رسالتك هنا...";
+        }
+        if (sendButton) sendButton.disabled = locked;
+        chips.forEach(function (button) {
+          button.disabled = locked;
+        });
+      }
+
+      function refreshAuthNavigation() {
+        var authLink = drawerLinks[drawerLinks.length - 1];
+        var authSection = navSections[navSections.length - 1];
+        if (authSection) {
+          authSection.key = authState.loggedIn ? "logout" : "login";
+          authSection.label = authState.loggedIn ? "تسجيل الخروج" : "تسجيل الدخول";
+        }
+        if (authLink) {
+          authLink.dataset.mobileSection = authSection ? authSection.key : (authState.loggedIn ? "logout" : "login");
+          authLink.setAttribute("aria-label", authSection ? authSection.label : (authState.loggedIn ? "تسجيل الخروج" : "تسجيل الدخول"));
+          authLink.innerHTML = (authState.loggedIn ? iconSvg("logout") : iconSvg("login")) +
+            "<span>" + (authState.loggedIn ? "تسجيل الخروج" : "تسجيل الدخول") + "</span>";
+        }
+        if (avatarButton) {
+          avatarButton.setAttribute("aria-label", authState.loggedIn ? "الحساب" : "تسجيل الدخول");
+        }
+        setComposerAuthLocked(!authState.loggedIn);
+      }
+
+      async function syncAuthState() {
+        if (authSyncPromise) return authSyncPromise;
+        authSyncPromise = (async function () {
+          try {
+            var response = await fetch("/api/auth/me", {
+              credentials: "include",
+              cache: "no-store",
+              headers: {
+                Accept: "application/json"
+              }
+            });
+            var payload = await response.json().catch(function () { return null; });
+            var user = payload && (payload.user || payload.data?.user || null);
+            authState.loggedIn = Boolean(response.ok && (payload?.ok || payload?.success) && user);
+            authState.user = authState.loggedIn ? user : null;
+          } catch (error) {
+            authState.loggedIn = false;
+            authState.user = null;
+          }
+          authState.loaded = true;
+          refreshAuthNavigation();
+          return authState;
+        })().finally(function () {
+          authSyncPromise = null;
+        });
+        return authSyncPromise;
+      }
+
+      async function logoutMobileUser() {
+        try {
+          await fetch("/api/auth/logout", {
+            method: "POST",
+            credentials: "include"
+          });
+        } catch (error) {
+          // Ignore logout transport failures and still clear the local UI state.
+        }
+        authState.loggedIn = false;
+        authState.user = null;
+        authState.loaded = true;
+        refreshAuthNavigation();
+        renderSection("messages");
+        showNotice("تم تسجيل الخروج بنجاح.");
       }
 
       function setDrawerOpen(isOpen) {
@@ -2178,6 +2331,7 @@
           models: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M12 3 4 7l8 4 8-4-8-4z"/><path d="M4 12l8 4 8-4M4 17l8 4 8-4"/></svg>',
           settings: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M12 15.5A3.5 3.5 0 1 0 12 8a3.5 3.5 0 0 0 0 7.5z"/><path d="M19.4 15a1.7 1.7 0 0 0 .34 1.88l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06A1.7 1.7 0 0 0 15 19.4a1.7 1.7 0 0 0-1 .6l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.7 1.7 0 0 0 8.6 15a1.7 1.7 0 0 0-1.88-.34l-.08.03a2 2 0 1 1-1.53-3.7l.08-.03A1.7 1.7 0 0 0 5.6 9a1.7 1.7 0 0 0-.6-1l-.06-.06A2 2 0 1 1 7.77 5.1l.06.06A1.7 1.7 0 0 0 9 5.6a1.7 1.7 0 0 0 1-.6l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.7 1.7 0 0 0 15 8.6c.4 0 .78-.12 1.1-.36l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.7 1.7 0 0 0 18.4 13c0 .4.12.78.36 1.1z"/></svg>',
           help: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="12" cy="12" r="9"/><path d="M9.8 9a2.4 2.4 0 0 1 4.6 1.2c0 1.8-2.4 2.1-2.4 3.8M12 17h.01"/></svg>',
+          login: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M14 17l5-5-5-5M19 12H7M11 5V3H5v18h6v-2"/></svg>',
           logout: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M10 17l-5-5 5-5M5 12h13M19 4v16"/></svg>',
           search: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>',
           plus: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M12 5v14M5 12h14"/></svg>',
@@ -2355,6 +2509,10 @@
 
       function renderSection(sectionKey) {
         if (!main || !mobilePage) return;
+        if (sectionKey === "login") {
+          goToLoginPage();
+          return;
+        }
         var renderers = {
           messages: renderMessages,
           files: renderFiles,
@@ -2402,6 +2560,19 @@
           setDrawerOpen(!body.classList.contains("is-drawer-open"));
         });
       });
+
+      if (avatarButton) {
+        avatarButton.addEventListener("click", function () {
+          setDrawerOpen(false);
+          syncAuthState().then(function () {
+            if (!authState.loggedIn) {
+              goToLoginPage();
+              return;
+            }
+            renderSection("settings");
+          });
+        });
+      }
 
       closeButtons.forEach(function (button) {
         button.addEventListener("click", function () {
@@ -2509,6 +2680,16 @@
         button.dataset.mobileSection = section.key;
         button.setAttribute("aria-label", section.label);
         button.addEventListener("click", function () {
+          if (section.key === "login" && !authState.loaded) {
+            syncAuthState().then(function () {
+              if (authState.loggedIn) {
+                renderSection("logout");
+              } else {
+                goToLoginPage();
+              }
+            });
+            return;
+          }
           renderSection(section.key);
         });
       });
@@ -2601,7 +2782,12 @@
           }
 
           if (logout) {
-            showNotice("تم تجهيز طلب تسجيل الخروج.");
+            if (!authState.loggedIn) {
+              goToLoginPage();
+              return;
+            }
+            logoutMobileUser();
+            return;
           }
 
           if (cancel) {
@@ -2629,9 +2815,23 @@
 
       if (composer) {
         composer.addEventListener("submit", function (event) {
+          if (!authState.loggedIn) {
+            event.preventDefault();
+            goToLoginPage();
+            return;
+          }
           event.preventDefault();
         });
+
+        composer.addEventListener("click", function (event) {
+          var loginCta = event.target.closest("[data-auth-login-cta]");
+          if (!loginCta) return;
+          goToLoginPage();
+        });
       }
+
+      refreshAuthNavigation();
+      syncAuthState();
     })();
   </script>
 </body>
