@@ -943,6 +943,50 @@
       gap: 11px;
     }
 
+    .settings-card {
+      padding: 14px;
+      display: grid;
+      grid-template-columns: 44px minmax(0, 1fr);
+      gap: 12px;
+      align-items: start;
+    }
+
+    .settings-card-body {
+      display: grid;
+      gap: 10px;
+      min-width: 0;
+    }
+
+    .settings-form {
+      display: grid;
+      gap: 8px;
+    }
+
+    .settings-input {
+      width: 100%;
+      min-height: 40px;
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      background: #ffffff;
+      color: var(--text);
+      padding: 0 13px;
+      font-size: 13px;
+      font-weight: 800;
+      outline: none;
+    }
+
+    .settings-save,
+    .settings-action {
+      min-height: 42px;
+      border: 0;
+      border-radius: 14px;
+      background: var(--primary-soft);
+      color: var(--primary);
+      font-size: 13px;
+      font-weight: 900;
+      padding: 0 13px;
+    }
+
     .settings-row {
       min-height: 72px;
       padding: 12px;
@@ -952,10 +996,18 @@
       gap: 12px;
     }
 
-    .settings-row button,
-    .settings-row select {
-      min-height: 32px;
-      max-width: 96px;
+    .settings-control {
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+      min-width: 0;
+    }
+
+    .settings-row .settings-select,
+    .settings-row .settings-switch,
+    .settings-row .settings-plain {
+      min-height: 34px;
+      max-width: 124px;
       border: 1px solid var(--line);
       border-radius: 999px;
       background: #ffffff;
@@ -963,6 +1015,69 @@
       padding: 6px 10px;
       font-size: 11px;
       font-weight: 900;
+    }
+
+    .settings-switch {
+      width: 54px;
+      min-width: 54px;
+      position: relative;
+      padding: 0;
+      background: #f3f4fa;
+      border-color: transparent;
+      display: inline-flex;
+      align-items: center;
+      justify-content: flex-start;
+      box-shadow: inset 0 0 0 1px rgba(109, 74, 255, 0.1);
+    }
+
+    .settings-switch::before {
+      content: "";
+      position: absolute;
+      left: 5px;
+      width: 24px;
+      height: 24px;
+      border-radius: 999px;
+      background: #ffffff;
+      box-shadow: 0 6px 16px rgba(21, 21, 47, 0.12);
+      transition: transform 0.18s ease;
+    }
+
+    .settings-switch.is-on {
+      background: var(--primary);
+    }
+
+    .settings-switch.is-on::before {
+      transform: translateX(21px);
+    }
+
+    .settings-select {
+      width: 100%;
+      appearance: none;
+      direction: rtl;
+    }
+
+    .settings-plain {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      white-space: nowrap;
+    }
+
+    .settings-action.is-danger {
+      background: #fff0f0;
+      color: #df3f4f;
+    }
+
+    .visually-hidden {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      padding: 0;
+      margin: -1px;
+      overflow: hidden;
+      clip: rect(0, 0, 0, 0);
+      white-space: nowrap;
+      border: 0;
     }
 
     .state-card,
@@ -1057,15 +1172,461 @@
       gap: 14px;
     }
 
+    .xp-panel-body {
+      display: grid;
+      gap: 14px;
+      min-width: 0;
+    }
+
+    .xp-head-spacer {
+      width: 32px;
+      height: 32px;
+    }
+
+    .xp-subtitle {
+      margin: -2px 0 0;
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 800;
+      text-align: center;
+    }
+
+    .xp-balance-card {
+      border: 1px solid var(--line);
+      border-radius: 20px;
+      padding: 16px;
+      display: grid;
+      gap: 14px;
+      align-items: center;
+      grid-template-columns: 110px minmax(0, 1fr);
+      background: #ffffff;
+      box-shadow: var(--soft-shadow);
+    }
+
+    .xp-balance-circle {
+      width: 110px;
+      height: 110px;
+      border-radius: 50%;
+      border: 6px solid rgba(109, 74, 255, 0.14);
+      display: grid;
+      place-items: center;
+      text-align: center;
+      background:
+        radial-gradient(circle at 50% 50%, #ffffff 56%, transparent 57%),
+        conic-gradient(var(--primary) 0 290deg, rgba(109, 74, 255, 0.18) 290deg 360deg);
+      box-shadow: inset 0 0 0 10px #ffffff;
+    }
+
+    .xp-balance-circle span {
+      display: block;
+      color: var(--text);
+      font-size: 22px;
+      font-weight: 900;
+      line-height: 1.1;
+    }
+
+    .xp-balance-circle small {
+      color: var(--muted);
+      font-size: 10px;
+      font-weight: 800;
+    }
+
+    .xp-balance-meta {
+      display: grid;
+      gap: 10px;
+    }
+
+    .xp-balance-meta div {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 800;
+    }
+
+    .xp-balance-meta b {
+      color: var(--text);
+      font-size: 13px;
+      font-weight: 900;
+    }
+
+    .xp-banner {
+      border-radius: 18px;
+      padding: 16px;
+      display: grid;
+      gap: 6px;
+      text-align: center;
+      background: linear-gradient(180deg, #f4efff, #fff);
+      color: var(--text);
+      box-shadow: var(--soft-shadow);
+    }
+
+    .xp-banner b {
+      font-size: 14px;
+      font-weight: 900;
+    }
+
+    .xp-banner small {
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 700;
+    }
+
+    .billing-toggle {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 10px;
+    }
+
+    .billing-pill {
+      min-height: 42px;
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      background: #ffffff;
+      color: var(--muted);
+      font-size: 13px;
+      font-weight: 900;
+      box-shadow: var(--soft-shadow);
+    }
+
+    .billing-pill.is-active {
+      color: var(--primary);
+      background: var(--primary-soft);
+      border-color: rgba(109, 74, 255, 0.3);
+    }
+
+    .plan-stack {
+      display: grid;
+      gap: 10px;
+    }
+
+    .plan-card {
+      min-height: 72px;
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      background: #ffffff;
+      display: grid;
+      grid-template-columns: 36px minmax(0, 1fr) auto;
+      align-items: center;
+      gap: 10px;
+      padding: 12px 14px;
+      box-shadow: var(--soft-shadow);
+      text-align: right;
+    }
+
+    .plan-card.is-selected {
+      border-color: rgba(109, 74, 255, 0.38);
+      background: linear-gradient(180deg, #ffffff, #f7f4ff);
+      box-shadow: 0 16px 30px rgba(109, 74, 255, 0.08);
+    }
+
+    .plan-card-icon {
+      width: 36px;
+      height: 36px;
+      border-radius: 12px;
+      display: grid;
+      place-items: center;
+      background: var(--primary-soft);
+      color: var(--primary);
+      font-size: 18px;
+    }
+
+    .plan-card-copy {
+      min-width: 0;
+      display: grid;
+      gap: 2px;
+    }
+
+    .plan-card-copy b {
+      font-size: 14px;
+      font-weight: 900;
+      color: var(--text);
+    }
+
+    .plan-card-copy small {
+      color: var(--muted);
+      font-size: 11px;
+      font-weight: 700;
+    }
+
+    .plan-card-price {
+      color: var(--primary);
+      font-size: 12px;
+      font-weight: 900;
+      white-space: nowrap;
+    }
+
+    .plan-hero {
+      border-radius: 22px;
+      padding: 18px 16px;
+      background: linear-gradient(180deg, #6d4aff, #4f2be8);
+      color: #ffffff;
+      display: grid;
+      gap: 12px;
+      justify-items: center;
+      text-align: center;
+      box-shadow: 0 20px 40px rgba(109, 74, 255, 0.22);
+    }
+
+    .plan-hero-badge {
+      width: 52px;
+      height: 52px;
+      border-radius: 16px;
+      background: rgba(255, 255, 255, 0.15);
+      display: grid;
+      place-items: center;
+      font-size: 22px;
+    }
+
+    .plan-hero-copy {
+      display: grid;
+      gap: 4px;
+    }
+
+    .plan-hero-copy b {
+      font-size: 18px;
+      font-weight: 900;
+    }
+
+    .plan-hero-copy small {
+      font-size: 12px;
+      font-weight: 700;
+      opacity: 0.92;
+    }
+
+    .plan-hero p {
+      margin: 0;
+      font-size: 12px;
+      font-weight: 700;
+      opacity: 0.92;
+    }
+
+    .feature-card,
+    .review-card {
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      background: #ffffff;
+      box-shadow: var(--soft-shadow);
+      padding: 14px;
+    }
+
+    .feature-list {
+      list-style: none;
+      margin: 0;
+      padding: 0;
+      display: grid;
+      gap: 10px;
+    }
+
+    .feature-list li {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      color: var(--text);
+      font-size: 12px;
+      font-weight: 800;
+      line-height: 1.6;
+    }
+
+    .feature-check {
+      width: 18px;
+      height: 18px;
+      border-radius: 50%;
+      background: #2fc97a;
+      color: #ffffff;
+      display: grid;
+      place-items: center;
+      font-size: 11px;
+      font-weight: 900;
+      flex: 0 0 18px;
+    }
+
+    .review-card {
+      display: grid;
+      gap: 4px;
+    }
+
+    .review-card-top {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      color: var(--text);
+    }
+
+    .review-card-top b {
+      font-size: 16px;
+      font-weight: 900;
+    }
+
+    .review-card-top span {
+      color: var(--primary);
+      font-size: 13px;
+      font-weight: 900;
+    }
+
+    .payment-list {
+      display: grid;
+      gap: 10px;
+    }
+
+    .payment-card {
+      min-height: 54px;
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      background: #ffffff;
+      display: grid;
+      grid-template-columns: 20px minmax(0, 1fr);
+      gap: 10px;
+      align-items: center;
+      padding: 0 14px;
+      box-shadow: var(--soft-shadow);
+    }
+
+    .payment-card.is-selected {
+      border-color: rgba(109, 74, 255, 0.34);
+      background: #f9f7ff;
+    }
+
+    .payment-radio {
+      width: 16px;
+      height: 16px;
+      border-radius: 50%;
+      border: 2px solid var(--line);
+      background: #ffffff;
+      position: relative;
+    }
+
+    .payment-card.is-selected .payment-radio {
+      border-color: var(--primary);
+    }
+
+    .payment-card.is-selected .payment-radio::after {
+      content: "";
+      position: absolute;
+      inset: 3px;
+      border-radius: 50%;
+      background: var(--primary);
+    }
+
+    .payment-copy {
+      display: grid;
+      gap: 2px;
+      text-align: right;
+    }
+
+    .payment-copy b {
+      color: var(--text);
+      font-size: 13px;
+      font-weight: 900;
+    }
+
+    .payment-copy small {
+      color: var(--muted);
+      font-size: 10px;
+      font-weight: 700;
+    }
+
+    .processing-hero,
+    .success-hero {
+      display: grid;
+      justify-items: center;
+      gap: 8px;
+      text-align: center;
+      padding: 10px 0 4px;
+    }
+
+    .processing-icon {
+      width: 110px;
+      height: 110px;
+      border-radius: 50%;
+      background: radial-gradient(circle, rgba(109, 74, 255, 0.16), rgba(109, 74, 255, 0.03));
+      color: var(--primary);
+      display: grid;
+      place-items: center;
+      font-size: 56px;
+      font-weight: 300;
+    }
+
+    .processing-hero b,
+    .success-hero b {
+      color: var(--text);
+      font-size: 18px;
+      font-weight: 900;
+    }
+
+    .processing-hero small,
+    .success-hero small {
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 700;
+    }
+
+    .flow-stepper {
+      display: grid;
+      gap: 10px;
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      background: #ffffff;
+      padding: 14px;
+      box-shadow: var(--soft-shadow);
+    }
+
+    .flow-step {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      color: var(--muted);
+      font-size: 13px;
+      font-weight: 800;
+    }
+
+    .flow-step.done,
+    .flow-step.active {
+      color: var(--text);
+    }
+
+    .flow-dot {
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      background: #dfe2f0;
+      flex: 0 0 12px;
+    }
+
+    .flow-step.done .flow-dot {
+      background: #2fc97a;
+    }
+
+    .flow-step.active .flow-dot {
+      background: var(--primary);
+    }
+
+    .success-check {
+      width: 84px;
+      height: 84px;
+      border-radius: 50%;
+      background: #2fc97a;
+      color: #ffffff;
+      display: grid;
+      place-items: center;
+      font-size: 38px;
+      font-weight: 900;
+      box-shadow: 0 18px 40px rgba(47, 201, 122, 0.24);
+    }
+
     .xp-panel[hidden],
     .xp-panel-backdrop[hidden] {
       display: none;
     }
 
     .xp-panel-head {
-      display: flex;
+      display: grid;
+      grid-template-columns: 32px minmax(0, 1fr) 32px;
       align-items: center;
-      justify-content: space-between;
       gap: 12px;
     }
 
@@ -1074,6 +1635,7 @@
       color: var(--text);
       font-size: 17px;
       font-weight: 900;
+      text-align: center;
     }
 
     .xp-close {
@@ -1136,6 +1698,17 @@
       font-size: 13px;
       font-weight: 900;
       box-shadow: 0 15px 30px rgba(109, 74, 255, 0.24);
+    }
+
+    .xp-link {
+      border: 0;
+      background: transparent;
+      color: var(--primary);
+      font-size: 12px;
+      font-weight: 900;
+      padding: 0;
+      text-align: center;
+      line-height: 1.8;
     }
 
     @media (prefers-color-scheme: dark) {
@@ -1242,11 +1815,6 @@
     </header>
 
     <main data-mobile-main>
-      <div class="device-pill">
-        <span>جوال</span>
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect x="7" y="2.5" width="10" height="19" rx="2.4"/><path d="M10 5.5h4"/><circle cx="12" cy="18" r=".8"/></svg>
-      </div>
-
       <section class="hero">
         <h1><span class="hero-text">مرحباً بك</span><span class="hero-emoji">👋</span></h1>
         <p>كيف يمكنني مساعدتك اليوم؟</p>
@@ -1289,19 +1857,7 @@
 
   <div class="xp-panel-backdrop" data-xp-close hidden></div>
   <section class="xp-panel" data-xp-panel hidden aria-label="رصيد XP">
-    <div class="xp-panel-head">
-      <h2>رصيد XP</h2>
-      <button class="xp-close" type="button" data-xp-close aria-label="إغلاق">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M6 6l12 12M18 6 6 18"/></svg>
-      </button>
-    </div>
-    <div class="xp-plan">الباقة الحالية <b>Spark</b> 👑</div>
-    <div class="xp-panel-list">
-      <div class="xp-panel-row"><span>المستخدم اليوم</span><b>120 نقطة</b></div>
-      <div class="xp-panel-row"><span>المتبقي اليومي</span><b>280 نقطة</b></div>
-      <div class="xp-panel-row"><span>الحد الشهري</span><b>10,000 نقطة</b></div>
-    </div>
-    <button class="xp-upgrade" type="button">ترقية الباقة</button>
+    <div class="xp-panel-body" data-xp-view></div>
   </section>
 
   <script>
@@ -1313,12 +1869,23 @@
       var openButtons = document.querySelectorAll("[data-drawer-open]");
       var closeButtons = document.querySelectorAll("[data-drawer-close]");
       var backdrop = document.querySelector("[data-drawer-backdrop]");
+      var xpBackdrop = document.querySelector(".xp-panel-backdrop");
       var xpPanel = document.querySelector("[data-xp-panel]");
+      var xpViewHost = document.querySelector("[data-xp-view]");
       var xpOpen = document.querySelector("[data-xp-open]");
       var xpCloseButtons = document.querySelectorAll("[data-xp-close]");
       var drawerLinks = Array.prototype.slice.call(document.querySelectorAll(".drawer-link"));
       var homeMarkup = main ? main.innerHTML : "";
       var activeModel = getSavedModel();
+      var settingsState = getSettingsState();
+      var xpState = {
+        view: "balance",
+        history: [],
+        plan: "spark",
+        billing: "monthly",
+        method: "mada",
+        status: "idle"
+      };
       var navSections = [
         { key: "messages", label: "المحادثات" },
         { key: "files", label: "الملفات" },
@@ -1346,6 +1913,32 @@
         }
       }
 
+      function getSettingsState() {
+        var defaults = {
+          name: "أحمد محمد",
+          email: "ahmed@example.com",
+          language: "ar",
+          nightMode: false,
+          privacy: true,
+          notifications: true
+        };
+        try {
+          var stored = localStorage.getItem("orlixorMobileSettings");
+          return stored ? Object.assign({}, defaults, JSON.parse(stored)) : defaults;
+        } catch (error) {
+          return defaults;
+        }
+      }
+
+      function saveSettingsState(nextState) {
+        settingsState = Object.assign({}, settingsState, nextState || {});
+        try {
+          localStorage.setItem("orlixorMobileSettings", JSON.stringify(settingsState));
+        } catch (error) {
+          // ignore storage failures
+        }
+      }
+
       function setDrawerOpen(isOpen) {
         body.classList.toggle("is-drawer-open", isOpen);
         openButtons.forEach(function (button) {
@@ -1356,11 +1949,225 @@
       function setXpPanelOpen(isOpen) {
         if (!xpPanel) return;
         xpPanel.hidden = !isOpen;
-        xpCloseButtons.forEach(function (button) {
-          if (button.classList.contains("xp-panel-backdrop")) {
-            button.hidden = !isOpen;
-          }
+        if (xpBackdrop) xpBackdrop.hidden = !isOpen;
+        if (isOpen) {
+          setXpView(xpState.view || "balance", false);
+        }
+      }
+
+      function setXpView(view, rememberHistory) {
+        if (!xpViewHost) return;
+        var nextView = view || "balance";
+        if (rememberHistory !== false && xpState.view && xpState.view !== nextView) {
+          xpState.history.push(xpState.view);
+        }
+        xpState.view = nextView;
+        xpViewHost.innerHTML = renderXpView(nextView);
+      }
+
+      function goBackInXpFlow() {
+        if (!xpState.history.length) {
+          setXpView("balance", false);
+          return;
+        }
+        var prev = xpState.history.pop();
+        setXpView(prev, false);
+      }
+
+      function refreshSettingsPage() {
+        if (!main || !mobilePage) return;
+        mobilePage.classList.add("has-mobile-section");
+        main.innerHTML = renderSettings();
+        drawerLinks.forEach(function (link) {
+          link.classList.toggle("is-active", link.dataset.mobileSection === "settings");
         });
+      }
+
+      function xpPlanMeta() {
+        if (xpState.plan === "tuwaiq") return { name: "Tuwaiq", price: "79 ر.س / شهر", accent: "orange" };
+        if (xpState.plan === "pioneer") return { name: "Pioneer", price: "149 ر.س / شهر", accent: "purple" };
+        if (xpState.plan === "free") return { name: "Free", price: "مجاني", accent: "gray" };
+        return { name: "Spark", price: "39 ر.س / شهر", accent: "purple" };
+      }
+
+      function planFeatures(plan) {
+        var plans = {
+          free: ["بدء مجاني", "وصول أساسي للمحادثة", "حدود خفيفة يومية", "ترقية لاحقًا بسهولة"],
+          spark: ["10,000 XP شهريًا", "الوصول للنماذج الأساسية", "أدوات متعددة", "دعم البريد الإلكتروني"],
+          tuwaiq: ["30,000 XP شهريًا", "أولوية أعلى", "تحليل أعمق", "ملفات أكثر وتكلفة محسوبة"],
+          pioneer: ["100,000 XP شهريًا", "أعلى أولوية", "كافة النماذج", "تحديثات وميزات متقدمة"]
+        };
+        return plans[plan] || plans.spark;
+      }
+
+      function planPrice(plan) {
+        return {
+          free: "مجاني",
+          spark: "39 ر.س / شهر",
+          tuwaiq: "79 ر.س / شهر",
+          pioneer: "149 ر.س / شهر"
+        }[plan] || "39 ر.س / شهر";
+      }
+
+      function planIcon(plan) {
+        if (plan === "free") return "◌";
+        if (plan === "spark") return "👑";
+        if (plan === "tuwaiq") return "✦";
+        return "💎";
+      }
+
+      function xpHeader(title, withBack) {
+        return '<div class="xp-panel-head">' +
+          (withBack ? '<button class="xp-close" type="button" data-xp-back aria-label="رجوع"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M15 18l-6-6 6-6"/></svg></button>' : '<span class="xp-head-spacer"></span>') +
+          '<h2>' + title + '</h2>' +
+          '<button class="xp-close" type="button" data-xp-close aria-label="إغلاق"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M6 6l12 12M18 6 6 18"/></svg></button>' +
+          '</div>';
+      }
+
+      function renderXpView(view) {
+        var currentPlan = xpPlanMeta();
+        var planList = ["free", "spark", "tuwaiq", "pioneer"].map(function (plan) {
+          var meta = {
+            free: { desc: "ابدأ بتحريكك مجانًا", icon: "◌" },
+            spark: { desc: "للاستخدام اليومي والمهام الأساسية", icon: "👑" },
+            tuwaiq: { desc: "للمستخدمين المحترفين", icon: "✦" },
+            pioneer: { desc: "للمشاريع الكبرى والميزات الكاملة", icon: "💎" }
+          }[plan];
+          return '<button class="plan-card' + (xpState.plan === plan ? ' is-selected' : '') + '" type="button" data-xp-plan="' + plan + '">' +
+            '<span class="plan-card-icon">' + meta.icon + '</span>' +
+            '<span class="plan-card-copy"><b>' + currentPlanLabel(plan) + '</b><small>' + meta.desc + '</small></span>' +
+            '<span class="plan-card-price">' + planPrice(plan) + '</span>' +
+            '</button>';
+        }).join("");
+
+        if (view === "plans") {
+          return xpHeader("ترقية الباقة", true) +
+            '<p class="xp-subtitle">اختر الباقة المناسبة لك</p>' +
+            '<div class="billing-toggle" role="tablist">' +
+            '<button class="billing-pill' + (xpState.billing === "monthly" ? ' is-active' : '') + '" type="button" data-xp-billing="monthly">شهري</button>' +
+            '<button class="billing-pill' + (xpState.billing === "yearly" ? ' is-active' : '') + '" type="button" data-xp-billing="yearly">سنوي</button>' +
+            '</div>' +
+            '<div class="plan-stack">' + planList + '</div>' +
+            '<button class="xp-upgrade" type="button" data-xp-go="details">عرض تفاصيل الباقة</button>';
+        }
+
+        if (view === "details") {
+          return xpHeader("تفاصيل الباقة", true) +
+            '<div class="plan-hero">' +
+            '<div class="plan-hero-badge">' + planIcon(xpState.plan) + '</div>' +
+            '<div class="plan-hero-copy"><b>' + currentPlan.name + '</b><small>' + currentPlan.price + '</small></div>' +
+            '<p>الاستخدام اليومي والمهام الأساسية</p>' +
+            '</div>' +
+            '<div class="feature-card">' +
+            '<ul class="feature-list">' + planFeatures(xpState.plan).map(function (item) {
+              return '<li><span class="feature-check">✓</span><span>' + item + '</span></li>';
+            }).join("") + '</ul>' +
+            '</div>' +
+            '<button class="xp-upgrade" type="button" data-xp-go="payment">متابعة الدفع</button>' +
+            '<button class="xp-link" type="button" data-xp-go="plans">العودة إلى الباقات</button>';
+        }
+
+        if (view === "payment") {
+          return xpHeader("مراجعة الباقة", true) +
+            '<div class="review-card">' +
+            '<div class="review-card-top"><b>' + currentPlan.name + '</b><span>' + currentPlan.price + '</span></div>' +
+            '<small>اختر وسيلة الدفع المناسبة</small>' +
+            '</div>' +
+            '<div class="payment-list">' +
+            paymentOption("card", "بطاقة مدى / فيزا / مستر كارد", "بطاقة", xpState.method === "card") +
+            paymentOption("apple", "Apple Pay", "Apple", xpState.method === "apple") +
+            paymentOption("stc", "STC Pay", "STC", xpState.method === "stc") +
+            '</div>' +
+            '<button class="xp-upgrade" type="button" data-xp-go="processing">متابعة الدفع</button>';
+        }
+
+        if (view === "processing") {
+          return xpHeader("جاري معالجة الدفع", true) +
+            '<div class="processing-hero">' +
+            '<div class="processing-icon">◔</div>' +
+            '<b>جاري معالجة عملية الدفع...</b>' +
+            '<small>من فضلك انتظر حتى تكتمل الخطوات التالية</small>' +
+            '</div>' +
+            '<div class="flow-stepper">' +
+            flowStep("done", "التحقق من البيانات") +
+            flowStep("active", "معالجة الدفع") +
+            flowStep("pending", "تفعيل الباقة") +
+            flowStep("pending", "إرسال التأكيد") +
+            '</div>';
+        }
+
+        if (view === "success") {
+          return xpHeader("تمت الترقية بنجاح", false) +
+            '<div class="success-hero">' +
+            '<div class="success-check">✓</div>' +
+            '<b>تمت الترقية بنجاح!</b>' +
+            '<small>مرحبًا بك في باقة ' + currentPlan.name + '</small>' +
+            '</div>' +
+            '<div class="feature-card">' +
+            '<ul class="feature-list">' + planFeatures(xpState.plan).map(function (item) {
+              return '<li><span class="feature-check">✓</span><span>' + item + '</span></li>';
+            }).join("") + '</ul>' +
+            '</div>' +
+            '<button class="xp-upgrade" type="button" data-xp-close>ابدأ استخدام الباقة</button>' +
+            '<button class="xp-link" type="button" data-xp-back-home>العودة للرئيسية</button>';
+        }
+
+        return xpHeader("رصيد XP", false) +
+          '<div class="xp-balance-card">' +
+          '<div class="xp-balance-circle"><span>280</span><small>من 10,000</small></div>' +
+          '<div class="xp-balance-meta">' +
+          '<div><span>المستخدم اليوم</span><b>120 XP</b></div>' +
+          '<div><span>المتبقي اليومي</span><b>280 XP</b></div>' +
+          '<div><span>الحد الشهري</span><b>10,000 XP</b></div>' +
+          '</div>' +
+          '</div>' +
+          '<div class="xp-banner"><b>تتمتع بمزايا أكثر مع الباقات الأعلى</b><small>قم بالترقية للحصول على حدود أوسع وإمكانات متقدمة.</small></div>' +
+          '<button class="xp-upgrade" type="button" data-xp-go="plans">ترقية الباقة</button>';
+      }
+
+      function currentPlanLabel(plan) {
+        if (plan === "free") return "Free";
+        if (plan === "spark") return "Spark";
+        if (plan === "tuwaiq") return "Tuwaiq";
+        return "Pioneer";
+      }
+
+      function paymentOption(key, title, badge, checked) {
+        return '<button class="payment-card' + (checked ? ' is-selected' : '') + '" type="button" data-xp-method="' + key + '">' +
+          '<span class="payment-radio"></span>' +
+          '<span class="payment-copy"><b>' + title + '</b><small>' + (badge || "") + '</small></span>' +
+          '</button>';
+      }
+
+      function flowStep(state, label) {
+        return '<div class="flow-step ' + state + '"><span class="flow-dot"></span><b>' + label + '</b></div>';
+      }
+
+      function escapeHtml(value) {
+        return String(value || "")
+          .replace(/&/g, "&amp;")
+          .replace(/</g, "&lt;")
+          .replace(/>/g, "&gt;")
+          .replace(/"/g, "&quot;")
+          .replace(/'/g, "&#39;");
+      }
+
+      function settingsControlRow(iconName, title, subtitle, controlHtml) {
+        return '<article class="settings-row">' +
+          '<span class="settings-icon">' + iconSvg(iconName) + '</span>' +
+          '<span class="section-copy"><b>' + title + '</b><small>' + subtitle + '</small></span>' +
+          '<span class="settings-control">' + controlHtml + '</span>' +
+          '</article>';
+      }
+
+      function settingsToggleRow(iconName, title, subtitle, key, enabled) {
+        return settingsControlRow(iconName, title, subtitle,
+          '<button class="settings-switch' + (enabled ? ' is-on' : '') + '" type="button" data-setting-toggle="' + key + '" aria-pressed="' + (enabled ? 'true' : 'false') + '"><span class="visually-hidden">' + title + '</span></button>');
+      }
+
+      function settingsActionRow(iconName, title, subtitle, actionText, actionKey, danger) {
+        return settingsControlRow(iconName, title, subtitle,
+          '<button class="settings-plain' + (danger ? ' is-danger' : '') + '" type="button" data-settings-action="' + actionKey + '">' + actionText + '</button>');
       }
 
       function iconSvg(name) {
@@ -1485,25 +2292,34 @@
           stateBlocks("لا توجد نماذج متاحة."));
       }
 
-      function settingsRow(iconName, title, subtitle, action) {
-        return '<button class="settings-row" type="button" data-section-action="' + (action || title) + '">' +
-          '<span class="settings-icon">' + iconSvg(iconName) + '</span>' +
-          '<span class="section-copy"><b>' + title + '</b><small>' + subtitle + '</small></span>' +
-          '<span class="section-meta">›</span>' +
-          '</button>';
-      }
-
       function renderSettings() {
+        var languageOptions = [
+          { value: "ar", label: "العربية" },
+          { value: "en", label: "English" }
+        ].map(function (option) {
+          return '<option value="' + option.value + '"' + (settingsState.language === option.value ? ' selected' : '') + '>' + option.label + '</option>';
+        }).join("");
+
         return sectionShell("settings", "الإعدادات", "إدارة إعدادات حسابك والتطبيق والخصوصية.",
           '<div class="settings-list">' +
-          settingsRow("messages", "معلومات الحساب", "اسمك، بريدك، وحالة الحساب") +
-          settingsRow("help", "اللغة", "العربية") +
-          settingsRow("settings", "الوضع الليلي", "يتبع إعدادات جهازك") +
-          settingsRow("shield", "الخصوصية", "إدارة الذاكرة والبيانات") +
-          settingsRow("messages", "الإشعارات", "تنبيهات الاستخدام والاشتراك") +
-          settingsRow("models", "إدارة الاشتراك", "الباقة والترقية والفواتير") +
-          settingsRow("files", "تصدير البيانات", "تنزيل نسخة من بياناتك") +
-          settingsRow("logout", "حذف الحساب", "طلب حذف آمن للحساب") +
+          '<article class="settings-card">' +
+          '<span class="settings-icon">' + iconSvg("messages") + '</span>' +
+          '<div class="settings-card-body">' +
+          '<div class="section-copy"><b>معلومات الحساب</b><small>عدّل الاسم والبريد الإلكتروني مباشرة من هنا</small></div>' +
+          '<div class="settings-form">' +
+          '<input class="settings-input" data-setting-name type="text" value="' + escapeHtml(settingsState.name) + '" placeholder="الاسم">' +
+          '<input class="settings-input" data-setting-email type="email" value="' + escapeHtml(settingsState.email) + '" placeholder="البريد الإلكتروني">' +
+          '<button class="settings-save" type="button" data-settings-save-account>حفظ التعديلات</button>' +
+          '</div>' +
+          '</div>' +
+          '</article>' +
+          settingsControlRow("help", "اللغة", "اختر اللغة المناسبة", '<select class="settings-select" data-setting-language>' + languageOptions + '</select>') +
+          settingsToggleRow("settings", "الوضع الليلي", "حفظ تفضيل الوضع الليلي", "nightMode", settingsState.nightMode) +
+          settingsToggleRow("shield", "الخصوصية", "السماح بحفظ الملاحظات", "privacy", settingsState.privacy) +
+          settingsToggleRow("messages", "الإشعارات", "إشعارات الاستخدام والاشتراك", "notifications", settingsState.notifications) +
+          settingsActionRow("models", "إدارة الاشتراك", "ترقية الباقة ومراجعة الفواتير", "فتح التفاصيل", "subscription") +
+          settingsActionRow("files", "تصدير البيانات", "تنزيل نسخة من بياناتك", "تصدير", "export-data") +
+          settingsActionRow("logout", "حذف الحساب", "طلب حذف آمن للحساب", "حذف", "delete-account", true) +
           '</div>' +
           stateBlocks("لا توجد إعدادات إضافية."));
       }
@@ -1602,6 +2418,8 @@
       if (xpOpen) {
         xpOpen.addEventListener("click", function () {
           setDrawerOpen(false);
+          xpState.view = "balance";
+          xpState.history = [];
           setXpPanelOpen(true);
         });
       }
@@ -1611,6 +2429,72 @@
           setXpPanelOpen(false);
         });
       });
+
+      if (xpPanel) {
+        xpPanel.addEventListener("click", function (event) {
+          var go = event.target.closest("[data-xp-go]");
+          var plan = event.target.closest("[data-xp-plan]");
+          var billing = event.target.closest("[data-xp-billing]");
+          var method = event.target.closest("[data-xp-method]");
+          var back = event.target.closest("[data-xp-back]");
+          var close = event.target.closest("[data-xp-close]");
+          var backHome = event.target.closest("[data-xp-back-home]");
+
+          if (backHome) {
+            setXpPanelOpen(false);
+            mobilePage.classList.remove("has-mobile-section");
+            main.innerHTML = homeMarkup;
+            drawerLinks.forEach(function (link) {
+              link.classList.remove("is-active");
+            });
+            return;
+          }
+
+          if (back) {
+            goBackInXpFlow();
+            return;
+          }
+
+          if (close) {
+            setXpPanelOpen(false);
+            return;
+          }
+
+          if (go) {
+            var nextView = go.dataset.xpGo;
+            if (nextView === "processing") {
+              setXpView("processing");
+              xpState.status = "processing";
+              window.setTimeout(function () {
+                xpState.status = "success";
+                setXpView("success", false);
+              }, 1200);
+              return;
+            }
+            if (nextView) {
+              setXpView(nextView);
+            }
+            return;
+          }
+
+          if (plan) {
+            xpState.plan = plan.dataset.xpPlan || "spark";
+            setXpView("details", false);
+            return;
+          }
+
+          if (billing) {
+            xpState.billing = billing.dataset.xpBilling || "monthly";
+            setXpView("plans", false);
+            return;
+          }
+
+          if (method) {
+            xpState.method = method.dataset.xpMethod || "mada";
+            setXpView("payment", false);
+          }
+        });
+      }
 
       document.addEventListener("keydown", function (event) {
         if (event.key === "Escape") {
@@ -1637,6 +2521,14 @@
           var logout = event.target.closest("[data-logout-confirm]");
           var cancel = event.target.closest("[data-mobile-cancel]");
           var home = event.target.closest("[data-mobile-home]");
+          var saveAccount = event.target.closest("[data-settings-save-account]");
+          var settingToggle = event.target.closest("[data-setting-toggle]");
+          var settingsAction = event.target.closest("[data-settings-action]");
+          var xpPlanChoice = event.target.closest("[data-xp-plan]");
+          var xpBillingChoice = event.target.closest("[data-xp-billing]");
+          var xpMethodChoice = event.target.closest("[data-xp-method]");
+          var xpGo = event.target.closest("[data-xp-go]");
+          var xpBackHome = event.target.closest("[data-xp-back-home]");
 
           if (home) {
             mobilePage.classList.remove("has-mobile-section");
@@ -1645,6 +2537,49 @@
               link.classList.remove("is-active");
             });
             window.scrollTo({ top: 0, behavior: "smooth" });
+            return;
+          }
+
+          if (saveAccount) {
+            var nameInput = main.querySelector("[data-setting-name]");
+            var emailInput = main.querySelector("[data-setting-email]");
+            saveSettingsState({
+              name: nameInput ? nameInput.value.trim() || settingsState.name : settingsState.name,
+              email: emailInput ? emailInput.value.trim() || settingsState.email : settingsState.email
+            });
+            refreshSettingsPage();
+            showNotice("تم حفظ معلومات الحساب.");
+            return;
+          }
+
+          if (settingToggle) {
+            var key = settingToggle.dataset.settingToggle;
+            if (key) {
+              var nextValue = !settingsState[key];
+              var patch = {};
+              patch[key] = nextValue;
+              saveSettingsState(patch);
+              refreshSettingsPage();
+              showNotice("تم تحديث " + settingToggle.closest(".settings-row").querySelector("b").textContent + ".");
+            }
+            return;
+          }
+
+          if (settingsAction) {
+            var settingsActionKey = settingsAction.dataset.settingsAction;
+            if (settingsActionKey === "subscription") {
+              xpState.view = "plans";
+              xpState.history = [];
+              setXpPanelOpen(true);
+            } else if (settingsActionKey === "export-data") {
+              showNotice("تم تجهيز تصدير البيانات.");
+            } else if (settingsActionKey === "delete-account") {
+              renderSection("logout");
+            }
+            return;
+          }
+
+          if (xpPlanChoice || xpBillingChoice || xpMethodChoice || xpGo || xpBackHome) {
             return;
           }
 
@@ -1681,6 +2616,13 @@
         main.addEventListener("input", function (event) {
           if (event.target.matches("[data-section-search]")) {
             filterCurrentSection(event.target.value);
+          }
+        });
+
+        main.addEventListener("change", function (event) {
+          if (event.target.matches("[data-setting-language]")) {
+            saveSettingsState({ language: event.target.value });
+            showNotice("تم حفظ اللغة.");
           }
         });
       }
